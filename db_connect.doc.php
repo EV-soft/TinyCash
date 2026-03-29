@@ -1,4 +1,4 @@
-<?php # db_connect.inc.php - Example
+<?php # db_connect.inc.php - Example 
 
 $db_host = "localhost";
 $db_user = "xxxxxx_root";
