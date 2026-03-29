@@ -27,3 +27,4 @@ TinyCash is a lightweight, web-based accounting and inventory management system 
    ```php
    <?php
    $conn = mysqli_connect("localhost", "your_user", "your_password", "your_database");
+   # Look at db_connect.doc.php for more...
