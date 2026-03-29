@@ -1,3 +1,5 @@
+![TinyCash Dashboard](images/Skærmbillede 2026-03-29 190119.png)
+
 # TinyCash Control 🛠️
 
 TinyCash is a lightweight, web-based accounting and inventory management system built with PHP and MySQL. It is designed for small businesses that need a simple and efficient solution for invoicing and stock tracking.
