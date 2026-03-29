@@ -1,4 +1,4 @@
-![TinyCash Dashboard](/images/Screeen_2026-03-29 190119.png)
+![TinyCash Dashboard](images/Screeen_2026-03-29 190119.png)
 
 # TinyCash Control 🛠️
 
