@@ -1,5 +1,5 @@
-<?php # db_blueprint.php
-if (file_exists(__DIR__ . '/db_connect.inc.php')) { require_once __DIR__ . '/db_connect.inc.php'; } 
+<?php # inc/db_blueprint.php  v:0.6 d:2026-04-03 i:EVS m:0
+if (file_exists(__DIR__ . '/inc/db_connect.inc.php')) { require_once __DIR__ . '/inc/db_connect.inc.php'; } 
 elseif (file_exists(__DIR__ . '/../db_connect.inc.php')) { require_once __DIR__ . '/../db_connect.inc.php';} 
 else { die("Error: Could not find db_connect.inc.php. Check fileplace."); }
 

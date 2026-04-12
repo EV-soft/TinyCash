@@ -1,0 +1,9 @@
+# 1. Benægt adgang til alt som standard
+Require all denied
+
+# 2. Lav en specifik undtagelse for din advisor-fil
+<Files "Master_Advisor.php">
+    <RequireAll>
+        Require all granted
+    </RequireAll>
+</Files>
