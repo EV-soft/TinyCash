@@ -1,4 +1,5 @@
-![TinyCash Dashboard](images/Skærmbillede 2026-03-29 190119.png)
+![TinyCash Dashboard](images/dashboard.png
+)
 
 # TinyCash Control 🛠️
 
@@ -22,11 +23,20 @@ TinyCash is a lightweight, web-based accounting and inventory management system 
 - **Invoicing:** Create professional invoices with PDF/Print-ready views.
 - **Collector Tool:** A built-in utility in `/tools/` for easy code backup and project snapshots.
 
-## Installation
-1. Upload all files to your PHP server.
-2. Create a MySQL database and import the `database_blueprint.sql` schema.
-3. Create a `db_connect.inc.php` file based on the following template:
-   ```php
-   <?php
-   $conn = mysqli_connect("localhost", "your_user", "your_password", "your_database");
-   # Look at db_connect.doc.php for more...
+## Installation & Configuration
+
+1. **Source files:**
+   - Upload all files to your PHP server.
+   
+2. **Database Setup:**
+   - Create a MySQL database and import `database_blueprint.sql`.
+   - Rename `db_connect.doc.php` to `db_connect.inc.php` and update it with your credentials.
+   - Look at db_connect.doc.php for more...
+
+3. **Company Profile (Static Data):**
+   - TinyCash uses a JSON file for static company information (name, address, VAT number) to reduce database overhead for non-changing data.
+   - Locate `/json-data/stamdata.json`.
+   - Update this file with your own business details.
+
+4. **Language:**
+   - The system defaults to English but can be switched via the built-in language selector.
