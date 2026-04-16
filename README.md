@@ -22,7 +22,7 @@ TinyCash is a lightweight, web-based accounting and inventory management system 
 - **Inventory Tracking:** Real-time stock management with automatic updates during invoicing.
 - **Invoicing:** Create professional invoices with PDF/Print-ready views.
 - **Collector Tool:** A built-in utility in `/tools/` for easy code backup and project snapshots.
-- **Try and feel:** [Live demo]([https://www.example.com](https://ev-soft.dk/tcash/about.page.php))
+- **Try and feel:** [Live demo](https://ev-soft.dk/tcash/about.page.php)
 
 
 ## Installation & Configuration
