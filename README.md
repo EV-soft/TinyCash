@@ -35,10 +35,5 @@ TinyCash is a lightweight, web-based accounting and inventory management system 
    - Rename `db_connect.doc.php` to `db_connect.inc.php` and update it with your credentials.
    - Look at db_connect.doc.php for more...
 
-3. **Company Profile (Static Data):**
-   - TinyCash uses a JSON file for static company information (name, address, VAT number) to reduce database overhead for non-changing data.
-   - Locate `/json-data/stamdata.json`.
-   - Update this file with your own business details.
-
-4. **Language:**
+3. **Language:**
    - The system defaults to English but can be switched via the built-in language selector.
