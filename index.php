@@ -1,33 +1,33 @@
-<?php # index.page.php v:0.8.0 d:2026-04-10 i:evs m:1
+<?php # index.php v:0.9.1 d:2026-05-08 i:evs
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
+require_once 'inc/php2htm.lib.php';
 
-htm_Header(lang('@Overview'));
+htm_Header('@Overview');
 showMenu();
 
-// 1. FETCH DASHBOARD DATA
 $current_year = date('Y');
 
-// A: Revenue this year
+// A: Omsætning i år (rettet kolonnenavn til line_vat_rate)
 $rev_res = mysqli_query($conn, "SELECT SUM(quantity * price_each) FROM invoice_lines 
                                 INNER JOIN invoices ON invoice_lines.inv_id = invoices.inv_id 
                                 WHERE YEAR(invoices.inv_date) = '$current_year'");
-$revenue = mysqli_fetch_column($rev_res) ?? 0;
+$revenue = mysqli_fetch_column($rev_res) ?: 0;
 
-// B: Count of outstanding invoices
-$open_res = mysqli_query($conn, "SELECT COUNT(*) FROM invoices WHERE inv_status = 'sent'");
-$count_open = mysqli_fetch_column($open_res) ?? 0;
+// B: Antal ubetalte fakturaer
+$open_res = mysqli_query($conn, "SELECT COUNT(*) FROM invoices WHERE inv_status = 'SENT'");
+$count_open = mysqli_fetch_column($open_res) ?: 0;
 
-// C: Products below minimum stock
+// C: Lav lagerbeholdning
 $stock_res = mysqli_query($conn, "SELECT COUNT(*) FROM products WHERE prod_stock <= prod_min_stock");
-$count_low_stock = mysqli_fetch_column($stock_res) ?? 0;
+$count_low_stock = mysqli_fetch_column($stock_res) ?: 0;
 
-// D: Total customers
+// D: Total kunder
 $cust_res = mysqli_query($conn, "SELECT COUNT(*) FROM customers");
-$count_customers = mysqli_fetch_column($cust_res) ?? 0;
-
+$count_customers = mysqli_fetch_column($cust_res) ?: 0;
 ?>
+
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
     <div style="background: #2ecc71; color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
         <small style="opacity: 0.9; text-transform: uppercase; font-size: 0.75em; font-weight: bold;"><?php echo lang('@Revenue This Year'); ?></small>
@@ -46,9 +46,10 @@ $count_customers = mysqli_fetch_column($cust_res) ?? 0;
         <div style="font-size: 1.8em; font-weight: bold; margin-top: 5px;"><?php echo $count_customers; ?></div>
     </div>
 </div>
+
 <div style="display: flex; gap: 20px; flex-wrap: wrap;">
     <div style="flex: 2; min-width: 300px;">
-        <?php htm_Card_(lang('@Latest Invoices')); ?>
+        <?php htm_Card_('@Latest Invoices'); ?>
         <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
             <thead>
                 <tr style="text-align: left; border-bottom: 2px solid #eee;">
@@ -59,10 +60,9 @@ $count_customers = mysqli_fetch_column($cust_res) ?? 0;
             </thead>
             <tbody>
             <?php
-            
-            // Vi beregner total_amount dynamisk, da kolonnen ikke findes i 'invoices' tabellen
+            // Rettet SQL: line_vat_rate i stedet for vat_rate
             $sql = "SELECT i.inv_id, i.invoice_no, c.cust_name, 
-                    (SELECT SUM(quantity * price_each * (1 + vat_rate / 100)) 
+                    (SELECT SUM(quantity * price_each * (1 + line_vat_rate / 100)) 
                      FROM invoice_lines 
                      WHERE inv_id = i.inv_id) AS calculated_total
                     FROM invoices i 
@@ -75,18 +75,19 @@ $count_customers = mysqli_fetch_column($cust_res) ?? 0;
                 echo "<tr><td colspan='3'>SQL Error: " . mysqli_error($conn) . "</td></tr>";
             } else {
                 while($l = mysqli_fetch_assoc($latest)) {
+                    $total = $l['calculated_total'] ?: 0;
                     echo "<tr style='border-bottom: 1px solid #f9f9f9;'>";
-                    echo "<td style='padding: 10px;'><a href='invoice_view.page.php?id={$l['inv_id']}'>#{$l['invoice_no']}</a></td>";
+                    echo "<td style='padding: 10px;'><a href='invoice_edit.php?id={$l['inv_id']}'>#{$l['invoice_no']}</a></td>";
                     echo "<td style='padding: 10px;'>{$l['cust_name']}</td>";
-                    echo "<td style='padding: 10px; text-align: right;'>" . number_format($l['calculated_total'], 2, ',', '.') . " kr.</td>";
-                    echo "</tr>";
+                    echo "<td style='padding: 10px; text-align: right;'>" . number_format($total, 2, ',', '.') . " kr.</td>";
+                    echo "</tr>";                               
                 }
             }
             ?>
             </tbody>
         </table>
         <p style="margin-top: 15px; font-size: 0.85em;">
-            <a href="invoices.page.php" style="color: #3498db; text-decoration: none; font-weight: bold;">
+            <a href="sales_hub.php" style="color: #3498db; text-decoration: none; font-weight: bold;">
                 <i class="fa fa-arrow-right"></i> <?php echo lang('@View all invoices'); ?>
             </a>
         </p>
@@ -94,15 +95,15 @@ $count_customers = mysqli_fetch_column($cust_res) ?? 0;
     </div>
     
     <div style="flex: 1; min-width: 250px;">
-        <?php htm_Card_(lang('@Quick Actions')); ?>
+        <?php htm_Card_('@Quick Actions'); ?>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-            <a href="invoice_create.page.php" style="display:flex; align-items:center; gap:10px; padding: 12px; background:#f9f9f9; text-decoration:none; color:#333; border-radius:4px; border-left:4px solid #2ecc71;">
+            <a href="invoice_edit.php?id=0" style="display:flex; align-items:center; gap:10px; padding: 12px; background:#f9f9f9; text-decoration:none; color:#333; border-radius:4px; border-left:4px solid #2ecc71;">
                 <i class="fa fa-plus-circle" style="color:#2ecc71;"></i> <?php echo lang('@New Invoice'); ?>
             </a>
-            <a href="product_new.page.php" style="display:flex; align-items:center; gap:10px; padding: 12px; background:#f9f9f9; text-decoration:none; color:#333; border-radius:4px; border-left:4px solid #3498db;">
+            <a href="product_edit.php?id=0" style="display:flex; align-items:center; gap:10px; padding: 12px; background:#f9f9f9; text-decoration:none; color:#333; border-radius:4px; border-left:4px solid #3498db;">
                 <i class="fa fa-box-open" style="color:#3498db;"></i> <?php echo lang('@Add New Product'); ?>
             </a>
-            <a href="customer_create.page.php" style="display:flex; align-items:center; gap:10px; padding: 12px; background:#f9f9f9; text-decoration:none; color:#333; border-radius:4px; border-left:4px solid #9b59b6;">
+            <a href="customer_edit.php?id=0" style="display:flex; align-items:center; gap:10px; padding: 12px; background:#f9f9f9; text-decoration:none; color:#333; border-radius:4px; border-left:4px solid #9b59b6;">
                 <i class="fa fa-user-plus" style="color:#9b59b6;"></i> <?php echo lang('@Add New Customer'); ?>
             </a>
         </div>

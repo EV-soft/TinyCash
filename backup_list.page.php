@@ -1,4 +1,4 @@
-<?php # /backup_list.page.php v:0.8.0 d:2026-04-10 i:Gemini m:1
+<?php # /backup_list.page.php v:0.9.1 d:2026-05-08 i:evs
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -23,16 +23,14 @@ if (isset($_GET['delete'])) {
     }
 }
 
-htm_Header(lang('@Backup Files'));
+htm_Header('@Backup Files');
 showMenu();
 
 echo "<div style='max-width:900px; margin:0 auto; padding:10px;'>";
     echo "<h2 style='margin-bottom: 20px;'>📂 " . lang('@Manage Backups') . "</h2>";
-
     htm_Alert($msg, 'success');
-    htm_Alert($err, 'error');
-
-    htm_Card_(lang('@Stored Backups'), '100%');
+    htm_Alert($err, 'error')
+    htm_Card_('@Stored Backups', '100%');
 
     // Hent filer og sorter efter nyeste først
     $files = glob($backupDir . "*.sql");
@@ -48,7 +46,6 @@ echo "<div style='max-width:900px; margin:0 auto; padding:10px;'>";
             </tr>
           </thead>
           <tbody>";
-
     if (empty($files)) {
         echo "<tr><td colspan='4' style='padding:40px; text-align:center; color:#999;'>" . lang('@No backups found') . "</td></tr>";
     } else {
@@ -62,9 +59,12 @@ echo "<div style='max-width:900px; margin:0 auto; padding:10px;'>";
                 echo "<td style='text-align:center;'>$size</td>";
                 echo "<td style='text-align:right;'>";
                     // Download (direkte link til filen)
-                    echo "<a href='$file' download class='link-invoice' style='margin-right:15px;' title='".lang('@Download')."'>📥</a>";
+                    echo "<a href='$file' download class='link-invoice' style='margin-right:15px;' title='".
+                          lang('@Download')."'>📥</a>";
                     // Slet (med bekræftelse)
-                    echo "<a href='?delete=$filename' onclick='return confirm(\"".lang('@Are you sure?')."\")' style='text-decoration:none; font-size:1.2em;' title='".lang('@Delete')."'>🗑️</a>";
+                    echo "<a href='?delete=$filename' onclick='return confirm(\"".
+                          lang('@Are you sure?')."\")' style='text-decoration:none; font-size:1.2em;' title='".
+                          lang('@Delete')."'>🗑️</a>";
                 echo "</td>";
             echo "</tr>";
         }
@@ -76,7 +76,6 @@ echo "<div style='max-width:900px; margin:0 auto; padding:10px;'>";
         echo "<a href='full_project_backup.php' class='btn-success' style='flex:1; text-align:center; text-decoration:none;'>+ " . lang('@Create New Backup') . "</a>";
         echo "<a href='backup_gendan.page.php' class='btn-primary' style='flex:1; text-align:center; text-decoration:none;'>🔄 " . lang('@Restore Backup') . "</a>";
     echo "</div>";
-
     htm_Card_end();
 echo "</div>";
 

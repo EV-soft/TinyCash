@@ -1,9 +1,9 @@
-<?php # /report_income.page.php v:0.8.1 d:2026-04-11 i:evs m:1
-require 'inc/auth.inc.php';
+<?php # /report_income.php v:0.8.1 d:2026-04-11 i:evs m:1
+require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
 
-htm_Header(lang('@Income Statement'));
+htm_Header('@Income Statement');
 showMenu();
 
 // 1. Hent valuta fra indstillinger (lodret tabel struktur)
@@ -97,7 +97,7 @@ echo "<div style='max-width:900px; margin:0 auto;'>";
     <div style="margin-top: 20px;"></div>
 
     <?php // --- CARD 2: MOMSOPGØRELSE --- ?>
-    <?php htm_Card_(lang('@Precise VAT Statement'), '600'); ?>
+    <?php htm_Card_('@Precise VAT Statement', '600'); ?>
     <div style="font-family:sans-serif; line-height: 1.8;">
         <div style="display:flex; justify-content: space-between; margin-bottom:10px;">
             <span><?php echo lang('@Sales VAT Due (from invoices)'); ?>:</span>

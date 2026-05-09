@@ -1,0 +1,59 @@
+<?php # /chart_of_accounts.php v:0.9.1 d:2026-05-07 i:evs
+ob_start();
+require_once 'inc/auth.inc.php';
+require_once 'inc/db_connect.inc.php';
+require_once 'inc/menu.inc.php';
+require_once 'inc/php2htm.lib.php'; 
+
+htm_Header('@Chart of Accounts');
+showMenu();
+
+echo "<div style='max-width:1000px; margin:0 auto; padding:10px;'>";
+if (isset($_GET['msg']) && $_GET['msg'] == 'updated') {
+    htm_Alert('@Account updated successfully', 'success', 700);
+}
+
+$top_btn = htm_Button('fa-plus', '@Add New Account', 'success', 'account_edit.php?id=0', '', '', '', false);
+htm_Card_('@Chart of Accounts', 1000, '', 'acc_card', true, $top_btn);
+
+$headers = ['@No.', '@Account Name', '@VAT Code', '@Rate', '@Actions'];
+$data = [];
+
+$sql = "SELECT a.*, v.vat_name, v.vat_rate 
+        FROM accounts a 
+        LEFT JOIN vat_codes v ON a.vat_code = v.vat_id 
+        ORDER BY a.acc_id ASC";
+$res = mysqli_query($conn, $sql);
+
+if (!$res) {
+    echo htm_Alert("@SQL Error: " . mysqli_error($conn), "danger");
+} else {
+    while ($row = mysqli_fetch_assoc($res)) {
+        $vat_txt = $row['vat_name'] ?: lang('@None');
+        $rate_txt = (isset($row['vat_rate']) && $row['vat_rate'] > 0) ? number_format($row['vat_rate'], 0) . "%" : "-";
+        $id = (int)$row['acc_id'];
+        
+        $btnEdit = '<a href="account_edit.php?id='.$id.'" style="display:inline-block; padding:6px 10px; background:#3498db; color:#ffffff !important; border-radius:4px; margin-right:5px; text-decoration:none;"><i class="fa fa-edit"></i></a>';
+        $btnDel = '<a href="account_delete.php?id='.$id.'" style="display:inline-block; padding:6px 10px; background:#e74c3c; color:#ffffff !important; border-radius:4px; text-decoration:none;" onclick="return confirm(\''.lang('@Are you sure?').'\')"><i class="fa fa-trash"></i></a>';
+
+        $data[] = [
+            $id,
+            "<strong>" . htmlspecialchars($row['acc_name']) . "</strong>",
+            $vat_txt,
+            $rate_txt,
+            $btnEdit . $btnDel 
+        ];
+    }
+    
+    if (empty($data)) {
+        echo "<p style='padding:20px; text-align:center; color:#95a5a6;'>" . lang('@No accounts found') . "</p>";
+    } else {
+        htm_Table($headers, $data, 'accTbl');
+    }
+}
+
+htm_Card_end();
+echo "</div>";
+htm_Footer();
+ob_end_flush();
+?>

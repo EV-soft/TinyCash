@@ -1,4 +1,4 @@
-<?php # /full_project_backup.php v:0.8.0 d:2026-04-10 i:Gemini m:2
+<?php # /full_project_backup.php v:0.9.0 d:2026-05-08 i:evs
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -42,21 +42,17 @@ foreach ($tables as $table) {
     // 3. Hent data fra tabellen 
     $res = mysqli_query($conn, "SELECT * FROM `$table` ");
     $numFields = mysqli_num_fields($res);
-
     if (mysqli_num_rows($res) > 0) {
         $sqlDump .= "-- Data for table: `$table` \n";
         while ($row = mysqli_fetch_row($res)) {
             $sqlDump .= "INSERT INTO `$table` VALUES(";
-            for ($j = 0; $j < $numFields; $j++) {
-                // Håndtering af værdier
+            for ($j = 0; $j < $numFields; $j++) {   // Håndtering af værdier
                 if ($row[$j] === null) {
                     $sqlDump .= 'NULL';
-                } else {
-                    // Escape data og indpak i citationstegn
+                } else {    // Escape data og indpak i citationstegn
                     $val = mysqli_real_escape_string($conn, $row[$j]);
                     $sqlDump .= '"' . $val . '"';
                 }
-                
                 if ($j < ($numFields - 1)) {
                     $sqlDump .= ',';
                 }
@@ -76,7 +72,6 @@ foreach ($tables as $table) {
             $sqlDump .= "\n/* JSON_DATA_START:$baseName\n" . $content . "\nJSON_DATA_END */\n";
         }
     }
-
     // Gem filen
     if (file_put_contents($filePath, $sqlDump)) {
         $msg = lang('@Backup created successfully!') . " ($filePath)";
@@ -85,27 +80,25 @@ foreach ($tables as $table) {
     }
 }
 
-htm_Header(lang('@Full Project Backup'));
+htm_Header('@Full Project Backup');
 showMenu();
 
 // Vis beskeder via den nye standardfunktion
 htm_Alert($msg, 'success');
 htm_Alert($err, 'error');
 
-htm_Card_(lang('@Create Complete Backup'), 600);
+htm_Card_('@Create Complete Backup', 600);
 ?>
 
 <div style="font-family: sans-serif;">
     <p style="margin-bottom: 25px; color: #7f8c8d; line-height: 1.6;">
         <?php echo lang('@This will generate a SQL file containing all database tables and all JSON configuration files.'); ?>
     </p>
-
     <form action="" method="post">
         <button type="submit" name="create_backup" class="btn-success" style="padding:15px; font-size: 1.2em;">
             📦 <?php echo lang('@Generate Backup Now'); ?>
         </button>
     </form>
-
     <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; display: flex; justify-content: space-between;">
         <a href="backup_list.page.php" style="color: #3498db; text-decoration: none; font-weight: bold;">
             📂 <?php echo lang('@View Backup Files'); ?>

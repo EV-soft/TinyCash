@@ -1,4 +1,4 @@
-<?php # /user_create.page.php v:0.9.1 d:2026-05-07 i:evs
+<?php # /user_create.php v:0.9.1 d:2026-05-07 i:evs
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';

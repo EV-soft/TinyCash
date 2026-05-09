@@ -1,4 +1,4 @@
-<?php # backup_restore_worker.php v:0.8 d:2026-04-10 i:Gemini m:1
+<?php # backup_restore_worker.php v:0.9.1 d:2026-05-07 i:evs
 require 'inc/auth.inc.php';
 require 'inc/db_connect.inc.php';
 
@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['backup_file'])) {
     array_map('unlink', glob("$extractDir/*.*"));
     rmdir($extractDir);
 
-    header("Location: backup_restore.page.php?msg=success");
+    header("Location: backup_restore.php?msg=success");
 } else {
-    header("Location: backup_restore.page.php?msg=error");
+    header("Location: backup_restore.php?msg=error");
 }

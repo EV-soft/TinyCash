@@ -1,4 +1,4 @@
-<?php # bank_import_process.php v:0.8.0 d:2026-04-10 i:Gemini m:2
+<?php # bank_import_process.php v:0.9.1 d:2026-05-07 i:evs
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -31,14 +31,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $val = trim($data[$index]);
 
             if (in_array($db_field, ['amount', 'net_amount', 'fee_amount'])) {
-                
                 // --- Robust numeric cleaning ---
                 $val = str_replace(' ', '', $val); // Remove spaces
                 $val = str_replace($t_sep, '', $val); // Remove thousands sep
                 $val = str_replace($d_sep, '.', $val); // Convert decimal sep to dot
                 $val = preg_replace('/[^-0-9.]/', '', $val); // Keep only minus, numbers and dot
                 $num = (float)$val;
-
                 if ($db_field == 'amount')     { $raw['gross'] = $num; $has_gross = true; }
                 if ($db_field == 'net_amount') { $raw['net'] = $num; $has_net = true; }
                 if ($db_field == 'fee_amount') { $raw['fee'] = $num; }
@@ -80,6 +78,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     fclose($handle);
     @unlink($file_path);
 
-    header("Location: reconcile_list.page.php?msg=imported&count=$importCount");
+    header("Location: reconcile_list.php?msg=imported&count=$importCount");
     exit;
 }

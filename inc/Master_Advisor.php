@@ -122,7 +122,8 @@ foreach ($iterator as $fileInfo) {
 
     // Include .php and .inc files, skip this file itself
     if (!preg_match("/\.(php|inc)$/i", $fileName) || $fileName == basename(__FILE__)) continue;
-
+    if (str_contains($filePath, 'udgaaet')) continue; 
+    
     $relativeName = str_replace($sourceDir, "", $filePath);
     $content = file_get_contents($filePath);
     

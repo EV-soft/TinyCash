@@ -1,12 +1,12 @@
-<?php # about.page.php v:0.8 d:2026-04-10 i:EVS m:2
+<?php # about.php v:0.9.1 d:2026-05-08 i:evs
 require 'inc/auth.inc.php';
 require 'inc/db_connect.inc.php';
 require 'inc/menu.inc.php';
 
-htm_Header(lang('@About TinyCash'));
+htm_Header('@About TinyCash');
 showMenu();
 
-htm_Card_(lang('@TinyCash Billing System'), '450');
+htm_Card_('@TinyCash Billing System', '450');
 ?>
 <div style="text-align: center; font-family: sans-serif; line-height: 1.6;">
     <div style="font-size: 2.5em; font-weight: bold; margin-bottom: 10px;">

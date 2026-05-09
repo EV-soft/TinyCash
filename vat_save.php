@@ -1,4 +1,4 @@
-<?php # /vat_save.php v:0.8.0 d:2026-04-11 i:evs m:0
+<?php # /vat_save.php v:0.9.1 d:2026-05-07 i:evs
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 
@@ -34,13 +34,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // 3. Eksekver
     if (mysqli_query($conn, $sql)) {
-        header("Location: vat_list.page.php?msg=success");
+        header("Location: vat_list.php?msg=success");
         exit;
     } else {
         // Vi dør med en fejlbesked, så vi kan se præcis hvad SQL brokker sig over
         die("❌ SQL Error: " . mysqli_error($conn) . "<br>Query: " . $sql);
     }
 } else {
-    header("Location: vat_list.page.php");
+    header("Location: vat_list.php");
     exit;
 }

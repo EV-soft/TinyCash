@@ -1,21 +1,18 @@
-<?php # /reconcile_action.php v:0.8.1 d:2026-04-11 i:Gemini m:1
+<?php # /reconcile_action.php v:0.9.1 d:2026-05-07 i:evs
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 
-// Modtag data fra formen
 $tmp_id     = isset($_POST['tmp_id']) ? (int)$_POST['tmp_id'] : 0;
-$target_id  = isset($_POST['target_id']) ? (int)$_POST['target_id'] : 0; // Faktura ID
-$acc_id     = isset($_POST['acc_id']) ? (int)$_POST['acc_id'] : 0;       // Direkte konto
+$target_id  = isset($_POST['target_id']) ? (int)$_POST['target_id'] : 0; 
+$acc_id     = isset($_POST['acc_id']) ? (int)$_POST['acc_id'] : 0;       
 $fee_amount = isset($_POST['fee_amount']) ? (float)$_POST['fee_amount'] : 0;
-$fee_acc_id = isset($_POST['fee_acc_id']) ? (int)$_POST['fee_acc_id'] : 2320; // Standard gebyrkonto
+$fee_acc_id = isset($_POST['fee_acc_id']) ? (int)$_POST['fee_acc_id'] : 2320; 
 
 if ($tmp_id === 0) die(lang('@No transaction selected.'));
 
-// 1. Hent den midlertidige bankpost
 $res = mysqli_query($conn, "SELECT * FROM bank_statement_temp WHERE tmp_id = $tmp_id");
 $bank = mysqli_fetch_assoc($res);
-
 if (!$bank) die(lang('@Bank entry not found.'));
 
 $bank_date   = $bank['trans_date'];
@@ -25,35 +22,39 @@ $bank_text   = mysqli_real_escape_string($conn, $bank['text_val']);
 mysqli_begin_transaction($conn);
 
 try {
-    // SCENARIE A: MATCH MOD FAKTURA (INDGÅENDE)
+    // --- 1. OPRET JOURNAL POST (Hovedbilaget) ---
+    $journal_text = ($target_id > 0) ? lang('@Payment inv. #') . $target_id : lang('@Bank entry:') . " " . $bank_text;
+    mysqli_query($conn, "INSERT INTO journal (jou_date, jou_text) VALUES ('$bank_date', '$journal_text')");
+    $jou_id = mysqli_insert_id($conn);
+
+    // --- 2. BOGFØR SELVE TRANSAKTIONEN ---
     if ($target_id > 0) {
-        // 1. Marker faktura som betalt
+        // Scenarie A: Faktura betalt
         mysqli_query($conn, "UPDATE invoices SET inv_status = 'paid' WHERE inv_id = $target_id");
-
-        // 2. Bogfør selve indbetalingen på Bank (Konto 1000)
-        $txt = lang('@Payment inv. #') . $target_id . ": " . $bank_text;
-        mysqli_query($conn, "INSERT INTO ledger (entry_date, entry_text, acc_id, amount) 
-                             VALUES ('$bank_date', '$txt', 1000, $bank_amount)");
-
-        // 3. HÅNDTER GEBYR
+        
+        // Bank (Debet/Kredit alt efter fortegn) på konto 1000
+        mysqli_query($conn, "INSERT INTO ledger (jou_id, acc_id, amount) VALUES ($jou_id, 1000, $bank_amount)");
+        
+        // Modpost: Her burde du teknisk set bogføre mod debitor (f.eks. konto 5000), 
+        // men i dette simple setup bogfører vi bankposten direkte.
+        
+        // HÅNDTER GEBYR (Kræver sin egen journalpost eller ekstra linjer)
         if ($fee_amount > 0) {
-            $fee_txt = lang('@Payment fee re: inv. #') . $target_id . " ($bank_text)";
-            // Debet Gebyrkonto (Omkostning stiger)
-            mysqli_query($conn, "INSERT INTO ledger (entry_date, entry_text, acc_id, amount) 
-                                 VALUES ('$bank_date', '$fee_txt', $fee_acc_id, $fee_amount)");
-            // Kredit Bank (Vi trækker gebyret fra bank-saldoen i regnskabet)
-            mysqli_query($conn, "INSERT INTO ledger (entry_date, entry_text, acc_id, amount) 
-                                 VALUES ('$bank_date', '$fee_txt', 1000, " . ($fee_amount * -1) . ")");
+            // Vi tilføjer gebyret til samme journal-ID
+            // Gebyrkonto (Omkostning - Debet)
+            mysqli_query($conn, "INSERT INTO ledger (jou_id, acc_id, amount) VALUES ($jou_id, $fee_acc_id, $fee_amount)");
+            // Bank modregning (Kredit)
+            mysqli_query($conn, "INSERT INTO ledger (jou_id, acc_id, amount) VALUES ($jou_id, 1000, " . ($fee_amount * -1) . ")");
         }
-    } 
-    // SCENARIE B: DIREKTE BOGFØRING (UDGÅENDE/ANDET)
-    elseif ($acc_id > 0) {
-        $txt = lang('@Bank entry:') . " " . $bank_text;
-        mysqli_query($conn, "INSERT INTO ledger (entry_date, entry_text, acc_id, amount) 
-                             VALUES ('$bank_date', '$txt', $acc_id, $bank_amount)");
+    } elseif ($acc_id > 0) {
+        // Scenarie B: Direkte bogføring på valgt konto
+        mysqli_query($conn, "INSERT INTO ledger (jou_id, acc_id, amount) VALUES ($jou_id, $acc_id, $bank_amount)");
+        
+        // Modpost til bank (1000) for at balancere
+        mysqli_query($conn, "INSERT INTO ledger (jou_id, acc_id, amount) VALUES ($jou_id, 1000, " . ($bank_amount * -1) . ")");
     }
 
-    // 4. Marker som behandlet
+    // --- 3. MARKER SOM BEHANDLET ---
     mysqli_query($conn, "UPDATE bank_statement_temp SET is_processed = 1 WHERE tmp_id = $tmp_id");
 
     mysqli_commit($conn);
@@ -64,4 +65,5 @@ try {
     die(lang('@Error:') . " " . $e->getMessage());
 }
 
-ob_end_flush();
+ob_end_flush(); 
+?>

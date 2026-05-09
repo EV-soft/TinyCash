@@ -1,4 +1,4 @@
-<?php # user_list.page.php v:0.8 d:2026-04-11 i:evs m:1
+<?php # user_list.php v:0.9.1 d:2026-05-07 i:evs
 require 'inc/auth.inc.php';
 require 'inc/db_connect.inc.php';
 require 'inc/menu.inc.php';
@@ -8,10 +8,10 @@ if ($_SESSION['user_role'] !== 'admin') {
     die(lang('@Access denied'));
 }
 
-htm_Header(lang('@User Management'));
+htm_Header('@User Management');
 showMenu();
 
-htm_Card_(lang('@System Users'));
+htm_Card_('@System Users');
 
 $sql = "SELECT user_id, username, user_role FROM users ORDER BY username ASC";
 $res = mysqli_query($conn, $sql);

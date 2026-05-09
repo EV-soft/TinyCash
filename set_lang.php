@@ -1,4 +1,4 @@
-<?php # set_lang.php v:0.8 d:2026-04-12 i:Gemini m:1
+<?php # set_lang.php v:0.9.1 d:2026-05-07 i:evs
 session_start();
 
 // 1. Hent den valgte sprogkode (f.eks. 'da' eller 'en')
