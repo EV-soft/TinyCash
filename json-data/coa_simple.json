@@ -1,0 +1,13 @@
+[
+  {"account_no": 1000, "name": "Salg af ydelser (momsfri)", "type": "revenue", "vat_code": "Uden", "vat_rate": 0.00},
+  {"account_no": 1010, "name": "Salg af ydelser (momspligtig)", "type": "revenue", "vat_code": "U25", "vat_rate": 25.00},
+  {"account_no": 2000, "name": "Småanskaffelser og værktøj", "type": "expense", "vat_code": "I25", "vat_rate": 25.00},
+  {"account_no": 2010, "name": "Software og abonnementer", "type": "expense", "vat_code": "I25", "vat_rate": 25.00},
+  {"account_no": 2020, "name": "Kontorhold og tryksager", "type": "expense", "vat_code": "I25", "vat_rate": 25.00},
+  {"account_no": 2030, "name": "Rejseudgifter og kørsel", "type": "expense", "vat_code": "Uden", "vat_rate": 0.00},
+  {"account_no": 2040, "name": "Telefon og internet", "type": "expense", "vat_code": "I25", "vat_rate": 25.00},
+  {"account_no": 2050, "name": "Husleje / Lokaler", "type": "expense", "vat_code": "Uden", "vat_rate": 0.00},
+  {"account_no": 2060, "name": "Revisor og rådgivning", "type": "expense", "vat_code": "I25", "vat_rate": 25.00},
+  {"account_no": 5000, "name": "Driftskonto (Bank)", "type": "asset", "vat_code": "Uden", "vat_rate": 0.00},
+  {"account_no": 6000, "name": "Momsafregning", "type": "liability", "vat_code": "Uden", "vat_rate": 0.00}
+]

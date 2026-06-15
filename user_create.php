@@ -1,8 +1,9 @@
-<?php # /user_create.php v:0.9.1 d:2026-05-07 i:evs
+<?php # /user_create.php v:1.0.0 d:2026-06-15 i:evs
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
+require_once 'inc/php2htm.lib.php';
 
 $msg = ""; $err = "";
 

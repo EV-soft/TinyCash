@@ -1,7 +1,8 @@
-<?php # backup_restore.page.php v:0.9.1 d:2026-05-08 i:evs
+<?php # backup_restore.php v:1.0.0 d:2026-06-15 i:evs
 require 'inc/auth.inc.php';
 require 'inc/db_connect.inc.php'; 
 require 'inc/menu.inc.php';
+require_once 'inc/php2htm.lib.php'; 
 
 // Kun admins
 if ($_SESSION['user_role'] !== 'admin') { die(lang('@Access denied')); }

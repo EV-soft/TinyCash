@@ -1,7 +1,8 @@
-<?php # user_list.php v:0.9.1 d:2026-05-07 i:evs
+<?php # user_list.php v:1.0.0 d:2026-06-15 i:evs
 require 'inc/auth.inc.php';
 require 'inc/db_connect.inc.php';
 require 'inc/menu.inc.php';
+require_once 'inc/php2htm.lib.php'; 
 
 // Sikkerhed: Kun admins må se denne liste
 if ($_SESSION['user_role'] !== 'admin') {
@@ -45,7 +46,7 @@ if (!$res) {
         echo "<td style='padding: 12px; border-bottom: 1px solid #eee;'><span style='$roleStyle'>" . $roleLabel . "</span></td>";
         
         echo "<td style='padding: 12px; border-bottom: 1px solid #eee; text-align: right;'>";
-        echo "<a href='user_edit.page.php?id=" . $row['user_id'] . "' style='color: #3498db; text-decoration: none; margin-right:15px; font-weight:bold;'>" . lang('@Edit') . "</a>";
+        echo "<a href='user_edit.php?id=" . $row['user_id'] . "' style='color: #3498db; text-decoration: none; margin-right:15px; font-weight:bold;'>" . lang('@Edit') . "</a>";
         
         if ($row['user_id'] != $_SESSION['user_id']) {
             echo "<a href='user_actions.php?action=delete&id=" . $row['user_id'] . "' style='color: #e74c3c; text-decoration: none; font-weight:bold;' onclick='return confirm(\"" . lang('@Are you sure?') . "\")'>" . lang('@Delete') . "</a>";
@@ -59,14 +60,15 @@ if (!$res) {
 
     // --- HER ER DEN NYE PLACERING AF KNAPPEN ---
     echo "<div style='border-top: 1px solid #eee; padding-top: 20px; display: flex; justify-content: space-between; align-items: center;'>";
-        echo "<a href='user_create.page.php' style='background:#2ecc71; color:white; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold; display:inline-block;'>";
+        echo "<a href='user_create.php' style='background:#2ecc71; color:white; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold; display:inline-block;'>";
         echo "<i class='fa fa-plus-circle'></i> " . lang('@Create New User');
         echo "</a>";
-
+/* 
         // Tilføjer også Backup linket diskret her i bunden
-        echo "<a href='backup_restore.page.php' style='color: #95a5a6; text-decoration: none; font-size: 0.9em;'>";
+        echo "<a href='backup_restore.php' style='color: #95a5a6; text-decoration: none; font-size: 0.9em;'>";
         echo "⚙ " . lang('@System Tools');
         echo "</a>";
+         */
     echo "</div>";
 }
 

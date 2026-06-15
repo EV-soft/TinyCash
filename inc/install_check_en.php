@@ -1,4 +1,4 @@
-<?php # /install_check_en.php v:1.0.0 d:2026-06-15 i:evs
+<?php # /install_check_en.php v:1.0.0 d:2026-05-11 i:evs
 ob_start();
 session_start();
 

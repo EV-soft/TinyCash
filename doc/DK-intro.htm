@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <title>Systemdisposition - TinyCash ERP</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f4f6f8;
+            color: #333;
+            margin: 0;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 12px;
+            margin-top: 0;
+            font-size: 24px;
+        }
+        p.subtitle {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-top: -10px;
+            margin-bottom: 30px;
+        }
+        details {
+            background: #fafbfc;
+            border: 1px solid #e1e4e6;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            overflow: hidden;
+            transition: border-color 0.2s ease;
+        }
+        details[open] {
+            border-color: #3498db;
+            background: #ffffff;
+        }
+        summary {
+            padding: 14px 18px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+            cursor: pointer;
+            outline: none;
+            user-select: none;
+            background: #fafbfc;
+            border-bottom: 1px solid transparent;
+        }
+        details[open] summary {
+            background: #f1f7fc;
+            border-bottom: 1px solid #e1e4e6;
+            color: #2980b9;
+        }
+        summary:hover {
+            background: #f1f3f5;
+        }
+        details[open] summary:hover {
+            background: #e1f0fa;
+        }
+        .content {
+            padding: 18px;
+        }
+        .sub-list {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+        }
+        .sub-list > li {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f1f3f5;
+        }
+        .sub-list > li:last-child {
+            border-bottom: none;
+        }
+        .sub-item-title {
+            font-weight: 600;
+            color: #34495e;
+            display: inline-block;
+            margin-bottom: 2px;
+            cursor: help;
+            border-bottom: 1px dashed #b2bec3;
+        }
+        .sub-item-desc {
+            font-size: 13px;
+            color: #666;
+            margin: 8px 0 0 0;
+        }
+        .nested-details {
+            margin-top: 8px;
+            background: #ffffff;
+            border: 1px solid #e1e4e6;
+        }
+        .nested-details summary {
+            padding: 10px 14px;
+            font-size: 14px;
+            background: #f8f9fa;
+        }
+        .nested-details[open] summary {
+            background: #f1f3f5;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📖 Systemdisposition: TinyCash ERP</h1>
+    <p class="subtitle">
+    Komplet interaktiv beskrivelse </p>
+
+    <details>
+        <summary title="Sti: index.php">
+        🏠 1. Oversigt & Dashboard</summary>
+        <div class="content">
+            <p class="sub-item-desc" style="margin-top:0;">
+            Systemets centrale landingsside og daglige udgangspunkt. Indeholder hurtig statistik, finansielle nøgletal (KPI'er), genveje til hyppige handlinger samt vigtige systemnotificeringer.</p>
+        </div>
+    </details>
+
+    <details>
+        <summary title="Modul: sales">
+        📄 2. Salg & Kunder</summary>
+        <div class="content">
+            <ul class="sub-list">
+                <li>
+                    <span class="sub-item-title" title="Fil: sales_hub.php">
+                    🚀 Sales Hub Dashboard</span>
+                    <p class="sub-item-desc">
+                    Avanceret salgsoversigt, grafer og rapportering over udestående poster.</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: invoice_edit.php?id=0">
+                    ➕ Opret ny faktura</span>
+                    <p class="sub-item-desc">
+                    Faktureringsmodul med linjeelementer, momsvalg, rabatstyring og direkte afsendelse.</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: customer_edit.php?id=0">✨ Opret ny kunde</span>
+                    <p class="sub-item-desc">
+                    Kundekartotek med stamdata, leveringsadresser, betalingsbetingelser og historik.</p>
+                </li>
+            </ul>
+        </div>
+    </details>
+
+    <details>
+        <summary title="Modul: bank">
+        🏦 3. Bank & Afstemning</summary>
+        <div class="content">
+            <ul class="sub-list">
+                <li>
+                    <span class="sub-item-title" title="Fil: bank_import_step1.php">
+                    📥 Importér bankfil</span>
+                    <p class="sub-item-desc">
+                    Upload og indlæsning af kontoudtog (CSV / Camt.053) direkte fra banken.</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: reconcile_list.php">⚖️ Bankafstemning</span>
+                    <p class="sub-item-desc">
+                    Matchning af indlæste bankbevægelser op imod allerede bogførte fakturaer og udgifter.</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: settings_fees.php">
+                    ⚙️ Gebyrregler</span>
+                    <p class="sub-item-desc">
+                    Automatisering og opsætning af regler for faste bankgebyrer, renter og transaktionsomkostninger.</p>
+                </li>
+            </ul>
+        </div>
+    </details>
+
+    <details>
+        <summary title="Modul: accounting">
+        💰 4. Finans & Regnskab</summary>
+        <div class="content">
+            <ul class="sub-list">
+                <li>
+                    <span class="sub-item-title" title="Fil: expense_list.php">
+                    📋 Udgiftsliste</span>
+                    <p class="sub-item-desc">Oversigt over alle registrerede kreditorbilag, indkøb og driftsomkostninger.</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: expense_edit.php?id=0">
+                    📥 Registrer udgift</span>
+                    <p class="sub-item-desc">
+                    Indtastning, upload og kategorisering af nye bilag samt udlæg.</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: ledger_view.php">
+                    📖 Finansjournal / Hovedbog</span>
+                    <p class="sub-item-desc">
+                    Det fulde, kronologiske revisionsspor over absolut alle posteringer i systemet.</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: vat_report.php">
+                    🧾 Momsrapport</span>
+                    <p class="sub-item-desc">
+                    Periodisk opgørelse og sammentælling af købs- og salgsmoms til brug ved indberetning.</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: report_income.php">
+                    📊 Resultatopgørelse</span>
+                    <p class="sub-item-desc">
+                    Driftsregnskab (Profit & Loss) samt balance, der viser virksomhedens reelle resultat.</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: chart_of_accounts.php">
+                    📑 Kontoplan</span>
+                    <p class="sub-item-desc">
+                    Definition og administration af systemets finanskonti.</p>
+                </li>
+            </ul>
+        </div>
+    </details>
+
+    <details>
+        <summary title="Modul: inventory">
+        📦 5. Lager & Produkter</summary>
+        <div class="content">
+            <ul class="sub-list">
+                <li>
+                    <span class="sub-item-title" title="Fil: inventory_status.php">
+                    📉 Lagerstatus</span>
+                    <p class="sub-item-desc">
+                    Aktuel opgørelse over lagerværdi, stykantal, lokationer samt advarsler om kritiske beholdninger.</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: product_edit.php?id=0">➕ Opret nyt produkt</span>
+                    <p class="sub-item-desc">
+                    Produktkort med varenumre, kostpriser, salgspriser og tilknyttede lagerstyringsmetoder.</p>
+                </li>
+            </ul>
+        </div>
+    </details>
+
+    <details>
+        <summary title="Modul: production">🛠 6. Produktion</summary>
+        <div class="content">
+            <p class="sub-item-desc" style="margin-top:0;">
+            Modul dedikeret til styring af produktionsprocesser. Sigtet mod opsætning af styklister (BOM - Bill of Materials), produktionsordrer og ressourceallokering.</p>
+        </div>
+    </details>
+
+    <details>
+        <summary title="Modul: system">
+        ⚙️ 7. System & Konfiguration</summary>
+        <div class="content">
+            <ul class="sub-list">
+                <li>
+                    <span class="sub-item-title" title="Fil: company_settings.php">🏢 Virksomhedsindstillinger</span>
+                    <p class="sub-item-desc">
+                    Stamdata, valuta, logo og standardbetingelser, der fremgår på eksterne dokumenter.</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: vat_codes.php">🧾 Momskoder & Satser</span>
+                    <p class="sub-item-desc">
+                    Konfiguration af momssatser (f.eks. 25% indland, EU-salg, omvendt betalingspligt).</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: user_list.php">🔑 Brugerstyring</span>
+                    <p class="sub-item-desc">
+                    Oprettelse, redigering og tildeling af roller og adgangsniveauer til medarbejdere.</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: storage_browser.php">📁 Storage Browser</span>
+                    <p class="sub-item-desc">
+                    Fysisk oversigt over uploadede filer, bilagsbilleder og genererede PDF-dokumenter.</p>
+                </li>
+                
+                <li>
+                    <details class="nested-details">
+                        <summary title="Konfiguration: control_panel">
+                        🛠️ Kontrolpanel</summary>
+                        <div style="padding: 12px;">
+                            <ul class="sub-list">
+                                <li>
+                                    <span class="sub-item-title" title="Fil: backup.php">
+                                    📥 Backup Management</span>
+                                    <p class="sub-item-desc">
+                                    Manuel og automatisk eksport af databasestrukturer samt uploadede filer.</p>
+                                </li>
+                                <li>
+                                    <span class="sub-item-title" title="Fil: backup_restore.php">
+                                    🔄 Gendan system</span>
+                                    <p class="sub-item-desc">
+                                    Gendannelse af data fra tidligere gemte sikkerhedskopier (Rollback).</p>
+                                </li>
+                                <li>
+                                    <span class="sub-item-title" title="Fil: setup_chart.php">
+                                    📑 Kontoplan forslag</span>
+                                    <p class="sub-item-desc">
+                                    Standardopsætning og pre-konfiguration af danske kontoplaner.</p>
+                                </li>
+                                <li>
+                                    <span class="sub-item-title" title="Fil: error_log.php">⚠️ Error Log</span>
+                                    <p class="sub-item-desc">
+                                    Teknisk fejllog og systemmeddelelser til fejlfinding for udviklere.</p>
+                                </li>
+                            </ul>
+                        </div>
+                    </details>
+                </li>
+                
+                <li>
+                    <span class="sub-item-title" title="Fil: ai_help.php">
+                    ℹ️ AI support</span>
+                    <p class="sub-item-desc">
+                    Integreret AI-assistent og kontekstuel hjælp til brug af systemets funktioner.</p>
+                </li>
+                <li>
+                    <span class="sub-item-title" title="Fil: about.php">
+                    ℹ️ Om TinyCash</span>
+                    <p class="sub-item-desc">
+                    Versionsinformation, licensvilkår, systemrettigheder og overordnet status.</p>
+                </li>
+            </ul>
+        </div>
+    </details>
+
+    <details>
+        <summary title="Fil: logout.php">
+        🚪 8. Sessionsstyring</summary>
+        <div class="content">
+            <p class="sub-item-desc" style="margin-top:0;">
+            Sikker aflogning af den aktuelle bruger. Funktionen rydder alle aktive session-data og omdirigerer brugeren sikkert tilbage til login-skærmen.</p>
+        </div>
+    </details>
+
+</div>
+
+</body>
+</html>

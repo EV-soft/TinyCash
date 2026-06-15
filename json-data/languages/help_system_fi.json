@@ -1,0 +1,191 @@
+{
+    "index.php": [
+        "<h3>Kojelaudan yleiskatsaus – Ohje<\/h3>",
+        "<p>Tervetuloa päävalvomoon. Tällä sivulla näkyvät reaaliaikaiset taloudelliset luvut ja keskeiset indikaattorit suoraan tietokannasta.<\/p>",
+        "<ul><li><strong>Tämän vuoden liikevaihto:<\/strong> Näyttää kuluvan kalenterivuoden aikana lopullisiksi vahvistettujen laskujen kumulatiivisen bruttomyynnin.<\/li><\/ul>",
+        "<li><strong>Maksamattomat laskut:<\/strong> Niiden laskujen kokonaismäärä, jotka on lähetetty mutta jotka odottavat tällä hetkellä maksua.<\/li>",
+        "<li><strong>Varastotilannehälytys:<\/strong> Näyttää niiden tuotteiden lukumäärän, joiden nykyinen varastotaso on laskenut määritetyn varmuusvaraston vähimmäismäärän tasolle tai sen alle. Jos lukumäärä on suurempi kuin nolla, widget vaihtaa väriä varoitukseksi.<\/li>",
+        "<li><strong>Asiakkaiden kokonaismäärä:<\/strong> Järjestelmään rekisteröityjen yksilöllisten asiakasprofiilien kokonaismäärä.<\/li>",
+        "<p>Voit tarkastella tietoja <em>Viimeisimmät laskut<\/em> -luettelosta tai muokata laskua suoraan napsauttamalla sen viitenumeroa. Pikatoimintopaneeli tarjoaa nopeita pikakuvakkeita tietueiden luomiseen ilman päävalikkoa.<\/p>"
+    ],
+    "sales_hub.php": [
+        "<h3>Myyntikeskus ja laskujen hallinta<\/h3>",
+        "<p>Tämän keskusmoduulin avulla voit seurata, suodattaa ja hallinnoida kaikkia asiakaskirjanpitoa ja myyntiasiakirjoja.<\/p>",
+        "<ul><li><strong>Laskurekisteri:<\/strong> Näyttää hakutoiminnolla varustetun luettelon kaikista luoduista laskuista, mukaan lukien laskunumerot, laskun päivämäärät, asiakkaiden nimet sekä kokonaissummat arvonlisäverolla.<\/li><\/ul>",
+        "<li><strong>Tilan seuranta:<\/strong> Laskut luokitellaan niiden käsittelyvaiheen mukaan: <em>Luonnos<\/em> (muokattavissa, ei vielä lähetetty), <em>Lähetetty<\/em> (avoin ja maksua odottava) ja <em>Maksettu<\/em> (maksettu).<\/li>",
+        "<li><strong>Käytännölliset pikatoiminnot:<\/strong> Avaa muokkausnäkymä napsauttamalla mitä tahansa laskuriviä tai -numeroa. Pääsäätimien avulla voit luoda uuden laskun, viedä tietoja tai laatia hyvityslaskun palautuksia varten.<\/li>",
+        "<p>Käytä taulukon yläpuolella olevia hakukriteereitä, jotta voit nopeasti rajata tuloksia tiettyjen ajanjaksojen, asiakastunnusten tai maksutilanteiden mukaan.<\/p>"
+    ],
+    "invoice_edit.php": [
+        "Täällä voit luoda tai muokata asiakkaillesi lähetettäviä laskuja.",
+        "Valitse asiakas luettelosta, jotta voit luoda uuden laskun.",
+        "Syötä oikea laskun päivämäärä ja eräpäivä.",
+        "Valitse tuote avattavasta valikosta lisätäksesi sen riville.",
+        "Järjestelmä hakee hinnan ja arvonlisäverokannan automaattisesti tietokannasta.",
+        "Määrää ja hintaa voi muokata manuaalisesti jokaisella rivillä erikseen.",
+        "Välisumma, arvonlisävero ja loppusumma lasketaan automaattisesti alareunassa.",
+        "Sisäiset huomautukset eivät näy asiakkaan tulostetussa laskussa.",
+        "Muista napsauttaa Tallenna lasku, jotta muutokset tallentuvat turvallisesti."
+    ],
+    "setup_chart.php": [
+        "<h3>Tilinpäätösrakenteen määrittäminen ja asennus – Turvallisuusohjeet<\/h3>",
+        "<p>Tämä alustustyötila huolehtii tapahtumien seurantaa varten tarvittavien ensisijaisten tilikarttamallien valinnasta, tarkistuksesta ja tietokannan luomisesta.<\/p>",
+        "<ul><li><strong>Mallivaihtoehdot:<\/strong> Voit valita kolmesta eri mallista: <em>Yksinkertainen<\/em> (sopii erinomaisesti freelancereille ja palveluyrityksille, joilla ei ole varastoa), <em>Vakiomalli<\/em> (sopii pienyrityksille, joissa tarvitaan tavanomaista arvonlisäveron, ajoneuvojen ja hallinnollisten tietojen seurantaa) sekä <em>Laajennettu<\/em> (kattava malli yritysrakenteille, joissa on työntekijöitä, poistoja ja rahoitusvaroja).<\/li><\/ul>",
+        "<li><strong>Toteutusta edeltävä käyttöasteen arviointi:<\/strong> Ennen oikaisujen käsittelyä rutiini suorittaa erillisen rivien laskentakyselyn (<em>COUNT(*)<\/em>) kohdetilitaulukkoon. Jos järjestelmä havaitsee olemassa olevia profiilitietojonoja, asennuskytkin lukittuu automaattisesti tietojen pysyvyyden takaamiseksi.<\/li>",
+        "<li><strong>Tuhoavat taulukon tyhjennysraja-arvot:<\/strong> Kun puhdas kirjanpitojärjestelmä alustetaan, tietokantaliittymä poistaa olemassa olevat rakenteet tyhjennyskomennolla (<em>TRUNCATE<\/em>). Tämä nollaa avainseurantamatriisit kokonaan ennen kirjausten aloittamista.<\/li>",
+        "<li><strong>Parametrisoitu eräpäivitysmatriisi:<\/strong> Lähdetietolohkoista (<em>coa_*.json<\/em>) jäsennetyt taulukkorivit kootaan standardoitujen tietokantarakenteiden avulla (<em>mysqli_prepare<\/em>). Rutiini sitoo kokonaislukutunnisteet, nimimerkkijonot ja veroluokat siististi toisiinsa tyyppimuunnoksista johtuvien poikkeusten välttämiseksi.<\/li>",
+        "<li><strong>Valtion sieppauksen lukitus (kaksoisavaimella):<\/strong> Kun taulukon luominen on onnistunut, erillinen seurantajärjestelmä tallentaa käyttöönottotilan merkin asetusjoukkoon. Alustamisprosessi liittää mukaan pysyvän vahvistuslipun, joka varmistaa, että tulevat käynnistykset ohjaavat käyttäjät suoraan konfiguraatiorakenteen ohi.<\/li>",
+        "<li><strong>Asynkroninen DOM-esikatselun synkronointi:<\/strong> Valitut tietokantarakenteet siirretään välittömästi asiakaspuolen muistiin jatkuvasti toimivien tietojen jäsentämisskriptien (<em>json_encode<\/em>) avulla. Interaktiiviset toiminnot muokkaavat mallilohkoja dynaamisesti, jolloin taulukoiden näkymiä päivitetään ja tyyppimerkintöjä mukautetaan siististi koko käyttöliittymässä ilman, että sivua tarvitsee päivittää.<\/li>",
+        "<p>Tarkista kirjanpitomallien asetukset huolellisesti ennen niiden käyttöönottoa, sillä mallin alustaminen tyhjentää tyhjät kohdetabelit ja luo pysyvän seurantarakenteen.<\/p>"
+    ],
+    "customer_edit.php": [
+        "<h3>Asiakashallinnan ohjeet<\/h3>",
+        "<p>Tällä sivulla voit luoda uuden asiakasprofiilin tai päivittää tietokannassasi olevan olemassa olevan asiakkaan tietoja.<\/p>",
+        "<ul><li><strong>Pakolliset tiedot:<\/strong> <em>Asiakkaan nimi<\/em> on pakollinen tieto profiilin tallentamiseksi. Kaikki muut tiedot ovat vapaaehtoisia, mutta niiden antamista suositellaan laskutuksen tarkkuuden varmistamiseksi.<\/li><\/ul>",
+        "<li><strong>Yritystiedot:<\/strong> Syöttämällä <em>CVR<\/em>-numeron (yritysrekisterinumero) ja nimeämällä <em>yhteys<\/em>henkilön varmistat, että talousasiakirjat tulostuvat ammattimaisesti ja oikeassa muodossa.<\/li>",
+        "<li><strong>Maksuehdot:<\/strong> <em>Maksupäivät<\/em>-kenttä määrittää tämän asiakkaan oletusarvoisen maksuaikavälin (oletusarvo 8 päivää). Kun luot uuden laskun tälle asiakkaalle, eräpäivä mukautuu automaattisesti tämän arvon perusteella.<\/li>",
+        "<li><strong>Sisäiset huomautukset:<\/strong> <em>Huomautukset<\/em>-kenttä on tarkoitettu yksinomaan sisäiseen seurantaan ja hallinnointiin. Tähän kirjoitetut tiedot eivät näy asiakkaan tulostetuissa laskuissa.<\/li>",
+        "<p>Napsauta <strong>Tallenna muutokset<\/strong> -painiketta tallentaaksesi muutokset turvallisesti. Palaa Sales Hubiin <strong>Takaisin<\/strong>-painikkeella muuttamatta tietoja.<\/p>"
+    ],
+    "bank_import_step1.php": [
+        "<h3>Ohjeet tiliotteen tuontiin<\/h3>",
+        "<p>Tämän moduulin avulla voit tuoda pankkitapahtumat pankistasi tavallisen CSV-tiedoston avulla ilman, että sinun tarvitsee kirjata niitä manuaalisesti kirjanpitoon.<\/p>",
+        "<ul><li><strong>Lataa tallennettu profiili:<\/strong> Jos tuot tietoja usein samasta pankista, voit valita avattavasta valikosta aiemmin tallennetun profiilin, jolloin mukautetut sarakemääritykset palautuvat välittömästi.<\/li><\/ul>",
+        "<li><strong>Tietojen esikatselu ja erottimien automaattinen tunnistus:<\/strong> Kun lataat CSV-tiedoston, näyttöön tulee 6 rivin näyte. Järjestelmä tunnistaa automaattisesti, käytetäänkö tiedostossa erottimina puolipisteitä (;) vai pilkkuja (,), ja nimeää sarakkeet sarakkeeksi <em>1, sarakkeeksi 2<\/em> jne.<\/li>",
+        "<li><strong>Sarakkeiden kohdistuskentät:<\/strong> Ilmoita tarkat sarakkeenumerot, joissa tietosi sijaitsevat. Moottori yrittää täyttää nämä kentät automaattisesti analysoimalla otsikoista sanoja kuten <em>Date\/Dato<\/em>, <em>Text\/Tekst<\/em> tai <em>Amount\/Beløb<\/em>.<\/li>",
+        "<li><strong>Ohita rivit:<\/strong> Useimmissa pankkitiedostoissa on yläreunassa otsikkorivi tai metatietoja. Aseta tämä arvoksi 1 (tai suuremmaksi), jotta tuontimoottori ei tulkitse tekstiotsikoita talouskirjauksiksi.<\/li>",
+        "<li><strong>Tallenna asetteluprofiili:<\/strong> Jotta sarakkeita ei tarvitse määrittää manuaalisesti seuraavalla kerralla, kirjoita pankin nimi kohtaan <em>Tallenna profiilina<\/em> ja tallenna asetukset napsauttamalla levykekuvaketta (💾).<\/li>",
+        "<p>Tarkista asetuksesi huolellisesti esikatselutaulukon avulla ja napsauta sitten <strong>”Viimeistele tuonti”<\/strong> siirtääksesi jäsennellyt tiedot käsittelyympäristöön.<\/p>"
+    ],
+    "reconcile_list.php": [
+        "<h3>Ohjeet pankkitilien täsmäytykseen<\/h3>",
+        "<p>Tämän työtilan avulla voit täsmäyttää tuodut tiliotteen rivit maksamattomiin myyntilaskuihin tai kohdistaa toimintakulut nopeasti oikeille kirjanpitotileille.<\/p>",
+        "<ul><li><strong>Vihreät summat (saapuvat maksut):<\/strong> Nämä rivit kuvaavat asiakkaiden maksuja. Järjestelmä etsii automaattisesti järjestelmästäsi maksamattomia laskuja, joiden kokonaissumma on sama. Jos täsmälleen vastaava lasku löytyy, laskun pudotusvalikko korostetaan <span style='color:#2ecc71; font-weight:bold;'>vihreällä<\/span> ja valitaan valmiiksi puolestasi.<\/li><\/ul>",
+        "<li><strong>Palkkioiden laskeminen (⚡ Palkkio):<\/strong> Jos maksu on peräisin maksuportaalista (esim. Stripe, MobilePay), napsauta <em>⚡ Palkkio<\/em> -linkkiä. Tämä laskee käsittelypalkkiot dynaamisesti ja kirjaa ne suoraan valitsemallesi palkkiotilille käyttäen ennalta määritettyjä kiinteitä, suhteellisia tai yhdistettyjä laskentamalleja.<\/li>",
+        "<li><strong>Punaiset summat (menot):<\/strong> Nämä ovat korttimaksuja, toimittajille suoritettuja maksuja tai tilisiirtoja. Valitse avattavasta luettelosta sopiva kulu- tai omaisuustili, jotta voit luokitella kirjauksen.<\/li>",
+        "<li><strong>Tietokantatoiminnot vahvistuksen jälkeen:<\/strong> Kun napsautat <strong>OK<\/strong>, sovellus suorittaa kolmivaiheisen kaksoiskirjausprosessin: päiväkirjaan annetaan yksilöllinen seurantatunnus, vastaavat taseen rivit lisätään pääkirjaan ja väliaikainen rivi merkitään lopullisesti käsitellyksi.<\/li>",
+        "<li><strong>Tietueiden poistaminen:<\/strong> Napsauta roskakorikuvaketta (🗑️) poistaaksesi yksittäisiä väliaikaisia rivejä, jotka eivät kuulu kirjanpitotileihisi.<\/li>",
+        "<p>Tarkista jokainen tapahtumarivi huolellisesti. Kun olet tarkistanut tiedot, paina vihreää toimintopainiketta, jotta tiedot käsitellään turvallisesti ja kirjataan lopullisesti kirjanpitoon.<\/p>"
+    ],
+    "settings_fees.php": [
+        "<h3>Maksusääntöjen määrittämisen ohjeet<\/h3>",
+        "<p>Tämän hallintapaneelin avulla voit automatisoida ulkoisten maksuportaalien tai kauppiaspalveluiden (kuten Stripe, MobilePay tai PayPal) perimien käsittelymaksujen laskennan.<\/p>",
+        "<ul><li><strong>Lähteen nimi:<\/strong> Määritä maksupalveluntarjoajan yksilöllinen tunniste (esim. <em>stripe<\/em>). Tämä arvo vastaa tapahtuman tuontilähteen tunnistetta, kun rivejä käsitellään täsmäytysjärjestelmässä.<\/li><\/ul>",
+        "<li><strong>Laskentamallit:<\/strong> Valitse, miten maksut lasketaan: <ul><li><em>Kiinteä summa:<\/em> Vähennetään kiinteä summa jokaiselta tapahtumariviltä volyymista riippumatta.<\/li><li><em>Prosenttiosuus:<\/em> Vähennetään vaihteleva prosenttiosuus, joka perustuu yksinomaan bruttosummaan.<\/li><li><em>Sekamalli:<\/em> Yhdistää kiinteät osat ja dynaamiset prosenttiosuudet, mikä takaa erittäin tarkan tapahtumien kartoituksen.<\/li><\/ul><\/li>",
+        "<li><strong>Korko- ja kiinteäkorkokentät:<\/strong> Syötä matemaattisissa laskentamalleissa käytettävät dynaamiset muuttujat. Prosenttikorkojen osalta muotoile summa tavallisina desimaalilukuina (esim. syötä <em>0,014<\/em>, jos haluat määrittää 1,4 %:n käsittelymallin). Kiinteiden korotusten osalta määritä tarkka numeerinen hinta-arvo suoraan (esim. 1,00).<\/li>",
+        "<li><strong>Aktiivisten sääntöjen hallinta:<\/strong> Alemmassa paneelissa näkyy täydellinen luettelo nykyisessä moottori-instanssissasi aktiivisista määritetyistä asetuksista. Napsauta roskakorikuvaketta (🗑️), jos haluat poistaa tarpeettomat säännöt pysyvästi järjestelmän pääasetuksista.<\/li>",
+        "<p>Napsauta <strong>Tallenna sääntö,<\/strong> jotta muutokset tallennetaan välittömästi. Kun säännöt on tallennettu, ne ovat heti käytettävissä reaaliaikaisessa täsmäytystyötilassasi salamakuvakkeen kautta.<\/p>"
+    ],
+    "inventory_status.php": [
+        "<h3>Varastotilanteen ohjeet<\/h3>",
+        "<p>Tämä hallintapaneeli tarjoaa kattavan reaaliaikaisen yleiskatsauksen tuotevalikoimastasi, ja sen avulla voit seurata aktiivisia varastomääriä, nykyisiä hintarakenteita sekä taloudellisia tietoja.<\/p>",
+        "<ul><li><strong>Tuotekoodi ja tunniste:<\/strong> <em>SKU<\/em>-sarakkeessa (Stock Keeping Unit) näkyy tuotteen yksilöllinen tunniste. Jos tuotteelle ei ole määritetty omaa SKU-koodia, järjestelmä käyttää automaattisesti järjestelmän omaa tunnistetta (ID).<\/li><\/ul>",
+        "<li><strong>Tilin kohdistus:<\/strong> T<em>ili<\/em>-sarakkeessa määritetään, mille tilille tilikartassasi liikevaihto kirjataan, kun tämä tuote lisätään myyntilaskulle. Jos tuotteen kohdalla näkyy <span style='color:red; font-style:italic;'>”Ei tiliä”<\/span>, tieto on päivitettävä välittömästi, jotta kirjanpito pysyy tarkasti kaksinkertaisen kirjanpidon periaatteiden mukaisena.<\/li>",
+        "<li><strong>Hinnat ja valuutta:<\/strong> Hinnat lasketaan automaattisesti järjestelmän asetusten mukaisesti (esim. <em>DKK<\/em> tai <em>EUR<\/em>) ja noudattavat tuotteen asetussivulla määritettyä perusasettelua.<\/li>",
+        "<li><strong>Tietojen hallinta ja vienti:<\/strong> Voit hallita tietoluetteloasi oikean yläkulman työkalurivin painikkeiden avulla: laajenna valikoimaasi napsauttamalla <strong>Uusi tuote<\/strong> (➕) tai luo puhdas raakamuotoinen taulukkolaskentatiedosto nykyisestä varastoluettelostasi valitsemalla <strong>CSV<\/strong>.<\/li>",
+        "<li><strong>Tietueiden muokkaaminen:<\/strong> Napsauta toiminto-sarakkeen kynäkuvaketta (📝), niin pääset suoraan kyseisen rivin muokkausnäkymään.<\/li>",
+        "<p>Tarkista tuotetietorivit säännöllisesti varmistaaksesi, että aktiiviset varastosaldot ovat täysin yhdenmukaiset fyysisten varojen seurantaprosessien kanssa.<\/p>"
+    ],
+    "product_edit.php": [
+        "<h3>Tuote- ja varastonhallinnan ohjeet<\/h3>",
+        "<p>Tämän lomakkeen avulla voit luoda uuden tuotteen tai päivittää olemassa olevan tuotetietueen tietoja, hintoja ja varastorajoja.<\/p>",
+        "<ul><li><strong>Myyntihinta ja nettosumma:<\/strong> Syötä perusmyyntihinta ilman arvonlisäveroa. Järjestelmä tunnistaa automaattisesti sekä pilkulla (,) että pisteellä (.) erotetut merkinnät ja muodostaa niistä siistit tietueet.<\/li><\/ul>",
+        "<li><strong>Tulotilien kohdistus:<\/strong> Valitse tilikartastasi sopiva liikevaihtoluokka. Tämä avattava valikko rajoittaa valinnan koskemaan yksinomaan tulotilejä. Tilin muuttaminen säätää arvonlisäverolaskelmia dynaamisesti tilin voimassa olevan veroluokan perusteella.<\/li>",
+        "<li><strong>Dynaaminen bruttomääräinen hinnoittelu (hinta sis. alv):<\/strong> Alareunassa oleva yhteenvetopaneeli laskee ja näyttää asiakkaan lopullisen vähittäishinnan reaaliajassa. Se laskee syöttämäsi nettomäärän valitun tulotilin integroidun verokannan perusteella.<\/li>",
+        "<li><strong>Varastoseuranta ja varoitusrajat:<\/strong> <ul><li><em>Varastossa:<\/em> Määrittää varastossasi tällä hetkellä käytettävissä olevan fyysisen määrän.<\/li><li><em>Vähimmäistaso:<\/em> Asettaa kriittisen varastorajan. Kun nykyinen varastosi laskee tähän tasoon tai sen alle, automaattiset varoitusilmaisimet aktivoituvat hallintapaneelissasi ilmoittaakseen täydennystarpeesta.<\/li><\/ul><\/li>",
+        "<p>Napsauta <strong>Tallenna muutokset<\/strong> tai <strong>Luo tuote<\/strong>, jotta konfiguraatiotiedot lähetetään keskusprosessointimoduuliin. Peruuta muutokset ja palaa turvallisesti päävarastokäyttöliittymään <strong>Peruuta<\/strong>-painikkeella.<\/p>"
+    ],
+    "expense_list.php": [
+        "<h3>Kulujen yleiskatsaus – Ohje<\/h3>",
+        "<p>Tämä työtila toimii keskitettynä lokina, jonka avulla voidaan seurata ja hallinnoida kaikkia toimintakuluja, toimittajilta tehtyjä ostoksia sekä digitaalisia kuitteja.<\/p>",
+        "<ul><li><strong>Toimittajien ja luokkien seuranta:<\/strong> Jokaisella rivillä on mainittu tarkka toimittaja sekä lyhyt kuvaus. T<em>ili<\/em>-sarakkeessa näkyy, mihin tilikarttasi toiminta- tai omaisuustiliin kirjaus on vaikuttanut.<\/li><\/ul>",
+        "<li><strong>Älykkäät liitetiedostojen merkit:<\/strong> <em>Tiedosto<\/em>-sarakkeessa linkitetyt tositteet tai asiakirjat on merkitty yksilöllisillä tunnuksilla: <ul><li><span style='color:#3498db;'>Paperiliitin (📎):<\/span> Ilmaisee tavallisen ulkoisen liitetiedoston (esim. ladatun kuitin tai kuvan).<\/li><li><span style='color:#e74c3c;'>Lasku-dollari-kuvake ():<\/span> Tunnistaa sisäisesti luodut tositetiedostot, joita hallitaan turvallisesti järjestelmänne rakenteessa.<\/li><li><em>Kolme viivaa (---):<\/em> Ilmaisee, että tähän kuluriviin ei ole liitetty digitaalista asiakirjakopiota.<\/li><\/ul><\/li>",
+        "<li><strong>Lokitietojen laajentaminen:<\/strong> Napsauta oikeassa yläkulmassa olevan hallintapaneelin <strong>Lisää kulu<\/strong> -painiketta (➕), jolloin siirryt suoraan luontinäkymään.<\/li>",
+        "<li><strong>Toimintorivi:<\/strong> Käytä toimintopainikkeita kohteiden muokkaamiseen tai poistamiseen. Roskakorikuvaketta napsauttamalla avautuu turvallisuustarkistusilmoitus, ennen kuin poistotoimenpide viedään läpi tietokoneen sisällä.<\/li>",
+        "<p>Tarkista tämä seurantaruudukko säännöllisesti varmistaaksesi, että kirjanpitotodisteesi ovat täydelliset, tilit on kohdistettu oikein ja menot vastaavat kassamenojasi.<\/p>"
+    ],
+    "expense_edit.php": [
+        "<h3>Ohjeet kulujen kirjaamiseen<\/h3>",
+        "<p>Tällä näytöllä voit kirjata tai muokata toimintakuluja. Voit käyttää vasemmalla olevaa jaetun näytön Document Depot -toimintoa tiedostojen katseluun ja liittämiseen kirjoittaessasi.<\/p>",
+        "<ul><li><strong>Kuitin numero (Kuitin nro):<\/strong> Kirjoita laskun tai kuitin viitenumero (bilagsnummer). Tämä yhdistää fyysisen tai digitaalisen asiakirja-arkistosi kirjanpitomerkintään. Jos kenttä jätetään tyhjäksi, se jää tyhjäksi.<\/li><\/ul>",
+        "<li><strong>Document Depot -työnkulku:<\/strong> Napsauta mitä tahansa tiedostoa vasemmassa sarakkeessa avataksesi reaaliaikaisen, vieritettävän esikatselun. Napsauta <em>Tilknyt<\/em> (Liitä)-painiketta liittääksesi kyseisen asiakirjan tähän kulutietueeseen.<\/li>",
+        "<li><strong>Perinteinen tiedostojen lähetys:<\/strong> Jos tiedostoa ei ole tallennettu tallennustilaasi, voit silti käyttää lomakkeen alaosassa olevaa perinteistä tiedostovalitsinta ja ladata asiakirjan suoraan tietokoneeltasi.<\/li>",
+        "<p>Kun olet napsauttanut Tallenna-painiketta, järjestelmä kopioi tiedoston automaattisesti pysyvään latausarkistoosi, tyhjentää lähdekansion ja luo tasoituskirjaukset.<\/p>"
+    ],
+    "ledger_view.php": [
+        "<h3>Pääkirjan ohjeet<\/h3>",
+        "<p>Tämä näyttö tarjoaa kirjausketjun koko taloudellisesta toiminnastasi ja esittää raakamuotoiset tapahtumatiedot ryhmiteltynä suoraan operatiivisten lokimerkintöjen mukaan.<\/p>",
+        "<ul><li><strong>Kirjanpitotapahtuman numero (#):<\/strong> Kirjanpitotiedot tallennetaan kaksoiskirjanpidon periaatteiden mukaisesti. Useat rivit, joilla on sama yksilöllinen <em>kirjanpitotapahtuman numero,<\/em> kuuluvat täsmälleen samaan kirjanpitotapahtumasarjaan.<\/li><\/ul>",
+        "<li><strong>Todistusviite (todistusnumero):<\/strong> Kirjoita laskun tai kuitin numero. Tämä yhdistää fyysisen asiakirja-arkistosi järjestelmään. Jos kenttä jätetään tyhjäksi, tapahtuma kirjataan ilman ulkoista todistusviitettä.<\/li>",
+        "<li><strong>Veloitus- ja hyvityssäännöt:<\/strong> <ul><li><em>Veloitus (+):<\/em> Esitetään vihreällä, edustaa saapuvia varojen muutoksia tai toimintakustannuksia.<\/li><li><em>Luotto (-):<\/em> Esitetään <span style='color:red; font-weight:bold;'>punaisella<\/span>, ja se kuvaa varojen vähenemistä, oman pääoman muutoksia tai liikevaihdon vaihtumista.<\/li><\/ul><\/li>",
+        "<li><strong>Ketjumuotoiset poistot:<\/strong> roskakorikuvake (🗑️) sijaitsee yksinomaan päiväkirjapaketin otsikkorivillä. Tätä napsauttamalla käynnistyy suojattu palautusskripti tietokantatapahtumakehyksen sisällä, joka poistaa turvallisesti rakenteellisen päiväkirjamerkinnän ja kaikki siihen liittyvät <em>pääkirjan<\/em> taseen tasausrivit samanaikaisesti.<\/li>",
+        "<p>Tämän taulukon avulla voit jäljittää kirjanpidollisia poikkeamia, tarkistaa kirjauserien taseen ja varmistaa, että koko kaksoiskirjanpitokirjanpitosi on läpinäkyvästi tarkastettu.<\/p>"
+    ],
+    "vat_report.php": [
+        "<h3>Arvonlisäveroraportin ohjeet<\/h3>",
+        "<p>Tämä analyysipaneeli kokoaa ja laskee verovelkasi ja palautettavat summat kuluvan tilikauden kirjanpitotapahtumien perusteella.<\/p>",
+        "<ul><li><strong>Vuosisuodatus:<\/strong> Lause käsittelee arvoja dynaamisesti URL-kyselymerkkijonossa annetun vuosimuuttujan perusteella. Jos vuotta ei ole nimenomaisesti määritetty, laskentamoottori poimii tiedot kuluvasta kalenterivuodesta.<\/li><\/ul>",
+        "<li><strong>Tiliin perustuva kartoitus:<\/strong> Sen sijaan, että kysely perustuisi jäykkiin tapahtumakohtaisiin tunnisteisiin, se vertaa arvoja lukemalla <em>vat_code-<\/em> ja <em>vat_rate<\/em>-parametrit, jotka on integroitu suoraan tilikarttasi asetuksiin.<\/li>",
+        "<li><strong>Nettosumma:<\/strong> Järjestelmä laskee <strong>yhteen<\/strong> saman veroryhmän sisällä syntyneen kokonaisnettoliikevaihdon tai raakaperusteiset kulut, jotta saadaan arviointia edeltävä vertailusumma.<\/li>",
+        "<li><strong>Arvonlisäveron laskentamoottori:<\/strong> Verovaikutus lasketaan rivi riviltä käyttämällä vakiomuotoisia aritmeettisia prosenttiparametreja ($Nettosumma \\times \\frac{ALV-kanta}{100}$). Tätä arvoa voi hyödyntää tarkastettaessa tietoja virallisia veroviranomaisten raportteja varten tai laadittaessa julkisia taseita.<\/li>",
+        "<p>Tarkista, että tilit on koodattu oikein, jos luvut eivät näytä olevan kohdallaan. Käytä tätä tietokoostetta, jotta voit hoitaa jatkuvat yritysveroraportointitehtäväsi tarkasti.<\/p>"
+    ],
+    "report_income.php": [
+        "<h3>Tuloslaskelma ja arvonlisävero-ohjeet<\/h3>",
+        "<p>Tämä analyysipaneeli kokoaa taloudelliset tulosindikaattorisi kahteen toiminnalliseen yhteenvetoon: viralliseen tulosmittareiden rakennekaavioon ja selkeään taseeseen, josta näkyy verotustilanteesi.<\/p>",
+        "<ul><li><strong>Liikevaihdon laskelmat:<\/strong> Järjestelmä hakee vain ne rivit, jotka liittyvät yksinomaan <em>maksettuina<\/em> merkittyihin asiakasasiakirjoihin. Maksamattomat tai luonnosvaiheessa olevat saldot jätetään kokonaan pois näistä liikevaihdon laskelmista tietokannan selkeyden varmistamiseksi.<\/li><\/ul>",
+        "<li><strong>Toimintakustannusten indeksointi:<\/strong> Kustannukset ryhmitellään vertaamalla paikallisia tilikohdistuksia vakiomuotoisen päärekisterin viitenumeroihin (<em>std_ref_id<\/em>). Näin varmistetaan, että paikalliset kustannuspaikat siirtyvät saumattomasti jäsenneltyihin konsernin veroryhmiin.<\/li>",
+        "<li><strong>Vuotuiset tulosmittarit:<\/strong> Nettomarginaalin arvio näkyy taulukon alaosassa ($Liikevaihto – Kokonaiskustannukset$). Jos tulos on positiivinen, teksti näkyy automaattisesti vihreänä; nettotappiot näkyvät <span style='color:#ff7675; font-weight:bold;'>punais<\/span>ina.<\/li>",
+        "<li><strong>Arvonlisäveron tarkka erittely:<\/strong> <ul><li><em>Maksettava myyntiarvonlisävero:<\/em> Verovelvoitteiden kokonaismäärä, joka lasketaan dynaamisesti lopullisten laskutusrivien summien perusteella.<\/li><li><em>Vähennettävä ostojen arvonlisävero:<\/em> Sitoutuneista tapahtumalokeista kerätyt yhteenlasketut vähennettävät ostoverot.<\/li><li><em>Nettosaldon tila:<\/em> Vähennetään seurantapoolit sen määrittämiseksi, onko sinulla aktiivista verovelvoitetta (<span style='color:#e67e22; font-weight:bold;'>maksettava arvonlisävero<\/span>) vai palautettavaa hyvitystä (<span style='color:#27ae60; font-weight:bold;'>saatava arvonlisävero<\/span>).<\/li><\/ul><\/li>",
+        "<p>Käytä näitä lukuja johdon raportoinnissa, säännöllisissä tilintarkastuksissa sekä lukujen järjestelyssä ennen pakollisten verotietojen toimittamista viranomaisille.<\/p>"
+    ],
+    "chart_of_accounts.php": [
+        "<h3>Tili- ja tilikarttaohjeet<\/h3>",
+        "<p>Tämä pääkirja ohjaa organisaatiosi taloushallinnon rakennetta ja määrittelee, miten kaksoiskirjanpidon kirjanpitotiedot luokitellaan, seurataan ja kootaan raportointimoduulien välillä.<\/p>",
+        "<ul><li><strong>Tilityyppien luokittelu:<\/strong> Jokainen liiketoimintatapahtuma luokitellaan johonkin neljästä perusrahoitusryhmästä: <ul><li><em>Tuotot:<\/em> Liikevaihto ja tulovirrat.<\/li><li><em>Kulut:<\/em> Toiminnalliset menot ja yleiset yleiskustannukset.<\/li><li><em>Omaisuus:<\/em> Yrityksen resurssit, kassataseet ja saamiset.<\/li><li><em>Velat:<\/em> Yrityksen velvoitteet, velat ja pääomapoolit.<\/li><\/ul><\/li><\/ul>",
+        "<li><strong>Verotiedot (ALV-koodi ja -kanta):<\/strong> Näyttää voimassa olevat veroparametrit, jotka on peritty suoraan linkitetystä <em>vat_codes<\/em>-rekisteristä. Jos tili on vapautettu verolaskelmista, sen kohdalla näkyy teksti <em>”Ei mitään<\/em>” ja tyhjä viiva (-).<\/li>",
+        "<li><strong>Vakioviiteasetus (Std Ref):<\/strong> Liittää mukautetut paikalliset taloushallinnon asetukset suoraan pääasetteluun (<em>std_accounts<\/em>). Tämä jäsennelty vastaavuus varmistaa, että lokalisoidut liiketoimintatilit siirtyvät tarkasti yhtenäisiin konsernin tulo- ja veroyhteenvetoihin.<\/li>",
+        "<li><strong>Dynaamiset työkaluasetukset:<\/strong> Lisää uusi taloushallinnon solmu napsauttamalla <strong>Lisää uusi tili<\/strong> -painiketta (➕). Voit muokata keskeisiä parametrejä tai poistaa tarpeettomat tilit turvallisesti tietokantarakenteesta käyttämällä lokalisoituja toimintorivin laukaisimia.<\/li>",
+        "<p>Muokkaa tilejäsi huolellisesti. Rakenteelliset muutokset vaikuttavat suoraan siihen, miten tapahtumamerkinnät näkyvät pääkirjan saldotiedoissa ja aiemmissa kirjanpitotiedoissa.<\/p>"
+    ],
+    "company_settings.php": [
+        "<h3>Yritystiedot Ohje<\/h3>",
+        "<p>Tämä ohjauskeskus hallinnoi yrityksesi brändiprofiilia, virallisia järjestelmäasetuksia, pankki-infrastruktuuria sekä automaattisen viestinnän perusasetuksia.<\/p>",
+        "<ul><li><strong>Yritystiedot ja rekisteritiedot:<\/strong> Määritä viralliset tiedot, kuten oikeushenkilön nimi, yhteyshenkilöt ja tunnistetiedot (esim. paikallisen <em>CVR-numeron<\/em> vahvistustiedot). Nämä tiedot täytetään lähteviin transaktioihin automaattisesti.<\/li><\/ul>",
+        "<li><strong>Pankki-infrastruktuurin rakenne:<\/strong> Kirjaa pankkien rekisteröintitiedot ja talletustilien järjestysjärjestykset tarkasti. Nämä tietosegmentit liitetään suoraan laskujen rakenteisiin, jotta saapuvat automaattiset maksujen täsmäytysprosessit sujuvat moitteettomasti.<\/li>",
+        "<li><strong>Vakioviestintäprofiili:<\/strong> Määritä järjestelmänlaajuiset oletusviestit tapahtumailmoituksille. Tämä lohko toimii valmiiksi ladattuna vakiotekstinä aina, kun laskuasiakirjoja lähetetään asiakkaille.<\/li>",
+        "<li><strong>Tietojen tallennusmekanismi (UPSERT):<\/strong> Tämän asetuksen lähettäminen käynnistää aktiivisen seurantaskriptin, joka käy parametrit läpi tavanomaisen avain-arvo-rakenteen avulla. Se käyttää sisäistä tietokantarutiinia suorittaakseen turvallisesti lisäys-tai-päivitys-asetuksen (<em>ON DUPLICATE KEY UPDATE<\/em>) keskus<em>asetusten<\/em> hakemistossa.<\/li>",
+        "<li><strong>SAF-T-tietojen vienti sääntelytarkoituksiin:<\/strong> Napsauta <strong>Vie SAF-T<\/strong> -painiketta () viedäksesi kaikki aiemmat kirjanpitotietosi standardoidussa XML-muodossa (Standard Audit File for Tax). Tämä toiminto valmistelee tiedostot asianmukaisesti ulkoisia tilintarkastuksia tai lakisääteisiä vaatimustenmukaisuuden tarkastuksia varten.<\/li>",
+        "<p>Tarkista kaikki päivitetyt tiedot huolellisesti ennen kuin painat <strong>Tallenna yrityksen asetukset -painiketta<\/strong>. Ydinominaisuuksien muuttaminen ohittaa dynaamisesti tiedot, jotka näkyvät sekä aktiivisissa asiakasportaaleissa että järjestelmänlaajuisissa raporttilokeissa.<\/p>"
+    ],
+    "about.php": [
+        "<h3>Tietoja TinyCashista Ohje ja tietoturva Auditointi Ohje<\/h3>",
+        "<p>Tässä yhteenvedossa seurataan metatietojen mittareita, aktiivisen arkkitehtuurin ajonaikaisia vertailuarvoja sekä infrastruktuurin rajapintojen pääsyoikeuksien tarkistuksia koko sovellusekosysteemissä.<\/p>",
+        "<ul><li><strong>Ydinversion parametrit:<\/strong> Paneeli hakee tiedot dynaamisesti järjestelmän kokoonpanomäärittelyistä ja tallentaa käynnissä olevan sovelluksen version (<em>APP_VERSION<\/em>) sekä sen viimeisimmän rakenteellisen julkaisun aikaleiman (<em>APP_DATE<\/em>).<\/li><\/ul>",
+        "<li><strong>Ympäristön ajonaikainen telemetria:<\/strong> Esityskenttä kokoaa yhteen suoria konfiguraatiometatietomääritelmiä ydinasetusten matriiseista ja näyttää aktiiviset moottoriversiot (<em>APP_VERSION<\/em>), lokalisointikielen valinnat sekä dynaamiset moottoritilastot (<em>phpversion<\/em>) selkeästi aktiivisessa näkymässä.<\/li>",
+        "<li><strong>Automaattiset hakemistojen sieppauskatselmukset:<\/strong> Sivun skripti käynnistää tietoturvakatselmusmoduulin (<em>check_security_lock<\/em>) suorittamaan paikallisen verkkopyynnön kohteen haun suojatuista riippuvuuskomentosarjoista (<em>db_connect.inc.php<\/em>). Tämä diagnoosisilmukka tarkastaa palautetun HTTP-otsikkopaketin palvelinpoikkeamien varalta.<\/li>",
+        "<li><strong>Rajojen lukituksen tarkistus (403\/404-tilat):<\/strong> Jos suojauspolkusäännöt (<em>.htaccess<\/em>) ovat voimassa, palvelinkontti estää kohdepyynnön, mikä aiheuttaa poikkeuksen, jossa pääsy evätään kokonaan tai resurssi puuttuu. Moduuli tulkitsee tämän poikkeustilan varmistaakseen, että hakemistojen lukitusrajat ovat voimassa.<\/li>",
+        "<li><strong>Paljastumispoikkeusvaroitukset:<\/strong> Kun sieppaussilmukka havaitsee esteen poikkeuksen sijaan tavallisen kelvollisen vastauksen, moottori poistaa tietoturvatilan ilmaisimen ja tulostaa lokalisoidun paljastumisvaroituksen, jolla ilmoitetaan järjestelmänvalvojille, että ydinkoodin resurssit ovat tällä hetkellä suojaamattomia.<\/li>",
+        "<li><strong>Ekosysteemin tavoitemääritykset:<\/strong> Järjestelmän tietueet seuraavat ympäristöprofiileja yhtenäisvaluuttaisina kirjanpitokonteksteina, jotka on suunniteltu säilyttämään rakenteellisen seurannan nopeus ja samalla varmistamaan, että paikallisten rakenteellisten tietojen eristäminen pysyy täysin järjestelmänvalvojan hallinnassa.<\/li>",
+        "<p>Jos tuotantoympäristön solmuissa ilmenee tietojen paljastumista koskeva varoitus, tarkista välittömästi palvelimen sääntöjen ohitukset estääksesi kolmansien osapuolten pääsyn kriittisiin asetustiedostoihin.<\/p>"
+    ],
+    "login.php": [
+        "<h3>Ohjeet tunnistautumiseen ja pääsynvalvontaan<\/h3>",
+        "<p>Tämä pääsyportti toimii sovellusekosysteemin ensisijaisena palomuurina ja huolehtii käyttäjien istuntojen vahvistamisesta, suojaavista ajonaikaisista tarkastuksista sekä jatkuvasta telemetriaseurannasta.<\/p>",
+        "<ul><li><strong>Ensikäynnistystarkistus (asennuksen keskeyttäminen):<\/strong> Käynnistyksen yhteydessä ydinrutiini suorittaa automaattisen kyselyn arvioidakseen rivien lukumäärän <em>käyttäjien<\/em> keskusdatataulukossa. Jos haku palauttaa tulokseksi nollan (0) ja havaitsee järjestelmän asennuslohkon (<em>inc\/user_create_admin.php<\/em>) olevan paikallaan, suoritus ohjaa liikenteen automaattisesti oletusasennussivustolle.<\/li><\/ul>",
+        "<li><strong>Puolustavat parametrikyselyt:<\/strong> Saapuvien tunnistetietojen tarkistukset estävät raakainjektiohyökkäykset ohjaamalla vahvistusparametrit nimenomaisesti standardien mukaisiin esivalmisteltuihin tietokantamalleihin (<em>mysqli_prepare<\/em>). Käyttäjätunnukset tarkistetaan turvallisesti parametroitujen merkkijonojen avulla ennen kuin sisäinen logiikka suorittaa hajautuslaskelmat.<\/li>",
+        "<li><strong>Salausperusteinen tiivisteen eheys:<\/strong> Asiakkaan salasanoja ei koskaan tallenneta tai verrata selväkielisenä. Sen sijaan ne käsitellään yksisuuntaisessa, turvallisessa salausperusteisessa vahvistusprosessissa (<em>password_verify<\/em>), jossa niitä verrataan suoraan tietokantaan tallennettuihin tiivistemerkkijonoihin.<\/li>",
+        "<li><strong>Tarkastuslokimatriisi (telemetria):<\/strong> Jokaisesta yksilöllisestä todennusvuorovaikutuksesta tallennetaan pysyvät metatiedot keskitettyyn <em>login_log<\/em>-hakemistoon. Reitityskoneisto tallentaa dynaamisesti asiakkaan verkkovektorin (<em>REMOTE_ADDR<\/em>), ympäristön ohjelmistotunnisteet (<em>HTTP_USER_AGENT<\/em>) sekä tulostilan lipun (<em>onnistui<\/em> tai <em>epäonnistui<\/em>) turvallisuustarkastusten helpottamiseksi.<\/li>",
+        "<li><strong>Istunnon tietoturvan optimointi:<\/strong> Kun tunnistetietojen täsmäys on onnistunut, todennusmoottori käynnistää välittömän tunnisteen uudelleengenerointiprosessin (<em>session_regenerate_id(true)<\/em>). Tämä prosessi mitätöi vanhan istuntoprofiilin kontekstin välittömästi, mikä estää istunnon kiinnittämiseen perustuvat hyökkäykset ennen globaalien käyttöoikeusmuuttujien täyttämistä.<\/li>",
+        "<li><strong>Dynaamiset käyttöliittymäscriptit:<\/strong> Renderöinnin jälkeinen DOM-script valvoo käyttäjän kenttien asetuksia (<em>#pwd_inside<\/em>). Se lisää dynaamisesti absoluuttisesti sijoitetun näkyvyysikonin (👁️) kentän vanhemman kehykseen, mikä luo turvallisen asiakaspuolen mekanismin, jolla syöttömaskeja voidaan vaihtaa sujuvasti piilotettujen salasanojen ja luettavien selväkielisten merkkijonojen välillä.<\/li>",
+        "<p>Käsittele tunnistetietojen hallintaa huolellisesti. Varmista, että varajärjestelmän asennustiedostot poistetaan tai lukitaan tuotantoympäristössä automaattisesti käyttöönoton jälkeen, jotta estetään ulkopuolisten luvaton pääsy.<\/p>"
+    ],
+    "user_list.php": [
+        "<h3>Käyttäjähallinta ja käyttöoikeuksien hallinta – Ohjeet<\/h3>",
+        "<p>Tämän työympäristön avulla järjestelmänvalvojat voivat tarkastaa, muokata ja hallita järjestelmäprofiileja sekä käyttöoikeuksia koko sovellusympäristössä.<\/p>",
+        "<ul><li><strong>Vain järjestelmänvalvojille tarkoitettu yhdyskäytävän suojaus:<\/strong> Suoritusmoottori suorittaa paikallisen turvallisuusarvioinnin (<em>_SESSION[&#x27;user_role&#x27;]<\/em>) ennen elementtien piirtämistä. Jos aktiivisella profiililla ei ole järjestelmänvalvojan oikeuksia, suoritus keskeytyy välittömästi päätelaitteen käyttöoikeuspoikkeuksen vuoksi.<\/li><\/ul>",
+        "<li><strong>Dynaaminen roolien tunnistus:<\/strong> Käyttäjäroolit määritetään suoraan tietokannan taulukoista. <em>Järjestelmänvalvoj<\/em>iksi tunnistetut profiilit saavat erottuvan, selvästi näkyvän tunnuskuvion, kun taas muut profiilit merkitään tavallisiksi käyttäjiksi.<\/li>",
+        "<li><strong>Itsesuuntautuvat loogiset suojaukset:<\/strong> Aktiivista käyttäjäprofiilia suojataan loogisilla ehdoilla. Järjestelmänvalvojat eivät voi poistaa tai alentaa omia aktiivisia tilejään, mikä estää hallintaoikeuksien tahattoman menettämisen kokonaan.<\/li>",
+        "<p>Tarkista käyttäjätietokannat järjestelmällisesti, jotta paikallisen toimintaverkostosi kirjanpitotiedot pysyvät tarkkoina.<\/p>"
+    ]
+}

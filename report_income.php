@@ -1,7 +1,8 @@
-<?php # /report_income.php v:0.8.1 d:2026-04-11 i:evs m:1
+<?php # /report_income.php v:1.0.0 d:2026-06-15 i:evs
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
+require_once 'inc/php2htm.lib.php';
 
 htm_Header('@Income Statement');
 showMenu();

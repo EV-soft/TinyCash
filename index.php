@@ -1,4 +1,4 @@
-<?php # index.php v:0.9.1 d:2026-05-08 i:evs
+<?php # index.php v:1.0.0 d:2026-06-15 i:evs
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
@@ -9,41 +9,76 @@ showMenu();
 
 $current_year = date('Y');
 
-// A: Omsætning i år (rettet kolonnenavn til line_vat_rate)
+// A: Omsætning i år
 $rev_res = mysqli_query($conn, "SELECT SUM(quantity * price_each) FROM invoice_lines 
                                 INNER JOIN invoices ON invoice_lines.inv_id = invoices.inv_id 
                                 WHERE YEAR(invoices.inv_date) = '$current_year'");
-$revenue = mysqli_fetch_column($rev_res) ?: 0;
+$revenue = $rev_res ? (mysqli_fetch_column($rev_res) ?: 0) : false;
 
 // B: Antal ubetalte fakturaer
 $open_res = mysqli_query($conn, "SELECT COUNT(*) FROM invoices WHERE inv_status = 'SENT'");
-$count_open = mysqli_fetch_column($open_res) ?: 0;
+$count_open = $open_res ? (mysqli_fetch_column($open_res) ?: 0) : false;
 
 // C: Lav lagerbeholdning
 $stock_res = mysqli_query($conn, "SELECT COUNT(*) FROM products WHERE prod_stock <= prod_min_stock");
-$count_low_stock = mysqli_fetch_column($stock_res) ?: 0;
+$count_low_stock = $stock_res ? (mysqli_fetch_column($stock_res) ?: 0) : false;
 
 // D: Total kunder
 $cust_res = mysqli_query($conn, "SELECT COUNT(*) FROM customers");
-$count_customers = mysqli_fetch_column($cust_res) ?: 0;
+$count_customers = $cust_res ? (mysqli_fetch_column($cust_res) ?: 0) : false;
 ?>
 
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
     <div style="background: #2ecc71; color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
         <small style="opacity: 0.9; text-transform: uppercase; font-size: 0.75em; font-weight: bold;"><?php echo lang('@Revenue This Year'); ?></small>
-        <div style="font-size: 1.8em; font-weight: bold; margin-top: 5px;"><?php echo number_format($revenue, 2, ',', '.'); ?> kr.</div>
+        <div style="font-size: 1.8em; font-weight: bold; margin-top: 5px;">
+            <?php 
+            if ($revenue === false) {
+                echo '<span style="font-size:0.6em; color:#ffdddd;">⚠️ DB Error</span>';
+            } else {
+                echo number_format($revenue, 2, ',', '.') . ' kr.'; 
+            }
+            ?>
+        </div>
     </div>
+
     <div style="background: #3498db; color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
         <small style="opacity: 0.9; text-transform: uppercase; font-size: 0.75em; font-weight: bold;"><?php echo lang('@Outstanding Invoices'); ?></small>
-        <div style="font-size: 1.8em; font-weight: bold; margin-top: 5px;"><?php echo $count_open; ?> stk.</div>
+        <div style="font-size: 1.8em; font-weight: bold; margin-top: 5px;">
+            <?php 
+            if ($count_open === false) {
+                echo '<span style="font-size:0.6em; color:#ffdddd;">⚠️ DB Error</span>';
+            } else {
+                echo $count_open . ' stk.'; 
+            }
+            ?>
+        </div>
     </div>
+
     <div style="background: <?php echo ($count_low_stock > 0 ? '#e67e22' : '#95a5a6'); ?>; color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-        <small style="opacity: 0.9; text-transform: uppercase; font-size: 0.75em; font-weight: bold;"><?php echo lang('@In stock'); ?> (<?php echo lang('@Warning'); ?>)</small>
-        <div style="font-size: 1.8em; font-weight: bold; margin-top: 5px;"><?php echo $count_low_stock; ?> varer</div>
+        <small style="opacity: 0.9; text-transform: uppercase; font-size: 0.75em; font-weight: bold;"><?php echo lang('@Out of stock'); ?> (<?php echo lang('@Warning'); ?>)</small>
+        <div style="font-size: 1.8em; font-weight: bold; margin-top: 5px;">
+            <?php 
+            if ($count_low_stock === false) {
+                echo '<span style="font-size:0.6em; color:#ffdddd;">⚠️ DB Error</span>';
+            } else {
+                echo $count_low_stock . ' varer'; 
+            }
+            ?>
+        </div>
     </div>
+
     <div style="background: #9b59b6; color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
         <small style="opacity: 0.9; text-transform: uppercase; font-size: 0.75em; font-weight: bold;"><?php echo lang('@Total Customers'); ?></small>
-        <div style="font-size: 1.8em; font-weight: bold; margin-top: 5px;"><?php echo $count_customers; ?></div>
+        <div style="font-size: 1.8em; font-weight: bold; margin-top: 5px;">
+            <?php 
+            if ($count_customers === false) {
+                echo '<span style="font-size:0.6em; color:#ffdddd;">⚠️ DB Error</span>';
+            } else {
+                echo $count_customers; 
+            }
+            ?>
+        </div>
     </div>
 </div>
 
@@ -60,7 +95,6 @@ $count_customers = mysqli_fetch_column($cust_res) ?: 0;
             </thead>
             <tbody>
             <?php
-            // Rettet SQL: line_vat_rate i stedet for vat_rate
             $sql = "SELECT i.inv_id, i.invoice_no, c.cust_name, 
                     (SELECT SUM(quantity * price_each * (1 + line_vat_rate / 100)) 
                      FROM invoice_lines 
@@ -72,7 +106,11 @@ $count_customers = mysqli_fetch_column($cust_res) ?: 0;
             $latest = mysqli_query($conn, $sql);
 
             if (!$latest) {
-                echo "<tr><td colspan='3'>SQL Error: " . mysqli_error($conn) . "</td></tr>";
+                // Rød fejlmelding hvis selve SQL-kaldet fejler (f.eks. manglende tabel)
+                echo "<tr><td colspan='3' style='padding: 15px; color: #e74c3c; font-weight: bold; background: #fadbd8; border-radius: 4px;'>❌ SQL Error: " . htmlspecialchars(mysqli_error($conn)) . "</td></tr>";
+            } elseif (mysqli_num_rows($latest) === 0) {
+                // Venlig besked hvis databasen virker, men er tom
+                echo "<tr><td colspan='3' style='padding: 15px; color: #7f8c8d; font-style: italic; text-align: center;'>" . lang('@No invoices found') . "</td></tr>";
             } else {
                 while($l = mysqli_fetch_assoc($latest)) {
                     $total = $l['calculated_total'] ?: 0;

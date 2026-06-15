@@ -1,0 +1,219 @@
+{
+    "index.php": [
+        "<h3>Dashboard Overview Help</h3>",
+        "<p>Welcome to your main cockpit. This page aggregates live financial metrics and critical indicators directly from the database.</p>",
+        "<ul><li><strong>Revenue This Year:</strong> Shows the cumulative gross sales from all finalized invoices within the current calendar year.</li>",
+        "<li><strong>Outstanding Invoices:</strong> The total count of invoices that have been sent but are currently awaiting payment.</li>",
+        "<li><strong>In Stock Warning:</strong> Displays the number of products where the current inventory level has dropped to or below the defined safety stock minimum. If the count is above zero, the widget changes color to alert you.</li>",
+        "<li><strong>Total Customers:</strong> The total number of unique client profiles registered in your system.</li></ul>",
+        "<p>Use the <em>Latest Invoices</em> list to view details or click a reference number to edit it directly. The <em>Quick Actions</em> panel offers fast shortcuts to create records without using the main navigation menu.</p>"
+    ],
+    "sales_hub.php": [
+        "<h3>Sales Hub & Invoice Management</h3>",
+        "<p>This central module allows you to monitor, filter, and manage all client billings and sales documents.</p>",
+        "<ul><li><strong>Invoice Registry:</strong> Displays a searchable list of all generated invoices, including invoice numbers, issue dates, customer names, and total amounts including VAT.</li>",
+        "<li><strong>Status Tracking:</strong> Invoices are categorized by lifecycle states: <em>Draft</em> (editable, not yet sent), <em>Sent</em> (open and awaiting payment), and <em>Paid</em> (settled).</li>",
+        "<li><strong>Actionable Shortcuts:</strong> Click on any invoice row or number to open the editor. Use the primary controls to generate a brand new invoice, export data, or issue a credit note for returns.</li></ul>",
+        "<p>Use the search parameters above the table to quickly isolate records by specific date intervals, customer names, or specific payment statuses.</p>"
+    ],
+    "invoice_edit.php": [
+        "<h3>Invoice Creation & Editing Help</h3>",
+        "<p>Here you can create or edit invoices for your customers. Follow these standard guidelines:</p>",
+        "<ul><li>Select a customer from the list to start a new invoice.</li>",
+        "<li>Enter the correct invoice date and the payment due date.</li>",
+        "<li>Choose a product from the dropdown menu to insert it into a line.</li>",
+        "<li>The system automatically retrieves the price and VAT rate from the database.</li>",
+        "<li>Quantity and price can be adjusted manually on each individual line.</li>",
+        "<li>The subtotal, VAT, and grand total are calculated automatically at the bottom.</li>",
+        "<li>Internal notes will not be visible on the customer's printed invoice.</li>",
+        "<li>Remember to click <strong>Save Invoice</strong> to store your changes securely.</li></ul>"
+    ],
+    "invoice_view.php": [
+        "<h3>Invoice Preview & Dispatch Help</h3>",
+        "<p>Here you can preview the complete invoice layout before finalizing it.</p>",
+        "<ul><li>Click <i class='fa-solid fa-pencil-ruler'></i> <b>Design Mode</b> to unlock elements and customize their positions on the page.</li>",
+        "<li>Drag elements around freely to adjust the visual spacing of your invoice layout.</li>",
+        "<li>Resize elements by dragging their right edge to fit your official business template.</li>",
+        "<li>Your changes are saved automatically to the database whenever you release an element.</li>",
+        "<li>Enter a custom text in the <b>Email Message</b> field to personalize your digital dispatch.</li>",
+        "<li>Click <i class='fa-solid fa-envelope'></i> <b>Send via Mail</b> to automatically generate a PDF and email it directly to the customer.</li>",
+        "<li>Use the <i class='fa-solid fa-file-code'></i> <b>OIOUBL XML</b> button to export a compliant Danish e-invoice for NemHandel.</li>",
+        "<li>Click <i class='fa-solid fa-print'></i> <b>Print</b> to open the browser dialogue; all system buttons are automatically hidden on paper.</li>",
+        "<li>Click <i class='fa-solid fa-door-open'></i> <b>Leave</b> to safely return to the sales hub when you are finished.</li></ul>"
+    ],
+    "setup_chart.php": [
+        "<h3>Chart of Accounts Setup &amp; Installation Security Help</h3>",
+        "<p>This initialization workspace handles the selection, verification, and database generation of the primary Chart of Accounts (COA) templates required for transactional tracking.</p>",
+        "<ul><li><strong>Template Choices:</strong> You can select between three distinct templates: <em>Simple</em> (ideal for freelancers and service-based businesses without inventory), <em>Standard</em> (suited for small businesses with standard VAT, vehicle, and administrative tracking), and <em>Extended</em> (comprehensive layout for corporate structures with employees, depreciation, and financial assets).</li>",
+        "<li><strong>Pre-Execution Occupancy Evaluation:</strong> Before processing adjustments, the routine executes an isolated row calculation query (<em>COUNT(*)</em>) against the target accounts table. If the system discovers existing profile data arrays, the installation switch locks automatically to guarantee data persistence.</li>",
+        "<li><strong>Destructive Table Truncation Boundaries:</strong> When initializing a clean ledger framework, the database interface drops existing structures using a clear operational command (<em>TRUNCATE</em>). This resets key tracking matrices completely before launching the entry sequence.</li>",
+        "<li><strong>Parameterized Batch Insertion Matrix:</strong> Array lines parsed from the source data blocks (<em>coa_*.json</em>) are compiled via standardized database structures (<em>mysqli_prepare</em>). The routine binds integer identifiers, name strings, and tax fractions cleanly to prevent type casting exceptions.</li>",
+        "<li><strong>State Interception Locking (On Duplicate Key):</strong> Following successful table generation, a dedicated tracker logs the deployment status marker within the settings array. The initialization process appends a persistent validation flag, ensuring future boots redirect operators directly past the configuration layout.</li>",
+        "<li><strong>Asynchronous DOM Preview Syncing:</strong> Selected database structures pass immediately into client-side memory spaces via continuous data parsing scripts (<em>json_encode</em>). Interactive functions manipulate template blocks dynamically to update table viewports and adjust type flags cleanly across the interface without forcing page refreshes.</li></ul>",
+        "<p>Review ledger configuration models attentively prior to execution, as initializing a template complete cycle purges empty target tables and establishes your persistent tracking architecture.</p>"
+    ],
+    "customer_edit.php": [
+        "<h3>Customer Management Help</h3>",
+        "<p>This page allows you to create a new client profile or update the information of an existing customer in your database.</p>",
+        "<ul><li><strong>Required Information:</strong> The <em>Customer Name</em> is mandatory to save the profile. All other details are optional but recommended for accurate invoicing.</li>",
+        "<li><strong>Company Details:</strong> Inputting the <em>CVR</em> (Company Registration Number) and a designated <em>Contact Person</em> ensures professional, correct layouts when generating financial documents.</li>",
+        "<li><strong>Payment Terms:</strong> The <em>Payment Days</em> field defines the default credit duration for this specific client (pre-set to 8 days). When creating a new invoice for this customer, the due date will automatically adjust based on this value.</li>",
+        "<li><strong>Internal Notes:</strong> The <em>Notes</em> field is strictly for internal tracking and administration. Information written here will never be visible on the customer's printed invoices.</li></ul>",
+        "<p>Click <strong>Save Changes</strong> to store the modifications securely. Use the <strong>Back</strong> button to return to the Sales Hub without altering any data.</p>"
+    ],
+    "bank_import_step1.php": [
+        "<h3>Bank Statement Import Help</h3>",
+        "<p>This module helps you import financial transactions from your bank using a standard CSV file, bypassing manual ledger entry.</p>",
+        "<ul><li><strong>Load Saved Profile:</strong> If you frequently import data from the same bank, you can select a previously saved profile from the dropdown menu to instantly restore your custom column mappings.</li>",
+        "<li><strong>Data Preview & Delimiter Auto-Detection:</strong> Uploading your CSV file displays a 6-row sample. The system automatically detects whether your file uses semicolons (;) or commas (,) as dividers, and maps out columns as <em>Col. 1, Col. 2</em>, etc.</li>",
+        "<li><strong>Column Mapping Fields:</strong> Provide the exact column numbers containing your data. The engine attempts to pre-fill these fields by analyzing headers for words like <em>Date/Dato</em>, <em>Text/Tekst</em>, or <em>Amount/Beløb</em>.</li>",
+        "<li><strong>Skip Lines:</strong> Most bank files contain a header row or meta-information at the top. Set this to 1 (or higher) to prevent the import engine from reading text headers as financial entries.</li>",
+        "<li><strong>Save Layout Profile:</strong> To avoid mapping columns manually next time, write the bank's name under <em>Save as Profile</em> and click the floppy disk icon (💾) to store the configuration.</li></ul>",
+        "<p>Verify your configurations carefully against the preview table, then click <strong>Complete Import</strong> to transfer the structured data to the processing environment.</p>"
+    ],
+    "reconcile_list.php": [
+        "<h3>Bank Reconciliation Help</h3>",
+        "<p>This workspace allows you to match your imported bank statement lines with your outstanding sales invoices or quickly assign operational expenses to the correct ledger accounts.</p>",
+        "<ul><li><strong>Green Amounts (Incoming Payments):</strong> These lines represent customer payments. The engine automatically scans your system for unpaid invoices with an identical total. If a precise match is located, the invoice dropdown is highlighted in <span style='color:#2ecc71; font-weight:bold;'>green</span> and pre-selected for you.</li>",
+        "<li><strong>Fee Calculations (⚡ Fee):</strong> If a payment originates from a payment gateway (e.g., Stripe, MobilePay), click the <em>⚡ Fee</em> link. This dynamically evaluates and applies processing fees directly into your designated fee account using your preset fixed, relative, or mixed calculation models.</li>",
+        "<li><strong>Red Amounts (Outgoing Payments):</strong> These represent card expenses, supplier payments, or transfers. Select the appropriate cost or asset account from the dropdown list to categorize the entry.</li>",
+        "<li><strong>Database Actions Upon Confirmation:</strong> When you click <strong>OK</strong>, the application handles a three-tier double-entry ledger sequence: a unique tracking id is assigned in the <em>journal</em>, matching balancing lines are added to your <em>ledger</em>, and the temporary line is flagged as permanently processed.</li>",
+        "<li><strong>Discarding Records:</strong> Click the trash icon (🗑️) to delete individual temporary lines that do not belong in your bookkeeping accounts.</li></ul>",
+        "<p>Review each transaction line carefully. Once verified, hit the green action button to securely process and commit the data to your permanent accounting books.</p>"
+    ],
+    "settings_fees.php": [
+        "<h3>Fee Rules Configuration Help</h3>",
+        "<p>This management panel allows you to automate the calculation of processing fees charged by external payment gateways or merchant accounts (such as Stripe, MobilePay, or PayPal).</p>",
+        "<ul><li><strong>Source Name:</strong> Specify the unique identifier of the transaction provider (e.g., <em>stripe</em>). This value matches the transaction's import source tag when processing lines in the reconciliation system.</li>",
+        "<li><strong>Calculation Models:</strong> Choose how fees are assessed: <ul><li><em>Fixed amount:</em> Deducts a flat rate per transaction line regardless of volume.</li><li><em>Percentage:</em> Subtracts a variable percentage based strictly on the gross sum.</li><li><em>Mixed:</em> Combines both fixed components and dynamic percentages for high-accuracy transaction mapping.</li></ul></li>",
+        "<li><strong>Rate & Fixed Rates Fields:</strong> Enter the dynamic variables used in your math calculation layouts. For percentage rates, format the amount using standard decimals (e.g., input <em>0.014</em> to map a 1.4% processing layout). For flat adjustments, define the strict numeric price value directly (e.g., 1.00).</li>",
+        "<li><strong>Active Rules Management:</strong> The lower panel displays a full directory of established configurations active in your current engine instance. Click the trash bin icon (🗑️) to permanently erase redundant rules from the master system settings.</li></ul>",
+        "<p>Click <strong>Save Rule</strong> to instantly commit changes. Once logged, the rules are instantly reachable inside your live reconciliation workspace via the lightning bolt trigger tool.</p>"
+    ],
+    "inventory_status.php": [
+        "<h3>Inventory Status Help</h3>",
+        "<p>This dashboard provides a complete real-time directory of your product catalog, tracking active stock volumes, current price structures, and financial mapping.</p>",
+        "<ul><li><strong>SKU & Identification:</strong> The <em>SKU</em> (Stock Keeping Unit) column displays your unique identifier. If no custom SKU is specified for a product, the core system identifier (ID) is used automatically.</li>",
+        "<li><strong>Account Mapping:</strong> The <em>Account</em> column specifies which financial account inside your chart of accounts receives the turnover when this product is added to a sales invoice. If a product shows <span style='color:red; font-style:italic;'>No account</span>, it should be updated immediately to secure precise double-entry layouts.</li>",
+        "<li><strong>Pricing & Currency:</strong> Prices are rendered automatically based on your system configuration preferences (e.g., <em>DKK</em> or <em>EUR</em>) and match the baseline layout defined on the product setup page.</li>",
+        "<li><strong>Data Management & Export:</strong> Use the top-right toolbar buttons to interact with your data catalog: click <strong>New Product</strong> (➕) to expand your collection, or use <strong>CSV</strong> to generate a clean raw spreadsheet export of your current stock directory.</li>",
+        "<li><strong>Modifying Records:</strong> Click the pencil icon (📝) in the actions column to jump directly to the modification workspace for that individual line.</li></ul>",
+        "<p>Review your product rows regularly to verify your active stock balances remain fully aligned with your physical asset tracking workflows.</p>"
+    ],
+    "product_edit.php": [
+        "<h3>Product & Inventory Management Help</h3>",
+        "<p>This form allows you to create a new product item or update the details, pricing, and stock thresholds of an existing catalog record.</p>",
+        "<ul><li><strong>Sales Price & Netto Input:</strong> Enter the baseline sales price excluding VAT. The system handles both comma (,) and dot (.) notation entries automatically to establish clean data records.</li>",
+        "<li><strong>Revenue Account Mapping:</strong> Select the matching turnover classification from your chart of accounts. This dropdown strictly isolates <em>revenue</em> accounts. Changing this account dynamically adjusts the VAT calculations based on the account's active tax tier.</li>",
+        "<li><strong>Dynamic Gross Pricing (Price incl. VAT):</strong> The lower summary panel calculates and displays the final customer retail price in real-time. It evaluates your raw netto input against the selected revenue account's integrated tax rate.</li>",
+        "<li><strong>Stock Tracking & Warning Thresholds:</strong> <ul><li><em>In Stock:</em> Defines the current physical quantity available in your inventory.</li><li><em>Min. Level:</em> Sets the critical stock boundary. When your current inventory drops to or below this metric, automated warning indicators are triggered across your dashboard to signal replenishment tasks.</li></ul></li></ul>",
+        "<p>Click <strong>Save Changes</strong> or <strong>Create Product</strong> to submit the configuration data to your central processing module. Use the <strong>Cancel</strong> button to discard edits and return safely to your main inventory interface.</p>"
+    ],
+    "expense_list.php": [
+        "<h3>Expense Overview Help</h3>",
+        "<p>This workspace serves as a centralized log for tracking and managing all operational expenditures, supplier purchases, and digital financial receipts.</p>",
+        "<ul><li><strong>Supplier & Category Tracking:</strong> Each line isolates the exact business supplier alongside a brief description. The <em>Account</em> column verifies which specific operating or asset account from your chart of accounts has been impacted by the entry.</li>",
+        "<li><strong>Smart Attachment Indicators:</strong> The <em>File</em> column identifies linked vouchers or documentation using unique markers: <ul><li><span style='color:#3498db;'>Paperclip (📎):</span> Indicates a standard external file attachment (e.g., uploaded receipt or picture).</li><li><span style='color:#e74c3c;'>Invoice-Dollar Icon ():</span> Identifies internal generated voucher files managed securely within your system layout.</li><li><em>Three dashes (---):</em> Signals that no digital document copy is assigned to this expense row.</li></ul></li>",
+        "<li><strong>Expanding the Log:</strong> Click the <strong>Add Expense</strong> button (➕) in the upper-right control field to switch directly to the creation layout module.</li>",
+        "<li><strong>Actions Row:</strong> Use the action triggers to modify or delete items. Clicking the trash icon prompts a defensive safety verification alert before executing any removal sequence in the data engine.</li></ul>",
+        "<p>Regularly monitor this index grid to ensure your documented proofs are complete, accounts are accurately mapped, and outlays match your cash outflows.</p>"
+    ],
+    "expense_edit.php": [
+        "<h3>Expense Entry Help</h3>",
+        "<p>This screen allows you to record or edit an operational expense. You can utilize the Split-Screen Document Depot on the left to view and attach files while typing.</p>",
+        "<ul><li><strong>Voucher Number (Voucher No.):</strong> Enter the invoice or receipt reference number (bilagsnummer). This connects your physical or digital document archive with the accounting entry. If left empty, the field will remain blank.</li>",
+        "<li><strong>Document Depot Workflow:</strong> Click any file in the left column to open a live, scrollable preview. Click the <em>Tilknyt</em> (Attach) button to bind that specific document to this expense record.</li>",
+        "<li><strong>Traditional Upload:</strong> If the file is not in your depot, you can still use the traditional file selector at the bottom of the form to upload a document directly from your computer.</li></ul>",
+        "<p>Once you click save, the system automatically copies the file to your permanent upload archive, cleans up the source depot folder, and creates the balancing journal entries.</p>"
+    ],
+    "ledger_view.php": [
+        "<h3>General Ledger Help</h3>",
+        "<p>This screen provides an audit trail of your complete financial footprint, showing the raw transaction layout grouped directly by operational log entries.</p>",
+        "<ul><li><strong>Journal grouping (#):</strong> Financial records are stored using double-entry design mechanics. Multiple lines sharing the same unique <em>Journal #</em> belong to the exact same accounting transaction sequence.</li>",
+        "<li><strong>Voucher Reference (Voucher No.):</strong> Enter the invoice or receipt number. This connects your physical document archive with the system. If left empty, the transaction will be recorded without an external voucher reference.</li>",
+        "<li><strong>Debit vs. Credit Rules:</strong> <ul><li><em>Debit (+):</em> Rendered in <span style='color:green; font-weight:bold;'>green</span>, representing incoming asset changes or operational costs.</li><li><em>Credit (-):</em> Rendered in <span style='color:red; font-weight:bold;'>red</span>, showing decreases in asset pools, equity shifts, or revenue turnover.</li></ul></li>",
+        "<li><strong>Cascading Deletions:</strong> the trash icon (🗑️) sits exclusively on the header row of a journal packet. Clicking this triggers a protected rollback script inside a database transaction framework, safely purging the structural <em>journal</em> entry and all bound <em>ledger</em> balancing lines simultaneously.</li></ul>",
+        "<p>Use this table interface to track down accounting anomalies, verify entry balancing states, and keep your full double-entry ledger stack transparently audited.</p>"
+    ],
+    "vat_report.php": [
+        "<h3>VAT Report Help</h3>",
+        "<p>This analytical panel aggregates and calculates your tax liabilities and reclaimable amounts based on the current financial year's ledger movements.</p>",
+        "<ul><li><strong>Year Filtering:</strong> The statement processes values dynamically based on the year variable provided in the URL query string. If no year is specified explicitly, the calculation engine isolates data from the current calendar year.</li>",
+        "<li><strong>Account-Driven Mapping:</strong> Rather than relying on rigid transactional tags, the query matches values by reading the <em>vat_code</em> and <em>vat_rate</em> parameters integrated directly into your chart of accounts setup.</li>",
+        "<li><strong>Net Amount Base:</strong> the system accumulates the total net turnover or raw base expenses across identical tax groups to serve as the baseline sum before evaluation.</li>",
+        "<li><strong>Calculated VAT Engine:</strong> The tax footprint is evaluated line-by-line using standard arithmetic percentage parameters ($Net Amount \\times \\frac{VAT Rate}{100}$). This value assists you when auditing data for official tax authority reports or preparing public balance sheets.</li></ul>",
+        "<p>Verify that your underlying accounts are assigned correct codes if any figures appear out of alignment. Use this data summary to complete your ongoing corporate tax reporting tasks accurately.</p>"
+    ],
+    "report_income.php": [
+        "<h3>Income Statement & VAT Help</h3>",
+        "<p>This analytical panel compiles your financial performance indicators into two operational summaries: the official structural layout for performance metrics and a clear balance sheet tracking your net tax status.</p>",
+        "<ul><li><strong>Revenue Assessment Calculations:</strong> The engine queries line items linked exclusively to customer documents flagged as <em>paid</em>. Unpaid or draft balances are completely excluded from these turnover calculations to protect database transparency.</li>",
+        "<li><strong>Operational Costs Indexing:</strong> Expenses are grouped by matching local account assignments up against standard master registry reference numbers (<em>std_ref_id</em>). This ensures that your local cost centers cascade seamlessly into structured corporate tax groups.</li>",
+        "<li><strong>Annual Performance Metrics:</strong> Your bottom-line net margin evaluation displays at the foot of the layout grid ($Revenue - Total Costs$). If performance yields positive financial returns, the text renders automatically in <span style='color:#2ecc71; font-weight:bold;'>green</span>; net losses show in <span style='color:#ff7675; font-weight:bold;'>red</span>.</li>",
+        "<li><strong>Precise VAT Settlements Breakdown:</strong> <ul><li><em>Sales VAT Due:</em> Total tax obligations collected dynamically across finalized billing line totals.</li><li><em>Deductible Purchase VAT:</em> Aggregated deductible input taxes sourced out of committed transactions logs.</li><li><em>Net Balance Status:</em> Subtracts tracking pools to determine whether you have an active tax obligation to settle (<span style='color:#e67e22; font-weight:bold;'>VAT to pay</span>) or an asset credit due back (<span style='color:#27ae60; font-weight:bold;'>VAT to receive</span>).</li></ul></li></ul>",
+        "<p>Use these values for executive reporting, regular auditing, and organizing figures prior to filing mandatory tax updates to administrative authorities.</p>"
+    ],
+    "chart_of_accounts.php": [
+        "<h3>Chart of Accounts Help</h3>",
+        "<p>This master register controls your organization's financial architecture, defining how double-entry ledger items classify, track, and aggregate across reporting modules.</p>",
+        "<ul><li><strong>Account Type Mapping:</strong> Every operational record is bound to one of four baseline financial groups: <ul><li><em>Revenue:</em> Sales turnover and income streams.</li><li><em>Expense:</em> Operational outlays and general overhead costs.</li><li><em>Asset:</em> Company resources, cash balances, and receivables.</li><li><em>Liability:</em> Corporate obligations, debts, and equity pools.</li></ul></li>",
+        "<li><strong>Tax Specifications (VAT Code & Rate):</strong> Displays active tax parameters inherited directly from your linked <em>vat_codes</em> register. If an account is exempted from calculations, it displays as <em>None</em> with a clean flat dashboard line entry (-).</li>",
+        "<li><strong>Standard Reference Alignment (Std Ref):</strong> Maps your custom local financial configurations directly onto master layout definitions (<em>std_accounts</em>). This structured matching ensures that localized business accounts cascade accurately into uniform corporate income and tax summaries.</li>",
+        "<li><strong>Dynamic Tool Options:</strong> Click the <strong>Add New Account</strong> button (➕) to inject a fresh financial node. Use the localized action row triggers to edit core parameters or erase redundant accounts securely from the database structure.</li></ul>",
+        "<p>Modify your accounts with care. Structural modifications dynamically shift how transaction entries populate your central journal balance flows and historical fiscal records.</p>"
+    ],
+    "company_settings.php": [
+        "<h3>Company Information Help</h3>",
+        "<p>This control center manages your corporate identity profile, official system parameters, banking infrastructure, and automated communication baselines.</p>",
+        "<ul><li><strong>Corporate Identity & Registry Fields:</strong> Define official details such as your legal entity title, contact nodes, and identification values (e.g., your local <em>CVR Number</em> verification data). This information populates outbound transactional assets dynamically.</li>",
+        "<li><strong>Banking Infrastructure Layout:</strong> Log your structural bank registration and storage account sequences accurately. These data segments are bound directly into invoice layouts to handle incoming automated payment matching processes cleanly.</li>",
+        "<li><strong>Standard Communications Profile:</strong> Set up your system-wide default transactional notification bodies. This block acts as the pre-loaded foundational boilerplate text whenever sending invoice documents out to customers.</li>",
+        "<li><strong>Data Storage Mechanics (UPSERT):</strong> Submitting this layout triggers an active tracking script that loops through parameters using an standard key-value setup. It uses an internal database routine to securely execute an insert-or-update layout (<em>ON DUPLICATE KEY UPDATE</em>) on your central <em>settings</em> index.</li>",
+        "<li><strong>Regulatory SAF-T Data Export:</strong> Click the <strong>Export SAF-T</strong> button () to extract your complete historical financial records into a standardized XML infrastructure layout (Standard Audit File for Tax). This mechanism prepares files cleanly for external accounting audits or mandatory compliance verification tasks.</li></ul>",
+        "<p>Review all updated entries carefully before hitting <strong>Save Company Settings</strong>. Altering core properties dynamically overrides information displayed on both active customer portals and structural reporting logs system-wide.</p>"
+    ],
+    "about.php": [
+        "<h3>About TinyCash Help &amp; Security Auditing Help</h3>",
+        "<p>This informational summary tracks metadata metrics, active architecture runtime baselines, and infrastructural boundary access checks across the application ecosystem.</p>",
+        "<ul><li><strong>Core Version Parameters:</strong> Sourced dynamically out of system configuration definitions, the panel registers the running <em>APP_VERSION</em> string alongside its latest structural release timestamp context (<em>APP_DATE</em>).</li>",
+        "<li><strong>Environmental Runtime Telemetry:</strong> The presentation array aggregates direct configuration metadata definitions from core settings matrices, outputting active engine versions (<em>APP_VERSION</em>), localization language toggles, and dynamic engine statistics (<em>phpversion</em>) cleanly onto the active viewport.</li>",
+        "<li><strong>Automated Directory Interception Audits:</strong> The page script instantiates a security auditing module (<em>check_security_lock</em>) to perform a local network request target lookup against protected dependency scripts (<em>db_connect.inc.php</em>). This diagnostic loop inspects the returned HTTP header packet to check for server exceptions.</li>",
+        "<li><strong>Boundary Lock Verification (403/404 Status):</strong> If the protective path rules (<em>.htaccess</em>) are operational, the target request is blocked by the server container, yielding an absolute access denied or resource missing exception. The module decodes this exception state to confirm directory lockdown boundaries are active.</li>",
+        "<li><strong>Exposure Exception Warnings:</strong> When the interception loop catches a standard valid response instead of a barrier exception, the engine drops the security status indicator and prints a localized exposure warning alert, notifying administrators that core codebase resources are currently unprotected.</li>",
+        "<li><strong>Ecosystem Target Specifications:</strong> System records track environmental profiles as single-currency accounting contexts engineered to preserve structural tracking speeds while ensuring localized structural data isolation remains under full administrator control.</li></ul>",
+        "<p>If an exposure exception warning triggers on production nodes, inspect your server rule overrides immediately to prevent third-party profiling of critical configuration files.</p>"
+    ],
+    "backup.php": [
+        "<h3>Documentation: Off-site Compliance</h3>",
+        "<p>According to bookkeeping regulations, financial data and digital receipts must be secured outside the primary server host environment. Execute this manual verification minimum once a month:</p>",
+        "<ol style='padding-left: 20px; margin-bottom: 15px;'>",
+        "<li>Download the full archive ZIP file to your local computer using the interface above.</li>",
+        "<li>Upload the ZIP file to your off-site corporate remote storage (e.g., OneDrive, Jottacloud, or pCloud).</li>",
+        "</ol>",
+        "<p style='font-weight: bold; color: #1e3a8a; margin-bottom: 5px;'>How to Verify the File Inside Your Cloud (OneDrive / Jottacloud):</p>",
+        "<ul style='padding-left: 20px;'>",
+        "<li><strong>Size Matching:</strong> Open your cloud storage drive interface and locate the uploaded file. Ensure that the byte-size listed in OneDrive/Jottacloud matches the size recorded by the system above.</li>",
+        "<li><strong>Transfer Validation:</strong> If your cloud provider or operating system tools display file properties, confirm that the cloud checksum matches the unique <strong>Local MD5</strong> token printed above. This mathematically guarantees zero data loss during upload.</li>",
+        "<li><strong>Status Check:</strong> Confirm that the remote file has finished syncing completely and displays a permanent cloud confirmation mark.</li>",
+        "</ul>"
+    ],
+    "login.php": [
+        "<h3>Authentication &amp; Gatekeeping Help</h3>",
+        "<p>This entry gateway acts as the primary firewall for the application ecosystem, managing user session validation, defensive runtime audits, and persistent telemetry tracking.</p>",
+        "<ul><li><strong>First-Run Installation Check (Setup Intercept):</strong> Upon initialization, the core routine executes an automated query to evaluate row counts inside the central <em>users</em> data array. If the lookup catches a flat result zero (0) and detects the presence of the system deployment block (<em>inc/user_create_admin.php</em>), the execution automatically re-routes traffic to the default setup layout.</li>",
+        "<li><strong>Defensive Parametric Queries:</strong> Inbound credential checks avoid raw injection vulnerabilities by routing verification parameters explicitly through standard prepared database templates (<em>mysqli_prepare</em>). Usernames are validated safely via parameterized strings before internal logic executes hash evaluations.</li>",
+        "<li><strong>Cryptographic Hash Integrity:</strong> Raw client password entries are never stored or compared in plain text. Instead, they pass through a one-way secure cryptographic verification process (<em>password_verify</em>) matched directly up against the recorded database hash strings.</li>",
+        "<li><strong>Audit Logging Matrix (Telemetry):</strong> Every unique authentication interaction logs persistent metadata into the central <em>login_log</em> index. The routing engine dynamically records the client network vector (<em>REMOTE_ADDR</em>), environmental software fingerprints (<em>HTTP_USER_AGENT</em>), and the outcome status flag (<em>Success</em> or <em>Failed</em>) to simplify security audits.</li>",
+        "<li><strong>Session Security Optimization:</strong> Following a successful credentials match, the authentication engine calls an instantaneous id regeneration procedure (<em>session_regenerate_id(true)</em>). This cycle invalidates the legacy session profile context immediately, neutralizing session-fixation attacks before populating global permission variables.</li>",
+        "<li><strong>Dynamic Interface Scripts:</strong> A post-rendering DOM script monitors user field configurations (<em>#pwd_inside</em>). It dynamically injects an absolute-positioned visibility icon (👁️) into the field parent frame, creating a secure client-side mechanism to switch input masks smoothly between hidden passwords and readable plain text strings.</li></ul>",
+        "<p>Treat credentials management attentively. Ensure fallback installation files are automatically purged or locked on production systems following deployment to prevent external unauthorized access.</p>"
+    ],
+    "user_list.php": [
+        "<h3>User Management &amp; Access Control Help</h3>",
+        "<p>This workspace allows administrators to audit, modify, and manage systemic profiles and access privileges across the application ecosystem.</p>",
+        "<ul><li><strong>Admin-Only Gateway Protection:</strong> The runtime engine executes a localized security evaluation (<em>_SESSION['user_role']</em>) before rendering elements. If the active profile lacks administrative clearance, execution immediately halts via a terminal access exception.</li>",
+        "<li><strong>Dynamic Role Identification:</strong> User roles are evaluated directly from database arrays. Profiles identified as <em>admin</em> receive a distinctive high-visibility badge layout, while secondary profiles are tagged as standard operators.</li>",
+        "<li><strong>Self-Targeting Logic Defenses:</strong> The active user profile is protected by logical conditions. Administrators cannot delete or downgrade their own active accounts, preventing complete accidental exclusion from management privileges.</li></ul>",
+        "<p>Review user tables systematically to maintain accurate accountability logs across your local operations network.</p>"
+    ]
+}

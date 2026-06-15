@@ -1,0 +1,19 @@
+# 1. Benægt adgang til alt som standard
+Require all denied
+
+# 2. Tillad adgang til login-siden, så man kan logge ind
+<Files "login.php">
+    Require all granted
+</Files>
+
+# 3. Tillad adgang til forsiden (index) efter login
+<Files "index.php">
+    Require all granted
+</Files>
+
+# 4. Din eksisterende undtagelse for advisor-filen
+<Files "Master_Advisor.php">
+    <RequireAll>
+        Require all granted
+    </RequireAll>
+</Files>

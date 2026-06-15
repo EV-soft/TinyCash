@@ -1,8 +1,14 @@
-<?php # /inc/master_advisor.php v:0.8.0 d:2026-04-11 i:evs m:0
+<?php # /inc/master_advisor.php v:0.9.6 d:2026-05-19 i:evs m:1 ok
 ob_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+// --- NY DYNAMISK LINJEGRÆNSE VIA URL ---
+// Henter 'limit' fra URL'en. Standard er 300, og den må ikke være mindre end 50.
+$maxLines = isset($_GET['limit']) ? (int)$_GET['limit'] : 300;
+if ($maxLines < 50) {
+    $maxLines = 50; 
+}
 
 function scanProjectFunctions($dir) {
     $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir));
@@ -11,19 +17,27 @@ function scanProjectFunctions($dir) {
 
     foreach ($phpFiles as $file) {
         $filename = $file->getRealPath();
-        if (basename($filename) === 'Master_Advisor.php') continue;
+        if (basename($filename) === 'master_advisor.php') continue;
+        
+        $relativePath = str_replace(realpath($dir), '', $filename);
+        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+        
+        if (str_contains($relativePath, '/') && !str_starts_with($relativePath, 'inc/')) {
+            continue;
+        }
+        if (str_contains($relativePath, 'PHPMailer') || str_contains($relativePath, 'phpmailer')) {
+            continue;
+        }
+
         $content = file_get_contents($filename);
         $tokens = token_get_all($content);
         
         $count = count($tokens);
         for ($i = 0; $i < $count; $i++) {
-            // Vi leder efter T_FUNCTION
             if (is_array($tokens[$i]) && $tokens[$i][0] === T_FUNCTION) {
-                
                 $funcName = "";
                 $params = "";
                 
-                // Find navnet (det næste T_STRING efter function)
                 for ($j = $i + 1; $j < $count; $j++) {
                     if (is_array($tokens[$j]) && $tokens[$j][0] === T_STRING) {
                         $funcName = $tokens[$j][1];
@@ -31,7 +45,6 @@ function scanProjectFunctions($dir) {
                     }
                 }
 
-                // Find parametrene (alt inde i parenteserne efter navnet)
                 $inParentheses = false;
                 for ($k = $j + 1; $k < $count; $k++) {
                     if ($tokens[$k] === '(') {
@@ -48,7 +61,7 @@ function scanProjectFunctions($dir) {
 
                 if ($funcName) {
                     $foundFunctions[] = [
-                        'file'   => str_replace(realpath(__DIR__), '', $filename),
+                        'file'   => $relativePath,
                         'name'   => $funcName,
                         'params' => empty(trim($params)) ? 'none' : htmlspecialchars(trim($params))
                     ];
@@ -56,63 +69,69 @@ function scanProjectFunctions($dir) {
             }
         }
     }
-
-    // --- VISNING (Samme mørke tema) --- 
-    echo '<div style="font-family:monospace; background:#1e1e1e; color:#d4d4d4; padding:20px; border-radius:8px; border:1px solid #333;">';
-    echo '<h2 style="color:#4ec9b0; border-bottom:1px solid #333; padding-bottom:10px;">TinyCash Intelligence: Function Map</h2>';
-    echo '<table style="width:100%; border-collapse:collapse;">';
-    echo '<tr style="text-align:left; background:#252526; color:#9cdcfe;"><th style="padding:10px;">Source File</th><th style="padding:10px;">Function Name</th><th style="padding:10px;">Parameters</th></tr>';
-
-    foreach ($foundFunctions as $func) {
-        echo '<tr style="border-bottom:1px solid #2d2d2d;">';
-        echo '<td style="padding:8px; color:#808080;">' . $func['file'] . '</td>';
-        echo '<td style="padding:8px; color:#dcdcaa; font-weight:bold;">' . $func['name'] . '()</td>';
-        echo '<td style="padding:8px; color:#ce9178;">' . $func['params'] . '</td>';
-        echo '</tr>';
-    }
-    echo '</table></div>';
+    return $foundFunctions;
 }
 
-
-scanProjectFunctions(dirname(__DIR__));
-
-// 1. Database connection
 if (file_exists('db_connect.inc.php')) {
     require_once 'db_connect.inc.php';
 } else {
     die("Error: db_connect.inc.php not found in this directory.");
 }
 
-echo "<div style='font-family:sans-serif; background:#fff; padding:20px;'>";
-echo "<h1>🛠 Project Snapshot for AI Advisor</h1>";
-echo "<p>Please copy all content below and paste it into the chat.</p>";
+$sourceDir = dirname(__DIR__); 
 
-// --- SECTION 1: DATABASE BLUEPRINT ---
-echo "<h2>1. Database Schema</h2>";
+$exportDir = __DIR__ . '/ai_export/';
+if (!file_exists($exportDir)) {
+    mkdir($exportDir, 0775, true);
+} else {
+    $oldFiles = glob($exportDir . 'upload_*.txt');
+    if ($oldFiles) {
+        foreach ($oldFiles as $oldFile) {
+            if (is_file($oldFile)) {
+                unlink($oldFile);
+            }
+        }
+    }
+}
+
+// A: BLUEPRINT
+$mainFile = $exportDir . 'upload_01_blueprint.txt';
+$mainHandle = fopen($mainFile, 'w');
+
+fwrite($mainHandle, "================================================================\n");
+fwrite($mainHandle, "TINYASH PROJECT SNAPSHOT - PART 01: BLUEPRINT\n");
+fwrite($mainHandle, "================================================================\n\n");
+
+$functions = scanProjectFunctions($sourceDir);
+fwrite($mainHandle, "### FUNCTION MAP ###\n");
+foreach ($functions as $func) {
+    fwrite($mainHandle, "File: {$func['file']} | Function: {$func['name']}({$func['params']})\n");
+}
+fwrite($mainHandle, "\n\n### DATABASE SCHEMA ###\n");
+
 $tables_res = mysqli_query($conn, "SHOW TABLES");
 if ($tables_res) {
     while ($table_row = mysqli_fetch_array($tables_res)) {
         $tableName = $table_row[0];
-        echo "<div style='background:#f8f9fa; border:1px solid #ddd; padding:10px; margin-bottom:10px; border-radius:5px;'>";
-        echo "<strong>Table: $tableName</strong><br><small style='color:#555;'>";
+        fwrite($mainHandle, "Table: $tableName\n");
         $cols_res = mysqli_query($conn, "DESCRIBE `$tableName`");
         $cols = [];
         while ($col = mysqli_fetch_assoc($cols_res)) {
             $cols[] = $col['Field'] . " (" . $col['Type'] . ")";
         }
-        echo implode(" | ", $cols);
-        echo "</small></div>";
+        fwrite($mainHandle, "Columns: " . implode(" | ", $cols) . "\n\n");
     }
 }
+fclose($mainHandle);
 
-// --- SECTION 2: SOURCE CODE COLLECTION ---
-echo "<h2>2. Source Code</h2>";
 
-$sourceDir = dirname(__DIR__); 
+// B: SOURCE CODE
 $directory = new RecursiveDirectoryIterator($sourceDir, RecursiveDirectoryIterator::SKIP_DOTS);
 $iterator = new RecursiveIteratorIterator($directory);
 
-echo "<pre style='background:#1e1e1e; color:#d4d4d4; padding:20px; border-radius:8px; overflow:auto; font-size:12px; line-height:1.5;'>";
+$partIndex = 2;
+$linesInCurrentFile = 0;
+$currentFileHandle = null;
 
 foreach ($iterator as $fileInfo) {
     if ($fileInfo->isDir()) continue;
@@ -120,23 +139,61 @@ foreach ($iterator as $fileInfo) {
     $filePath = $fileInfo->getPathname();
     $fileName = $fileInfo->getFilename();
 
-    // Include .php and .inc files, skip this file itself
     if (!preg_match("/\.(php|inc)$/i", $fileName) || $fileName == basename(__FILE__)) continue;
     if (str_contains($filePath, 'udgaaet')) continue; 
     
     $relativeName = str_replace($sourceDir, "", $filePath);
-    $content = file_get_contents($filePath);
-    
-    echo "################################################################\n";
-    echo "### FILE: $relativeName\n";
-    echo "################################################################\n\n";
-    echo htmlspecialchars($content);
-    echo "\n\n";
+    $relativeName = ltrim(str_replace('\\', '/', $relativeName), '/');
+
+    if (str_contains($relativeName, '/') && !str_starts_with($relativeName, 'inc/')) {
+        continue;
+    }
+    if (str_contains($relativeName, 'PHPMailer') || str_contains($relativeName, 'phpmailer')) {
+        continue;
+    }
+
+    if (!$currentFileHandle) {
+        $formattedIndex = sprintf('%02d', $partIndex);
+        $currentFileHandle = fopen($exportDir . "upload_{$formattedIndex}_source.txt", 'w');
+        fwrite($currentFileHandle, "### TinyCash Source Code - Part $formattedIndex ###\n\n");
+        $linesInCurrentFile = 2;
+    }
+
+    $separator = "################################################################\n### FILE: $relativeName\n################################################################\n\n";
+    fwrite($currentFileHandle, $separator);
+    $linesInCurrentFile += 4;
+
+    $fileLines = file($filePath);
+    foreach ($fileLines as $line) {
+        fwrite($currentFileHandle, $line);
+        $linesInCurrentFile++;
+
+        // Variablen $maxLines bruges nu dynamisk i stedet for den hårdkodede værdi 300
+        if ($linesInCurrentFile >= $maxLines) {
+            fclose($currentFileHandle);
+            $partIndex++;
+            $formattedIndex = sprintf('%02d', $partIndex);
+            $currentFileHandle = fopen($exportDir . "upload_{$formattedIndex}_source.txt", 'w');
+            fwrite($currentFileHandle, "### TinyCash Source Code - Part $formattedIndex ###\n\n");
+            $linesInCurrentFile = 2;
+        }
+    }
+    fwrite($currentFileHandle, "\n\n");
 }
 
-echo "</pre>";
-echo "</div>";
+if ($currentFileHandle) {
+    fclose($currentFileHandle);
+}
 
-$full_report = ob_get_clean();
-echo $full_report;
+ob_end_clean();
+echo "<div style='font-family:sans-serif; padding:30px; max-width:600px; margin:0 auto;'>";
+echo "<h2 style='color:#2ecc71;'>🚀 Eksport genstartet og renset!</h2>";
+echo "<p>Grænse brugt ved denne kørsel: <strong>" . $maxLines . " linjer</strong> pr. fil.</p>";
+echo "<p>Mappen ".'inc/ai_export/'."indeholder nu følgende filer:</p>";
+echo "<ul>";
+foreach (glob($exportDir . "upload_*") as $file) {
+    echo "<li>" . basename($file) . " (" . count(file($file)) . " linjer)</li>";
+}
+echo "</ul>";
+echo "</div>";
 ?>

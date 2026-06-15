@@ -1,0 +1,23 @@
+{
+    "note": "File: manifest.json",
+    "short_name": "TinyCash",
+    "name": "TinyCash Regnskab",
+    "icons": [
+        {
+            "src": "icon-192.png",
+            "type": "image/png",
+            "sizes": "192x192"
+        }
+    ],
+    "start_url": "index.page.php",
+    "background_color": "#ffffff",
+    "display": "minimal-ui",
+    "icons": [
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }],
+    "scope": "/",
+    "theme_color": "#3498db"
+}

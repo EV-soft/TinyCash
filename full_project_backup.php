@@ -1,116 +1,90 @@
-<?php # /full_project_backup.php v:0.9.0 d:2026-05-08 i:evs
+<?php # /full_project_backup.php v:0.9.5 d:2026-05-10 i:evs
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
+require_once 'inc/php2htm.lib.php';
 
-// Kun administratorer har adgang til backup-funktioner
 if (($_SESSION['user_role'] ?? '') !== 'admin') { die(lang('@Access denied')); }
 
 $backupDir = 'backups/';
 if (!is_dir($backupDir)) { mkdir($backupDir, 0755, true); }
 
 $msg = ""; $err = "";
-if (isset($_POST['create_backup'])) {
-    $filename = 'backup_' . date('Y-m-d_H-i-s') . '.sql';
-    $filePath = $backupDir . $filename;
-    
-    // 1. Start SQL Dump
-    $sqlDump = "-- TinyCash SQL Dump\n";
-    $sqlDump .= "-- " . lang('@Date') . ": " . date('Y-m-d H:i:s') . "\n\n";
 
-// --- SQL GENERERING START ---
+if (isset($_POST['create_zip'])) {
+    $zipName = 'FULL_BACKUP_' . date('Y-m-d_H-i-s') . '.zip';
+    $zipPath = $backupDir . $zipName;
+    $zip = new ZipArchive();
 
-// 1. Hent alle tabeller fra databasen
-$tables = [];
-$result = mysqli_query($conn, "SHOW TABLES");
-while ($row = mysqli_fetch_row($result)) {
-    $tables[] = $row[0];
-}
-
-foreach ($tables as $table) {
-    // 2. Skab tabel-struktur (CREATE TABLE)
-    $res = mysqli_query($conn, "SHOW CREATE TABLE `$table` ");
-    $row = mysqli_fetch_row($res);
-    
-    $sqlDump .= "\n\n-- --------------------------------------------------------\n";
-    $sqlDump .= "-- Table structure for: `$table` \n";
-    $sqlDump .= "-- --------------------------------------------------------\n\n";
-    $sqlDump .= "DROP TABLE IF EXISTS `$table`;\n";
-    $sqlDump .= $row[1] . ";\n\n";
-
-    // 3. Hent data fra tabellen 
-    $res = mysqli_query($conn, "SELECT * FROM `$table` ");
-    $numFields = mysqli_num_fields($res);
-    if (mysqli_num_rows($res) > 0) {
-        $sqlDump .= "-- Data for table: `$table` \n";
-        while ($row = mysqli_fetch_row($res)) {
-            $sqlDump .= "INSERT INTO `$table` VALUES(";
-            for ($j = 0; $j < $numFields; $j++) {   // Håndtering af værdier
-                if ($row[$j] === null) {
-                    $sqlDump .= 'NULL';
-                } else {    // Escape data og indpak i citationstegn
-                    $val = mysqli_real_escape_string($conn, $row[$j]);
-                    $sqlDump .= '"' . $val . '"';
+    if ($zip->open($zipPath, ZipArchive::CREATE) === TRUE) {
+        
+        // 1. GENERER SQL DUMP (Samme logik som før)
+        $sqlDump = "-- TinyCash SQL Full Dump\n";
+        $tables = [];
+        $result = mysqli_query($conn, "SHOW TABLES");
+        while ($row = mysqli_fetch_row($result)) { $tables[] = $row[0]; }
+        foreach ($tables as $table) {
+            $res = mysqli_query($conn, "SHOW CREATE TABLE `$table` ");
+            $row = mysqli_fetch_row($res);
+            $sqlDump .= "\nDROP TABLE IF EXISTS `$table`;\n" . $row[1] . ";\n";
+            $res = mysqli_query($conn, "SELECT * FROM `$table` ");
+            while ($row = mysqli_fetch_row($res)) {
+                $sqlDump .= "INSERT INTO `$table` VALUES(";
+                for ($j = 0; $j < mysqli_num_fields($res); $j++) {
+                    $sqlDump .= ($row[$j] === null) ? 'NULL' : '"' . mysqli_real_escape_string($conn, $row[$j]) . '"';
+                    if ($j < (mysqli_num_fields($res) - 1)) $sqlDump .= ',';
                 }
-                if ($j < ($numFields - 1)) {
-                    $sqlDump .= ',';
+                $sqlDump .= ");\n";
+            }
+        }
+        $zip->addFromString('database_dump.sql', $sqlDump);
+        // 2. PAK JSON-DATA MAPPE
+        if (is_dir('json-data/')) {
+            foreach (glob('json-data/*.json') as $file) {
+                $zip->addFile($file, 'json-data/' . basename($file));
+            }
+        }
+        // 3. PAK UPLOADS MAPPE (Inkl. Payout Reports & EXP_ bilag)
+        if (is_dir('uploads/')) {
+            $files = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator('uploads/', RecursiveDirectoryIterator::SKIP_DOTS),
+                RecursiveIteratorIterator::SELF_FIRST
+            );
+            foreach ($files as $file) {
+                if ($file->isFile()) {
+                    $zip->addFile($file->getRealPath(), 'uploads/' . $files->getSubPathName());
                 }
             }
-            $sqlDump .= ");\n";
         }
-    }
-}
-// --- SQL GENERERING SLUT ---
-
-    // 2. Indlejre JSON filer (Sprog og Indstillinger)
-    $jsonFiles = glob('json-data/*.json');
-    if ($jsonFiles) {
-        foreach ($jsonFiles as $file) {
-            $baseName = basename($file);
-            $content  = file_get_contents($file);
-            $sqlDump .= "\n/* JSON_DATA_START:$baseName\n" . $content . "\nJSON_DATA_END */\n";
-        }
-    }
-    // Gem filen
-    if (file_put_contents($filePath, $sqlDump)) {
-        $msg = lang('@Backup created successfully!') . " ($filePath)";
+        $zip->close();
+        $msg = lang('@Full ZIP-Backup created successfully!');
     } else {
-        $err = lang('@Error: Could not create backup file.');
+        $err = lang('@Error: Could not create ZIP file.');
     }
 }
 
 htm_Header('@Full Project Backup');
 showMenu();
 
-// Vis beskeder via den nye standardfunktion
 htm_Alert($msg, 'success');
 htm_Alert($err, 'error');
 
-htm_Card_('@Create Complete Backup', 600);
-?>
+htm_Shell_('max-width:600px; margin:20px auto;');
+htm_Card_('@Full ZIP-Archive', 600);
 
-<div style="font-family: sans-serif;">
-    <p style="margin-bottom: 25px; color: #7f8c8d; line-height: 1.6;">
-        <?php echo lang('@This will generate a SQL file containing all database tables and all JSON configuration files.'); ?>
-    </p>
-    <form action="" method="post">
-        <button type="submit" name="create_backup" class="btn-success" style="padding:15px; font-size: 1.2em;">
-            📦 <?php echo lang('@Generate Backup Now'); ?>
-        </button>
-    </form>
-    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; display: flex; justify-content: space-between;">
-        <a href="backup_list.page.php" style="color: #3498db; text-decoration: none; font-weight: bold;">
-            📂 <?php echo lang('@View Backup Files'); ?>
-        </a>
-        <a href="backup_gendan.page.php" style="color: #e67e22; text-decoration: none; font-weight: bold;">
-            <?php echo lang('@Go to Restore Page'); ?> →
-        </a>
-    </div>
-</div>
-
-<?php
+echo '<div style="text-align:center; padding:20px;">
+        <i class="fa-solid fa-file-zipper" style="font-size:4em; color:#8e44ad; margin-bottom:20px;"></i>
+        <p style="color:#666;">'.lang('@This will archive everything: Database, JSON settings, and all uploaded files (receipts & reports).').'</p>
+        
+        <form method="post" style="margin-top:30px;">
+            <button type="submit" name="create_zip" style="background:#8e44ad; color:white; padding:15px 30px; border:none; border-radius:8px; font-size:1.2em; cursor:pointer; font-weight:bold;">
+                <i class="fa fa-box-archive"></i> '.lang('@Download Full Archive').'
+            </button>
+        </form>
+      </div>';
 htm_Card_end();
+htm_Shell_end();
 htm_Footer();
 ob_end_flush();
 ?>
