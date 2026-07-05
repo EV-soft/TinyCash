@@ -80,15 +80,29 @@ htm_Card_(
 if ($error_msg) { htm_alert($error_msg, 'error', 300); }
 
 // Input felter
-htm_InputGroup(icon: 'fa-user', labl: '@Initials', name: 'initials', extr: 'required autofocus', plho: '@Enter initials...'); 
+htm_InputGroup(icon: 'fa-user', labl: '@Initials', name: 'initials', extr: 'required autofocus', 
+    hint:'@User name', plho: '@Enter initials...'); 
 htm_nl(2);
 
-htm_InputGroup(icon: 'fa-lock', labl: '@Password', name: 'password', type: 'password', extr: 'required style="padding-right: 35px; box-sizing: border-box;"', plho: '••••••••'); 
+htm_InputGroup(icon: 'fa-lock', labl: '@Password', name: 'password', type: 'password', 
+    extr: 'required style="padding-right: 35px; box-sizing: border-box;"', 
+    hint:'@User password', plho: '••••••••'); 
 htm_nl(2);
 
 htm_Button(
-    icon: 'fa-sign-in-alt', labl: '@Sign In', type: 'primary', styl: 'width: 100%; padding: 12px; font-size: 1.1em;', attr: 'name="login"', 
-    cont: '<div style="margin-top: 25px;"></div>' );
+        icon: 'fa-sign-in-alt', labl: '@Sign In', type: 'primary', 
+        styl: 'width: 100%; padding: 12px; font-size: 1.1em;', attr: 'name="login"', 
+        cont: '<div style="margin-top: 25px;"></div>' 
+    );
+echo '<div class="lang-switcher" style="text-align: center; margin-top: 20px; font-family: sans-serif; font-size: 0.9rem;">
+    <a href="set_lang.php?l=da" style="text-decoration: none; margin: 0 10px; color: #2c3e50;">
+        🇩🇰 Dansk
+    </a>
+    <span style="color: #ccc;">|</span>
+    <a href="set_lang.php?l=en" style="text-decoration: none; margin: 0 10px; color: #2c3e50;">
+        🇬🇧 English
+    </a>
+</div>';
 
 htm_Card_end(); 
 echo '</div>'; 
