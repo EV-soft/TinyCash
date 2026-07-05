@@ -5,8 +5,11 @@ require 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php'; 
 require_once 'inc/help.lib.php';
 
-if ($_SESSION['user_role'] !== 'admin') {
-    die(lang('@Access denied'));
+/* if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
+    deny_access_gracefully(); // Kalder den centrale funktion fra auth.inc.php
+} */
+if (!isset($_SESSION['user_level']) || (int)$_SESSION['user_level'] < 3) {
+    deny_access_gracefully(); 
 }
 
 htm_Header('@Backup Management');

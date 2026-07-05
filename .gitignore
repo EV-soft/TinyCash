@@ -1,0 +1,18 @@
+# .gitignore v:1.1.0 d:2026-07-05 i:evs
+
+# Database and sensitive credentials
+db_connect.inc.php
+json-data/stamdata.json
+inc/env.ini
+
+# Collector tool outputs
+tools/collected_*.txt
+
+# OS and IDE generated files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log

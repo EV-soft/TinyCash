@@ -1,12 +1,12 @@
-<?php # user_list.php v:1.0.0 d:2026-06-15 i:evs
+<?php # user_list.php v:1.0.1 d:2026-06-21 i:gemini ok
+require_once 'inc/php2htm.lib.php';
 require 'inc/auth.inc.php';
 require 'inc/db_connect.inc.php';
 require 'inc/menu.inc.php';
-require_once 'inc/php2htm.lib.php'; 
 
-// Sikkerhed: Kun admins må se denne liste
-if ($_SESSION['user_role'] !== 'admin') {
-    die(lang('@Access denied'));
+// Sikkerhed: Kun admins må se denne liste (Genbruger central fejlsidestyring)
+if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
+    deny_access_gracefully();
 }
 
 htm_Header('@User Management');
@@ -15,10 +15,10 @@ showMenu();
 htm_Card_('@System Users');
 
 $sql = "SELECT user_id, username, user_role FROM users ORDER BY username ASC";
-$res = mysqli_query($conn, $sql);
+$res = DB::query($conn, $sql);
 
 if (!$res) {
-    echo "<p style='color:red;'>" . lang('@SQL Error') . ": " . mysqli_error($conn) . "</p>";
+    echo "<p style='color:red;'>" . lang('@SQL Error') . ": " . DB::error($conn) . "</p>";
 } else {
     echo "<table style='width:100%; border-collapse: collapse; font-family: sans-serif; margin-bottom: 20px;'>";
     echo "<tr style='background: #f8f9fa; text-align: left;'>";
@@ -27,7 +27,7 @@ if (!$res) {
     echo "<th style='padding: 12px; border-bottom: 2px solid #dee2e6; text-align: right;'>" . lang('@Actions') . "</th>";
     echo "</tr>";
 
-    while ($row = mysqli_fetch_assoc($res)) {
+    while ($row = DB::fetch_assoc($res)) {
         $isAdmin = ($row['user_role'] === 'admin');
         $roleLabel = $isAdmin ? lang('@Administrator') : lang('@Standard User');
         
@@ -63,12 +63,6 @@ if (!$res) {
         echo "<a href='user_create.php' style='background:#2ecc71; color:white; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold; display:inline-block;'>";
         echo "<i class='fa fa-plus-circle'></i> " . lang('@Create New User');
         echo "</a>";
-/* 
-        // Tilføjer også Backup linket diskret her i bunden
-        echo "<a href='backup_restore.php' style='color: #95a5a6; text-decoration: none; font-size: 0.9em;'>";
-        echo "⚙ " . lang('@System Tools');
-        echo "</a>";
-         */
     echo "</div>";
 }
 

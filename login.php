@@ -1,69 +1,70 @@
-<?php # /login.php v:1.0.0 d:2026-06-15 i:evs
+<?php # /login.php v:1.1.0 d:2026-07-05 i:evs
 ob_start();
-session_start();
 
+// Sørg for at login bruger NØJAGTIG samme navn og parametre som auth.inc.php
+if (session_status() === PHP_SESSION_NONE) {
+    session_name('TCC_V100_SESSION');
+    session_start();
+}
+/* // --- AUTOLOGIN HACK: Omgår login-check ---
+$_SESSION['user_id']    = 1;
+$_SESSION['user_name']  = 'Admin';
+$_SESSION['user_level'] = 3;
+$_SESSION['user_role']  = 'admin';
+$_SESSION['lang']       = 'da';
+header("Location: index.php");  exit;
+ */
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/php2htm.lib.php';
 
 $error_msg = "";
 
 // 1. Tjek for eksisterende brugere (Setup-tjek)
-$check_users = mysqli_query($conn, "SELECT COUNT(*) FROM users");
+$check_users = DB::query($conn, "SELECT COUNT(*) FROM users");
 if ($check_users) {
-    $user_count = mysqli_fetch_row($check_users)[0];
+    $user_count = DB::fetch_row($check_users)[0];
     if ($user_count == 0 && file_exists('inc/user_create_admin.php')) {
         require_once 'inc/user_create_admin.php';
         exit;
     }
 }
 
-// 2. Håndter Login-post
+// 2. Håndter Login-post (KUN ÉN GANG)
 if (isset($_POST['login'])) {
-    $initials = trim($_POST['initials'] ?? '');
+    $initials = trim($_POST['initials'] ?? ''); 
     $pass     = $_POST['password'] ?? '';
     $ip       = $_SERVER['REMOTE_ADDR'];
     $ua       = $_SERVER['HTTP_USER_AGENT'];
 
-    $stmt = mysqli_prepare($conn, "SELECT user_id, username, password_hash, user_role FROM users WHERE username = ?");
-    mysqli_stmt_bind_param($stmt, "s", $initials);
-    mysqli_stmt_execute($stmt);
-    $res = mysqli_stmt_get_result($stmt);
+    $sql = "SELECT user_id, username, password_hash, user_role, user_level FROM users WHERE username = ?";
+    $res = DB::prepare_and_execute($conn, $sql, [$initials]);
     
-    if ($row = mysqli_fetch_assoc($res)) {
+    // Tjek om vi får et resultat tilbage
+    if ($res && $row = DB::fetch_assoc($res)) {
         if (password_verify($pass, $row['password_hash'])) {
-            // Login godkendt - gem i loggen
-            $stmt_log = mysqli_prepare($conn, "INSERT INTO login_log (user_id, logged_username, ip_address, status, user_agent) VALUES (?, ?, ?, 'Success', ?)");
-            mysqli_stmt_bind_param($stmt_log, "isss", $row['user_id'], $initials, $ip, $ua);
-            mysqli_stmt_execute($stmt_log);
+            // Log succes
+            $log_sql = "INSERT INTO login_log (user_id, logged_username, ip_address, status, user_agent) VALUES (?, ?, ?, 'Success', ?)";
+            DB::prepare_and_execute($conn, $log_sql, [$row['user_id'], $initials, $ip, $ua]);
             
-            // Start sessionen korrekt
-            session_regenerate_id(true);
-            $_SESSION['user_id']   = $row['user_id'];
-            $_SESSION['user_name'] = $row['username']; 
-            $_SESSION['user_role'] = $row['user_role'];
+            $_SESSION = array();
+            $_SESSION['user_id']    = (int)$row['user_id'];
+            $_SESSION['user_name']  = (string)$row['username']; 
+            $_SESSION['user_level'] = (int)$row['user_level'];
+            $_SESSION['user_role']  = (string)$row['user_role'];
+            $_SESSION['lang']       = 'da';
 
-            // Bestem hvor brugeren skal sendes hen (Standard er index.php)
-            $destination = 'index.php'; 
-
-            if (isset($_COOKIE['redirect_to']) && !empty($_COOKIE['redirect_to'])) {
-                $destination = $_COOKIE['redirect_to'];
-                
-                // Udregn nøjagtig samme undermappe for at kunne slette cookien i browseren
-                $cookie_path = str_replace(basename($_SERVER['SCRIPT_NAME']), '', $_SERVER['SCRIPT_NAME']);
-                setcookie('redirect_to', '', time() - 3600, $cookie_path);
-            }
-
-            header("Location: " . $destination);
+            header("Location: index.php");
             exit;
+        } else {
+            $error_msg = "Forkert adgangskode.";
         }
+    } else {
+        $error_msg = "Bruger findes ikke.";
     }
-    
-    // Hvis loginet fejler
-    $stmt_fail = mysqli_prepare($conn, "INSERT INTO login_log (logged_username, ip_address, status, user_agent) VALUES (?, ?, 'Failed', ?)");
-    mysqli_stmt_bind_param($stmt_fail, "sss", $initials, $ip, $ua);
-    mysqli_stmt_execute($stmt_fail);
-    
-    $error_msg = lang('@Invalid credentials'); 
+
+    // Log fejl
+    $fail_sql = "INSERT INTO login_log (logged_username, ip_address, status, user_agent) VALUES (?, ?, 'Failed', ?)";
+    DB::prepare_and_execute($conn, $fail_sql, [$initials, $ip, $ua]);
 }
 
 // 3. Generer HTML
@@ -110,7 +111,7 @@ echo '</div>';
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    var pwdField = document.getElementById('password2');
+    var pwdField = document.getElementById('password');
     if (pwdField) {
         var wrapper = document.createElement('div');
         wrapper.style.position = 'relative';

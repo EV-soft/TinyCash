@@ -1,4 +1,4 @@
-<?php # /storage_browser.php v:1.0.0 d:2026-06-15 i:evs
+<?php # /storage_browser.php v:1.1.0 d:2026-07-05 i:evs
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -117,123 +117,90 @@ if (isset($_GET['download']) && !empty($_GET['download'])) {
 htm_Header('@Storage Browser');
 showMenu();
 echo $msg_html;
-htm_Card_('@System Storage Browser', 1000);
+
+htm_Card_(capt: '@System Storage Browser', wdth: ''); 
 ?>
 <style>
-.tc-modal { display: none; position: fixed; z-index: 10500; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); font-family: sans-serif; }
-.tc-modal-content { 
-    background-color: #fff; 
-    margin: 2% auto; 
-    padding: 20px; 
-    border-radius: 8px; 
-    width: 80%; 
-    max-width: 950px; 
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3); 
-    display: flex; 
-    flex-direction: column; 
-    max-height: 95vh; 
-}
-.tc-modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-bottom: 15px; }
-
-.code-container { 
-    display: flex; 
-    flex-direction: column;
-    background: #2c3e50; 
-    border-radius: 4px; 
-    overflow: auto; 
-    max-height: 85vh; 
-    font-family: monospace; 
-    font-size: 13px; 
-    line-height: 1.5; 
-    position: relative; 
-    padding: 10px 0;
-}
-.code-row {
-    display: flex;
-    align-items: stretch;
+/* SPLIT PANEL LAYOUT VIA CSS GRID */
+.browser-split-container {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 15px;
+    align-items: start;
     width: 100%;
 }
-.line-number { 
-    padding: 0 10px 0 15px; 
-    background: #23313f; 
-    color: #7f8c8d; 
-    text-align: right; 
-    user-select: none; 
-    -webkit-user-select: none;
-    border-right: 1px solid #34495e; 
-    min-width: 45px; 
+
+/* VENSTRE PANEL (MAPPETRÆ) */
+.tree-panel {
+    background: #f8f9fa;
+    border: 1px solid #e3e6ef;
+    border-radius: 6px;
+    padding: 12px;
     box-sizing: border-box;
-    flex-shrink: 0;
 }
-.code-text { 
-    flex: 1; 
-    padding: 0 15px; 
-    color: #ecf0f1; 
-    margin: 0; 
-    box-sizing: border-box;
-    user-select: text;
-    -webkit-user-select: text;
-}
-
-.code-container.no-wrap .code-text { white-space: pre; word-break: normal; }
-.code-container.wrap .code-text { white-space: pre-wrap; word-break: break-all; }
-
-.image-container { 
-    display: none; 
-    justify-content: center; 
-    align-items: center; 
-    background: #eaeded; 
-    border-radius: 4px; 
-    padding: 20px; 
-    max-height: 85vh; 
-    overflow: auto; 
-}
-.image-container img { 
-    max-width: 100%; 
-    max-height: 80vh; 
-    object-fit: contain; 
-    border-radius: 4px; 
-    box-shadow: 0 2px 10px rgba(0,0,0,0.15); 
-    background: white; 
-}
-.tc-modal-close { font-size: 24px; font-weight: bold; color: #95a5a6; cursor: pointer; border: none; background: none; }
-.tc-modal-close:hover { color: #e74c3c; }
-.wrap-container { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #555; font-weight: 600; background: #f4f7f6; padding: 4px 10px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; }
-
-.action-btn {
-    padding: 6px 8px;
-    margin: 0;
-    font-size: 13px;
+.tree-root {
     font-weight: bold;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
+    color: #2c3e50;
+    margin-bottom: 12px;
+    font-size: 14px;
+    border-bottom: 1px solid #e3e6ef;
+    padding-bottom: 6px;
+}
+.tree-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.tree-item {
+    margin: 4px 0;
+}
+.tree-link {
     text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    white-space: nowrap;
-    overflow: visible;
-    line-height: 1.2;
-    transition: background-color 0.2s;
+    color: #4f566b;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transition: all 0.15s ease;
 }
-.btn-icon {
-    font-size: 16px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-    overflow: visible;
+.tree-link:hover {
+    background: #edf0f5;
+    color: #1a1f36;
 }
-.delete-icon-wrap {
-    background: #ffffff;
-    border-radius: 50%;
-    width: 18px;
-    height: 18px;
+.tree-link.active {
+    background: #3498db;
+    color: #ffffff;
+    font-weight: bold;
+}
+.tree-badge {
     font-size: 11px;
+    opacity: 0.75;
+    font-weight: normal;
 }
+
+/* HØJRE PANEL (FILPANEL) */
+.files-panel {
+    min-width: 0; 
+}
+.files-panel .tbl, 
+.files-panel .tbl th {
+    font-size: 11px !important;
+}
+.files-panel .tbl td {
+    font-size: 11px !important;
+    padding-top: 3px !important;
+    padding-bottom: 3px !important;
+}
+
+/* PROJEKT-KNAPPER */
+.action-btn {
+    padding: 2px 5px; margin: 0; font-size: 10px; font-weight: bold; color: white; border: none; border-radius: 4px; cursor: pointer;
+    text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; line-height: 1.2; transition: background-color 0.2s;
+}
+.btn-icon { font-size: 11px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+.delete-icon-wrap { background: #ffffff; border-radius: 50%; width: 13px; height: 13px; font-size: 8px; }
 .btn-view { background-color: #3498db; }
 .btn-view:hover { background-color: #2980b9; }
 .btn-download { background-color: #2ecc71; }
@@ -241,103 +208,143 @@ htm_Card_('@System Storage Browser', 1000);
 .btn-delete { background-color: #e74c3c; }
 .btn-delete:hover { background-color: #c0392b; }
 
-.tbl th:last-child .sort-icon,
-.tbl th:last-child i,
-.tbl th:last-child .fa {
-    display: none !important;
+/* Skjul sorteringspile på den sidste kolonne via system-standard */
+.tbl th:last-child .sort-icon, .tbl th:last-child i, .tbl th:last-child .fa { display: none !important; }
+.tbl th:last-child a::after { display: none !important; }
+
+/* MODAL & VIEWER STYLES */
+.tc-modal { display: none; position: fixed; z-index: 10500; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); font-family: sans-serif; }
+.tc-modal-content { 
+    background-color: #fff; margin: 2% auto; padding: 20px; border-radius: 8px; width: 85%; max-width: 1100px; 
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3); display: flex; flex-direction: column; max-height: 95vh; 
 }
-.tbl th:last-child a::after {
-    display: none !important;
+.tc-modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-bottom: 15px; }
+.code-container { 
+    display: flex; flex-direction: column; background: #2c3e50; border-radius: 4px; overflow: auto; max-height: 85vh; 
+    font-family: monospace; font-size: 12px; line-height: 1.5; position: relative; padding: 10px 0;
 }
+.code-row { display: flex; align-items: stretch; width: 100%; }
+.line-number { 
+    padding: 0 10px 0 15px; background: #23313f; color: #7f8c8d; text-align: right; user-select: none; -webkit-user-select: none;
+    border-right: 1px solid #34495e; min-width: 45px; box-sizing: border-box; flex-shrink: 0;
+}
+.code-text { flex: 1; padding: 0 15px; color: #ecf0f1; margin: 0; box-sizing: border-box; user-select: text; -webkit-user-select: text; }
+.code-container.no-wrap .code-text { white-space: pre; word-break: normal; }
+.code-container.wrap .code-text { white-space: pre-wrap; word-break: break-all; }
+.image-container { display: none; justify-content: center; align-items: center; background: #eaeded; border-radius: 4px; padding: 20px; max-height: 85vh; overflow: auto; }
+.image-container img { max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.15); background: white; }
+.tc-modal-close { font-size: 24px; font-weight: bold; color: #95a5a6; cursor: pointer; border: none; background: none; }
+.tc-modal-close:hover { color: #e74c3c; }
+.wrap-container { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; font-weight: 600; background: #f4f7f6; padding: 4px 10px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; }
 </style>
 
-<fieldset class="field-group" style="margin-bottom:25px; border-color:#3498db !important;">
-    <legend style="color:#3498db;"><?php echo lang('@Select Storage Directory'); ?></legend>
-    <form method="get" style="display:flex; gap:10px; padding:5px 0;">
-        <select name="folder" style="flex:1; border:none; background:transparent; font-size:14px;" onchange="this.form.submit();">
+<div class="browser-split-container">
+    
+    <div class="tree-panel">
+        <div class="tree-root">📁 storage/</div>
+        <ul class="tree-list">
             <?php
             foreach ($allowed_folders as $key => $path) {
-                $sel = ($current_key === $key) ? 'selected' : '';
+                $is_active = ($current_key === $key);
+                $active_class = $is_active ? 'active' : '';
+                $icon = $is_active ? '📂' : '📁';
+                
                 $folder_stats = get_folder_stats($path);
-                echo "<option value='$key' $sel>" . ucfirst($key) . " (" . $folder_stats['count'] . " " . lang('@files') . " - " . $folder_stats['formatted_size'] . ")</option>";
+                $display_name = ucfirst($key);
+                
+                echo "<li class='tree-item'>";
+                echo "<a href='storage_browser.php?folder={$key}' class='tree-link {$active_class}'>";
+                echo "<span>{$icon} {$display_name}</span>";
+                echo "<span class='tree-badge'>{$folder_stats['count']} " . lang('@files') . " • {$folder_stats['formatted_size']}</span>";
+                echo "</a>";
+                echo "</li>";
             }
             ?>
-        </select>
-    </form>
-</fieldset>
+        </ul>
+    </div>
 
-<?php
-$files = is_dir($storage_dir) ? array_diff(scandir($storage_dir), ['.', '..', '.htaccess']) : [];
-$table_data = [];
+    <div class="files-panel">
+        <?php
+        $files = is_dir($storage_dir) ? array_diff(scandir($storage_dir), ['.', '..', '.htaccess']) : [];
+        $table_data = [];
 
-foreach ($files as $file) {
-    $path = $storage_dir . $file;
-    if (is_dir($path)) continue; 
-    
-    $size = lang('@Unknown');
-    if (file_exists($path)) {
-        $size_bytes = @filesize($path);
-        if ($size_bytes !== false) {
-            $size = ($size_bytes >= 1048576) ? number_format($size_bytes / 1048576, 2, ',', '.') . ' MB' : number_format($size_bytes / 1024, 2, ',', '.') . ' KB';
+        foreach ($files as $file) {
+            $path = $storage_dir . $file;
+            if (is_dir($path)) continue; 
+            
+            $size = lang('@Unknown');
+            if (file_exists($path)) {
+                $size_bytes = @filesize($path);
+                if ($size_bytes !== false) {
+                    $size = ($size_bytes >= 1048576) ? number_format($size_bytes / 1048576, 2, ',', '.') . ' MB' : number_format($size_bytes / 1024, 2, ',', '.') . ' KB';
+                }
+            }
+            
+            $date = lang('@Unknown');
+            if (file_exists($path)) {
+                $mtime = @filemtime($path);
+                if ($mtime !== false) {
+                    $date = date(CONF_DATE_FORMAT.' H:i', $mtime);
+                }
+            }
+            
+            $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+            $can_view = (is_text_file($path) || in_array($ext, $image_extensions) || $ext === 'pdf');
+            
+            $actions = '<div style="display:flex; gap:4px; justify-content:flex-end; align-items:center;">';
+            if ($can_view) {
+                $actions .= '<button type="button" class="action-btn btn-view" onclick="openFileViewer(\'' . htmlspecialchars($file, ENT_QUOTES) . '\')"><span class="btn-icon">👁️</span> ' . lang('@View') . '</button>';
+            }
+            $actions .= '<a href="storage_browser.php?folder=' . $current_key . '&download=' . urlencode($file) . '" class="action-btn btn-download"><span class="btn-icon">📥</span> ' . lang('@Download') . '</a>';
+            $actions .= '<a href="storage_browser.php?folder=' . $current_key . '&delete=' . urlencode($file) . '" class="action-btn btn-delete" onclick="return confirm(\'' . lang('@Are you sure you want to delete this file?') . '\');"><span class="btn-icon delete-icon-wrap">❌</span> ' . lang('@Delete') . '</a>';
+            $actions .= '</div>';
+            
+            # Sorteringstildelingen mapper nu korrekt mod nøglerne defineret i $headers
+            $table_data[] = [
+                'name'     => htmlspecialchars($file),
+                'date'     => $date,
+                'size'     => $size,
+                '@Actions' => $actions
+            ];
         }
-    }
-    
-    $date = lang('@Unknown');
-    if (file_exists($path)) {
-        $mtime = @filemtime($path);
-        if ($mtime !== false) {
-            $date = date(CONF_DATE_FORMAT.' H:i', $mtime);
+
+        # Nøglerne her og i $column_styles skal matche hinanden 100% sprogligt
+        $headers = [ 
+            'name'     => lang('@File Name'), 
+            'date'     => lang('@Modified Date'), 
+            'size'     => lang('@Size'), 
+            '@Actions' => lang('@Actions') 
+        ];
+
+        # REGEL: Nøglen rettet fra 'actions' til '@Actions' så htm_Table() synkroniserer både th og td.
+        $column_styles = [
+            'name'     => '',
+            'date'     => '',
+            'size'     => 'text-align: right !important; padding-right: 25px !important;',
+            '@Actions' => 'text-align: right !important;'
+        ];
+
+        if (empty($table_data)) {
+            echo '<div style="text-align:center; padding:40px; color:#95a5a6; background:#fff; border:1px solid #e3e6ef; border-radius:6px; font-size:11px;"><i class="fa fa-folder-open" style="font-size:36px; margin-bottom:10px; display:block;"></i>' . lang('@No files found in this directory.') . '</div>';
+        } else {
+            htm_Table($headers, $table_data, 'tbl', 25, '', true, $column_styles);
         }
-    }
-    
-    $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-    $can_view = (is_text_file($path) || in_array($ext, $image_extensions) || $ext === 'pdf');
-    
-    $actions = '<div style="display:flex; gap:5px; justify-content:flex-end; align-items:center;">';
-    if ($can_view) {
-        $actions .= '<button type="button" class="action-btn btn-view" onclick="openFileViewer(\'' . htmlspecialchars($file, ENT_QUOTES) . '\')"><span class="btn-icon">👁️</span> ' . lang('@View') . '</button>';
-    }
-    $actions .= '<a href="storage_browser.php?folder=' . $current_key . '&download=' . urlencode($file) . '" class="action-btn btn-download"><span class="btn-icon">📥</span> ' . lang('@Download') . '</a>';
-    $actions .= '<a href="storage_browser.php?folder=' . $current_key . '&delete=' . urlencode($file) . '" class="action-btn btn-delete" onclick="return confirm(\'' . lang('@Are you sure you want to delete this file?') . '\');"><span class="btn-icon delete-icon-wrap">❌</span> ' . lang('@Delete') . '</a>';
-    $actions .= '</div>';
-    
-    $table_data[] = [
-        'name'    => htmlspecialchars($file),
-        'date'    => $date,
-        'size'    => $size,
-        'actions' => $actions
-    ];
-}
+        ?>
+    </div>
+</div>
 
-$headers = [ 'name' => lang('@File Name'), 'date' => lang('@Modified Date'), 'size' => lang('@Size'), 'actions' => lang('@Actions') ];
-
-$column_styles = [
-    'name'    => '',
-    'date'    => '',
-    'size'    => 'text-align: right !important; padding-right: 25px !important;',
-    'actions' => '@Action'
-];
-
-if (empty($table_data)) {
-    echo '<div style="text-align:center; padding:40px; color:#95a5a6;"><i class="fa fa-folder-open" style="font-size:48px; margin-bottom:15px; display:block;"></i>' . lang('@No files found in this directory.') . '</div>';
-} else {
-    htm_Table($headers, $table_data, 'tbl', 25, '', true, $column_styles);
-}
-
-htm_Card_end();
-?>
+<?php htm_Card_end(); ?>
 
 <div id="viewerModal" class="tc-modal">
     <div class="tc-modal-content">
         <div class="tc-modal-header">
-            <h3 id="viewerTitle" style="margin:0; color:#2c3e50; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:50%;"><?php echo lang('@File Content'); ?></h3>
+            <h3 id="viewerTitle" style="margin:0; color:#2c3e50; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:50%; font-size:16px;"><?php echo lang('@File Content'); ?></h3>
             <div style="display:flex; align-items:center; gap:15px;">
                 <label id="wrapToggleContainer" class="wrap-container"><input type="checkbox" id="wrapToggle" onchange="toggleWordWrap(this.checked)"><span><?php echo lang('@Ombryd linjer'); ?></span></label>
                 <button type="button" class="tc-modal-close" onclick="closeFileViewer()">&times;</button>
             </div>
         </div>
-        <div id="codeContainer" class="code-container no-wrap">
-            </div>
+        <div id="codeContainer" class="code-container no-wrap"></div>
         <div id="imageContainer" class="image-container"><img id="viewerImage" src="" alt="Billedvisning"></div>
         <div id="pdfContainer" style="display:none; width:100%;"><iframe id="viewerPdf" src="" style="width:100%; height:85vh; border:none; border-radius:4px;"></iframe></div>
     </div>

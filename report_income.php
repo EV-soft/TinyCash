@@ -9,20 +9,20 @@ showMenu();
 
 // 1. Hent valuta fra indstillinger (lodret tabel struktur)
 $sql = "SELECT setting_value FROM settings WHERE setting_key = 'currency' LIMIT 1";
-$res_settings = mysqli_query($conn, $sql);
+$res_settings = DB::query($conn, $sql);
 $currency = 'DKK'; // Standard fallback
-if ($res_settings && mysqli_num_rows($res_settings) > 0) {
-    $row = mysqli_fetch_assoc($res_settings);
+if ($res_settings && DB::num_rows($res_settings) > 0) {
+    $row = DB::fetch_assoc($res_settings);
     $currency = $row['setting_value'];
 }
 
 // --- 2. DATA BEREGNING ---
 // Hent Omsætning
-$res_sales = mysqli_query($conn, "SELECT SUM(il.quantity * il.price_each) as total 
+$res_sales = DB::query($conn, "SELECT SUM(il.quantity * il.price_each) as total 
                                   FROM invoice_lines il 
                                   JOIN invoices i ON il.inv_id = i.inv_id 
                                   WHERE i.inv_status = 'paid'");
-$row_sales = mysqli_fetch_assoc($res_sales);
+$row_sales = DB::fetch_assoc($res_sales);
 $revenue = $row_sales['total'] ?? 0;
 
 // Hent Udgifter
@@ -32,7 +32,7 @@ $sql_costs = "SELECT s.std_name, s.std_id, SUM(t.amount) as cat_total
               JOIN std_accounts s ON a.std_ref_id = s.std_id
               GROUP BY s.std_id 
               ORDER BY s.std_id ASC";
-$res_costs = mysqli_query($conn, $sql_costs);
+$res_costs = DB::query($conn, $sql_costs);
 
 // Hent Salgsmoms
 $sql_sales_vat = "SELECT SUM((il.quantity * il.price_each) * (a.vat_rate / 100)) as total_vat 
@@ -40,12 +40,12 @@ $sql_sales_vat = "SELECT SUM((il.quantity * il.price_each) * (a.vat_rate / 100))
                   JOIN invoices i ON il.inv_id = i.inv_id 
                   JOIN accounts a ON il.acc_id = a.acc_id 
                   WHERE i.inv_status = 'paid'";
-$res_sales_vat = mysqli_query($conn, $sql_sales_vat);
-$sales_vat = mysqli_fetch_assoc($res_sales_vat)['total_vat'] ?? 0;
+$res_sales_vat = DB::query($conn, $sql_sales_vat);
+$sales_vat = DB::fetch_assoc($res_sales_vat)['total_vat'] ?? 0;
 
 // Hent Købsmoms
-$res_purchase_vat = mysqli_query($conn, "SELECT SUM(vat_amount) as vat FROM transactions");
-$purchase_vat = mysqli_fetch_assoc($res_purchase_vat)['vat'] ?? 0;
+$res_purchase_vat = DB::query($conn, "SELECT SUM(vat_amount) as vat FROM transactions");
+$purchase_vat = DB::fetch_assoc($res_purchase_vat)['vat'] ?? 0;
 
 $vat_to_pay = $sales_vat - $purchase_vat;
 $total_costs = 0; 
@@ -71,8 +71,8 @@ echo "<div style='max-width:900px; margin:0 auto;'>";
         </tr>
 
         <?php 
-        if($res_costs && mysqli_num_rows($res_costs) > 0): 
-            while($cost = mysqli_fetch_assoc($res_costs)): 
+        if($res_costs && DB::num_rows($res_costs) > 0): 
+            while($cost = DB::fetch_assoc($res_costs)): 
                 $total_costs += $cost['cat_total']; ?>
                 <tr style="border-bottom:1px solid #eee;">
                     <td style="padding:12px 15px;">

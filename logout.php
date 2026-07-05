@@ -1,5 +1,5 @@
-<?php # logout.php v:0.8 d:2026-04-11 i:evs m:1
-// Start sessionen så vi kan lukke den
+<?php # logout.php v:1.1.0 d:2026-07-05 i:evs
+
 session_start();
 $_SESSION = array();
 

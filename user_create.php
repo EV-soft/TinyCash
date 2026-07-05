@@ -9,8 +9,8 @@ $msg = ""; $err = "";
 
 // --- 1. HÅNDTER OPRETTELSE (POST) ---
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_user'])) {
-    $username = mysqli_real_escape_string($conn, $_POST['username']);
-    $role     = mysqli_real_escape_string($conn, $_POST['user_role']);
+    $username = DB::real_escape_string($conn, $_POST['username']);
+    $role     = DB::real_escape_string($conn, $_POST['user_role']);
     $pw1      = $_POST['password'];
     $pw2      = $_POST['confirm_password'];
 
@@ -19,19 +19,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_user'])) {
     } elseif ($pw1 !== $pw2) {
         $err = lang('@Passwords do not match');
     } else {
-        $check = mysqli_query($conn, "SELECT user_id FROM users WHERE username = '$username'");
-        if (mysqli_num_rows($check) > 0) {
+        $check = DB::query($conn, "SELECT user_id FROM users WHERE username = '$username'");
+        if (DB::num_rows($check) > 0) {
             $err = lang('@Username already exists');
         } else {
             $hash = password_hash($pw1, PASSWORD_DEFAULT);
             $sql = "INSERT INTO users (username, password_hash, user_role) 
                     VALUES ('$username', '$hash', '$role')";
             
-            if (mysqli_query($conn, $sql)) {
+            if (DB::query($conn, $sql)) {
                 header("Location: user_list.php?msg=user_created");
                 exit;
             } else {
-                $err = "DB Error: " . mysqli_error($conn);
+                $err = "DB Error: " . DB::error($conn);
             }
         }
     }

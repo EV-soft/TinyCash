@@ -1,4 +1,4 @@
-<?php # about.php v:1.0.0 d:2026-06-15 i:evs
+<?php # about.php v:1.1.0 d:2026-07-05 i:evs
 require 'inc/auth.inc.php';
 require 'inc/db_connect.inc.php';
 require 'inc/menu.inc.php';
@@ -23,7 +23,7 @@ $security_ok = check_security_lock();
 htm_Header('@About TinyCash');
 showMenu();
 
-htm_Card_('@TinyCash Billing System', '500');
+htm_Card_('@TinyCash Accounting System', '500');
 ?>
 <div style="text-align: center; font-family: sans-serif; line-height: 1.6;">
     <div style="font-size: 2.5em; font-weight: bold; margin-bottom: 10px;">
@@ -34,11 +34,14 @@ htm_Card_('@TinyCash Billing System', '500');
     <hr>
     <p><?php echo lang('@© 2026 - Developed with a focus on simplicity and speed.'); ?></p>
     
-    <p style="text-align: left; background: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 4px solid #3498db;">
-        <strong>TinyCash </strong> <?php echo lang('@is a lightweight accounting system designed for small/smaller businesses, that want full control over their own data.'); ?><br>
+    <p style="text-align: left; 
+              background: rgba(128, 128, 128, 0.1); /* Semi-transparent grå - virker i begge modes */
+              padding: 15px; 
+              border-radius: 5px; 
+              border-left: 4px solid #3498db; 
+              color: inherit;"> <strong>TinyCash </strong> <?php echo lang('@is a lightweight accounting system designed for small/smaller businesses, that want full control over their own data.'); ?><br>
         <?php echo lang('@Currently as a single-currency system'); ?>
     </p>
-
     <div style="margin: 25px 0; text-align: left;">
         <h4 style="margin-bottom: 5px;"><?php echo lang('@Developed by:'); ?></h4>
         <p style="margin-top: 0;"><?php echo lang('@EV-soft & Gemini / For your Business'); ?></p>
@@ -46,8 +49,13 @@ htm_Card_('@TinyCash Billing System', '500');
         <h4 style="margin-bottom: 5px;"><?php echo lang('@System status:'); ?></h4>
         <ul style="list-style: none; padding: 0;">
             <li>✅ <?php echo lang('@PHP Version:'); echo ' '.phpversion(); ?></li>
-            <li>✅ <?php echo lang('@Database: MySQLi Connected'); ?></li>
-           <li>
+            <li>✅ 
+                <?php 
+                $db_display = ($db_type === 'sqlite') ? 'SQLite (File-based)' : 'MySQL (Server-based)';
+                echo lang('@Database:') . ' ' . $db_display; 
+                ?>
+            </li>
+            <li>
                 ✅ <?php echo lang('@Language:'); 
                 $current_l = $_SESSION['lang'] ?? 'da';
                 

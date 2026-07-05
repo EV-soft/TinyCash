@@ -12,8 +12,8 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
 set_time_limit(300);
 
 $tables = [];
-$result = mysqli_query($conn, "SHOW TABLES");
-while ($row = mysqli_fetch_row($result)) {
+$result = DB::query($conn, "SHOW TABLES");
+while ($row = DB::fetch_row($result)) {
     $tables[] = $row[0];
 }
 
@@ -24,19 +24,19 @@ $sql_dump .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
 
 foreach ($tables as $table) {
     // 1. Drop & Create Table struktur
-    $row2 = mysqli_fetch_row(mysqli_query($conn, "SHOW CREATE TABLE `" . $table . "`"));
+    $row2 = DB::fetch_row(DB::query($conn, "SHOW CREATE TABLE `" . $table . "`"));
     $sql_dump .= "\n\n" . $row2[1] . ";\n\n";
     
     // 2. Hent data ud af tabellen
-    $result_data = mysqli_query($conn, "SELECT * FROM `" . $table . "`");
-    $num_fields = mysqli_num_fields($result_data);
+    $result_data = DB::query($conn, "SELECT * FROM `" . $table . "`");
+    $num_fields = DB::num_fields($result_data);
     
-    while ($row = mysqli_fetch_row($result_data)) {
+    while ($row = DB::fetch_row($result_data)) {
         $sql_dump .= "INSERT INTO `" . $table . "` VALUES(";
         for ($j = 0; $j < $num_fields; $j++) {
             if (isset($row[$j])) {
                 // Undgå SQL injection i selve dumpet og bevar linjeskift
-                $escaped = mysqli_real_escape_string($conn, $row[$j]);
+                $escaped = DB::real_escape_string($conn, $row[$j]);
                 $sql_dump .= '"' . $escaped . '"';
             } else {
                 $sql_dump .= 'NULL';

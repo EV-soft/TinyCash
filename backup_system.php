@@ -20,23 +20,24 @@ if ($zip->open($backupDir . $zipName, ZipArchive::CREATE) !== TRUE) {
 
 // 1. SQL DUMP (Indeholder nu alle data: Kontoplan, brugere, transaktioner og FIRMADATA)
 $sqlDump = "-- TinyCash System Backup\n-- Generated: " . date('Y-m-d H:i:s') . "\n";
-$res = mysqli_query($conn, "SHOW TABLES");
+// MYSQL-only: $res = DB::query($conn, "SHOW TABLES");
+$res = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
 
-while ($row = mysqli_fetch_row($res)) {
+while ($row = DB::fetch_row($res)) {
     $table = $row[0];
     
     // Generer tabel-struktur
-    $createRes = mysqli_query($conn, "SHOW CREATE TABLE $table");
-    $create = mysqli_fetch_row($createRes);
+    $createRes = DB::query($conn, "SHOW CREATE TABLE $table");
+    $create = DB::fetch_row($createRes);
     $sqlDump .= "\n\n" . $create[1] . ";\n\n";
     
     // Generer data (INSERTs)
-    $data = mysqli_query($conn, "SELECT * FROM $table");
-    while ($item = mysqli_fetch_row($data)) {
+    $data = DB::query($conn, "SELECT * FROM $table");
+    while ($item = DB::fetch_row($data)) {
         // Håndter NULL værdier korrekt og escape strenge
         $values = array_map(function($val) use ($conn) {
             if ($val === null) return "NULL";
-            return "'" . mysqli_real_escape_string($conn, $val) . "'";
+            return "'" . DB::real_escape_string($conn, $val) . "'";
         }, $item);
         
         $sqlDump .= "INSERT INTO $table VALUES(" . implode(",", $values) . ");\n";

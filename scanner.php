@@ -1,4 +1,4 @@
-<?php # TranslationExtractor.php v:1.1.0 d:2026-07-05 i:evs
+<?php # scanner.php
 header('Content-Type: text/plain; charset=utf-8');
 
 $directory = __DIR__; 

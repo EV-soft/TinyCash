@@ -24,7 +24,7 @@ if (!$conn) {
 $acc_bank    = isset($CONF['conf_acc_bank']) ? (int)$CONF['conf_acc_bank'] : 5000;
 $acc_debitor = isset($CONF['conf_acc_debitor']) ? (int)$CONF['conf_acc_debitor'] : 8100;
 
-mysqli_begin_transaction($conn);
+DB::begin_transaction($conn);
 
 try {
     // 1. SIKRET: Tjek nuværende status samt hent beløb og dato til finanspostering
@@ -47,11 +47,11 @@ try {
     $inv_amount = (float)$row['total_amount'];
 
     // 2. Find det næste ledige fakturanummer
-    $num_res = mysqli_query($conn, "SELECT MAX(CAST(invoice_no AS UNSIGNED)) as max_no FROM invoices");
+    $num_res = DB::query($conn, "SELECT MAX(CAST(invoice_no AS UNSIGNED)) as max_no FROM invoices");
     if (!$num_res) {
         throw new Exception('Kunne ikke generere nyt fakturanummer');
     }
-    $num_row = mysqli_fetch_assoc($num_res);
+    $num_row = DB::fetch_assoc($num_res);
     $next_invoice_no = ($num_row['max_no'] > 0) ? $num_row['max_no'] + 1 : 1001; 
 
     // 3. SIKRET: Opdater fakturaen med nummer og ændr status til 'sent'
@@ -89,11 +89,11 @@ try {
     log_action($conn, 'POST_INVOICE', 'invoices', $inv_id, ['status' => 'draft'], ['status' => 'sent', 'invoice_no' => $next_invoice_no]);
 
     // Alt gik godt -> Gem ændringer i databasen permanent
-    mysqli_commit($conn);
+    DB::commit($conn);
     echo json_encode(['success' => true, 'invoice_no' => $next_invoice_no]);
 
 } catch (Exception $e) {
-    mysqli_rollback($conn);
+    DB::rollback($conn);
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }
 exit;
