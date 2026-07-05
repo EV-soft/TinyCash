@@ -5,18 +5,18 @@ require_once 'inc/php2htm.lib.php';
 $message = "";
 
 // 1. Tjek om der allerede findes en admin
-$check = mysqli_query($conn, "SELECT user_id FROM users WHERE user_role = 'admin' LIMIT 1");
-$adminExists = ($check && mysqli_num_rows($check) > 0);
+$check = DB::query($conn, "SELECT user_id FROM users WHERE user_role = 'admin' LIMIT 1");
+$adminExists = ($check && DB::num_rows($check) > 0);
 
 // 2. Logik: Opret administratoren
 if (isset($_POST['create_admin']) && !$adminExists) {
-    $initials = mysqli_real_escape_string($conn, trim($_POST['username']));
+    $initials = DB::real_escape_string($conn, trim($_POST['username']));
     $pass_hash = password_hash($_POST['password'], PASSWORD_DEFAULT);
     $role = 'admin';
     $sql = "INSERT INTO users (username, password_hash, user_role) 
             VALUES ('$initials', '$pass_hash', '$role')";
 
-    if (mysqli_query($conn, $sql)) {
+    if (DB::query($conn, $sql)) {
         $message = "<div style='background:#d4edda; color:#155724; padding:15px; border-radius:4px; margin-bottom:20px;'>
                     <strong>✅ " . lang('@Admin created successfully!') . "</strong><br>" . 
                     lang('@You can now log in to the system.') . "
@@ -25,7 +25,7 @@ if (isset($_POST['create_admin']) && !$adminExists) {
         $adminExists = true; 
     } else {
         $message = "<div style='background:#f8d7da; color:#721c24; padding:15px; border-radius:4px; margin-bottom:20px;'>
-                    ❌ " . lang('@Error') . ": " . mysqli_error($conn) . "</div>";
+                    ❌ " . lang('@Error') . ": " . DB::error($conn) . "</div>";
     }
 }
 

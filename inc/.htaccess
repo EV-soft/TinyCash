@@ -1,3 +1,5 @@
+# inc/.htaccess  renamed from "..htaccess"
+
 # 1. Benægt adgang til alt som standard
 Require all denied
 
@@ -16,4 +18,9 @@ Require all denied
     <RequireAll>
         Require all granted
     </RequireAll>
+</Files>
+
+# 5. Tillad adgang til notepads gemme-funktion
+<Files "notepad.inc.php">
+    Require all granted
 </Files>

@@ -1,4 +1,4 @@
-<?php # /inc/master_advisor.php v:0.9.6 d:2026-05-19 i:evs m:1 ok
+<?php # /inc/master_advisor.php v:1.1.0 d:2026-07-02 i:evs
 ob_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
@@ -109,7 +109,7 @@ foreach ($functions as $func) {
 }
 fwrite($mainHandle, "\n\n### DATABASE SCHEMA ###\n");
 
-$tables_res = mysqli_query($conn, "SHOW TABLES");
+$tables_res = mysqli_query($conn, "SHOW TABLES"); # Replace: mysqli_ to DB:: if SQLite
 if ($tables_res) {
     while ($table_row = mysqli_fetch_array($tables_res)) {
         $tableName = $table_row[0];

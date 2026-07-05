@@ -17,9 +17,9 @@ echo "<style>
 echo "<h2>Database Blueprint: " . htmlspecialchars($db_name ?? 'TinyCash') . "</h2>";
 
 // Hent alle tabeller
-$tables_res = mysqli_query($conn, "SHOW TABLES");
+$tables_res = DB::query($conn, "SHOW TABLES");
 
-while ($table_row = mysqli_fetch_array($tables_res)) {
+while ($table_row = DB::fetch_array($tables_res)) {
     $tableName = $table_row[0];
     
     echo "<div class='table-card'>";
@@ -37,8 +37,8 @@ while ($table_row = mysqli_fetch_array($tables_res)) {
             <tbody>";
     
     // Hent alle felter for denne tabel
-    $cols_res = mysqli_query($conn, "DESCRIBE `$tableName`");
-    while ($col = mysqli_fetch_assoc($cols_res)) {
+    $cols_res = DB::query($conn, "DESCRIBE `$tableName`");
+    while ($col = DB::fetch_assoc($cols_res)) {
         echo "<tr>
                 <strong><td>" . $col['Field'] . "</td></strong>
                 <td class='type'><big>" . $col['Type'] . "</big></td>

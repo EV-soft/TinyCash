@@ -1,15 +1,15 @@
-<?php # /inc/depot_worker.inc.php v:1.0.0 d:2026-05-24 i:evs ok
+<?php # /inc/depot_worker.inc.php v:1.1.0 d:2026-07-02 i:evs
 
 /**
  * Scanner Bilagsdepotet og sikrer, at kildemapperne eksisterer.
  * @return array Struktur over fundne filer opdelt på kilder.
  */
 function getDepotFiles() {
-    // Definer hovedmappen til depotet i din storage-struktur
-    $base_depot = __DIR__ . '/../storage/bilagsdepot/';
+    // Definer hovedmappen til depotet i din storage-struktur (små bogstaver, engelsk)
+    $base_depot = __DIR__ . '/../storage/voucher_depot/';
     
-    // De 4 ønskede kilde-mapper
-    $sources = ['Foto', 'Mail', 'Skanner', 'Download'];
+    // De 4 ønskede kilde-mapper i lowercase
+    $sources = ['mail', 'scanner', 'photo', 'download'];
     $depot_structure = [];
 
     foreach ($sources as $source) {
@@ -40,7 +40,7 @@ function getDepotFiles() {
                         'source'   => $source,
                         'size'     => filesize($full_path),
                         'date'     => filemtime($full_path),
-                        'rel_path' => 'storage/bilagsdepot/' . $source . '/' . $file
+                        'rel_path' => 'storage/voucher_depot/' . $source . '/' . $file
                     ];
                 }
             }

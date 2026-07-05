@@ -1,6 +1,6 @@
-<?php # send_invoice_action.php (Placeret i PROGROOT)
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
+<?php # send_invoice_action.php v:1.1.0 d:2026-07-02 i:evs
+// ini_set('display_errors', 1);
+// error_reporting(E_ALL);
  
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -11,8 +11,8 @@ $id = (int)$_GET['id'];
 
 $sql = "SELECT i.invoice_no, c.cust_name, c.cust_email FROM invoices i 
         JOIN customers c ON i.cust_id = c.cust_id WHERE i.inv_id = $id";
-$res = mysqli_query($conn, $sql);
-$data = mysqli_fetch_assoc($res);
+$res = DB::query($conn, $sql);
+$data = DB::fetch_assoc($res);
 
 if (!$data) {
     die(json_encode(['success' => false, 'error' => 'Invoice not found']));
@@ -48,7 +48,7 @@ $result = sendTinyMail(
 
 header('Content-Type: application/json');
 if ($result['success']) {
-    mysqli_query($conn, "UPDATE invoices SET inv_status = 'sent' WHERE inv_id = $id");
+    DB::query($conn, "UPDATE invoices SET inv_status = 'sent' WHERE inv_id = $id");
 }
 echo json_encode($result);
 ?>

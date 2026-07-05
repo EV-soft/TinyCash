@@ -1,9 +1,23 @@
-<?php # inc/auth.inc.php v:0.9.6 d:2026-05-25 i:evs
+<?php # inc/auth.inc.php v:1.1.0 d:2026-07-02 i:evs
+require_once 'inc/php2htm.lib.php'; 
+
 if (session_status() === PHP_SESSION_NONE) {
-    $session_time = 14400; // 14400 * 8;
+    $session_time = 14400; // 4 timer
     ini_set('session.gc_maxlifetime', $session_time);
-    session_set_cookie_params($session_time);
+    
+    // Tving et unikt sessionsnavn specifikt til dit PHP 8-miljø
+    // Dette klipper ALT samarbejde med de gamle, defekte sessionsfiler på serveren!
+    session_name('TCC_V100_SESSION'); 
+
+    session_set_cookie_params([
+        'lifetime' => $session_time,
+        'path' => '/',
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+
     session_start();
+    echo "";
 }
 
 // 1. --- HÅNDTER NIVEAUSKIFT FRA L-INDIKATOR (Kører ALTID) ---
@@ -19,21 +33,22 @@ if (isset($_GET['l'])) {
     $requested_lang = strtolower($_GET['l']);
     if (preg_match('/^[a-z]{2}$/', $requested_lang)) {
         $_SESSION['lang'] = $requested_lang;
+        
+        // Opdater proglang med det samme, så biblioteket forstår det
+        if ($requested_lang === 'en') {
+            $_SESSION['proglang'] = 'en : English';
+        } else {
+            $_SESSION['proglang'] = 'da : Dansk';
+        }
     }
-    $url = parse_url($_SERVER['HTTP_REFERER'] ?? 'index.php');
-    $path = $url['path'] ?? 'index.php';
-    $query = [];
-    if (isset($url['query'])) {
-        parse_str($url['query'], $query);
-        unset($query['l']); 
-    }
-    $new_url = $path . (!empty($query) ? '?' . http_build_query($query) : '');
-    header("Location: " . $new_url);
-    exit;
 }
 
+// Fallback hvis sessionen ikke er sat endnu
 if (!isset($_SESSION['lang'])) {
     $_SESSION['lang'] = 'da'; 
+}
+if (!isset($_SESSION['proglang'])) {
+    $_SESSION['proglang'] = 'da : Dansk';
 }
 
 // Hent den aktuelle sti med det samme
@@ -63,7 +78,6 @@ if (isset($_SESSION['user_id']) && strpos($current_url, 'login.php') === false) 
 }
 
 // 4. --- LOGIN-KONTROL ---
-// Hvis vi er på login.php, stopper vi her, så siden ikke fanges i en uendelig løkke
 if (strpos($current_url, 'login.php') !== false) {
     return; 
 }
@@ -80,15 +94,29 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_id'] <= 0) {
 // 5. --- BRUGER-NIVEAU KONTROL ---
 $uLev = $_SESSION['user_level'] ?? 2;
 
-if (isset($rLev)) {
-    if ($uLev < $rLev) {
-        ob_clean();
-        header('Content-Type: text/html; charset=utf-8');
-        echo '<div style="max-width:500px; margin:50px auto; padding:20px; border:1px solid #e74c3c; background:#fdf2f2; color:#b91c1c; font-family:sans-serif; border-radius:4px; text-align:center;">';
-        echo '<h3>' . lang('Access Denied') . '</h3>';
-        echo '<p>' . lang('Your user level is not high enough to view this page.') . '</p>';
-        echo '<a href="index.php" style="color:#2563eb; text-decoration:none; font-weight:bold;">' . lang('Go to Frontpage') . '</a>';
-        echo '</div>';
-        exit;
+if (isset($rLev) && $uLev < $rLev) {
+    deny_access_gracefully();
+}
+
+// Central funktion til at afvise adgang med bevaret menu og design
+function deny_access_gracefully() {
+    if (ob_get_length()) ob_clean();
+    
+    if (!function_exists('showMenu')) {
+        require_once 'inc/menu.inc.php';
     }
+    
+    htm_Header(lang('Access Denied'));
+    showMenu();
+    
+    htm_Card_(lang('Access Denied'), 600, '', 'access_error', false);
+    echo '<div style="text-align:center; padding:20px;">';
+    echo '<i class="fa fa-exclamation-triangle" style="font-size:48px; color:#e74c3c; margin-bottom:15px;"></i>';
+    echo '<p style="font-size:1.2em; color:#555; margin-bottom:25px;">' . lang('Your user level is not high enough to view this page.') . '</p>';
+    htm_Button('fa-arrow-left', 'Back to Dashboard', 'primary', 'sales_hub.php', '', '', '', true);
+    echo '</div>';
+    htm_Card_end();
+    
+    htm_Footer();
+    exit;
 }

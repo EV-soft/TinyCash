@@ -1,7 +1,7 @@
-<?php # /inc/help.lib.php - Centraliseret hjælpesystem (Logik og UI)
+<?php # /inc/help.lib.php - v:1.1.0 d:2026-07-02 i:evs
 
 # -------------------------------------------------------------------------
-# INTERN DATA-LOGIK (Rettet til dynamisk sprogvalg)
+# INTERN DATA-LOGIK
 # -------------------------------------------------------------------------
 
 function _help_get_content($current_page, $target_lang) {
@@ -9,26 +9,72 @@ function _help_get_content($current_page, $target_lang) {
     $lang = strtolower(trim($target_lang));
     
     // 2. Definer stien til den specifikke sprogfil
-    $lang_file = dirname(__DIR__) . "/json-data/languages/help_system_" . $lang . ".json";
+    $lang_file   = dirname(__DIR__) . "/json-data/languages/help_system_" . $lang . ".json";
     $master_file = dirname(__DIR__) . '/json-data/help_system.json';
     
-    // 3. Vælg sprogfilen hvis den findes, ellers snup master-filen (en)
-    $file_to_load = (file_exists($lang_file)) ? $lang_file : $master_file;
+    if (!file_exists($master_file)) return false;
+    $master_data = json_decode(file_get_contents($master_file), true);
+    if (!$master_data || !isset($master_data[$current_page])) return false;
 
-    if (!file_exists($file_to_load)) return false;
-    
-    $data = json_decode(file_get_contents($file_to_load), true);
-    if (!$data || !isset($data[$current_page])) {
-        // Hvis siden mangler i sprogfilen, så prøv at snappe den fra master-filen i stedet
-        if ($file_to_load !== $master_file && file_exists($master_file)) {
-            $data = json_decode(file_get_contents($master_file), true);
-            if (!$data || !isset($data[$current_page])) return false;
+    $help_lines = $master_data[$current_page];
+
+    // Hvis sproget ikke er engelsk, forsøger vi at hente eller generere oversættelsen online
+    if ($lang !== 'en') {
+        $lang_data = [];
+        if (file_exists($lang_file)) {
+            $lang_data = json_decode(file_get_contents($lang_file), true) ?? [];
+        }
+
+        if (isset($lang_data[$current_page])) {
+            // Sektionen findes allerede på det valgte sprog
+            $help_lines = $lang_data[$current_page];
         } else {
-            return false;
+            // Sektionen mangler! Vi oversætter automatisk via OpenAI API
+            $apiKey = $_ENV['OPENAI_API_KEY'] ?? $_SERVER['OPENAI_API_KEY'] ?? (function_exists('getenv') ? getenv('OPENAI_API_KEY') : '') ?? '';
+            
+            if (!empty($apiKey)) {
+                $payload = [
+                    "model" => "gpt-4o-mini", // Hurtig og præcis til strukturerede tekst-oversættelser
+                    "messages" => [
+                        [
+                            "role" => "system",
+                            "content" => "You are a professional software translator. Translate the following application help text into HTML blocks. Translate to language code: " . strtoupper($target_lang) . ". Keep all HTML tags, structure, and technical terminology intact. Return ONLY the translated lines inside a raw JSON array of strings, matching the source format. No markdown, no wrapper."
+                        ],
+                        [
+                            "role" => "user",
+                            "content" => json_encode($help_lines)
+                        ]
+                    ]
+                ];
+
+                $ch = curl_init("https://api.openai.com/v1/chat/completions");
+                curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json", "Authorization: Bearer " . $apiKey]);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+                curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+                $response = curl_exec($ch);
+                curl_close($ch);
+
+                if ($response) {
+                    $res_data = json_decode($response, true);
+                    $ai_json = $res_data['choices'][0]['message']['content'] ?? '';
+                    $translated_lines = json_decode(trim($ai_json), true);
+                    
+                    if (is_array($translated_lines)) {
+                        // Gem den nye oversættelse i sprogfilen, så den er klar til næste gang
+                        $lang_data[$current_page] = $translated_lines;
+                        $lang_dir = dirname($lang_file);
+                        if (!is_dir($lang_dir)) {
+                            @mkdir($lang_dir, 0755, true);
+                        }
+                        file_put_contents($lang_file, json_encode($lang_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                        $help_lines = $translated_lines;
+                    }
+                }
+            }
         }
     }
-
-    $help_lines = $data[$current_page];
     return implode("\n", $help_lines);
 }
 
@@ -36,6 +82,7 @@ function _help_has_text($current_page, $target_lang) {
     $content = _help_get_content($current_page, $target_lang);
     return ($content !== false && !empty($content));
 }
+
 
 # -------------------------------------------------------------------------
 # BRUGERFLADE-FUNKTIONER (HTM_*)
@@ -45,36 +92,7 @@ function _help_has_text($current_page, $target_lang) {
 function htm_HelpSystem() {
     $current_page = basename($_SERVER['SCRIPT_NAME']);
     $target_lang  = isset($_SESSION['lang']) ? $_SESSION['lang'] : 'da';
-    $master_file = dirname(__DIR__) . '/json-data/help_system.json';
-
- /*    // DEBUG INFO DIREKTE PÅ SKÆRMEN:
-    echo "<div style='background:#fff; border:3px solid red; padding:15px; margin:20px; color:#000; font-family:monospace; z-index:999999; position:relative;'>";
-    echo "<h3>🔍 Debug Hjælpesystem:</h3>";
-    echo "Aktuel side: <b>" . $current_page . "</b><br>";
-    echo "Søger efter fil på sti: <b>" . $master_file . "</b><br>";
- */    
-/*     if (!file_exists($master_file)) {
-        echo "<span style='color:red;'>❌ FEJL: help_system.json findes IKKE på denne sti!</span><br>";
-    } else {
-        echo "<span style='color:green;'>✔️ OK: Filen eksisterer.</span><br>";
-        $raw = file_get_contents($master_file);
-        $master_data = json_decode($raw, true);
-        
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            echo "<span style='color:red;'>❌ FEJL I JSON-SYNTAKS: " . json_last_error_msg() . "</span><br>";
-        } else {
-            echo "<span style='color:green;'>✔️ OK: JSON er gyldig.</span><br>";
-            if (!isset($master_data[$current_page])) {
-                echo "<span style='color:red;'>❌ FEJL: Nøglen '" . $current_page . "' findes IKKE inde i din JSON-fil!</span><br>";
-                echo "Tilgængelige nøgler i filen: " . implode(", ", array_keys($master_data)) . "<br>";
-            } else {
-                echo "<span style='color:green;'>✔️ OK: Nøglen '" . $current_page . "' blev fundet!</span><br>";
-            }
-        }
-    }
-    echo "</div>";
-
- */    // Den oprindelige kode fortsætter herunder...
+    
     $help_text = _help_get_content($current_page, $target_lang);
     if (!$help_text) return;
     
@@ -119,6 +137,7 @@ function htm_HelpSystem() {
     </script>
     <?php
 }
+
 # FLOATING ACTION BAR
 function htm_FloatingActionBar() {
     $current_page = basename($_SERVER['SCRIPT_NAME']);
@@ -138,7 +157,6 @@ function htm_FloatingActionBar() {
         <a href="invoice_edit.php?id=0" class="fab-item"><span class="fab-dot dot-invoice"></span><i class="fa fa-file-invoice"></i> <?php echo lang('@New Invoice'); ?></a>
         <a href="expense_edit.php?id=0" class="fab-item"><span class="fab-dot dot-receipt"></span><i class="fa fa-receipt"></i> <?php echo lang('@New Expense'); ?></a>
         <a href="product_edit.php?id=0" class="fab-item"><span class="fab-dot dot-account"></span><i class="fa fa-box-open"></i> <?php echo lang('@New Product'); ?></a>
-        <a href="account_edit.php?id=0" class="fab-item"><span class="fab-dot dot-account"></span><i class="fa fa-plus-square"></i> <?php echo lang('@New Account'); ?></a>
         <a href="customer_edit.php?id=0" class="fab-item"><i class="fa fa-user-plus"></i> <?php echo lang('@New Customer'); ?></a>
         <div id="fab-scroll-top" class="fab-top" style="display:none;" onclick="window.scrollTo({top: 0, behavior: 'smooth'});" data-hint="<?php echo lang('@Go to top'); ?>"><i class="fa fa-arrow-up"></i>&nbsp;<span><?php echo lang('@Top'); ?></span></div>
         <a href="#" class="fab-item" onclick="<?php echo $btn_onclick; ?>" style="<?php echo $btn_style; ?>" data-hint="<?php echo lang($btn_hint); ?>">
@@ -146,5 +164,78 @@ function htm_FloatingActionBar() {
         </a>
     </div>
     <?php
+}
+
+# -------------------------------------------------------------------------
+# INTELIGENT UTILITY LOGIK (OpenAI Bilagsscanning)
+# -------------------------------------------------------------------------
+
+/**
+ * Scanner et bilag (billede eller PDF) vha. OpenAI gpt-4o og returnerer strukturerede data.
+ * @param string $file_path Relativ eller absolut sti til filen på serveren
+ * @return array|null [dato => 'YYYY-MM-DD', total => 123.45, leverandor => 'Navn'] eller null ved fejl
+ */
+function scanBilagMedOpenAI($file_path) {
+    $api_key = $_ENV['OPENAI_API_KEY'] ?? $_SERVER['OPENAI_API_KEY'] ?? (function_exists('getenv') ? getenv('OPENAI_API_KEY') : '') ?? '';
+
+    if (empty($api_key) || !file_exists($file_path)) {
+        return null;
+    }
+
+    $file_data = file_get_contents($file_path);
+    $mime_type = mime_content_type($file_path);
+    $base64_file = base64_encode($file_data);
+
+    $json_schema = [
+        'name' => 'receipt_extractor',
+        'strict' => true,
+        'schema' => [
+            'type' => 'object',
+            'properties' => [
+                'dato' => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
+                'total' => ['type' => 'number', 'description' => 'Totalbeløb med moms'],
+                'leverandor' => ['type' => 'string', 'description' => 'Leverandørnavn']
+            ],
+            'required' => ['dato', 'total', 'leverandor'],
+            'additionalProperties' => false
+        ]
+    ];
+
+    $payload = [
+        'model' => 'gpt-4o',
+        'messages' => [
+            [
+                'role' => 'user',
+                'content' => [
+                    ['type' => 'text', 'text' => 'Analyseer dette bilag. Find dato (YYYY-MM-DD), totalbeløb og leverandørnavn.'],
+                    ['type' => 'image_url', 'image_url' => ['url' => 'data:' . $mime_type . ';base64,' . $base64_file]]
+                ]
+            ]
+        ],
+        'response_format' => ['type' => 'json_schema', 'json_schema' => $json_schema]
+    ];
+
+    $ch = curl_init('https://api.openai.com/v1/chat/completions');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . $api_key
+    ]);
+    
+    // Sikrer at forbindelsen ikke fejler på lokale SSL-opsætninger
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+
+    $response = curl_exec($ch);
+    curl_close($ch);
+    
+    $result = json_decode($response, true);
+    if (isset($result['choices'][0]['message']['content'])) {
+        return json_decode($result['choices'][0]['message']['content'], true);
+    }
+
+    return null;
 }
 ?>
