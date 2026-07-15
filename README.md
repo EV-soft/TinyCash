@@ -67,7 +67,9 @@
 
    - **Language:** The system currently includes 13 pre-defined languages. You can add or edit texts on the management page located under *System/Control Panel/Language Editing*, or directly in `/json-data/languages.json`.
 
-
+<br>
+<br>
+<br>
 
 # **TinyCash 🛠️**
 
