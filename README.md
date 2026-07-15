@@ -11,7 +11,7 @@
 
 **It provides a fast, efficient, and self-reliant solution for invoicing, inventory management, VAT handling, and more.**
 
-***Limitation: The system currently supports only one currency.***
+**Limitation:** The system currently supports only one currency.
 
 ### Core Features & Strengths
 
@@ -75,9 +75,9 @@
 
 Systemet understøtter over 180 sprog, hvoraf 13 sprog i øjeblikket er forberedt med en minimal oversættelse, der dækker hovedmenuen og systemets vigtigste elementer. 
 
-**Systemet er udviklet med henblik på at opfylde de danske lovkrav der stilles til bogføringsprogrammer. Programmet kan afvikles på alt fra standard webhotel, til egen NAS-server.**
+Systemet er udviklet med henblik på at opfylde de danske lovkrav der stilles til bogføringsprogrammer. Programmet kan afvikles på alt fra standard webhotel, til egen NAS-server.
 
-**Det løser dine behov for hurtig, effektiv og selvhjulpen håndtering af fakturering,  lagerstyring, momshåndtering m.v.**
+Det løser dine behov for hurtig, effektiv og selvhjulpen håndtering af fakturering,  lagerstyring, momshåndtering m.v.
 
 Begrænsning: Systemet understøtter p.t. kun brug af én valuta.
 
@@ -89,31 +89,31 @@ Begrænsning: Systemet understøtter p.t. kun brug af én valuta.
 
 - 🔐 **Privatliv & Ejerskab (Self-Hosted): Dine data er 100% dine. Ingen afhængighed af tredjeparts sky-løsninger, ingen månedlige abonnementer. Kør alt sikkert på din egen infrastruktur.**
 
-- ⚡ ***Høj Ydeevne: Bygget med ren PHP/MySQL-logik, hvilket sikrer hurtig eksekvering, selv på simple delte hosting-miljøer.**
+- ⚡ **Høj Ydeevne:** Bygget med ren PHP/MySQL-logik, hvilket sikrer hurtig eksekvering, selv på simple delte hosting-miljøer.
 
-- 🛠️ **Udvikler-centreret Arkitektur: Systemet er nu centraliseret omkring et robust bibliotek** (*`php2htm.lib.php`*), der håndterer alt fra tema-styring (Light/Custom/Dark) til genanvendelige UI-komponenter, hvilket gør koden modulær og let at vedligeholde.**
+- 🛠️ **Udvikler-centreret Arkitektur:** Systemet er nu centraliseret omkring et robust bibliotek (*`php2htm.lib.php`*), der håndterer alt fra tema-styring (Light/Custom/Dark) til genanvendelige UI-komponenter, hvilket gør koden modulær og let at vedligeholde.
 
-- **Den nuværende kode er skrevet af EV-soft i tæt samarbejde med AI-assistenter.**
+- Den nuværende kode er skrevet af EV-soft i tæt samarbejde med AI-assistenter.
 
 ### **Vigtigste Funktioner**
 
-- **Kunde- & Leverandørstyring: Effektiv databasehåndtering af dine forretningsrelationer.**
+- **Kunde- & Leverandørstyring:** Effektiv databasehåndtering af dine forretningsrelationer.
 
-- **Fakturering: Professionelle, printklare fakturalayouts med fuld fleksibilitet.**
+- **Fakturering:** Professionelle, printklare fakturalayouts med fuld fleksibilitet.
 
-- **Lagerstyring: Realtidssporing med automatisk nedskrivning af beholdning ved salg.**
+- **Lagerstyring:** Realtidssporing med automatisk nedskrivning af beholdning ved salg.
 
-- **Bilagsstyring: AI-skanning og tolkning  af bilag, samt journalisering og elektronisk arkivering af disse.**
+- **Bilagsstyring:** AI-skanning og tolkning  af bilag, samt journalisering og elektronisk arkivering af disse.
 
-- **Bankimport: Integreret CSV-import fra bank, til afstemning af kontobevægelser.**
+- **Bankimport:** Integreret CSV-import fra bank, til afstemning af kontobevægelser.
 
-- **Backup: Kontrol af regelmæssig backup af data, bilag, mail og andre dokumenter.**
+- **Backup:** Kontrol af regelmæssig backup af data, bilag, mail og andre dokumenter.
 
-- **Integrerede Værktøjer: Et indbygget værktøjssæt til kodegennemgang, backup, migrering af databaser og avanceret sprogstyring.**
+- **Integrerede Værktøjer:** Et indbygget værktøjssæt til kodegennemgang, backup, migrering af databaser og avanceret sprogstyring.
 
-- **Tema-valg: Programmes farvevalg d.v.s. visuelle temaer (Light, Dark, Custom).**
+- **Tema-valg:** Programmes farvevalg d.v.s. visuelle temaer (Light, Dark, Custom).
 
-- **Brugerniveau: I programmets menu kan ”slukkes” for forskellige punkter svarende til brugerfunktion: Simpel – Avanceret – System ansvarlig. Der er ingen automatik, men en knap i Log ud feltet, der skifter niveau.**
+- **Brugerniveau:** I programmets menu kan ”slukkes” for forskellige punkter svarende til brugerfunktion: Simpel – Avanceret – System ansvarlig. Der er ingen automatik, men en knap i Log ud feltet, der skifter niveau.
 
 ### **Installation & Konfiguration**
 
@@ -121,7 +121,7 @@ Begrænsning: Systemet understøtter p.t. kun brug af én valuta.
 
 **2. Database Opsætning**
 
-- MySQL: Opret en MySQL-database via dit kontrolpanel. Opret en database-admin med de fulde rettigheder til databasen.
+- **MySQL:** Opret en MySQL-database via dit kontrolpanel. Opret en database-admin med de fulde rettigheder til databasen.
 
 - **Importer** *`database\\\_blueprint.sql`* for at oprette nødvendige tabeller.
 
@@ -137,7 +137,7 @@ Begrænsning: Systemet understøtter p.t. kun brug af én valuta.
 
 **3. API & Sprog-konfiguration**
 
-- **OpenAI: For at aktivere smarte oversættelsesforslag, og indskanning af bilag, indsæt din `OPENAI\\\_API\\\_KEY` i din `env.ini` i `inc/`-mappen.**
+- **OpenAI:** For at aktivere smarte oversættelsesforslag, og indskanning af bilag, indsæt din `OPENAI\\\_API\\\_KEY` i din `env.ini` i `inc/`-mappen.
 
 
-- **Sprog: Systemet indeholder nu 13 prædefinerede sprog. Du kan tilføje eller rette teks**ter på redigeringssiden, som du finder i System/Kontrolpanel/Sprog redigering.
+- **Sprog:** Systemet indeholder nu 13 prædefinerede sprog. Du kan tilføje eller rette tekster på redigeringssiden, som du finder i System/Kontrolpanel/Sprog redigering.
