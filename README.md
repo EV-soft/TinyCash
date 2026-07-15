@@ -73,17 +73,17 @@
 
 **TinyCash er et open source webbaseret regnskabssystem, skrevet i PHP, og  understøttet af MySQL og SQLite.**
 
-**Systemet understøtter over 180 sprog, hvoraf 13 sprog i øjeblikket er forberedt med en minimal oversættelse, der dækker hovedmenuen og systemets vigtigste elementer. **
+Systemet understøtter over 180 sprog, hvoraf 13 sprog i øjeblikket er forberedt med en minimal oversættelse, der dækker hovedmenuen og systemets vigtigste elementer. 
 
 **Systemet er udviklet med henblik på at opfylde de danske lovkrav der stilles til bogføringsprogrammer. Programmet kan afvikles på alt fra standard webhotel, til egen NAS-server.**
 
 **Det løser dine behov for hurtig, effektiv og selvhjulpen håndtering af fakturering,  lagerstyring, momshåndtering m.v.**
 
-***Begrænsning: Systemet understøtter p.t. kun brug af én valuta. ***
+Begrænsning: Systemet understøtter p.t. kun brug af én valuta.
 
 ### **Kerneegenskaber & Styrker**
 
-- 🌍 **Smart Sprog-motor: TinyCash understøtter nu automatiseret oversættelse via OpenAI-integration.* Systemet scanner automatisk kildekoden for sætninger (på engelsk) og giver dig en central redigeringsside til at administrere oversættelser – nu med 13 forberedte sprog.**
+- 🌍 **Smart Sprog-motor: TinyCash understøtter nu automatiseret oversættelse via OpenAI-integration.* Systemet scanner automatisk kildekoden for sætninger (på engelsk) og giver dig en central redigeringsside til at administrere oversættelser – nu med 13 forberedte sprog.*
 
 - 📦 **Automatiseret Lagerstyring: Lagerbeholdningen opdateres automatisk, når varer sælges og fakturaer oprettes, hvilket sikrer fuld synkronisering mellem salg og beholdning.**
 
@@ -105,7 +105,7 @@
 
 - **Bilagsstyring: AI-skanning og tolkning  af bilag, samt journalisering og elektronisk arkivering af disse.**
 
-- ***Bankimport: Integreret CSV-import fra bank, til afstemning af kontobevægelser.**
+- **Bankimport: Integreret CSV-import fra bank, til afstemning af kontobevægelser.**
 
 - **Backup: Kontrol af regelmæssig backup af data, bilag, mail og andre dokumenter.**
 
@@ -117,22 +117,22 @@
 
 ### **Installation & Konfiguration**
 
-**1. Programkode Upload alle filer fra kilde-arkivet til en PHP-kompatibel server. 	(Krav: PHP 8.0+) **
+1. Programkode Upload alle filer fra kilde-arkivet til en PHP-kompatibel server. 	(Krav: PHP 8.0+) 
 
 **2. Database Opsætning**
 
-- **MySQL: Opret en MySQL-database via dit kontrolpanel. Opret en database-admin med de fulde rettigheder til databasen. **
+- MySQL: Opret en MySQL-database via dit kontrolpanel. Opret en database-admin med de fulde rettigheder til databasen.
 
 - **Importer** *`database\\\_blueprint.sql`* for at oprette nødvendige tabeller.
 
 
-- **Rediger** konfigurationsfilen i `inc/env.ini` med dine databaseoplysninger (`host, bruger, kodeord, database`), samt mail og API-forbindelses oplysninger. Udelades mail og API mistes blot mail og oversættelses-muligheder. **
+- **Rediger** konfigurationsfilen i `inc/env.ini` med dine databaseoplysninger (`host, bruger, kodeord, database`), samt mail og API-forbindelses oplysninger. Udelades mail og API mistes blot mail og oversættelses-muligheder.
 
 
-- **SQLite: Kræver ingen opsætning. Blandt filerne er en præopsat database.**
+- **SQLite:** Kræver ingen opsætning. Blandt filerne er en præopsat database.
 
 
-- **API & Sprog: Indsæt din `OPENAI\_API\_KEY` i `env.ini` for at aktivere AI-sprogoversættelser og bilagsskanning. Sprogfiler kan rettes via systemets indbyggede redigeringsside  eller direkte i `/json-data/languages.json`. **
+- **API & Sprog:** Indsæt din `OPENAI\_API\_KEY` i `env.ini` for at aktivere AI-sprogoversættelser og bilagsskanning. Sprogfiler kan rettes via systemets indbyggede redigeringsside  eller direkte i `/json-data/languages.json`. 
 
 
 **3. API & Sprog-konfiguration**
