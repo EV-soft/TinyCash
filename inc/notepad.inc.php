@@ -1,4 +1,5 @@
-<?php # /inc/notepad.inc.php v:1.1.0 d:2026-07-02 i:evs
+<?php # /inc/notepad.inc.php v:1.2.0 d:2026-08-11 i:evs 
+# (Rettet: manglede session_name() før session_start() i gem-grenen)
 ob_start();
 
 $file_path = __DIR__ . '/../storage/global_notepad.html';
@@ -7,7 +8,16 @@ $file_path = __DIR__ . '/../storage/global_notepad.html';
 // 1. WORKER-LOGIK (Kører KUN når der gemmes data via POST)
 // =========================================================================
 if (isset($_GET['notepad_action']) && $_GET['notepad_action'] === 'save') {
+    // RETTET: manglede session_name('TCC_V100_SESSION') før session_start().
+    // Denne gren kaldes direkte via fetch() til inc/notepad.inc.php uden om
+    // auth.inc.php - det er derfor det FØRSTE sessionsberøring på denne
+    // forespørgsel. Uden det rigtige navn startede PHP en helt ny, ukendt
+    // session i stedet for at genoptage brugerens rigtige TCC_V100_SESSION
+    // (samme fejlklasse som blev fundet i logout.php, set_lang.php og
+    // htm_Header()). Betyder i praksis, at et evt. fremtidigt genaktiveret
+    // sikkerhedstjek på $_SESSION['user_role'] herunder ALDRIG ville virke.
     if (session_status() === PHP_SESSION_NONE) { 
+        session_name('TCC_V100_SESSION');
         session_start(); 
     }
     
@@ -39,7 +49,7 @@ if (file_exists($file_path)) {
 }
 ?>
 
-<button type="button" onclick="toggleGlobalNotes()" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; background: #2c3e50; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;" title="<?php echo lang('@Open Notepad (Alt + N)'); ?>">
+<button type="button" class="no-print" onclick="toggleGlobalNotes()" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; background: #2c3e50; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;" title="<?php echo lang('@Open Notepad (Alt + N)'); ?>">
     📝
 </button>
 

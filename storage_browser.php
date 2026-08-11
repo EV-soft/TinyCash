@@ -1,4 +1,4 @@
-<?php # /storage_browser.php v:1.1.0 d:2026-07-05 i:evs
+<?php # /storage_browser.php v:1.2.0 d:2026-07-07 i:claude (Opdateret til at bruge htm_ActionButtons)
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -130,20 +130,21 @@ htm_Card_(capt: '@System Storage Browser', wdth: '');
     width: 100%;
 }
 
-/* VENSTRE PANEL (MAPPETRÆ) */
+/* VENSTRE PANEL (MAPPETRÆ) - nu tema-bevidst i stedet for hårdkodede
+   lys-tema-farver, som gjorde panelet til en lys boks i dark-tema. */
 .tree-panel {
-    background: #f8f9fa;
-    border: 1px solid #e3e6ef;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 12px;
     box-sizing: border-box;
 }
 .tree-root {
     font-weight: bold;
-    color: #2c3e50;
+    color: var(--text-main);
     margin-bottom: 12px;
     font-size: 14px;
-    border-bottom: 1px solid #e3e6ef;
+    border-bottom: 1px solid var(--border-color);
     padding-bottom: 6px;
 }
 .tree-list {
@@ -156,7 +157,7 @@ htm_Card_(capt: '@System Storage Browser', wdth: '');
 }
 .tree-link {
     text-decoration: none;
-    color: #4f566b;
+    color: var(--text-muted);
     font-size: 13px;
     padding: 6px 10px;
     border-radius: 4px;
@@ -166,12 +167,12 @@ htm_Card_(capt: '@System Storage Browser', wdth: '');
     transition: all 0.15s ease;
 }
 .tree-link:hover {
-    background: #edf0f5;
-    color: #1a1f36;
+    background: var(--bg-table-hover);
+    color: var(--text-main);
 }
 .tree-link.active {
-    background: #3498db;
-    color: #ffffff;
+    background: var(--color-primary);
+    color: var(--text-light);
     font-weight: bold;
 }
 .tree-badge {
@@ -194,20 +195,6 @@ htm_Card_(capt: '@System Storage Browser', wdth: '');
     padding-bottom: 3px !important;
 }
 
-/* PROJEKT-KNAPPER */
-.action-btn {
-    padding: 2px 5px; margin: 0; font-size: 10px; font-weight: bold; color: white; border: none; border-radius: 4px; cursor: pointer;
-    text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; line-height: 1.2; transition: background-color 0.2s;
-}
-.btn-icon { font-size: 11px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
-.delete-icon-wrap { background: #ffffff; border-radius: 50%; width: 13px; height: 13px; font-size: 8px; }
-.btn-view { background-color: #3498db; }
-.btn-view:hover { background-color: #2980b9; }
-.btn-download { background-color: #2ecc71; }
-.btn-download:hover { background-color: #27ae60; }
-.btn-delete { background-color: #e74c3c; }
-.btn-delete:hover { background-color: #c0392b; }
-
 /* Skjul sorteringspile på den sidste kolonne via system-standard */
 .tbl th:last-child .sort-icon, .tbl th:last-child i, .tbl th:last-child .fa { display: none !important; }
 .tbl th:last-child a::after { display: none !important; }
@@ -215,10 +202,12 @@ htm_Card_(capt: '@System Storage Browser', wdth: '');
 /* MODAL & VIEWER STYLES */
 .tc-modal { display: none; position: fixed; z-index: 10500; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); font-family: sans-serif; }
 .tc-modal-content { 
-    background-color: #fff; margin: 2% auto; padding: 20px; border-radius: 8px; width: 85%; max-width: 1100px; 
+    background-color: var(--bg-card); margin: 2% auto; padding: 20px; border-radius: 8px; width: 85%; max-width: 1100px; 
     box-shadow: 0 4px 20px rgba(0,0,0,0.3); display: flex; flex-direction: column; max-height: 95vh; 
 }
-.tc-modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-bottom: 15px; }
+.tc-modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--color-primary); padding-bottom: 10px; margin-bottom: 15px; }
+/* .code-container er BEVIDST altid mørk (kode-fremviser-æstetik), uanset
+   sidens tema - rørt ikke ved, det er ikke en tema-fejl men et design-valg. */
 .code-container { 
     display: flex; flex-direction: column; background: #2c3e50; border-radius: 4px; overflow: auto; max-height: 85vh; 
     font-family: monospace; font-size: 12px; line-height: 1.5; position: relative; padding: 10px 0;
@@ -231,11 +220,11 @@ htm_Card_(capt: '@System Storage Browser', wdth: '');
 .code-text { flex: 1; padding: 0 15px; color: #ecf0f1; margin: 0; box-sizing: border-box; user-select: text; -webkit-user-select: text; }
 .code-container.no-wrap .code-text { white-space: pre; word-break: normal; }
 .code-container.wrap .code-text { white-space: pre-wrap; word-break: break-all; }
-.image-container { display: none; justify-content: center; align-items: center; background: #eaeded; border-radius: 4px; padding: 20px; max-height: 85vh; overflow: auto; }
+.image-container { display: none; justify-content: center; align-items: center; background: var(--bg-panel); border-radius: 4px; padding: 20px; max-height: 85vh; overflow: auto; }
 .image-container img { max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.15); background: white; }
-.tc-modal-close { font-size: 24px; font-weight: bold; color: #95a5a6; cursor: pointer; border: none; background: none; }
-.tc-modal-close:hover { color: #e74c3c; }
-.wrap-container { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; font-weight: 600; background: #f4f7f6; padding: 4px 10px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; }
+.tc-modal-close { font-size: 24px; font-weight: bold; color: var(--text-muted); cursor: pointer; border: none; background: none; }
+.tc-modal-close:hover { color: var(--color-danger); }
+.wrap-container { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-main); font-weight: 600; background: var(--bg-panel); padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border-color); cursor: pointer; }
 </style>
 
 <div class="browser-split-container">
@@ -291,13 +280,18 @@ htm_Card_(capt: '@System Storage Browser', wdth: '');
             $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
             $can_view = (is_text_file($path) || in_array($ext, $image_extensions) || $ext === 'pdf');
             
-            $actions = '<div style="display:flex; gap:4px; justify-content:flex-end; align-items:center;">';
+            // Byg handlings-array via htm_ActionButtons. 'label' bevarer den
+            // synlige tekst ved siden af ikonet, ligesom originalens
+            // .action-btn-knapper havde (kræver den udvidede htm_ActionButtons
+            // med label-understøttelse - se htm_ActionButtons_v2.php).
+            $file_actions = [];
             if ($can_view) {
-                $actions .= '<button type="button" class="action-btn btn-view" onclick="openFileViewer(\'' . htmlspecialchars($file, ENT_QUOTES) . '\')"><span class="btn-icon">👁️</span> ' . lang('@View') . '</button>';
+                $file_actions[] = ['icon' => 'fa-eye', 'label' => '@View', 'onclick' => "openFileViewer('" . htmlspecialchars($file, ENT_QUOTES) . "')", 'type' => 'primary'];
             }
-            $actions .= '<a href="storage_browser.php?folder=' . $current_key . '&download=' . urlencode($file) . '" class="action-btn btn-download"><span class="btn-icon">📥</span> ' . lang('@Download') . '</a>';
-            $actions .= '<a href="storage_browser.php?folder=' . $current_key . '&delete=' . urlencode($file) . '" class="action-btn btn-delete" onclick="return confirm(\'' . lang('@Are you sure you want to delete this file?') . '\');"><span class="btn-icon delete-icon-wrap">❌</span> ' . lang('@Delete') . '</a>';
-            $actions .= '</div>';
+            $file_actions[] = ['icon' => 'fa-download', 'label' => '@Download', 'link' => 'storage_browser.php?folder=' . $current_key . '&download=' . urlencode($file), 'type' => 'success'];
+            $file_actions[] = ['icon' => 'fa-trash', 'label' => '@Delete', 'link' => 'storage_browser.php?folder=' . $current_key . '&delete=' . urlencode($file), 'confirm' => '@Are you sure you want to delete this file?', 'type' => 'danger'];
+
+            $actions = htm_ActionButtons($file_actions, false);
             
             # Sorteringstildelingen mapper nu korrekt mod nøglerne defineret i $headers
             $table_data[] = [
@@ -325,7 +319,7 @@ htm_Card_(capt: '@System Storage Browser', wdth: '');
         ];
 
         if (empty($table_data)) {
-            echo '<div style="text-align:center; padding:40px; color:#95a5a6; background:#fff; border:1px solid #e3e6ef; border-radius:6px; font-size:11px;"><i class="fa fa-folder-open" style="font-size:36px; margin-bottom:10px; display:block;"></i>' . lang('@No files found in this directory.') . '</div>';
+            echo '<div style="text-align:center; padding:40px; color:var(--text-muted); background:var(--bg-panel); border:1px solid var(--border-color); border-radius:6px; font-size:11px;"><i class="fa fa-folder-open" style="font-size:36px; margin-bottom:10px; display:block;"></i>' . lang('@No files found in this directory.') . '</div>';
         } else {
             htm_Table($headers, $table_data, 'tbl', 25, '', true, $column_styles);
         }
@@ -338,7 +332,7 @@ htm_Card_(capt: '@System Storage Browser', wdth: '');
 <div id="viewerModal" class="tc-modal">
     <div class="tc-modal-content">
         <div class="tc-modal-header">
-            <h3 id="viewerTitle" style="margin:0; color:#2c3e50; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:50%; font-size:16px;"><?php echo lang('@File Content'); ?></h3>
+            <h3 id="viewerTitle" style="margin:0; color:var(--text-main); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:50%; font-size:16px;"><?php echo lang('@File Content'); ?></h3>
             <div style="display:flex; align-items:center; gap:15px;">
                 <label id="wrapToggleContainer" class="wrap-container"><input type="checkbox" id="wrapToggle" onchange="toggleWordWrap(this.checked)"><span><?php echo lang('@Ombryd linjer'); ?></span></label>
                 <button type="button" class="tc-modal-close" onclick="closeFileViewer()">&times;</button>

@@ -148,16 +148,6 @@
         "<li><strong>Opcje narzędzia dynamicznego:<\/strong> Kliknij przycisk <strong>„Dodaj nowe konto”<\/strong> (➕), aby dodać nowy węzeł finansowy. Skorzystaj z lokalnych wyzwalaczy w wierszu akcji, aby edytować podstawowe parametry lub bezpiecznie usunąć zbędne konta ze struktury bazy danych.<\/li>",
         "<p>Wprowadzaj zmiany w kontach z rozwagą. Zmiany strukturalne mają dynamiczny wpływ na sposób, w jaki zapisy transakcji wpływają na salda w dzienniku głównym oraz na historyczne dane księgowe.<\/p>"
     ],
-    "company_settings.php": [
-        "<h3>Informacje o firmie Pomoc<\/h3>",
-        "<p>To centrum sterowania zarządza profilem tożsamości korporacyjnej, oficjalnymi parametrami systemowymi, infrastrukturą bankową oraz standardami automatycznej komunikacji.<\/p>",
-        "<ul><li><strong>Pola dotyczące tożsamości korporacyjnej i rejestru:<\/strong> Określ oficjalne dane, takie jak nazwa podmiotu prawnego, dane kontaktowe oraz dane identyfikacyjne (np. dane weryfikacyjne dotyczące lokalnego <em>numeru CVR<\/em>). Informacje te są dynamicznie wprowadzane do wychodzących dokumentów transakcyjnych.<\/li><\/ul>",
-        "<li><strong>Układ infrastruktury bankowej:<\/strong> Dokładnie rejestruj sekwencje numerów rejestracyjnych oddziałów bankowych oraz numerów rachunków depozytowych. Segmenty tych danych są bezpośrednio powiązane z układami faktur, co pozwala na sprawne przetwarzanie przychodzących automatycznych procesów dopasowywania płatności.<\/li>",
-        "<li><strong>Standardowy profil komunikacyjny:<\/strong> Skonfiguruj domyślną treść powiadomień transakcyjnych dla całego systemu. Ten blok pełni rolę wstępnie wczytanego, podstawowego szablonu tekstu, który jest stosowany przy wysyłaniu faktur do klientów.<\/li>",
-        "<li><strong>Mechanizm przechowywania danych (UPSERT):<\/strong> Przesłanie tego schematu uruchamia skrypt śledzący, który przechodzi cyklicznie przez parametry przy użyciu standardowej struktury klucz-wartość. Wykorzystuje on wewnętrzną procedurę bazodanową do bezpiecznego wykonania operacji wstawiania lub aktualizacji (<em>ON DUPLICATE KEY UPDATE<\/em>) w głównym indeksie <em>ustawień<\/em>.<\/li>",
-        "<li><strong>Eksport danych SAF-T zgodnie z przepisami:<\/strong> Kliknij przycisk <strong>„Eksportuj SAF-T<\/strong>” (), aby wyeksportować kompletną historię danych finansowych do pliku w standardowym formacie XML (Standard Audit File for Tax). Funkcja ta pozwala na prawidłowe przygotowanie plików na potrzeby zewnętrznych audytów księgowych lub obowiązkowych kontroli zgodności.<\/li>",
-        "<p>Przed kliknięciem przycisku <strong>„Zapisz ustawienia firmy<\/strong>” należy dokładnie sprawdzić wszystkie zaktualizowane wpisy. Dynamiczna zmiana podstawowych właściwości powoduje zastąpienie informacji wyświetlanych zarówno na aktywnych portalach klientów, jak i w systemowych dziennikach raportów strukturalnych.<\/p>"
-    ],
     "about.php": [
         "<h3>O TinyCash – Pomoc i audyt bezpieczeństwa – Pomoc<\/h3>",
         "<p>W niniejszym podsumowaniu informacyjnym śledzone są wskaźniki metadanych, aktualne wartości referencyjne środowiska uruchomieniowego oraz kontrole dostępu do granic infrastruktury w całym ekosystemie aplikacji.<\/p>",

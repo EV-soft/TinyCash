@@ -3,6 +3,7 @@
 # Database and sensitive credentials
 db_connect.inc.php
 json-data/stamdata.json
+*.sqlite*
 inc/env.ini
 
 # Collector tool outputs

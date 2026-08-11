@@ -1,4 +1,4 @@
-<?php # /ledger_view.page.php v:1.1.0 d:2026-05-04 i:Gemini m:3
+<?php # /ledger_view.php v:1.2.0 d:2026-07-07 i:claude (Opdateret til at bruge htm_ConfirmLink)
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -15,7 +15,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'delete_jou' && isset($_GET['jo
         DB::query($conn, "DELETE FROM journal WHERE jou_id = $jou_id");
         
         DB::commit($conn);
-        header("Location: ledger_view.page.php?msg=deleted");
+        header("Location: ledger_view.php?msg=deleted");
         exit;
     } catch (Exception $e) {
         DB::rollback($conn);
@@ -50,14 +50,16 @@ if ($res) {
         $is_new_jou = ($last_jou !== $row['jou_id']);
         
         // Slet-knap (kun på første linje af et bilag)
+        // Erstattet htm_Button+manuel confirm()-onclick med htm_ConfirmLink,
+        // som escaper bekræftelsesteksten centralt.
         $deleteBtn = '';
         if ($is_new_jou) {
-            $deleteBtn = htm_Button(
-                icon: 'fa-trash-can', 
-                type: 'danger', 
-                link: "ledger_view.page.php?action=delete_jou&jou_id={$row['jou_id']}", 
+            $deleteBtn = htm_ConfirmLink(
+                icon: 'fa-trash-can',
+                link: "ledger_view.php?action=delete_jou&jou_id={$row['jou_id']}",
+                mess: '@Are you sure?',
+                type: 'danger',
                 styl: 'padding:2px 6px; font-size:11px;',
-                attr: 'onclick="return confirm(\''.lang('@Are you sure?').'\')"',
                 echo: false
             );
         }
@@ -68,10 +70,10 @@ if ($res) {
 
         // Tilføj række til array
         $tableData[] = [
-            $is_new_jou ? date('d.m.Y', strtotime($row['jou_date'])) : '<span style="color:#ccc;">»</span>',
+            $is_new_jou ? date('d.m.Y', strtotime($row['jou_date'])) : '<span style="color:var(--text-muted);">»</span>',
             $is_new_jou ? "<strong>#{$row['jou_id']}</strong>" : '',
             $is_new_jou ? htmlspecialchars($row['jou_text']) : '',
-            "<small style='color:#7f8c8d;'>{$row['acc_id']}</small> " . htmlspecialchars($row['acc_name']),
+            "<small style='color:var(--text-muted);'>{$row['acc_id']}</small> " . htmlspecialchars($row['acc_name']),
             "<div style='text-align:right;'>$debit</div>",
             "<div style='text-align:right;'>$credit</div>",
             "<div style='text-align:center;'>$deleteBtn</div>"

@@ -1,4 +1,5 @@
-<?php # /customer_edit.php v:0.9.2 d:2026-06-07 i:evs
+<?php # /customer_edit.php v:1.2.0 d:2026-08-11 i:evs 
+# (Opdateret til at bruge htm_ConfirmLink)
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -14,18 +15,20 @@ $msg = ""; $err = "";
 if (isset($_GET['del']) && (int)$_GET['del'] > 0) {
     $del_id = (int)$_GET['del'];
     
-    // Sikkerhedstjek: Har kunden aktive fakturaer?
-    $check_inv = DB::query($conn, "SELECT COUNT(*) as total FROM invoices WHERE cust_id = $del_id");
-    $inv_row = DB::fetch_assoc($check_inv);
-    
-    if ($inv_row['total'] > 0) {
-        $err = lang('@Cannot delete customer: This customer has active invoices linked to them.');
+    // Sikkerhedstjek: Hent fakturaer der er tilknyttet kunden
+    $check_inv = DB::query($conn, "SELECT invoice_id FROM invoices WHERE cust_id = $del_id");
+    if (DB::num_rows($check_inv) > 0) {
+        $invoices = [];
+        while ($inv = DB::fetch_assoc($check_inv)) {
+            $invoices[] = $inv['invoice_id'];
+        }
+        $inv_list = implode(', ', $invoices);
+        $err = lang('@Cannot delete customer: The following invoice ID(s) are linked:') . ' ' . $inv_list;
     } else {
         // Kunden har ingen fakturaer – slet rækken
         if (DB::query($conn, "DELETE FROM customers WHERE cust_id = $del_id")) {
-            // STOP SCRIPTET HER OG SKIFT SIDE
             header("Location: sales_hub.php");
-            exit; // <-- SIKRER AT PHP IKKE LÆSER VIDERE OG GEMMER EN NY TOM KUNDE
+            exit;
         } else {
             $err = lang('@SQL Error:') . " " . DB::error($conn);
         }
@@ -34,13 +37,13 @@ if (isset($_GET['del']) && (int)$_GET['del'] > 0) {
 
 // 1. HÅNDTER GEM (Både ny og opdatering)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name    = DB::real_escape_string($conn, $_POST['cust_name']);
-    $email   = DB::real_escape_string($conn, $_POST['cust_email']);
-    $phone   = DB::real_escape_string($conn, $_POST['cust_phone']);
-    $address = DB::real_escape_string($conn, $_POST['cust_address']);
-    $cvr     = DB::real_escape_string($conn, $_POST['cust_cvr']);
-    $contact = DB::real_escape_string($conn, $_POST['cust_contact_person']);
-    $notes   = DB::real_escape_string($conn, $_POST['cust_notes']);
+    $name    = DB::escape($conn, $_POST['cust_name']);
+    $email   = DB::escape($conn, $_POST['cust_email']);
+    $phone   = DB::escape($conn, $_POST['cust_phone']);
+    $address = DB::escape($conn, $_POST['cust_address']);
+    $cvr     = DB::escape($conn, $_POST['cust_cvr']);
+    $contact = DB::escape($conn, $_POST['cust_contact_person']);
+    $notes   = DB::escape($conn, $_POST['cust_notes']);
     $days    = (int)$_POST['cust_payment_days'];
 
     if ($cust_id > 0) {
@@ -79,8 +82,12 @@ if ($cust_id > 0) {
 }
 
 // Hvis navnet er tomt i databasen, giv det en synlig tekst i titlen, så du ved det er den tomme række
-$display_name = !empty($cust['cust_name']) ? $cust['cust_name'] : '[Empty Row / Ghost Customer]';
+/* $display_name = !empty($cust['cust_name']) ? $cust['cust_name'] : '[Empty Row / Ghost Customer]';
 $title = $cust_id > 0 ? lang('@Edit Customer') . ": " . $display_name : lang('@Add New Customer');
+ */
+$display_name = !empty($cust['cust_name']) ? $cust['cust_name'] : '[Empty Row / Ghost Customer]';
+$title = $cust_id > 0 ? lang('@Edit Customer') . ": " . $display_name . 
+            " (ID: " . $cust_id . ")" : lang('@Add New Customer');
 htm_Header($title);
 showMenu();
 
@@ -89,8 +96,10 @@ if ($err) htm_Alert($err, 'error');
 
 echo "<div style='margin: 20px auto; width: fit-content;'>";
 htm_Card_(capt: '@Customer Information', wdth: 550, form: 'edit_customer_form');
-    
-    htm_InputGroup(icon: 'fa-user', labl: '@Customer Name', name: 'cust_name', valu: $cust['cust_name'], extr: 'align-left', wdth: '100%');
+    echo "<div style='display:flex; width:100%; gap:10px;'>";
+        htm_InputGroup(icon: 'fa-id-badge', labl: '@ID', name: 'cust_id_display', valu: $cust_id > 0 ? $cust_id : '-', type: 'view', extr: 'align-center', wdth: '15%');
+        htm_InputGroup(icon: 'fa-user', labl: '@Customer Name', name: 'cust_name', valu: $cust['cust_name'], extr: 'align-left', wdth: '85%');
+    echo "</div>";
     htm_InputGroup(icon: 'fa-map-marker-alt', labl: '@Address', name: 'cust_address', valu: $cust['cust_address'], type: 'textarea', extr: 'align-left', wdth: '100%');
     
     echo "<div style='display:flex; width:100%;'>";
@@ -109,9 +118,17 @@ htm_Card_(capt: '@Customer Information', wdth: 550, form: 'edit_customer_form');
     echo "<div style='display:flex; gap:10px; margin-top:20px; border-top:1px solid #eee; padding-top:20px;'>";
         htm_Button(icon: 'fa-save', labl: '@Save Changes', type: 'success', link: '', styl: 'flex:2;', attr: 'onclick="document.getElementById(\'edit_customer_form\').submit();"');
         
-        // RETTET ATTR: type="button" er flyttet frem, så den blokerer for form-submission
+        // Erstattet htm_Button+confirmDelete()-JS med htm_ConfirmLink, som
+        // escaper bekræftelsesteksten korrekt centralt i php2htm.lib.php.
         if ($cust_id > 0) {
-            htm_Button(icon: 'fa-trash', labl: '@Delete', type: 'danger', link: '', styl: 'flex:1;', attr: 'type="button" onclick="confirmDelete('.$cust_id.');"');
+            htm_ConfirmLink(
+                icon: 'fa-trash',
+                labl: '@Delete',
+                link: 'customer_edit.php?id='.$cust_id.'&del='.$cust_id,
+                mess: '@Are you sure you want to delete this customer? This cannot be undone.',
+                type: 'danger',
+                styl: 'flex:1; text-align:center;'
+            );
         }
         
         htm_Button(icon: 'fa-arrow-left', labl: '@Back', type: 'secondary', link: 'sales_hub.php', styl: 'flex:1;');
@@ -120,15 +137,6 @@ htm_Card_(capt: '@Customer Information', wdth: 550, form: 'edit_customer_form');
 htm_Card_end();
 
 echo "</div>";
-
-// JavaScript til slet-bekræftelse med engelske parametre til sproghåndtering
-echo '<script>
-function confirmDelete(id) {
-    if (confirm("' . lang('@Are you sure you want to delete this customer? This cannot be undone.') . '")) {
-        window.location.href = "customer_edit.php?id=" + id + "&del=" + id;
-    }
-}
-</script>';
 
 htm_Footer(); 
 ob_end_flush();

@@ -1,4 +1,5 @@
-<?php # /login.php v:1.1.0 d:2026-07-05 i:evs
+<?php # /login.php v:1.2.0 d:2026-08-11 i:evs 
+# (Tilføjet valgbar database-type: SQLite/MySQL)
 ob_start();
 
 // Sørg for at login bruger NØJAGTIG samme navn og parametre som auth.inc.php
@@ -14,8 +15,35 @@ $_SESSION['user_role']  = 'admin';
 $_SESSION['lang']       = 'da';
 header("Location: index.php");  exit;
  */
+
+// --- NYT: LÆS EVT. VALGT DATABASE-TYPE FRA FORMULAREN, FØR db_connect.inc.php
+// KØRER. db_connect.inc.php læser $_SESSION['db_type'] og bruger den sektion
+// (mysql_config/sqlite_config) i stedet for env.ini's statiske ACTIVE_DB.
+// Kun 'mysql'/'sqlite' accepteres - selve forbindelsesoplysningerne kommer
+// STADIG udelukkende fra env.ini, brugeren vælger blot hvilken af de to
+// allerede konfigurerede sektioner der skal bruges.
+if (isset($_POST['db_type']) && in_array($_POST['db_type'], ['mysql', 'sqlite'], true)) {
+    $_SESSION['db_type'] = $_POST['db_type'];
+}
+
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/php2htm.lib.php';
+
+// Find env-filen (samme logik som db_connect)
+$env_paths = ['env.ini', '.env', 'inc/env.ini', 'inc/.env'];
+$env_file = '';
+foreach ($env_paths as $path) {
+    if (file_exists($path)) { $env_file = $path; break; }
+}
+
+// Læs konfigurationen
+$config = $env_file ? parse_ini_file($env_file, true) : [];
+
+// Tjek om MySQL er opsat
+$mysql_configured = (
+    !empty($config['mysql_config']['DB_HOST']) && 
+    !empty($config['mysql_config']['DB_NAME'])
+);
 
 $error_msg = "";
 
@@ -46,12 +74,17 @@ if (isset($_POST['login'])) {
             $log_sql = "INSERT INTO login_log (user_id, logged_username, ip_address, status, user_agent) VALUES (?, ?, ?, 'Success', ?)";
             DB::prepare_and_execute($conn, $log_sql, [$row['user_id'], $initials, $ip, $ua]);
             
+            // Bevar db_type i sessionen på tværs af $_SESSION-nulstillingen herunder,
+            // så resten af sessionen efter login forbliver på samme database.
+            $chosen_db_type = $_SESSION['db_type'] ?? $db_type;
+
             $_SESSION = array();
             $_SESSION['user_id']    = (int)$row['user_id'];
             $_SESSION['user_name']  = (string)$row['username']; 
             $_SESSION['user_level'] = (int)$row['user_level'];
             $_SESSION['user_role']  = (string)$row['user_role'];
             $_SESSION['lang']       = 'da';
+            $_SESSION['db_type']    = $chosen_db_type;
 
             header("Location: index.php");
             exit;
@@ -68,13 +101,17 @@ if (isset($_POST['login'])) {
 }
 
 // 3. Generer HTML
-htm_Header(lang('@Login'));
+// Login-siden låses bevidst til light-tema: der findes ingen temavælger her
+// (showMenu() vises jo ikke før login), så en tidligere gemt dark/custom-
+// cookie ville ellers gøre siden svær at bruge uden mulighed for selv at
+// skifte tilbage. Se htm_Header()'s $force_theme-parameter.
+htm_Header(lang('@Login'), 1600, true, 'light');
 
 echo '<div style="display: flex; justify-content: center; align-items: center; min-height: 80vh;">';
 
 htm_Card_(
     capt: "TinyCash " . lang('@Login'), 
-    wdth: '300', 
+    wdth: '400', 
     form: 'login.php'
 );
 
@@ -90,6 +127,56 @@ htm_InputGroup(icon: 'fa-lock', labl: '@Password', name: 'password', type: 'pass
     hint:'@User password', plho: '••••••••'); 
 htm_nl(2);
 
+// --- NYT: DATABASE-TYPE VÆLGER ---
+// $db_type er sat af db_connect.inc.php og afspejler den database, siden
+// rent faktisk lige har forbundet til (enten fra et tidligere valg i
+// sessionen, eller env.ini's ACTIVE_DB som fallback ved en frisk session).
+$is_mysql  = ($db_type === 'mysql');
+$is_sqlite = ($db_type === 'sqlite');
+
+// ... (din eksisterende kode)
+
+// Logik for MySQL-feltet
+$mysql_disabled = $mysql_configured ? '' : 'disabled';
+$mysql_style    = $mysql_configured ? 'cursor:pointer;' : 'cursor:not-allowed; opacity: 0.4;';
+$mysql_title    = $mysql_configured ? '' : ' title="'.lang('@MySQL is not configured').'"';
+if ($mysql_disabled ) $info= '<br>'.lang('@MySQL is not setup (disabled) ');
+    
+echo '<div style="margin-bottom: 15px; padding: 10px 12px; border: 1px solid var(--border-fieldset, #ccc); border-radius: 8px; background: var(--bg-panel, #f8f9fa);"
+      data-hint="'.lang('@SQLite up to 50,000 accounting entries<br>MySQL Many many more...<br>MySQL requires advanced installation').$info.'">';
+      
+echo '  <div style="font-size: 0.8rem; color: var(--text-muted, #666); margin-bottom: 8px;">
+            <i class="fa fa-database" style="margin-right: 5px; color: var(--color-primary);"></i>' . lang('@Database') . '
+        </div>';
+
+// SQLite
+echo '  <label style="display:inline-flex; align-items:center; gap:5px; margin-right:20px; cursor:pointer; font-size:0.9rem;">
+            <input type="radio" name="db_type" value="sqlite" ' . ($is_sqlite ? 'checked' : '') . '> ' . lang('@SQLite (local file)') . '
+        </label>';
+
+// MySQL (deaktiveret hvis ikke opsat)
+echo '  <label style="display:inline-flex; align-items:center; gap:5px; '.$mysql_style.' font-size:0.9rem;" '.$mysql_title.'>
+            <input type="radio" name="db_type" value="mysql" ' . ($is_mysql ? 'checked' : '') . ' ' . $mysql_disabled .'> ' . lang('@MySQL (server)') . '
+        </label>';
+echo '</div>';
+/* 
+echo '<div style="margin-bottom: 15px; padding: 10px 12px; border: 1px solid var(--border-fieldset, #ccc); border-radius: 8px; background: var(--bg-panel, #f8f9fa);"
+      data-hint="'.lang('@SQLite up to 50,000 accounting entries<br>MySQL Many many more...<br>MySQL requires advanced installation').'">';
+echo '  <div style="font-size: 0.8rem; color: var(--text-muted, #666); margin-bottom: 8px;">';
+echo '      <i class="fa fa-database" style="margin-right: 5px; color: var(--color-primary);"></i>' . lang('@Database');
+echo '  </div>';
+echo '  <label style="display:inline-flex; align-items:center; gap:5px; margin-right:20px; cursor:pointer; font-size:0.9rem;">';
+echo '      <input type="radio" name="db_type" value="sqlite" ' . ($is_sqlite ? 'checked' : '') . '>';
+echo '      ' . lang('@SQLite (local file)');
+echo '  </label>';
+echo '  <label style="display:inline-flex; align-items:center; gap:5px; cursor:pointer; font-size:0.9rem;">';
+echo '      <input type="radio" name="db_type" value="mysql" ' . ($is_mysql ? 'checked' : '') . '>';
+echo '      ' . lang('@MySQL (server)');
+echo '  </label>';
+echo '</div>';
+ */
+htm_nl(1);
+
 htm_Button(
         icon: 'fa-sign-in-alt', labl: '@Sign In', type: 'primary', 
         styl: 'width: 100%; padding: 12px; font-size: 1.1em;', attr: 'name="login"', 
@@ -104,6 +191,11 @@ echo '<div class="lang-switcher" style="text-align: center; margin-top: 20px; fo
         🇬🇧 English
     </a>
 </div>';
+/* 
+echo '<div class="lang-switcher" style="text-align: center; margin-top: 20px; font-family: sans-serif; font-size: 0.9rem;">
+    <a href="?l=da"><img src="dk.svg" alt="Dansk"></a>
+    <a href="?l=en"><img src="gb.svg" alt="English"></a>
+</div>';  */
 
 htm_Card_end(); 
 echo '</div>'; 

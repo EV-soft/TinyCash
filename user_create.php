@@ -9,8 +9,8 @@ $msg = ""; $err = "";
 
 // --- 1. HÅNDTER OPRETTELSE (POST) ---
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_user'])) {
-    $username = DB::real_escape_string($conn, $_POST['username']);
-    $role     = DB::real_escape_string($conn, $_POST['user_role']);
+    $username = DB::escape($conn, $_POST['username']);
+    $role     = DB::escape($conn, $_POST['user_role']);
     $pw1      = $_POST['password'];
     $pw2      = $_POST['confirm_password'];
 

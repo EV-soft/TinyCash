@@ -1,4 +1,4 @@
-<?php # /chart_of_accounts.php v:1.1.0 d:2026-07-05 i:evs
+<?php # /chart_of_accounts.php v:1.2.0 d:2026-07-07 i:claude (Opdateret til at bruge htm_ActionButtons)
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -32,21 +32,24 @@ if (!$res) {
         $vat_txt = $row['vat_name'] ?: lang('@None');
         $rate_txt = (isset($row['vat_rate']) && $row['vat_rate'] > 0) ? number_format($row['vat_rate'], 0) . "%" : "-";
         $id = (int)$row['acc_id'];
-        
-        $btnEdit = '<a href="account_edit.php?id='.$id.'" style="display:inline-block; padding:6px 10px; background:#3498db; color:#ffffff !important; border-radius:4px; margin-right:5px; text-decoration:none;"><i class="fa fa-edit"></i></a>';
-        $btnDel = '<a href="account_delete.php?id='.$id.'" style="display:inline-block; padding:6px 10px; background:#e74c3c; color:#ffffff !important; border-radius:4px; text-decoration:none;" onclick="return confirm(\''.lang('@Are you sure?').'\')"><i class="fa fa-trash"></i></a>';
+
+        $accRowActions = [
+            ['icon' => 'fa-edit',  'link' => 'account_edit.php?id='.$id, 'hint' => '@Edit', 'type' => 'primary'],
+            ['icon' => 'fa-trash', 'link' => 'account_delete.php?id='.$id, 'hint' => '@Delete', 'confirm' => '@Are you sure?', 'type' => 'danger'],
+        ];
+        $btns = htm_ActionButtons($accRowActions, false);
 
         $data[] = [
             $id,
             "<strong>" . htmlspecialchars($row['acc_name']) . "</strong>",
             $vat_txt,
             $rate_txt,
-            $btnEdit . $btnDel 
+            $btns
         ];
     }
     
     if (empty($data)) {
-        echo "<p style='padding:20px; text-align:center; color:#95a5a6;'>" . lang('@No accounts found') . "</p>";
+        echo "<p style='padding:20px; text-align:center; color:var(--text-muted);'>" . lang('@No accounts found') . "</p>";
     } else {
         htm_Table($headers, $data, 'accTbl');
     }

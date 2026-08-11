@@ -148,16 +148,6 @@
         "<li><strong>Dynamiska verktygsalternativ:<\/strong> Klicka på knappen <strong>Lägg till nytt konto<\/strong> (➕) för att lägga till en ny finansiell nod. Använd de lokala åtgärdsraderna för att redigera grundläggande parametrar eller radera överflödiga konton på ett säkert sätt från databasstrukturen.<\/li>",
         "<p>Var försiktig när du ändrar dina konton. Strukturella ändringar påverkar dynamiskt hur transaktionsposterna fyller i saldobalanserna i huvudboken och de historiska bokföringsuppgifterna.<\/p>"
     ],
-    "company_settings.php": [
-        "<h3>Hjälp med företagsinformation<\/h3>",
-        "<p>Detta kontrollcenter hanterar företagets identitetsprofil, officiella systemparametrar, bankinfrastruktur och standarder för automatiserad kommunikation.<\/p>",
-        "<ul><li><strong>Fält för företagsidentitet och registrering:<\/strong> Ange officiella uppgifter såsom din juridiska enhets namn, kontaktpersoner och identifieringsuppgifter (t.ex. verifieringsuppgifter för ditt lokala <em>CVR-nummer<\/em>). Dessa uppgifter fylls automatiskt i vid utgående transaktioner.<\/li><\/ul>",
-        "<li><strong>Bankinfrastrukturens uppbyggnad:<\/strong> Registrera bankens strukturella registrerings- och kontoföljder noggrant. Dessa datadelar kopplas direkt till fakturamallarna för att säkerställa en smidig hantering av inkommande automatiska betalningsavstämningar.<\/li>",
-        "<li><strong>Standardkommunikationsprofil:<\/strong> Ställ in standardtexten för transaktionsmeddelanden som gäller för hela systemet. Denna mall fungerar som en förinställd grundtext som används vid utskick av fakturor till kunder.<\/li>",
-        "<li><strong>Datalagringsmekanik (UPSERT):<\/strong> När du skickar in denna layout aktiveras ett spårningsskript som går igenom parametrarna med hjälp av en standardkonfiguration av nyckel-värde-par. Skriptet använder en intern databasrutin för att på ett säkert sätt utföra en infoga-eller-uppdatera-operation (<em>ON DUPLICATE KEY UPDATE<\/em>) på ditt centrala inställningsindex.<\/li>",
-        "<li><strong>Export av SAF-T-data enligt gällande regler:<\/strong> Klicka på knappen <strong>”Exportera SAF-T”<\/strong> () för att exportera alla dina historiska finansiella uppgifter till ett standardiserat XML-format (Standard Audit File for Tax). Denna funktion förbereder filerna på ett korrekt sätt inför externa revisionsgranskningar eller obligatoriska kontroller av regelefterlevnad.<\/li>",
-        "<p>Granska alla uppdaterade poster noggrant innan du klickar på <strong>”Spara företagsinställningar<\/strong>”. Om du ändrar grundläggande egenskaper på ett dynamiskt sätt åsidosätts den information som visas både på aktiva kundportaler och i systemomfattande rapporteringsloggar.<\/p>"
-    ],
     "about.php": [
         "<h3>Om TinyCash – Hjälp och säkerhetsgranskning – Hjälp<\/h3>",
         "<p>Denna informationssammanfattning spårar metadatamätvärden, referensvärden för aktiv arkitektur under körning samt åtkomstkontroller vid infrastrukturgränser inom hela applikationsekosystemet.<\/p>",

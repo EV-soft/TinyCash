@@ -1,4 +1,4 @@
-<?php # /mail_inbox.php v:1.1.0 d:2026-07-02 i:evs
+<?php # /mail_inbox.php v:1.2.0 d:2026-07-10 i:claude (Rettet: opdigtede --theme-*-variabler erstattet med de rigtige, eksisterende temavariabler)
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/php2htm.lib.php';
@@ -55,12 +55,12 @@ $file_name = isset($_GET['file_name']) ? $_GET['file_name'] : '';
 if ($mbox && $view_id > 0 && (!empty($download_part) || !empty($view_part))) {
     $active_part = !empty($download_part) ? $download_part : $view_part;
     $msg_no = imap_msgno($mbox, $view_id);
-    
+
     if ($msg_no > 0) {
         $file_content = imap_fetchbody($mbox, $msg_no, $active_part);
         $structure = imap_fetchstructure($mbox, $msg_no);
         $part_structure = $structure;
-        
+
         if (strpos($active_part, '.') !== false) {
             $sub_parts = explode('.', $active_part);
             foreach ($sub_parts as $p) {
@@ -106,13 +106,13 @@ if ($mbox && $view_id > 0) {
             'from'    => htmlspecialchars($header->fromaddress),
             'date'    => date('d.m.Y H:i', strtotime($header->date))
         ];
-        
+
         $structure = imap_fetchstructure($mbox, $msg_no);
         $body_raw = imap_fetchbody($mbox, $msg_no, 1);
         if (isset($structure->encoding) && $structure->encoding == 3) $mail_body = base64_decode($body_raw);
         elseif (isset($structure->encoding) && $structure->encoding == 4) $mail_body = quoted_printable_decode($body_raw);
         else $mail_body = $body_raw;
-        
+
         $mail_body = nl2br(htmlspecialchars(strip_tags($mail_body)));
 
         if (isset($structure->parts) && count($structure->parts) > 1) {
@@ -148,54 +148,62 @@ showMenu();
 
 $base_url = 'mail_inbox.php?box=' . $box_type;
 
+// RETTET: hele denne <style>-blok brugte opdigtede "--theme-*"-variabler
+// (--theme-primary, --theme-text-main, --theme-bg-panel, --theme-border-color
+// osv.), som IKKE findes noget sted i systemet. De faldt derfor konstant
+// tilbage til deres hårdkodede fallback-værdier, uanset tema. Det konkrete
+// symptom: den aktive fane brugte fallback #3498db som baggrund - som er
+// NØJAGTIG samme blå farve som custom-temaets --bg-main (sidebaggrunden) -
+// så den aktive fane forsvandt visuelt ind i baggrunden. Alle "--theme-*"
+// er nu erstattet med de rigtige, eksisterende variabler fra htm_page.lib.php.
 echo '<style>
     .page-title-bar { max-width: 1800px; margin: 10px auto 5px auto; display: flex; justify-content: space-between; align-items: center; padding-bottom: 5px; }
-    .page-title-bar h1 { margin: 0; font-size: 24px; color: var(--theme-text-main, #2c3e50); font-weight: 600; display: flex; align-items: center; gap: 10px; }
-    
-    .mailbox-tabs { max-width: 1800px; margin: 0 auto 15px auto; display: flex; gap: 5px; border-bottom: 2px solid var(--theme-primary, #3498db); }
-    .mail-tab { padding: 10px 20px; font-size: 14px; font-weight: 600; text-decoration: none; color: var(--theme-text-muted, #7f8c8d); background: var(--theme-bg-panel, #f8f9fa); border: 1px solid var(--theme-border-color, #ced4da); border-bottom: none; border-radius: 6px 6px 0 0; transition: all 0.2s; }
-    .mail-tab:hover { background: var(--theme-bg-hover, #e9ecef); color: var(--theme-text-main, #2c3e50); }
-    .mail-tab.active { background: var(--theme-primary, #3498db); color: white; border-color: var(--theme-primary, #3498db); }
+    .page-title-bar h1 { margin: 0; font-size: 24px; color: var(--text-main); font-weight: 600; display: flex; align-items: center; gap: 10px; }
 
-    .mailbox-container { display: flex; max-width: 1800px; margin: 0 auto 40px auto; background: var(--theme-bg-card, #fff); border-radius: 0 0 8px 8px; box-shadow: 0 4px 15px var(--theme-shadow, rgba(0,0,0,0.08)); min-height: 800px; border: 1px solid var(--theme-border-color, #ced4da); overflow: hidden; }
-    .mail-sidebar { width: 25%; border-right: 1px solid var(--theme-border-color, #ced4da); display: flex; flex-direction: column; background: var(--theme-bg-panel, #f8f9fa); }
-    .sidebar-header { padding: 15px 20px; border-bottom: 1px solid var(--theme-border-color, #ced4da); background: var(--theme-bg-card, #fff); }
-    .sidebar-header h2 { margin: 0; font-size: 15px; color: var(--theme-text-main, #2c3e50); }
-    .sidebar-header p { margin: 3px 0 0 0; font-size: 11px; color: var(--theme-text-muted, #7f8c8d); }
+    .mailbox-tabs { max-width: 1800px; margin: 0 auto 15px auto; display: flex; gap: 5px; border-bottom: 2px solid var(--color-primary); }
+    .mail-tab { padding: 10px 20px; font-size: 14px; font-weight: 600; text-decoration: none; color: var(--text-muted); background: var(--bg-panel); border: 1px solid var(--border-color); border-bottom: none; border-radius: 6px 6px 0 0; transition: all 0.2s; }
+    .mail-tab:hover { background: var(--bg-table-hover); color: var(--text-main); }
+    .mail-tab.active { background: var(--color-primary); color: var(--text-light); border-color: var(--color-primary); }
+
+    .mailbox-container { display: flex; max-width: 1800px; margin: 0 auto 40px auto; background: var(--bg-card); border-radius: 0 0 8px 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); min-height: 800px; border: 1px solid var(--border-color); overflow: hidden; }
+    .mail-sidebar { width: 25%; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; background: var(--bg-panel); }
+    .sidebar-header { padding: 15px 20px; border-bottom: 1px solid var(--border-color); background: var(--bg-card); }
+    .sidebar-header h2 { margin: 0; font-size: 15px; color: var(--text-main); }
+    .sidebar-header p { margin: 3px 0 0 0; font-size: 11px; color: var(--text-muted); }
     .mail-list { flex: 1; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
-    .mail-item { padding: 15px 20px; border-bottom: 1px solid var(--theme-border-subtle, #e9ecef); cursor: pointer; transition: background 0.2s; display: block; text-decoration: none; color: inherit; }
-    .mail-item:hover { background: var(--theme-bg-hover, #e9ecef); }
-    .mail-item.active { background: var(--theme-bg-hover, #e9ecef); border-left: 4px solid var(--theme-primary, #3498db); padding-left: 16px; }
-    .mail-item .mail-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--theme-text-muted, #7f8c8d); margin-bottom: 4px; }
-    .mail-item .mail-from { font-weight: bold; font-size: 13px; color: var(--theme-text-main, #2c3e50); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mail-item .mail-subject { font-size: 13px; color: var(--theme-text-muted, #7f8c8d); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mail-workspace { width: 75%; display: flex; background: var(--theme-bg-card, #fff); }
-    .mail-text-pane { width: 35%; padding: 25px; display: flex; flex-direction: column; border-right: 1px solid var(--theme-border-color, #ced4da); }
-    .mail-preview-pane { width: 65%; background: var(--theme-preview-bg, #525659); display: flex; flex-direction: column; position: relative; }
-    .mail-view-header { border-bottom: 2px solid var(--theme-border-subtle, #e9ecef); padding-bottom: 15px; margin-bottom: 20px; }
-    .mail-view-subject { font-size: 18px; margin: 0 0 10px 0; color: var(--theme-text-main, #2c3e50); line-height: 1.3; }
-    .mail-view-meta { font-size: 12px; color: var(--theme-text-muted, #7f8c8d); line-height: 1.5; }
-    .mail-view-body { font-size: 13px; line-height: 1.6; color: var(--theme-text-main, #2c3e50); white-space: pre-wrap; flex: 1; overflow-y: auto; margin-bottom: 20px; padding-right: 5px; }
-    .attachments-section { border-top: 1px dashed var(--theme-border-color, #ced4da); padding-top: 15px; }
-    .attachments-title { font-size: 13px; font-weight: bold; margin-bottom: 10px; color: var(--theme-text-main, #2c3e50); }
+    .mail-item { padding: 15px 20px; border-bottom: 1px solid var(--border-subtle); cursor: pointer; transition: background 0.2s; display: block; text-decoration: none; color: inherit; }
+    .mail-item:hover { background: var(--bg-table-hover); }
+    .mail-item.active { background: var(--bg-table-hover); border-left: 4px solid var(--color-primary); padding-left: 16px; }
+    .mail-item .mail-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+    .mail-item .mail-from { font-weight: bold; font-size: 13px; color: var(--text-main); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mail-item .mail-subject { font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mail-workspace { width: 75%; display: flex; background: var(--bg-card); }
+    .mail-text-pane { width: 35%; padding: 25px; display: flex; flex-direction: column; border-right: 1px solid var(--border-color); }
+    .mail-preview-pane { width: 65%; background: #525659; display: flex; flex-direction: column; position: relative; }
+    .mail-view-header { border-bottom: 2px solid var(--border-subtle); padding-bottom: 15px; margin-bottom: 20px; }
+    .mail-view-subject { font-size: 18px; margin: 0 0 10px 0; color: var(--text-main); line-height: 1.3; }
+    .mail-view-meta { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    .mail-view-body { font-size: 13px; line-height: 1.6; color: var(--text-main); white-space: pre-wrap; flex: 1; overflow-y: auto; margin-bottom: 20px; padding-right: 5px; }
+    .attachments-section { border-top: 1px dashed var(--border-color); padding-top: 15px; }
+    .attachments-title { font-size: 13px; font-weight: bold; margin-bottom: 10px; color: var(--text-main); }
     .attachment-grid { display: flex; flex-direction: column; gap: 6px; }
-    .attachment-card { background: var(--theme-bg-panel, #f8f9fa); border: 1px solid var(--theme-border-subtle, #e9ecef); padding: 8px 12px; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; text-decoration: none; color: var(--theme-text-main, #2c3e50); font-size: 12px; }
-    .attachment-card:hover, .attachment-card.viewing { background: var(--theme-bg-hover, #e9ecef); border-color: var(--theme-primary, #3498db); }
+    .attachment-card { background: var(--bg-panel); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; text-decoration: none; color: var(--text-main); font-size: 12px; }
+    .attachment-card:hover, .attachment-card.viewing { background: var(--bg-table-hover); border-color: var(--color-primary); }
     .attachment-main-click { display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1; text-decoration: none; color: inherit; }
-    .preview-iframe { width: 100%; height: 100%; border: none; background: var(--theme-preview-bg, #525659); }
-    .preview-img-container { width: 100%; height: 100%; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 20px; background: var(--theme-preview-dark, #333); }
+    .preview-iframe { width: 100%; height: 100%; border: none; background: #525659; }
+    .preview-img-container { width: 100%; height: 100%; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 20px; background: #333; }
     .preview-img { max-width: 100%; max-height: 100%; object-fit: contain; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-    .preview-top-bar { background: var(--theme-preview-bar, #2c3e50); padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; color: white; font-size: 12px; }
-    .no-mail-selected, .imap-error { display: flex; align-items: center; justify-content: center; flex: 1; color: var(--theme-text-muted, #7f8c8d); font-style: italic; font-size: 14px; text-align: center; padding: 40px; width: 100%; }
-    .sidebar-pagination { padding: 12px 15px; border-top: 1px solid var(--theme-border-color, #ced4da); background: var(--theme-bg-card, #fff); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-    .pagination-btn { padding: 5px 12px; font-size: 12px; font-weight: 600; text-decoration: none; color: var(--theme-text-main, #2c3e50); background: var(--theme-bg-panel, #f8f9fa); border: 1px solid var(--theme-border-subtle, #e9ecef); border-radius: 4px; transition: background 0.2s; }
-    .pagination-btn:hover { background: var(--theme-bg-hover, #e9ecef); }
-    .pagination-btn.disabled { color: var(--theme-text-muted, #7f8c8d); pointer-events: none; opacity: 0.5; background: transparent; border-color: transparent; }
-    .pagination-info { font-size: 11px; color: var(--theme-text-muted, #7f8c8d); }
+    .preview-top-bar { background: var(--color-dark); padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; color: var(--text-light); font-size: 12px; }
+    .no-mail-selected, .imap-error { display: flex; align-items: center; justify-content: center; flex: 1; color: var(--text-muted); font-style: italic; font-size: 14px; text-align: center; padding: 40px; width: 100%; }
+    .sidebar-pagination { padding: 12px 15px; border-top: 1px solid var(--border-color); background: var(--bg-card); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .pagination-btn { padding: 5px 12px; font-size: 12px; font-weight: 600; text-decoration: none; color: var(--text-main); background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: 4px; transition: background 0.2s; }
+    .pagination-btn:hover { background: var(--bg-table-hover); }
+    .pagination-btn.disabled { color: var(--text-muted); pointer-events: none; opacity: 0.5; background: transparent; border-color: transparent; }
+    .pagination-info { font-size: 11px; color: var(--text-muted); }
 </style>';
 
 echo '<div class="page-title-bar">';
-echo '  <h1><i class="fa-regular fa-envelope" style="color:var(--theme-primary, #3498db)"></i> ' . lang('@Document Inbox') . '</h1>';
+echo '  <h1><i class="fa-regular fa-envelope" style="color:var(--color-primary)"></i> ' . lang('@Document Inbox') . '</h1>';
 htm_Button(icon: 'fa-door-open', labl: lang('@Leave'), type: 'danger', link: 'sales_hub.php');
 echo '</div>';
 
@@ -213,20 +221,18 @@ if (!$mbox) {
 } else {
     $total_messages = imap_num_msg($mbox);
     $max_emails = 15; // Mails pr. side
-    
+
     $current_page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
     $total_pages = max(1, ceil($total_messages / $max_emails));
-    
+
     $start = $total_messages - (($current_page - 1) * $max_emails);
     $end = max(1, $start - $max_emails + 1);
-    
+
     echo '<div class="mail-sidebar">';
     echo '  <div class="sidebar-header"><h2>' . $page_title . '</h2><p>' . htmlspecialchars($imap_user) . ' (' . $total_messages . ' ' . lang('@mails') . ')</p></div>';
 
-   // echo '<div class="mail-sidebar">';
-   // echo '  <div class="sidebar-header"><h2>' . ($box_type === 'invoice' ? lang('@Supplier Invoices') : lang('@Voucher Inbox')) . '</h2><p>' . htmlspecialchars($imap_user) . ' (' . $total_messages . ' ' . lang('@mails') . ')</p></div>';
     echo '  <div class="mail-list">';
-    
+
     if ($total_messages == 0) {
         echo '    <div class="no-mail-selected">' . lang('@The inbox is empty.') . '</div>';
     } else {
@@ -237,7 +243,7 @@ if (!$mbox) {
             $subject = isset($header->subject) ? imap_utf8($header->subject) : lang('@(No subject)');
             $from = htmlspecialchars($header->fromaddress);
             $active_class = ($view_id === $uid) ? ' active' : '';
-            
+
             echo '<a href="' . $base_url . '&uid=' . $uid . '&page=' . $current_page . '" class="mail-item' . $active_class . '">';
             echo '  <div class="mail-meta"><span class="mail-date">' . $date . '</span></div>';
             echo '  <div class="mail-from">' . $from . '</div>';
@@ -246,7 +252,7 @@ if (!$mbox) {
         }
     }
     echo '  </div>';
-    
+
     if ($total_messages > 0) {
         echo '  <div class="sidebar-pagination">';
         if ($current_page > 1) {
@@ -263,7 +269,7 @@ if (!$mbox) {
         echo '  </div>';
     }
     echo '</div>';
-    
+
     if ($view_id > 0 && $mail_details) {
 echo '<div class="mail-workspace">';
         echo '  <div class="mail-text-pane">';
@@ -274,7 +280,7 @@ echo '<div class="mail-workspace">';
         echo '        <strong>' . lang('@Date:') . '</strong> ' . $mail_details['date'];
         echo '      </div>';
         echo '    </div>';
-        
+
         // 1. VEDHÆFTEDE FILER & REGISTRERINGSKNAP (Flyttet op)
         $selected_part_name = '';
         $selected_part_ext = '';
@@ -282,7 +288,7 @@ echo '<div class="mail-workspace">';
             echo '<div class="attachments-section" style="margin-bottom: 15px;">';
             echo '  <div class="attachments-title"><i class="fa-solid fa-paperclip"></i> ' . lang('@Attachments') . ' (' . count($attachments) . ')</div>';
             echo '  <div class="attachment-grid">';
-            
+
             if (empty($view_part) && !empty($attachments[0]['part'])) {
                 $view_part = $attachments[0]['part'];
             }
@@ -302,17 +308,17 @@ echo '<div class="mail-workspace">';
 
                 echo '<div class="attachment-card' . ($is_viewing ? ' viewing' : '') . '">';
                 echo '  <a href="' . $base_url . '&uid=' . $view_id . '&view_part=' . $att['part'] . '&file_name=' . urlencode($att['name']) . '" class="attachment-main-click">';
-                echo '    <i class="fa-solid ' . $icon . '" style="color:var(--theme-primary, #3498db); font-size:16px;"></i>';
-                echo '    <div><strong>' . htmlspecialchars($att['name']) . '</strong> <span style="font-size:10px; color:var(--theme-text-muted, #7f8c8d);">(' . $size_kb . ')</span></div>';
+                echo '    <i class="fa-solid ' . $icon . '" style="color:var(--color-primary); font-size:16px;"></i>';
+                echo '    <div><strong>' . htmlspecialchars($att['name']) . '</strong> <span style="font-size:10px; color:var(--text-muted);">(' . $size_kb . ')</span></div>';
                 echo '  </a>';
-                
+
                 if ($box_type === 'voucher' || $box_type === 'vendor') {
                     $create_expense_url = 'expense_edit.php?id=0&source_voucher=' . (int)$view_id;
-                    echo '  <a href="' . $create_expense_url . '" class="pagination-btn" title="' . lang('@Create Expense') . '" style="margin-left:auto; margin-right:5px; padding:3px 8px; font-size:11px; background:var(--theme-primary, #3498db); color:white; border:none; display:flex; align-items:center; gap:4px;">';
+                    echo '  <a href="' . $create_expense_url . '" class="pagination-btn" title="' . lang('@Create Expense') . '" style="margin-left:auto; margin-right:5px; padding:3px 8px; font-size:11px; background:var(--color-primary); color:var(--text-light); border:none; display:flex; align-items:center; gap:4px;">';
                     echo '    <i class="fa-solid fa-file-invoice-dollar"></i> ' . lang('@Register') . '</a>';
                 }
 
-                echo '  <a href="' . $base_url . '&uid=' . $view_id . '&download_part=' . $att['part'] . '&file_name=' . urlencode($att['name']) . '" title="' . lang('@Download') . '" style="color:var(--theme-text-muted, #7f8c8d); margin-left:5px;"><i class="fa-solid fa-download"></i></a>';
+                echo '  <a href="' . $base_url . '&uid=' . $view_id . '&download_part=' . $att['part'] . '&file_name=' . urlencode($att['name']) . '" title="' . lang('@Download') . '" style="color:var(--text-muted); margin-left:5px;"><i class="fa-solid fa-download"></i></a>';
                 echo '</div>';
             }
             echo '  </div>';
@@ -320,16 +326,16 @@ echo '<div class="mail-workspace">';
         }
 
         // 2. SKILLESTREG OVER BESKEDEN
-        echo '<hr style="border:0; border-top:1px solid var(--theme-border-subtle, #e9ecef); margin: 15px 0 20px 0;">';
-        
+        echo '<hr style="border:0; border-top:1px solid var(--border-subtle); margin: 15px 0 20px 0;">';
+
         // 3. SELVE EMAIL-BESKEDEN
         echo '    <div class="mail-view-body">' . $mail_body . '</div>';
         echo '  </div>';
-        
+
         echo '  <div class="mail-preview-pane">';
         if (!empty($view_part) && !empty($selected_part_name)) {
             $preview_url = $base_url . '&uid=' . $view_id . '&view_part=' . $view_part . '&file_name=' . urlencode($selected_part_name);
-            
+
             echo '    <div class="preview-top-bar">';
             echo '      <span><i class="fa-regular fa-file"></i> ' . htmlspecialchars($selected_part_name) . '</span>';
             echo '      <a href="' . $preview_url . '" target="_blank" style="color:white; text-decoration:none; background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:3px;"><i class="fa-solid fa-expand"></i> Fuld skærm</a>';
@@ -348,9 +354,9 @@ echo '<div class="mail-workspace">';
         echo '  </div>'; 
         echo '</div>'; 
     } else {
-        echo '<div class="mail-workspace"><div class="no-mail-selected"><div><i class="fa-regular fa-envelope" style="font-size:40px; margin-bottom:10px; display:block; color: var(--theme-secondary, #e74c3c);"></i>' . lang('@Select an email from the list to read its content.') . '</div></div></div>';
+        echo '<div class="mail-workspace"><div class="no-mail-selected"><div><i class="fa-regular fa-envelope" style="font-size:40px; margin-bottom:10px; display:block; color: var(--color-danger);"></i>' . lang('@Select an email from the list to read its content.') . '</div></div></div>';
     }
-    
+
     imap_close($mbox);
 }
 

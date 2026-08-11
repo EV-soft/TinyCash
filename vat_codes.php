@@ -1,4 +1,4 @@
-<?php # /vat_codes.php v:0.9.1 d:2026-05-07 i:evs
+<?php # /vat_codes.php v:1.0.0 d:2026-07-07 i:claude (Opdateret til at bruge htm_ConfirmLink)
 require 'inc/auth.inc.php';
 require 'inc/db_connect.inc.php'; 
 require 'inc/menu.inc.php';
@@ -31,14 +31,27 @@ echo "<div style='max-width:800px; margin:0 auto;'>";
     while ($row = DB::fetch_assoc($res)) {
         // Håndter manglende vat_acc_id sikkert
         $acc_id = $row['vat_acc_id'] ?? '-'; 
+
+        // Erstattet det hårdkodede, danske "Slet?" onclick-confirm (uden om
+        // lang()) med htm_ConfirmLink, som bruger '@Are you sure?' og
+        // escaper teksten korrekt.
+        $delBtn = htm_ConfirmLink(
+            icon: 'fa-trash',
+            link: '?delete='.$row['vat_id'],
+            mess: '@Are you sure?',
+            type: 'danger',
+            styl: 'padding:0; background:transparent; color:var(--color-danger); font-size:16px;',
+            echo: false
+        );
+
         echo "<tr style='border-bottom:1px solid #eee;'>
                 <td style='padding:10px;'><b>{$row['vat_id']}</b></td>
                 <td style='padding:10px;'>{$row['vat_name']}</td>
                 <td style='padding:10px; text-align:center;'>{$row['vat_rate']}%</td>
                 <td style='padding:10px; text-align:right;'>{$acc_id}</td>
-                <td style='padding:10px; text-align:right;'>
-                    <a href='?delete={$row['vat_id']}' style='color:#e74c3c; text-decoration:none;' onclick='return confirm(\"Slet?\")'>🗑️</a>
-                </td>
+                <td style='padding:10px; text-align:right;'>"
+                    . $delBtn .
+                "</td>
               </tr>";
     }
     echo "</table>";

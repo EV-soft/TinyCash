@@ -148,16 +148,6 @@
         "<li><strong>Dynaamiset työkaluasetukset:<\/strong> Lisää uusi taloushallinnon solmu napsauttamalla <strong>Lisää uusi tili<\/strong> -painiketta (➕). Voit muokata keskeisiä parametrejä tai poistaa tarpeettomat tilit turvallisesti tietokantarakenteesta käyttämällä lokalisoituja toimintorivin laukaisimia.<\/li>",
         "<p>Muokkaa tilejäsi huolellisesti. Rakenteelliset muutokset vaikuttavat suoraan siihen, miten tapahtumamerkinnät näkyvät pääkirjan saldotiedoissa ja aiemmissa kirjanpitotiedoissa.<\/p>"
     ],
-    "company_settings.php": [
-        "<h3>Yritystiedot Ohje<\/h3>",
-        "<p>Tämä ohjauskeskus hallinnoi yrityksesi brändiprofiilia, virallisia järjestelmäasetuksia, pankki-infrastruktuuria sekä automaattisen viestinnän perusasetuksia.<\/p>",
-        "<ul><li><strong>Yritystiedot ja rekisteritiedot:<\/strong> Määritä viralliset tiedot, kuten oikeushenkilön nimi, yhteyshenkilöt ja tunnistetiedot (esim. paikallisen <em>CVR-numeron<\/em> vahvistustiedot). Nämä tiedot täytetään lähteviin transaktioihin automaattisesti.<\/li><\/ul>",
-        "<li><strong>Pankki-infrastruktuurin rakenne:<\/strong> Kirjaa pankkien rekisteröintitiedot ja talletustilien järjestysjärjestykset tarkasti. Nämä tietosegmentit liitetään suoraan laskujen rakenteisiin, jotta saapuvat automaattiset maksujen täsmäytysprosessit sujuvat moitteettomasti.<\/li>",
-        "<li><strong>Vakioviestintäprofiili:<\/strong> Määritä järjestelmänlaajuiset oletusviestit tapahtumailmoituksille. Tämä lohko toimii valmiiksi ladattuna vakiotekstinä aina, kun laskuasiakirjoja lähetetään asiakkaille.<\/li>",
-        "<li><strong>Tietojen tallennusmekanismi (UPSERT):<\/strong> Tämän asetuksen lähettäminen käynnistää aktiivisen seurantaskriptin, joka käy parametrit läpi tavanomaisen avain-arvo-rakenteen avulla. Se käyttää sisäistä tietokantarutiinia suorittaakseen turvallisesti lisäys-tai-päivitys-asetuksen (<em>ON DUPLICATE KEY UPDATE<\/em>) keskus<em>asetusten<\/em> hakemistossa.<\/li>",
-        "<li><strong>SAF-T-tietojen vienti sääntelytarkoituksiin:<\/strong> Napsauta <strong>Vie SAF-T<\/strong> -painiketta () viedäksesi kaikki aiemmat kirjanpitotietosi standardoidussa XML-muodossa (Standard Audit File for Tax). Tämä toiminto valmistelee tiedostot asianmukaisesti ulkoisia tilintarkastuksia tai lakisääteisiä vaatimustenmukaisuuden tarkastuksia varten.<\/li>",
-        "<p>Tarkista kaikki päivitetyt tiedot huolellisesti ennen kuin painat <strong>Tallenna yrityksen asetukset -painiketta<\/strong>. Ydinominaisuuksien muuttaminen ohittaa dynaamisesti tiedot, jotka näkyvät sekä aktiivisissa asiakasportaaleissa että järjestelmänlaajuisissa raporttilokeissa.<\/p>"
-    ],
     "about.php": [
         "<h3>Tietoja TinyCashista Ohje ja tietoturva Auditointi Ohje<\/h3>",
         "<p>Tässä yhteenvedossa seurataan metatietojen mittareita, aktiivisen arkkitehtuurin ajonaikaisia vertailuarvoja sekä infrastruktuurin rajapintojen pääsyoikeuksien tarkistuksia koko sovellusekosysteemissä.<\/p>",

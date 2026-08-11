@@ -1,4 +1,4 @@
-<?php # /product_edit.php v:1.0.1 d:2026-05-03 i:Gemini m:1
+<?php # /product_edit.php v:1.2.0 d:2026-08-11 i:evs 
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php'; 
 require_once 'inc/menu.inc.php';
@@ -8,58 +8,78 @@ require_once 'inc/php2htm.lib.php';
 $s = get_settings($conn);
 $cur = $s['currency'] ?? 'DKK';
 
-// 1. Data: Hent varen eller forbered en tom model
+// 1. Data: Hent varen, forbered en kopi, eller opret en tom model
 $id = (int)($_GET['id'] ?? 0);
+$copy_id = (int)($_GET['copy_id'] ?? 0);
 
 if ($id > 0) {
     // Rediger eksisterende produkt
     $res = DB::query($conn, "SELECT * FROM products WHERE prod_id = $id");
     $item = DB::fetch_assoc($res);
     if (!$item) die(lang('@Product not found'));
+    $pageTitle = lang('@Edit Product');
+} elseif ($copy_id > 0) {
+    // Opret variant: Hent data fra det eksisterende produkt, men nulstil ID'et
+    $res = DB::query($conn, "SELECT * FROM products WHERE prod_id = $copy_id");
+    $item = DB::fetch_assoc($res);
+    if (!$item) die(lang('@Product not found'));
+    
+    $item['prod_id'] = 0;
+    $item['prod_name'] = $item['prod_name'] . ' (Variant)';
+    $item['prod_sku'] = ($item['prod_sku'] ?? '') . '-2';
+    $pageTitle = lang('@New Variant');
 } else {
     // Opret nyt produkt - Standardværdier
     $item = [
-        'prod_id'       => 0,
-        'prod_name'     => '',
-        'prod_stock'    => 0,
+        'prod_id'        => 0,
+        'prod_sku'       => '',
+        'prod_name'      => '',
+        'prod_stock'     => 0,
         'prod_min_stock' => 5,
-        'prod_price'    => 0,
-        'prod_vat_rate' => '25'
+        'prod_price'     => 0,
+        'acc_id'         => 0
     ];
+    $pageTitle = lang('@New Product');
 }
 
-$pageTitle = ($id > 0) ? lang('@Edit Product') : lang('@New Product');
 htm_Header($pageTitle);
 showMenu();
-?>
 
-<script>
-function updateBrutto() {
-    let netto = parseFloat(document.getElementsByName('prod_price')[0].value.replace(',', '.')) || 0;
-    let vatVal = document.getElementsByName('prod_vat_rate')[0].value;
-    let vat = (vatVal === 'free') ? 0 : parseFloat(vatVal) || 0;
-    
-    let brutto = netto * (1 + (vat / 100));
-    document.getElementById('brutto_display').innerText = brutto.toLocaleString('da-DK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+// Hent konti til kontoplan / momsstyring hvis relevant
+$acc_opts = [];
+$acc_res = DB::query($conn, "SELECT acc_id, acc_name FROM accounts ORDER BY acc_name ASC");
+if ($acc_res) {
+    while($acc = DB::fetch_assoc($acc_res)) {
+        $acc_opts[$acc['acc_id']] = $acc['acc_name'];
+    }
 }
-</script>
+?>
 
 <?php
-echo "<div style='max-width:500px; margin:20px auto;'>";
-    htm_Card_($pageTitle, 500);
+echo "<div style='max-width:600px; margin:20px auto;'>";
+    htm_Card_($pageTitle, 600);
 ?>
-    <!-- Action skifter automatisk baseret på ID -->
+    <!-- Action skifter automatisk baseret på om det er et nyt produkt eller opdatering -->
     <form id="prod_form" action="inventory_actions.php?action=<?php echo ($id > 0 ? 'update_product' : 'create_product'); ?>" method="POST">
         <input type="hidden" name="prod_id" value="<?php echo $item['prod_id']; ?>">
         
         <div style="display: grid; gap: 15px;">
             <?php 
                 htm_InputGroup(
+                    icon: 'fa-barcode',
+                    labl: '@SKU / Item number',
+                    name: 'prod_sku',
+                    valu: $item['prod_sku'] ?? '',
+                    extr: ''
+                ); 
+
+                htm_InputGroup(
                     icon: 'fa-tag',
                     labl: '@Product Name',
                     name: 'prod_name',
                     valu: $item['prod_name'],
-                    extr: 'required autofocus'
+                    type: 'textarea',
+                    extr: 'required autofocus rows="4"'
                 ); 
             ?>
 
@@ -71,7 +91,8 @@ echo "<div style='max-width:500px; margin:20px auto;'>";
                         labl: '@In Stock',
                         name: 'prod_stock',
                         valu: $item['prod_stock'],
-                        type: 'number'
+                        type: 'number',
+                        extr: 'style="text-align: center;"'
                     ); 
                     ?>
                 </div>
@@ -83,7 +104,7 @@ echo "<div style='max-width:500px; margin:20px auto;'>";
                         name: 'prod_min_stock',
                         valu: $item['prod_min_stock'],
                         type: 'number',
-                        extr: 'min="0"'
+                        extr: 'min="0" style="text-align: center;"'
                     ); 
                     ?>
                 </div>
@@ -92,7 +113,7 @@ echo "<div style='max-width:500px; margin:20px auto;'>";
             <hr style="border: 0; border-top: 1px solid #eee; margin: 5px 0;">
 
             <div style="display: flex; gap: 15px; align-items: flex-end;">
-                <div style="flex: 2;">
+                <div style="flex: 3;">
                     <?php 
                         htm_InputGroup(
                             icon: 'fa-money-bill-wave',
@@ -100,36 +121,22 @@ echo "<div style='max-width:500px; margin:20px auto;'>";
                             name: 'prod_price',
                             valu: number_format($item['prod_price'], 2, ',', ''),
                             type: 'text',
-                            extr: 'required oninput="updateBrutto()" style="font-weight:bold;"'
+                            extr: 'required style="font-weight:bold; text-align: right;"'
                         ); 
                     ?>
                 </div>
-                <div style="flex: 1;">
+                <div style="flex: 4;">
                     <?php 
-                        $vat_opts = ['25' => '25%', '0' => '0%', 'free' => lang('@Exempt')];
                         htm_InputGroup(
-                            icon: 'fa-percent',
-                            labl: '@VAT',
-                            name: 'prod_vat_rate',
-                            valu: $item['prod_vat_rate'],
+                            icon: 'fa-book',
+                            labl: '@Account',
+                            name: 'acc_id',
+                            valu: $item['acc_id'] ?? 0,
                             type: 'sele',
-                            opti: $vat_opts,
-                            extr: 'onchange="updateBrutto()"'
+                            opti: $acc_opts
                         ); 
                     ?>
                 </div>
-            </div>
-
-            <div style="background: #f8f9fa; padding: 12px; border-radius: 4px; border-left: 4px solid #3498db; font-size: 0.95em;">
-                <span style="color: #7f8c8d;"><?php echo lang('@Price incl. VAT'); ?>:</span>
-                <span style="float: right; font-weight: bold; color: #2c3e50;">
-                    <span id="brutto_display">
-                        <?php 
-                        $current_vat = ($item['prod_vat_rate'] == 'free') ? 0 : ($item['prod_vat_rate'] ?? 25);
-                        echo number_format($item['prod_price'] * (1 + $current_vat/100), 2, ',', '.'); 
-                        ?>
-                    </span> <?php echo $cur; ?>
-                </span>
             </div>
         </div>
     </form>

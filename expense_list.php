@@ -1,4 +1,4 @@
-<?php # /expense_list.php v:1.1.0 d:2026-07-05 i:evs
+<?php # /expense_list.php v:1.2.0 d:2026-07-07 i:claude (Opdateret til at bruge htm_ActionButtons)
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -12,11 +12,11 @@ htm_Header('@Expenses');
 showMenu();
 
 // Vi bruger htm_Shell til den ydre container
-htm_Shell_('max-width:1100px; margin:0 auto; padding:10px;');
+htm_Shell_('max-width:1400px; margin:0 auto; padding:10px;');
 
 $top_btn = htm_Button(icon:'fa-plus', labl:'@Add Expense', type:'success', link:'expense_edit.php', echo:false);
 
-htm_Card_('@Expense Overview', 1100, '', 'exp_card', true, $top_btn);
+htm_Card_('@Expense Overview', 1200, '', 'exp_card', true, $top_btn);
 
 $headers = ['@Date', '@Supplier', '@Description', '@Account', '@Amount', '@File', '@Actions'];
 $data = [];
@@ -47,24 +47,28 @@ if (!$conn) {
                 $attachment_cell .= htm_Shell_end(false);
             }
 
-            $btnEdit = htm_Button(icon:'fa-edit', type:'primary', link:'expense_edit.php?id='.$id, echo:false);
-            $btnDel  = htm_Button(icon:'fa-trash', type:'danger', link:'expense_actions.php?action=delete&id='.$id, attr:'onclick="return confirm(\''.lang('@Are you sure?').'\')"', echo:false);
+            // Erstattet to separate htm_Button()-kald (med manuel confirm()
+            // på slet-knappen) med ét htm_ActionButtons()-kald.
+            $rowActions = htm_ActionButtons([
+                ['icon' => 'fa-edit',  'link' => 'expense_edit.php?id='.$id, 'hint' => '@Edit', 'type' => 'primary'],
+                ['icon' => 'fa-trash', 'link' => 'expense_actions.php?action=delete&id='.$id, 'hint' => '@Delete', 'confirm' => '@Are you sure?', 'type' => 'danger'],
+            ], false);
 
             $data[] = [
                 $date,
                 "<strong>" . htmlspecialchars($r['supplier']) . "</strong>",
-                "<span style='font-size:0.85em; color:#7f8c8d;'>" . htmlspecialchars($r['description'] ?? '') . "</span>",
+                "<span style='font-size:0.85em; color:var(--text-muted);'>" . htmlspecialchars($r['description'] ?? '') . "</span>",
                 ($r['acc_name'] ?? '---'),
                 "<strong>$amt</strong>",
                 $attachment_cell,
-                $btnEdit . " " . $btnDel
+                $rowActions
             ];
         }
     }
 }
 
 if (empty($data) && isset($res) && $res) {
-    echo "<p style='padding:40px; text-align:center; color:#999;'>" . lang('@No expenses found') . "</p>";
+    echo "<p style='padding:40px; text-align:center; color:var(--text-muted);'>" . lang('@No expenses found') . "</p>";
 } elseif (!empty($data)) {
     htm_Table($headers, $data, 'expTbl');
 }

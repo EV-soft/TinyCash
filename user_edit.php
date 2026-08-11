@@ -10,8 +10,8 @@ $msg = ""; $err = "";
 
 // 1. Gem-logik
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_user'])) {
-    $username = DB::real_escape_string($conn, $_POST['username']);
-    $role     = DB::real_escape_string($conn, $_POST['user_role']);
+    $username = DB::escape($conn, $_POST['username']);
+    $role     = DB::escape($conn, $_POST['user_role']);
     $pw1      = $_POST['new_password'];
     $pw2      = $_POST['confirm_password'];
 
@@ -81,7 +81,7 @@ htm_InputGroup(icon: 'fa-user', labl: '@Username', name: 'username', valu: $u['u
         attr: 'name="save_user"',
         styl: 'flex:2; padding:12px; font-weight:bold;',
         cont: '<div style="margin-top:25px; display:flex; gap:10px; border-top:1px solid #eee; padding-top:20px;">' . 
-              htm_Button(icon: 'fa-times', labl: '@Cancel', type: 'secondary', link: 'user_list.page.php', styl: 'flex:1; padding:12px;') . 
+              htm_Button(icon: 'fa-times', labl: '@Cancel', type: 'secondary', link: 'user_list.php', styl: 'flex:1; padding:12px;') . 
               '</div>'
     );
 

@@ -109,15 +109,18 @@ foreach ($functions as $func) {
 }
 fwrite($mainHandle, "\n\n### DATABASE SCHEMA ###\n");
 
-$tables_res = mysqli_query($conn, "SHOW TABLES"); # Replace: mysqli_ to DB:: if SQLite
+// ERSTAT MED DETTE (SQLite/PDO kompatibelt):
+$tables_res = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table'");
 if ($tables_res) {
-    while ($table_row = mysqli_fetch_array($tables_res)) {
+    while ($table_row = DB::fetch_array($tables_res)) {
         $tableName = $table_row[0];
+        if ($tableName === 'sqlite_sequence') continue;
         fwrite($mainHandle, "Table: $tableName\n");
-        $cols_res = mysqli_query($conn, "DESCRIBE `$tableName`");
+        
+        $cols_res = DB::query($conn, "PRAGMA table_info(`$tableName`)");
         $cols = [];
-        while ($col = mysqli_fetch_assoc($cols_res)) {
-            $cols[] = $col['Field'] . " (" . $col['Type'] . ")";
+        while ($col = DB::fetch_assoc($cols_res)) {
+            $cols[] = $col['name'] . " (" . $col['type'] . ")";
         }
         fwrite($mainHandle, "Columns: " . implode(" | ", $cols) . "\n\n");
     }

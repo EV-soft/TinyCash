@@ -1,4 +1,4 @@
-<?php # inc/db_connect.inc.php v:1.1.0 d:2026-07-02 i:evs
+<?php # inc/db_connect.inc.php v:1.2.0 d:2026-08-11 i:evs 
 define('APP_VERSION', '1.1.0');
 define('APP_DATE', '2026-07-05');
 /* 
@@ -82,23 +82,53 @@ if (!isset($config['ACTIVE_DB'])) {
     die("Fejl: Nøglen ACTIVE_DB blev ikke afundet i env.ini. Indhold fundet: " . implode(', ', array_keys($config)));
 }
 //   var_dump($config['ACTIVE_DB']);  exit; // DEBUG: Fjern denne linje når det virker
-   
-// Hent den aktive sektion fra roden af arrayet
-$active_section = $config['ACTIVE_DB'] ?? 'mysql_config'; 
+
+// --- NYT: VALGBAR DATABASE-TYPE VIA SESSION (login.php) ---
+// Hvis brugeren har valgt DB-type på login-siden (gemt i $_SESSION['db_type']
+// som enten 'mysql' eller 'sqlite'), bruger vi DEN i stedet for den statiske
+// ACTIVE_DB fra env.ini. Er intet valgt (frisk session, eller sider der ikke
+// går via login.php's vælger), falder vi tilbage til env.ini som hidtil.
+// NOTE: Selve forbindelsesoplysningerne (host/bruger/kodeord/sti) kommer
+// STADIG udelukkende fra env.ini's [mysql_config]/[sqlite_config] - brugeren
+// vælger kun HVILKEN af de to allerede konfigurerede sektioner der bruges,
+// aldrig hvilke credentials der forbindes med.
+$session_override = null;
+if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['db_type']) && in_array($_SESSION['db_type'], ['mysql', 'sqlite'], true)) {
+    $session_override = $_SESSION['db_type'] . '_config';
+}
+
+// Hent den aktive sektion fra roden af arrayet (session-valg vinder over ACTIVE_DB)
+$active_section = $session_override ?? ($config['ACTIVE_DB'] ?? 'mysql_config');
 // Hent kun indstillingerne for den aktive sektion
 $db_settings = $config[$active_section] ?? [];
 $db_type = $db_settings['DB_TYPE'] ?? 'mysql';
+
+// Gem den FAKTISK anvendte type tilbage i sessionen, så resten af sessionen
+// (alle sider efter login) er konsistent, selv hvis valget kom fra env.ini's
+// fallback i stedet for et eksplicit brugervalg.
+if (session_status() === PHP_SESSION_ACTIVE) {
+    $_SESSION['db_type'] = $db_type;
+}
 
 // --- 5. DATABASE CONNECTION (DYNAMISK MOTOR) ---
 if ($db_type === 'sqlite') {
     // SQLite Engine
     $db_path_rel = $db_settings['DB_PATH'] ?? 'data/tinycash.sqlite';
-    $db_path_abs = realpath(__DIR__ . '/' . $db_path_rel);
 
-    // Opret mappen hvis den mangler
-    if (!file_exists(dirname($db_path_abs))) {
-        mkdir(dirname($db_path_abs), 0755, true);
+    // RETTET: realpath() kan kun slå stien op, hvis MÅLET allerede findes.
+    // Ved en frisk installation findes tinycash.sqlite endnu ikke, så
+    // realpath() på hele filstien returnerede false - hvilket gav
+    // "mkdir(): Invalid path", fordi dirname(false) ikke er en gyldig sti.
+    // Løsning: byg mappe-stien uden om realpath, opret den om nødvendigt,
+    // og brug FØRST realpath på selve mappen (som nu altid findes).
+    $db_dir_rel = dirname($db_path_rel);
+    $db_dir_abs = __DIR__ . '/' . $db_dir_rel;
+
+    if (!is_dir($db_dir_abs)) {
+        mkdir($db_dir_abs, 0755, true);
     }
+
+    $db_path_abs = realpath($db_dir_abs) . '/' . basename($db_path_rel);
 
     $pdo = new PDO('sqlite:' . $db_path_abs);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -184,25 +214,103 @@ function is_date_locked($conn, $date) {
     return false;
 }
 
+/* ==========================================================================
+   RETTET: DB::num_rows() på SQLite returnerede ALTID 1 (sandt), så snart
+   forespørgslen bare lykkedes - uanset om der reelt var 0 eller flere
+   matchende rækker. Det gjorde fx "findes brugernavnet allerede?"-tjek i
+   user_create.php altid sandt, selv for helt nye, ledige brugernavne.
+
+   Årsagen: PDO (som SQLite bruger) har ingen pålidelig "tæl rækker uden at
+   forbruge dem"-funktion for SELECT, i modsætning til MySQLi, som som
+   standard bufrer hele resultatet med det samme (så num_rows() OG en
+   efterfølgende fetch_assoc() begge virker på samme resultat). Det er netop
+   dette MySQLi-mønster - num_rows() efterfulgt af fetch_assoc() på samme
+   variabel - som bruges 14+ steder i projektet.
+
+   Løsningen er denne lille wrapper-klasse: for SQLite SELECT-forespørgsler
+   hentes ALLE rækker øjeblikkeligt ind i et PHP-array (ligesom MySQLi gør
+   internt), så både optælling og efterfølgende, gentagen rækkehentning
+   virker korrekt - uden at ændre opførslen for MySQL-installationer eller
+   for ikke-SELECT-forespørgsler (INSERT/UPDATE/DELETE) på SQLite.
+   ========================================================================== */
+class SQLiteBufferedResult {
+    private $rows;
+    private $pointer = 0;
+    private $count;
+
+    public function __construct(array $rows) {
+        $this->rows = $rows;
+        $this->count = count($rows);
+    }
+
+    public function fetch($mode = 'assoc') {
+        if ($this->pointer >= $this->count) return false;
+        $row = $this->rows[$this->pointer];
+        $this->pointer++;
+        if ($mode === 'num') {
+            return array_values($row);
+        } elseif ($mode === 'both') {
+            return array_merge($row, array_values($row));
+        }
+        return $row; // 'assoc'
+    }
+
+    public function numRows() {
+        return $this->count;
+    }
+}
+
 class DB {
     public static function is_sqlite() {
         global $db_type;
         return ($db_type === 'sqlite');
-    }public static function query($conn, $sql) {
+    }
+    public static function query($conn, $sql) {
         global $pdo, $db_type;
-        return ($db_type === 'sqlite') ? $pdo->query($sql) : mysqli_query($conn, $sql);
+        try {
+            if ($db_type === 'sqlite') {
+                $stmt = $pdo->query($sql);
+                if ($stmt === false) return false;
+                // Kun SELECT-forespørgsler bufres til et array (se klassen
+                // ovenfor) - INSERT/UPDATE/DELETE returnerer stadig det rå
+                // PDOStatement-objekt som hidtil, uændret opførsel.
+                if (preg_match('/^\s*SELECT/i', $sql)) {
+                    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    return new SQLiteBufferedResult($rows);
+                }
+                return $stmt;
+            } else {
+                return mysqli_query($conn, $sql);
+            }
+        } catch (Exception $e) {
+            // Vi returnerer false, men vi logger fejlen, så du kan se den i logfilen
+            error_log("DB Query Suppressed Error: " . $e->getMessage() . " | SQL: " . $sql);
+            return false;
+        }
+    }
+    // Tilføj denne metode inde i din DB klasse i inc/db_connect.inc.php
+    public static function error($conn) {
+        global $db_type, $pdo;
+        if ($db_type === 'sqlite') {
+            return $pdo->errorInfo()[2] ?? 'Unknown SQLite error';
+        } else {
+            return mysqli_error($conn);
+        }
     }
     public static function fetch_assoc($result) {
         global $db_type;
+        if ($result instanceof SQLiteBufferedResult) return $result->fetch('assoc');
         return ($db_type === 'sqlite') ? $result->fetch(PDO::FETCH_ASSOC) : mysqli_fetch_assoc($result);
     }
     public static function fetch_row($result) {
         global $db_type;
+        if ($result instanceof SQLiteBufferedResult) return $result->fetch('num');
         return ($db_type === 'sqlite') ? $result->fetch(PDO::FETCH_NUM) : mysqli_fetch_row($result);
     }
     // Denne metode er den, der fejler lige nu. Sørg for den står præcis sådan her:
     public static function free_result($result) {
         global $db_type;
+        if ($result instanceof SQLiteBufferedResult) return; // rent PHP-array, intet at frigøre
         if ($db_type !== 'sqlite') {
             mysqli_free_result($result);
         }
@@ -246,14 +354,31 @@ class DB {
     }
     public static function num_rows($result) {
         global $db_type;
+        if ($result instanceof SQLiteBufferedResult) return $result->numRows();
         if ($db_type === 'sqlite') {
-            // SQLite har ikke en direkte num_rows. 
-            // Vi tæller rækkerne ved at hente dem alle, hvis nødvendigt, 
-            // men til et if-tjek er det nok at returnere 1 hvis resultatet findes.
+            // Fallback for evt. resultater der ikke gik gennem DB::query()
+            // (fx et rå PDOStatement fra prepare_and_execute) - dette bør
+            // normalt ikke ramme SELECT-tilfælde længere, jf. rettelsen ovenfor.
             return ($result) ? 1 : 0;
         } else {
             return mysqli_num_rows($result);
         }
+    }
+    // NYT: Transaktionsstøtte - kræves af expense_actions.php (og ethvert
+    // andet sted, der skal garantere flere sammenhørende opdateringer enten
+    // lykkes helt eller fortrydes helt, fx annullering af en bogført udgift
+    // + synkronisering af journalen i samme operation).
+    public static function begin_transaction($conn) {
+        global $pdo, $db_type;
+        return ($db_type === 'sqlite') ? $pdo->beginTransaction() : mysqli_begin_transaction($conn);
+    }
+    public static function commit($conn) {
+        global $pdo, $db_type;
+        return ($db_type === 'sqlite') ? $pdo->commit() : mysqli_commit($conn);
+    }
+    public static function rollback($conn) {
+        global $pdo, $db_type;
+        return ($db_type === 'sqlite') ? $pdo->rollBack() : mysqli_rollback($conn);
     }
     public static function prepare($conn, $sql) {
         global $pdo, $db_type;
@@ -261,6 +386,7 @@ class DB {
     }
     public static function fetch_array($result) {
         global $db_type;
+        if ($result instanceof SQLiteBufferedResult) return $result->fetch('both');
         return ($db_type === 'sqlite') ? $result->fetch(PDO::FETCH_BOTH) : mysqli_fetch_array($result);
     }
     public static function update($conn, $table, $data, $where_field, $where_value) {
@@ -321,6 +447,52 @@ class DB {
             }
         }
         return $sqlDump;
+    }
+    // Kun DB-STRUKTUR (CREATE TABLE m.m.), ingen data. Bruges af program-backup,
+    // hvor det er skemaet - ikke regnskabsdataene - der skal kunne rulles tilbage
+    // sammen med koden. Cross-engine som dump_to_sql().
+    public static function dump_schema($conn) {
+        global $db_type, $pdo;
+        $out = "-- TinyCash Schema (structure only) - Type: $db_type - Date: " . date('Y-m-d H:i:s') . "\n\n";
+        if ($db_type === 'sqlite') {
+            $res = $pdo->query("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 ELSE 3 END");
+            foreach ($res as $row) {
+                $out .= $row['sql'] . ";\n";
+            }
+        } else {
+            $res = mysqli_query($conn, "SHOW TABLES");
+            while ($row = mysqli_fetch_row($res)) {
+                $table   = $row[0];
+                $created = mysqli_fetch_row(mysqli_query($conn, "SHOW CREATE TABLE `$table`"));
+                $out .= "\n" . $created[1] . ";\n";
+            }
+        }
+        return $out;
+    }
+    // Tilføj denne til din DB klasse i inc/db_connect.inc.php
+    public static function escape($conn, $string) {
+        global $db_type, $pdo;
+        if ($db_type === 'sqlite') {
+            return str_replace("'", "''", $string); // SQLite escape
+        } else {
+            return mysqli_real_escape_string($conn, $string); // MySQLi escape
+        }
+    }
+    // Alias for escape(): mange kaldesteder (expense_edit, bank_import, vat_save,
+    // auto_backup m.fl.) bruger MySQLi-navnet real_escape_string(). Uden dette gav
+    // de "Call to undefined method DB::real_escape_string()". Håndterer både
+    // MySQL og SQLite via escape().
+    public static function real_escape_string($conn, $string) {
+        return self::escape($conn, $string);
+    }
+    // Tilføj denne til din DB klasse i inc/db_connect.inc.php
+    public static function insert_id($conn) {
+        global $db_type, $pdo;
+        if ($db_type === 'sqlite') {
+            return $pdo->lastInsertId();
+        } else {
+            return mysqli_insert_id($conn);
+        }
     }
     public static function stmt_bind_param(&$stmt, $types, ...$params) {
         global $db_type;

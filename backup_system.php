@@ -1,4 +1,5 @@
-<?php # backup_system.php v:0.9.1 d:2026-05-07 i:evs
+<?php # backup_system.php v:1.2.0 d:2026-08-11 i:evs 
+# (Cross-engine dump via DB::dump_to_sql())
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 
@@ -18,31 +19,10 @@ if ($zip->open($backupDir . $zipName, ZipArchive::CREATE) !== TRUE) {
     die(lang('@ZIP creation failed'));
 }
 
-// 1. SQL DUMP (Indeholder nu alle data: Kontoplan, brugere, transaktioner og FIRMADATA)
-$sqlDump = "-- TinyCash System Backup\n-- Generated: " . date('Y-m-d H:i:s') . "\n";
-// MYSQL-only: $res = DB::query($conn, "SHOW TABLES");
-$res = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
-
-while ($row = DB::fetch_row($res)) {
-    $table = $row[0];
-    
-    // Generer tabel-struktur
-    $createRes = DB::query($conn, "SHOW CREATE TABLE $table");
-    $create = DB::fetch_row($createRes);
-    $sqlDump .= "\n\n" . $create[1] . ";\n\n";
-    
-    // Generer data (INSERTs)
-    $data = DB::query($conn, "SELECT * FROM $table");
-    while ($item = DB::fetch_row($data)) {
-        // Håndter NULL værdier korrekt og escape strenge
-        $values = array_map(function($val) use ($conn) {
-            if ($val === null) return "NULL";
-            return "'" . DB::real_escape_string($conn, $val) . "'";
-        }, $item);
-        
-        $sqlDump .= "INSERT INTO $table VALUES(" . implode(",", $values) . ");\n";
-    }
-}
+// 1. SQL DUMP (Indeholder alle data: Kontoplan, brugere, transaktioner og FIRMADATA)
+// Bruger den centrale cross-engine dump, så den virker på både MySQL og SQLite -
+// samme format som full_project_backup.php, hvilket gør backuppen restore-kompatibel.
+$sqlDump = DB::dump_to_sql($conn);
 $zip->addFromString('database_dump.sql', $sqlDump);
 
 // 2. SYSTEMFILER (Sprogfiler og andre konfigurationer i JSON)

@@ -1,8 +1,12 @@
-<?php # about.php v:1.1.0 d:2026-07-05 i:evs
-require 'inc/auth.inc.php';
-require 'inc/db_connect.inc.php';
-require 'inc/menu.inc.php';
-require_once 'inc/php2htm.lib.php';
+<?php # about.php v:1.2.0 d:2026-08-11 i:evs 
+require_once __DIR__ . '/inc/auth.inc.php';
+require_once __DIR__ . '/inc/db_connect.inc.php';
+require_once __DIR__ . '/inc/menu.inc.php';
+require_once __DIR__ . '/inc/php2htm.lib.php';
+
+if (!defined('APP_VERSION')) {
+    die("Fejl: Kunne ikke indlæse konfiguration (db_connect.inc.php). Tjek stien eller rettigheder.");
+}
 
 // --- Effekt-kontrol af .htaccess ---
 function check_security_lock() {
@@ -39,12 +43,15 @@ htm_Card_('@TinyCash Accounting System', '500');
               padding: 15px; 
               border-radius: 5px; 
               border-left: 4px solid #3498db; 
-              color: inherit;"> <strong>TinyCash </strong> <?php echo lang('@is a lightweight accounting system designed for small/smaller businesses, that want full control over their own data.'); ?><br>
-        <?php echo lang('@Currently as a single-currency system'); ?>
+              color: inherit;"> <strong>TinyCash </strong> 
+              <?php echo 
+                lang('@is a lightweight accounting system designed for small/smaller businesses, that want full control over their own data.').
+                '<br>'. lang('@Currently running as a single-currency system, but with a built-in currency converter.'); 
+              ?>
     </p>
     <div style="margin: 25px 0; text-align: left;">
         <h4 style="margin-bottom: 5px;"><?php echo lang('@Developed by:'); ?></h4>
-        <p style="margin-top: 0;"><?php echo lang('@EV-soft & Gemini / For your Business'); ?></p>
+        <p style="margin-top: 0;"><?php echo lang('@EV-soft & AI agents / For your Business'); ?></p>
         
         <h4 style="margin-bottom: 5px;"><?php echo lang('@System status:'); ?></h4>
         <ul style="list-style: none; padding: 0;">

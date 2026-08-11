@@ -1,4 +1,5 @@
-<?php # inventory_status.php v:1.1.0 d:2026-07-05 i:evs
+<?php # inventory_status.php v:1.2.0 d:2026-08-11 i:evs 
+# (Tilføjet Opret variant-knap)
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/auth.inc.php';
 require_once 'inc/php2htm.lib.php';
@@ -33,10 +34,17 @@ if ($res && DB::num_rows($res) > 0) {
         // Lagerstatus
         $display_stock = $stk; 
 
-        // Action knapper
-        $btns = '<a href="product_edit.php?id='.$r['prod_id'].'" class="btn-icon bg-edit"><i class="fa fa-pencil"></i></a>';
+        // Action knapper inkl. ny variant-knap
+        $btns = htm_ActionButtons([
+            ['icon' => 'fa-pencil', 'link' => 'product_edit.php?id='.$r['prod_id'], 'hint' => '@Edit', 'type' => 'primary'],
+            ['icon' => 'fa-copy', 'link' => 'product_edit.php?copy_id='.$r['prod_id'], 'hint' => 'Opret variant', 'type' => 'success'],
+        ], false);
         
-        $data[] = [$sku, $name, $prc, $display_stock, $btns];
+        $data[] = [$sku, 
+            '<span class="truncate" onclick="toggleCell(this.parentElement)" title="'.lang('@Click to toggle view').'">'.$name.'</span>', 
+            $prc, 
+            $display_stock, 
+            $btns];
     }
 }
 
@@ -50,7 +58,7 @@ $headers = [
 ];
 
 // Generer tabellen (Kun ét kald her)
-htm_Table($headers, $data, 'inv_table', 50);
+htm_Table($headers, $data, 'inv_table', 50, vhgh:'350px', expo:'test.csv');
 
 htm_Card_end();
 htm_Footer();

@@ -148,16 +148,6 @@
         "<li><strong>Dynamische Tool-Optionen:<\/strong> Klicken Sie auf die Schaltfläche <strong>„Neues Konto hinzufügen“<\/strong> (➕), um einen neuen Finanzknoten hinzuzufügen. Verwenden Sie die lokalisierten Auslöser in der Aktionszeile, um Kernparameter zu bearbeiten oder überflüssige Konten sicher aus der Datenbankstruktur zu löschen.<\/li>",
         "<p>Nehmen Sie Änderungen an Ihren Konten mit Bedacht vor. Strukturelle Änderungen wirken sich unmittelbar darauf aus, wie sich Transaktionsbuchungen auf die Saldenbewegungen in Ihrem Hauptbuch und auf Ihre historischen Buchhaltungsunterlagen auswirken.<\/p>"
     ],
-    "company_settings.php": [
-        "<h3>Hilfe zu Unternehmensinformationen<\/h3>",
-        "<p>Diese Leitstelle verwaltet Ihr Corporate-Identity-Profil, offizielle Systemparameter, die Bankinfrastruktur sowie die Vorgaben für die automatisierte Kommunikation.<\/p>",
-        "<ul><li><strong>Unternehmensidentität und Registrierungsfelder:<\/strong> Legen Sie offizielle Angaben wie den Namen Ihrer juristischen Person, Kontaktdaten und Identifikationswerte fest (z. B. Ihre lokalen <em>CVR-Nummern<\/em>-Verifizierungsdaten). Diese Informationen werden dynamisch in ausgehende Transaktionsdaten übernommen.<\/li><\/ul>",
-        "<li><strong>Layout der Bankinfrastruktur:<\/strong> Erfassen Sie Ihre Bankkontonummern und Kontosequenzen präzise. Diese Datensätze werden direkt in Rechnungslayouts eingebunden, um eingehende automatisierte Zahlungsabgleichsprozesse reibungslos abzuwickeln.<\/li>",
-        "<li><strong>Standard-Kommunikationsprofil:<\/strong> Richten Sie die systemweiten Standardtexte für Transaktionsbenachrichtigungen ein. Dieser Block dient als vorgefertigter Grundtext, der beim Versand von Rechnungsdokumenten an Kunden automatisch eingefügt wird.<\/li>",
-        "<li><strong>Mechanismen der Datenspeicherung (UPSERT):<\/strong> Das Absenden dieses Layouts löst ein aktives Tracking-Skript aus, das die Parameter anhand einer standardmäßigen Schlüssel-Wert-Konfiguration durchläuft. Es nutzt eine interne Datenbankroutine, um ein „Insert-or-Update“-Layout (<em>ON DUPLICATE KEY UPDATE<\/em>) sicher in Ihrem zentralen Einstellungsindex auszuführen.<\/li>",
-        "<li><strong>Vorgeschriebener SAF-T-Datenexport:<\/strong> Klicken Sie auf die Schaltfläche <strong>„SAF-T exportieren“<\/strong> (), um Ihre gesamten historischen Finanzdaten in ein standardisiertes XML-Format (Standard Audit File for Tax) zu exportieren. Dieser Vorgang bereitet die Dateien ordnungsgemäß für externe Wirtschaftsprüfungen oder vorgeschriebene Compliance-Prüfungen vor.<\/li>",
-        "<p>Überprüfen Sie alle aktualisierten Einträge sorgfältig, bevor Sie auf <strong>„Unternehmens-Einstellungen speichern“<\/strong> klicken. Durch die dynamische Änderung von Kerneigenschaften werden die Informationen sowohl in den aktiven Kundenportalen als auch in den systemweiten Berichtsprotokollen überschrieben.<\/p>"
-    ],
     "about.php": [
         "<h3>Über TinyCash – Hilfe &amp; Sicherheitsüberprüfung – Hilfe<\/h3>",
         "<p>Diese zusammenfassende Übersicht erfasst Metadatenkennzahlen, Basisdaten zur Laufzeit aktiver Architekturen sowie Überprüfungen der Zugriffsgrenzen der Infrastruktur im gesamten Anwendungsökosystem.<\/p>",

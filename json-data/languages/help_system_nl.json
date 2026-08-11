@@ -148,16 +148,6 @@
         "<li><strong>Dynamische toolopties:<\/strong> Klik op de knop <strong>‘Nieuw account toevoegen’<\/strong> (➕) om een nieuw financieel knooppunt toe te voegen. Gebruik de lokaal aangepaste actietriggers om kernparameters te bewerken of overbodige accounts veilig uit de databasestructuur te verwijderen.<\/li>",
         "<p>Wees voorzichtig bij het aanpassen van uw rekeningen. Structurele wijzigingen hebben direct invloed op de manier waarop transactieboekingen worden verwerkt in de saldi van uw hoofdboek en in uw historische boekhoudgegevens.<\/p>"
     ],
-    "company_settings.php": [
-        "<h3>Bedrijfsinformatie Help<\/h3>",
-        "<p>Dit controlecentrum beheert uw huisstijl, officiële systeemparameters, bankinfrastructuur en standaarden voor geautomatiseerde communicatie.<\/p>",
-        "<ul><li><strong>Bedrijfsidentiteit en registratievelden:<\/strong> definieer officiële gegevens zoals de naam van uw rechtspersoon, contactpersonen en identificatiegegevens (bijvoorbeeld de verificatiegegevens van uw lokale <em>CVR-nummer<\/em>). Deze informatie wordt automatisch ingevuld in uitgaande transactiedocumenten.<\/li><\/ul>",
-        "<li><strong>Opbouw van de bankinfrastructuur:<\/strong> Leg de structuur van uw bankregistraties en rekeningen voor opslag nauwkeurig vast. Deze gegevenssegmenten worden rechtstreeks in factuurlay-outs geïntegreerd om inkomende geautomatiseerde betalingsafstemmingsprocessen soepel te laten verlopen.<\/li>",
-        "<li><strong>Standaardcommunicatieprofiel:<\/strong> stel hier de standaardtekst voor transactiemeldingen in voor het hele systeem. Dit blok fungeert als de vooraf ingevulde basistekst die wordt gebruikt bij het versturen van facturen naar klanten.<\/li>",
-        "<li><strong>Werking van gegevensopslag (UPSERT):<\/strong> Wanneer u deze indeling indient, wordt een actief volgscript geactiveerd dat de parameters doorloopt aan de hand van een standaard sleutel-waarde-configuratie. Het maakt gebruik van een interne databaseroutine om op veilige wijze een ‘insert-or-update’-indeling (<em>ON DUPLICATE KEY UPDATE<\/em>) uit te voeren op uw centrale <em>instellingen<\/em>index.<\/li>",
-        "<li><strong>SAF-T-gegevens exporteren voor regelgevingsdoeleinden:<\/strong> Klik op de knop <strong>‘SAF-T exporteren’<\/strong> () om uw volledige historische financiële gegevens te exporteren naar een gestandaardiseerde XML-indeling (Standard Audit File for Tax). Dit mechanisme zorgt ervoor dat de bestanden op een overzichtelijke manier worden voorbereid voor externe boekhoudkundige controles of verplichte nalevingscontroles.<\/li>",
-        "<p>Controleer alle bijgewerkte gegevens zorgvuldig voordat u op <strong>&#x27;Bedrijfsinstellingen opslaan&#x27;<\/strong> klikt. Als u kernkenmerken dynamisch wijzigt, worden de gegevens die worden weergegeven op zowel actieve klantenportalen als in de rapportagelogboeken voor het hele systeem overschreven.<\/p>"
-    ],
     "about.php": [
         "<h3>Over TinyCash Hulp &amp; Beveiligingscontrole Hulp<\/h3>",
         "<p>Dit informatieve overzicht houdt metadata-statistieken, referentiewaarden voor de actieve architectuur tijdens de uitvoering en controles op de toegangsgrenzen van de infrastructuur binnen het applicatie-ecosysteem bij.<\/p>",

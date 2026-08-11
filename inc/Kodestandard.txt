@@ -1,0 +1,636 @@
+Kodestandard: Brug ' til PHP-output og " til HTML-attributter. 
+Al HTML-generering skal ske via funktionerne i php2htm.inc.php.
+Funktionsparametre angives med navn (PHP8).
+Er der mange gentagelser, så giv et forslag til standardfunktion.
+
+Når du viser kode, kan du så ikke minimere de mange blanke linier.
+Jeg mister overblik når en funktion ikke kan vises i et skærmvindue.
+Lange linier brydes så der er cirka max. 120 tegn.
+
+Liste over 4-tegns ord som benyttes som variabelnavne i funktionskald:
+$data= [ # This is the source for keywords. 
+            ['labl','Label','Built-in Translate'],
+            ['capt','Caption','Built-in Translate'],
+            ['body','Body (content)','Built-in Translate'],
+            ['foot','Footer','Built-in Translate'],
+            ['plho','PlaceHolder','Built-in Translate'],
+            ['icon','Icon',''],
+            ['hint','Hint (user tip / title)','Built-in Translate'],
+            ['desc','Description',''],
+            ['type','Type',''],
+            ['name','Name',''],
+            ['valu','Value',''],
+            ['vmax','MaxValue',''],
+            ['vmin','MinValue',''],
+            ['form','Form',''],
+            ['subm','Submit',''],
+            ['acti','Form action',''],
+            ['clas','Class',''],
+            ['wdth','Width',''],
+            ['heig','Height',''],
+            ['algn','Align',''],
+            ['marg','Margin',''],
+            ['styl','Style',''],
+            ['attr','Attribute',''],
+            ['mode','Mode, method',''],
+            ['font','Font',''],
+            ['colr','Color',''],
+            ['fclr','Foreground color',''],
+            ['bclr','Background color',''],
+            ['llgn','LabelAlign',''],
+            ['link','Link',''],
+            ['targ','Target',''],
+            ['akey','AcessKey',''],
+            ['kind','Kind',''],
+            ['echo','Echo',''],
+            ['unit','Unit',''],
+            ['disa','Disabled',''],
+            ['rows','Rows',''],
+            ['step','Step',''],
+            ['bord','Border',''],
+            ['plac','Placement',''],
+            ['rept','Repeat',''],
+            ['rtrn','Return',''],
+            ['titl','Title','Built-in Translate'],
+            ['info','Info',''],
+            ['inis','Initial script',''],
+            ['imag','image',''],
+            ['pbrd','Page border',''],
+            ['simu','Simulate',''],
+            ['clck','Click',''],
+            ['stck','isSticky',''],
+            ['cntx','Context',''],
+            ['text','Plain text without HTML codes',''],
+            ['html','Text with HTML codes',''],
+            ['srce','Source with html content',''],
+            ['butt','Button',''],
+            ['mess','Message','Built-in Translate'],
+            ['tplc','Class for Placement of tooltip',''],
+            ['tsty','Style for Placement of tooltip',''],
+            ['head','Panel header background (style)',''],
+            ['evnt','Event script',''],
+            ['note','Note','Built-in Translate'],
+            ['rept','Repeat',''],
+            ['shrt','shortcut',''],
+            ['frst','First',''],
+            ['last','Last',''],
+            ['from','From',''],
+            ['to__','To',''],
+            ['elem','Element id',''],
+            ['pref','Prefix',''],
+            ['suff','Suffix',''],
+            ['filt','Ability to filter records',''],
+            ['data','Data',''],
+            ['crea','Created / Flag for creating new record',''],
+            ['modi','Ability to modify data',''],
+            ['expo','Export file',''],
+            ['just','Justify',''],
+            ['sort','Flag for sorting',''],
+            ['filt','Flag for filtering',''],
+            ['vrnt','Variant',''],
+            ['capt','tblcapt - Caption above table','Built-in Translate'],
+            ['pref','rowpref - fields prefixed table-rows',''],
+            ['body','rowbody - table fields',''],
+            ['suff','rowsuff - fields suffixed table-rows',''],
+            ['idix','ix-suffix on name/id',''],
+            ['note','tblnote - text below the table','Built-in Translate'],
+            ['data','tbldata - Array with the table content',''],
+            ['filt','filteron - Flag for table filtering (filt)',''],
+            ['sort','sorton - Flag for table sorting (sort)',''],
+            ['crea','createrec - Flag for table creating new record',''],
+            ['modi','modifyrec - Flag for modifying table records',''],
+            ['vhgh','viewheight - The height of scrolling window showing the table',''],
+            ['styl','Style for table-span',''],
+            ['from','calledfrom - DebugData: source file',''],
+            ['list','list for options',''],
+            ['enbl','Enabled',''],
+            ['dflt','Default',''],
+            ['strt','Start',''],
+            ['expo','export table to file',''],
+            ['show','Show cards arrows. Only show (disabled/readonly)',''],
+            ['poup','Show cards popup/content-menu.',''],
+            ['help','Link to custom-help',''],
+            ['ftop','string: Ajust field vertical position',''],
+            ['code','Flag to convert html special characters',''],
+            ['synt','Flag rel syntax output',''],
+            ['repl','Flag rel formattet string',''],
+            ['fmat','Format string',''],
+            ['vlue','Value to replace ',''],
+            ['cont','Container',''],
+            ['niv0','Xtra style attribute= value in niveau 0',''],
+            ['niv1','Xtra style attribute= value in niveau 1','Not active'],
+            ['niv2','Xtra style attribute= value in niveau 2','Not active'],
+            ['niv3','Xtra style attribute= value in niveau 3','Not active'],
+            ['niv4','Xtra style attribute= value in niveau 4','Not active'],
+            ['niv5','Xtra style attribute= value in niveau 5','Not active'],
+            ['niv6','Xtra style attribute= value in niveau 6','Not active'],
+            ['niv7','Xtra style attribute= value in niveau 7','Not active'],
+            ['tout','Timeout','']  /* ,
+            ['limt','Limit
+            ['cols','Column Style
+            ['cont','Container
+            ['
+            ['dec0','htm_Input() Variant',''],
+            ['dec1','htm_Input() Variant',''],
+            ['dec2','htm_Input() Variant',''],
+            ['num0','htm_Input() Variant',''],
+            ['num1','htm_Input() Variant',''],
+            ['num2','htm_Input() Variant',''],
+            ['num3','htm_Input() Variant',''],
+            ['mail','htm_Input() Variant',''],
+            ['link','htm_Input() Variant',''],
+            ['sear','htm_Input() Variant',''],
+            ['file','htm_Input() Variant',''],      
+            ['imag','htm_Input() Variant',''],
+            ['date','htm_Input() Variant',''],
+            ['time','htm_Input() Variant',''],
+            ['week','htm_Input() Variant',''],
+            ['mont','htm_Input() Variant',''],
+            ['rang','htm_Input() Variant',''],
+            ['butt','htm_Input() Variant',''],
+            ['colr','htm_Input() Variant',''],
+            ['phon','htm_Input() Variant',''],
+            ['pass','htm_Input() Variant',''],
+            ['area','htm_Input() Variant',''],
+            ['html','htm_Input() Variant',''],
+            ['chck','htm_Input() Variant',''],
+            ['rado','htm_Input() Variant',''],
+            ['opti','htm_Input() Variant',''],
+            ['hidd','htm_Input() Variant','']   */
+        ];
+
+Husk at du gemmer virksom version inden du går igang med fejlsøgning
+
+Hvad kan gøres ved fejlsøgning: Slå til at vise fejl, Inspicer console, inspicer Network, ?Inspicer logfil
+SQL: if (!mysqli_query($conn, $sql)) { die('SQL Fejl: ' . mysqli_error($conn) . '<br>Query: ' . $sql); }
+Indsæt sporings ECHO 'A '; i kildefiler.
+
+Installation:
+Copy sourcefiles to the webserver
+Tilpas: inc/db_connect.doc.php
+Rename db_connect.doc.php to db_connect.inc.php and setup connectiondata
+Med PHPMyAdmin:
+Opret en database:  “evsoftdk_tcash”.
+Opret databasebruger: Brugernavn:  "evsoftdk_" Adgangskode: "*********"
+Omdøb midlertidigt: .htaccess til ..htaccess (Dette giver adgang til mappen)
+I en browseer gå til URL: <SERVER_URL><BASE>/inc/db_connect.inc.php 
+
+
+Installationen af TinyCash er designet til at være simpel og "lightweight", da systemet kører på en standard PHP/MySQL-arkitektur (LAMP/LEMP).
+Her er en trin-for-trin guide til at få systemet op at køre på din webserver:
+1. Forudsætninger (Serverkrav)
+Før du starter, skal du sikre dig, at din server opfylder følgende:
+PHP: Version 7.4 eller nyere (PHP 8.x anbefales).
+Database: MySQL eller MariaDB.
+Extensions: PHP skal have mysqli og zip modulerne aktiveret.
+Webserver: Apache (med .htaccess support) eller Nginx.
+2. Upload af filer
+Download TinyCash-filerne fra dit repository eller din kilde.
+Brug en FTP-klient (som f.eks. FileZilla) eller dit webhotels File Manager til at uploade alle filer til serverens rodmappe (typisk public_html, www eller et underdomæne).
+3. Opret Database
+Log ind på dit kontrolpanel (f.eks. cPanel eller DirectAdmin).
+Opret en ny MySQL-database (f.eks. navn_tinycash).
+Opret en database-bruger med et stærkt kodeord.
+Tilknyt brugeren til databasen med alle rettigheder (ALL PRIVILEGES).
+Valgfrit: Importer den medfølgende .sql fil via phpMyAdmin, hvis systemet ikke har en automatisk database-installationsguide.
+4. Konfiguration (config.php)
+TinyCash bruger typisk en konfigurationsfil til at forbinde til databasen.
+Find filen (ofte navngivet config.php eller db_connect.php).
+Indtast dine database-oplysninger:
+PHP
+define('DB_HOST', 'localhost');
+define('DB_USER', 'dit_brugernavn');
+define('DB_PASS', 'dit_kodeord');
+define('DB_NAME', 'din_database');
+5. Sæt Mapperettigheder (Permissions)
+For at systemet kan gemme bilag, lave backups og opdatere sprogfiler, skal visse mapper være skrivbare for serveren:
+/json-data/ (til languages.json og indstillinger)
+/backups/ (til SQL- og systembackups)
+/uploads/ eller /receipts/ (hvor dine PDF/JPG bilag gemmes)
+Indstil rettighederne til 755 (eller 775/777 afhængig af serveropsætning).
+6. Første login & Opsætning
+Åbn din browser og gå til din URL (f.eks. https://ditdomæne.dk).
+Hvis systemet er helt nyt, vil du ofte blive mødt af en "Setup Administrator" skærm.
+Opret din første admin-bruger med navn og et stærkt kodeord.
+Gå til Company Settings og indtast dit CVR-nummer, adresse og bankoplysninger, så dine fakturaer ser korrekte ud fra start.
+7. Verificering
+Når du er logget ind, bør du køre dit extract_translations.php script (som vi arbejdede på tidligere) én gang. Dette sikrer, at din languages.json er helt synkroniseret med serverens filstruktur og klar til brug på alle 12 sprog.
+Tip: Husk altid at slette eventuelle install.php eller setup.sql filer fra serveren, når installationen er gennemført, af sikkerhedshensyn.
+
+
+-- 1. Kontoplan og Stamdata
+CREATE TABLE std_accounts (
+    std_id INT(11) AUTO_INCREMENT PRIMARY KEY,
+    std_name VARCHAR(255) NOT NULL,
+    std_type ENUM('asset','liabilities','revenue','costs') NOT NULL
+);
+
+CREATE TABLE vat_codes (
+    vat_id VARCHAR(10) PRIMARY KEY,
+    vat_name VARCHAR(50) NOT NULL,
+    vat_rate DECIMAL(5,2) NOT NULL,
+    vat_account INT(11)
+);
+
+CREATE TABLE accounts (
+    acc_id INT(11) PRIMARY KEY,
+    acc_name VARCHAR(100) NOT NULL,
+    acc_type ENUM('asset','liability','revenue','expense') NOT NULL,
+    std_ref_id INT(11),
+    vat_code VARCHAR(10),
+    vat_rate DECIMAL(5,2) DEFAULT 0.00,
+    FOREIGN KEY (vat_code) REFERENCES vat_codes(vat_id)
+);
+
+-- 2. Kunder og Produkter
+CREATE TABLE customers (
+    cust_id INT(11) AUTO_INCREMENT PRIMARY KEY,
+    cust_name VARCHAR(100) NOT NULL,
+    cust_address TEXT,
+    cust_email VARCHAR(100),
+    cust_phone VARCHAR(20),
+    cust_cvr VARCHAR(20),
+    cust_payment_days INT(11) DEFAULT 8
+);
+
+CREATE TABLE products (
+    prod_id INT(11) AUTO_INCREMENT PRIMARY KEY,
+    prod_sku VARCHAR(50),
+    prod_name VARCHAR(100) NOT NULL,
+    prod_stock INT(11) DEFAULT 0,
+    prod_min_stock INT(11) DEFAULT 5,
+    prod_price DECIMAL(10,2) NOT NULL,
+    acc_id INT(11),
+    FOREIGN KEY (acc_id) REFERENCES accounts(acc_id)
+);
+
+-- 3. Fakturering
+CREATE TABLE invoices (
+    inv_id INT(11) AUTO_INCREMENT PRIMARY KEY,
+    invoice_no INT(11) NOT NULL,
+    cust_id INT(11) NOT NULL,
+    inv_date DATE NOT NULL,
+    inv_due_date DATE NOT NULL,
+    inv_status ENUM('draft','paid','sent','void') DEFAULT 'draft',
+    FOREIGN KEY (cust_id) REFERENCES customers(cust_id)
+);
+
+CREATE TABLE invoice_lines (
+    line_id INT(11) AUTO_INCREMENT PRIMARY KEY,
+    inv_id INT(11) NOT NULL,
+    line_text VARCHAR(255),
+    quantity DECIMAL(10,2) DEFAULT 1.00,
+    price_each DECIMAL(15,2) NOT NULL,
+    vat_rate DECIMAL(5,2) DEFAULT 25.00,
+    acc_id INT(11),
+    prod_id INT(11),
+    FOREIGN KEY (inv_id) REFERENCES invoices(inv_id) ON DELETE CASCADE,
+    FOREIGN KEY (acc_id) REFERENCES accounts(acc_id)
+);
+
+-- 4. Bogføring og Transaktioner
+CREATE TABLE journal (
+    jou_id INT(11) AUTO_INCREMENT PRIMARY KEY,
+    jou_date DATE NOT NULL,
+    jou_text VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE ledger (
+    led_id INT(11) AUTO_INCREMENT PRIMARY KEY,
+    jou_id INT(11),
+    acc_id INT(11),
+    amount DECIMAL(15,2),
+    FOREIGN KEY (jou_id) REFERENCES journal(jou_id) ON DELETE CASCADE,
+    FOREIGN KEY (acc_id) REFERENCES accounts(acc_id)
+);
+
+CREATE TABLE transactions (
+    trans_id INT(11) AUTO_INCREMENT PRIMARY KEY,
+    trans_date DATE NOT NULL,
+    trans_text VARCHAR(255),
+    amount DECIMAL(10,2) NOT NULL,
+    vat_amount DECIMAL(10,2) DEFAULT 0.00,
+    acc_id INT(11),
+    offset_acc_id INT(11),
+    attachment_path VARCHAR(255),
+    FOREIGN KEY (acc_id) REFERENCES accounts(acc_id)
+);
+
+-- 5. System, Login og Indstillinger
+CREATE TABLE settings (
+    setting_key VARCHAR(50) PRIMARY KEY,
+    setting_value TEXT
+);
+
+CREATE TABLE users (
+    user_id INT(11) AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    user_role ENUM('admin','user') DEFAULT 'user'
+);
+
+CREATE TABLE login_log (
+    log_id INT(11) AUTO_INCREMENT PRIMARY KEY,
+    user_id INT(11),
+    logged_username VARCHAR(100),
+    login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ip_address VARCHAR(45),
+    status ENUM('Success','Failed'),
+    user_agent TEXT
+);
+
+
+
+
+-- Create VAT-tables (Must be run before creating acounts tables)
+INSERT INTO vat_codes (vat_id, vat_name, vat_rate, vat_account) VALUES 
+('U25', 'Salgsmoms (25%)', 25.00, 21020),
+('I25', 'Købsmoms (25%)', 25.00, 21010),
+('Momsfri', 'Momsfritaget', 0.00, NULL);
+
+-- Create Danish Acounts tables
+-- INDTÆGTER (Revenue)
+INSERT INTO accounts (acc_id, acc_name, acc_type, vat_code, vat_rate) VALUES 
+(1000, 'Varesalg (Indland)', 'revenue', 'U25', 25.00),
+(1010, 'Konsulentydelser', 'revenue', 'U25', 25.00),
+(1050, 'Rykkergebyrer (momsfrit)', 'revenue', 'Momsfri', 0.00);
+
+-- VARIABLE OMKOSTNINGER (Expense)
+INSERT INTO accounts (acc_id, acc_name, acc_type, vat_code, vat_rate) VALUES 
+(2000, 'Varekøb', 'expense', 'I25', 25.00),
+(2100, 'Fragt og levering', 'expense', 'I25', 25.00);
+
+-- ADMINISTRATION & DRIFT (Expense)
+INSERT INTO accounts (acc_id, acc_name, acc_type, vat_code, vat_rate) VALUES 
+(3000, 'Husleje', 'expense', 'Momsfri', 0.00),
+(3010, 'Strøm, vand og varme', 'expense', 'I25', 25.00),
+(5010, 'Kontorartikler', 'expense', 'I25', 25.00),
+(5030, 'IT-software / TinyCash', 'expense', 'I25', 25.00),
+(5040, 'Småanskaffelser', 'expense', 'I25', 25.00),
+(7000, 'Bankgebyrer', 'expense', 'Momsfri', 0.00);
+
+-- AKTIVER (Asset)
+INSERT INTO accounts (acc_id, acc_name, acc_type, vat_code, vat_rate) VALUES 
+(12000, 'Driftsmidler (Inventar)', 'asset', 'I25', 25.00),
+(14000, 'Debitorer (Tilgodehavender)', 'asset', 'Momsfri', 0.00),
+(15000, 'Bank - Driftskonto', 'asset', 'Momsfri', 0.00),
+(15010, 'Kassebeholdning', 'asset', 'Momsfri', 0.00);
+
+-- PASSIVER (Liability)
+INSERT INTO accounts (acc_id, acc_name, acc_type, vat_code, vat_rate) VALUES 
+(20000, 'Egenkapital', 'liability', 'Momsfri', 0.00),
+(21010, 'Indgående moms (Købsmoms)', 'liability', 'Momsfri', 0.00),
+(21020, 'Udgående moms (Salgsmoms)', 'liability', 'Momsfri', 0.00),
+(22000, 'Kreditorer (Leverandørgæld)', 'liability', 'Momsfri', 0.00);
+
+########################################3333
+
+Database Blueprint: evsoftdk_TinyCashControl
+Table: accounts
+Fieldname	Type	Null	Key	Default
+acc_id	int(11)	NO	PRI	-
+acc_name	varchar(100)	NO	-	-
+acc_type	enum('asset','liability','revenue','expense')	NO	-	-
+std_ref_id	int(11)	YES	-	-
+vat_code	varchar(10)	YES	-	-
+vat_rate	decimal(5,2)	YES	-	0.00
+Table: bank_statement_temp
+Fieldname	Type	Null	Key	Default
+tmp_id	int(11)	NO	PRI	-
+import_source	varchar(50)	YES	-	-
+acc_id	int(11)	YES	-	-
+trans_date	date	NO	-	-
+text_val	varchar(255)	YES	-	-
+amount	decimal(15,2)	YES	-	-
+fee_amount	decimal(15,2)	YES	-	0.00
+is_processed	tinyint(1)	YES	-	-
+raw_hash	varchar(64)	YES	UNI	-
+Table: customers
+Fieldname	Type	Null	Key	Default
+cust_id	int(11)	NO	PRI	-
+cust_name	varchar(100)	NO	-	-
+cust_contact_person	varchar(100)	YES	-	-
+cust_address	text	YES	-	-
+cust_email	varchar(100)	YES	-	-
+cust_phone	varchar(20)	YES	-	-
+cust_cvr	varchar(20)	YES	-	-
+cust_notes	text	YES	-	-
+cust_payment_days	int(11)	YES	-	8
+Table: expenses
+Fieldname	Type	Null	Key	Default
+exp_id	int(11)	NO	PRI	-
+exp_date	date	NO	-	-
+supplier	varchar(255)	NO	-	-
+account_id	int(11)	NO	-	-
+amount	decimal(10,2)	NO	-	-
+vat_rate	decimal(5,2)	YES	-	25.00
+description	text	YES	-	-
+attachment	varchar(255)	YES	-	-
+created_at	timestamp	YES	-	current_timestamp()
+attachment_file	varchar(255)	YES	-	-
+Table: invoice_lines
+Fieldname	Type	Null	Key	Default
+line_id	int(11)	NO	PRI	-
+inv_id	int(11)	NO	MUL	-
+line_text	varchar(255)	NO	-	-
+quantity	decimal(10,2)	NO	-	1.00
+price_each	decimal(15,2)	NO	-	-
+vat_rate	decimal(5,2)	YES	-	25.00
+acc_id	int(11)	YES	-	1000
+line_vat_rate	decimal(5,2)	YES	-	25.00
+prod_id	int(11)	YES	-	-
+Table: invoices
+Fieldname	Type	Null	Key	Default
+inv_id	int(11)	NO	PRI	-
+invoice_no	int(11)	YES	UNI	-
+cust_id	int(11)	NO	MUL	-
+inv_date	date	NO	-	-
+inv_due_date	date	NO	-	-
+delivery_address	text	YES	-	-
+currency	varchar(10)	YES	-	DKK
+inv_status	enum('draft','paid','sent','void')	YES	-	draft
+Table: journal
+Fieldname	Type	Null	Key	Default
+jou_id	int(11)	NO	PRI	-
+jou_date	date	NO	-	-
+jou_text	varchar(255)	NO	-	-
+created_at	timestamp	YES	-	current_timestamp()
+Table: ledger
+Fieldname	Type	Null	Key	Default
+led_id	int(11)	NO	PRI	-
+jou_id	int(11)	NO	MUL	-
+acc_id	int(11)	NO	MUL	-
+amount	decimal(15,2)	NO	-	-
+Table: login_log
+Fieldname	Type	Null	Key	Default
+log_id	int(11)	NO	PRI	-
+user_id	int(11)	YES	-	-
+logged_username	varchar(100)	YES	-	-
+login_time	timestamp	YES	-	current_timestamp()
+ip_address	varchar(45)	YES	-	-
+status	enum('Success','Failed')	YES	-	Success
+user_agent	text	YES	-	-
+Table: products
+Fieldname	Type	Null	Key	Default
+prod_id	int(11)	NO	PRI	-
+prod_sku	varchar(50)	YES	UNI	-
+prod_name	varchar(100)	YES	-	-
+prod_stock	int(11)	YES	-	-
+prod_min_stock	int(11)	YES	-	5
+prod_price	decimal(10,2)	YES	-	-
+acc_id	int(11)	YES	-	-
+Table: settings
+Fieldname	Type	Null	Key	Default
+setting_key	varchar(50)	NO	PRI	-
+setting_value	text	YES	-	-
+Table: std_accounts
+Fieldname	Type	Null	Key	Default
+std_id	int(11)	NO	PRI	-
+std_name	varchar(255)	NO	-	-
+std_type	enum('asset','liabilities','revenue','costs')	NO	-	-
+Table: transactions
+Fieldname	Type	Null	Key	Default
+trans_id	int(11)	NO	PRI	-
+trans_date	date	NO	-	-
+trans_text	varchar(255)	NO	-	-
+amount	decimal(10,2)	NO	-	-
+vat_amount	decimal(10,2)	YES	-	0.00
+acc_id	int(11)	NO	-	-
+offset_acc_id	int(11)	YES	-	5000
+attachment_path	varchar(255)	YES	-	-
+Table: users
+Fieldname	Type	Null	Key	Default
+user_id	int(11)	NO	PRI	-
+username	varchar(50)	NO	UNI	-
+password_hash	varchar(255)	NO	-	-
+user_role	enum('admin','user')	NO	-	user
+Table: vat_codes
+Fieldname	Type	Null	Key	Default
+vat_id	varchar(10)	NO	PRI	-
+vat_name	varchar(50)	YES	-	-
+vat_rate	decimal(5,2)	YES	-	-
+vat_account	int(11)	YES	-	-
+
+
+
+Fejlsøgning:
+Når noget ikke virker kan det være:
+  Kildekode: Syntaks-fejl
+  Webserver: PHP-fejl normalt skjult for brugeren
+             SQL-fejl usynlige
+  Browser: HTML/CSS/JS-fejl meldes i browser-output
+ 
+ 
+Det er en fremragende og meget præcis kategorisering af, hvor fejlene kan gemme sig 
+i dit tCash-system. Du har fuldstændig ret i, at de værste fejl er dem, der er 
+"usynlige" (Webserver/SQL), fordi de bare stopper processen uden at fortælle hvorfor.
+
+Her er en uddybning af dine punkter med konkrete metoder til, hvordan du fanger 
+fejlene i hvert lag, når du udvikler:
+
+
+1. Kildekode: Syntaks-fejl
+Disse sker, mens koden skrives eller tolkes af PHP (f.eks. et manglende semikolon ;, 
+en glemt parentes }, eller en stavefejl i et funktionsnavn).
+
+Hvad der sker: Hvis det er en fatal syntaksfejl (Parse Error), nægter PHP 
+overhovedet at køre filen.
+
+    Værktøj: Brug en kode-editor med Linting (f.eks. VS Code med PHP-extensions). 
+    Den understreger fejlen med rødt, inden du overhovedet gemmer og tester filen i browseren.
+
+
+2. Webserver: PHP-fejl (Skjult)
+Det var præcis det, vi oplevede før med mysqli_fetch_column(). Serveren stopper kørslen, 
+og hvis fejlvisning er slået fra, ser du intet.
+
+    Værktøj til PHP: Foruden de tre ini_set/error_reporting linjer, vi brugte i top-filen, 
+    kan du på din Synology NAS tjekke den centrale fejl-log. Den ligger typisk i webserverens 
+    pakke (f.eks. Apache eller Nginx logfilerne) eller i PHP-pakkens log i DSM.
+
+
+3. Webserver: SQL-fejl (Usynlige)
+En SQL-forespørgsel kan være syntaktisk forkert (f.eks. hvis du staver et kolonnenavn forkert), 
+eller databasen kan være nede. PHP kører gladeligt videre, men dit $result bliver 
+bare til false.
+
+Hvad der sker: Hvis du prøver at trække data ud af et false-resultat, crasher PHP med 
+en "Fatal error" i næste linje.
+
+    Værktøj til SQL: Byg altid en manuel opsamling på dine vigtige queries under udvikling, 
+    præcis som vi gjorde i din index.php:
+
+    PHP
+    if (!$result) {
+        echo "SQL Fejl: " . mysqli_error($conn);
+    }
+
+
+4. Browser: HTML / CSS / JavaScript-fejl
+Når koden er afleveret til browseren, kan der stadig være fejl. HTML-fejl (f.eks. et manglende 
+</div>) breaker designet, mens JavaScript-fejl (f.eks. i din toggleTestLevel() 
+funktion) stopper interaktionen.
+
+    Værktøj: Højreklik hvor som helst på din webside i browseren og vælg Undersøg 
+    (Inspect) -> Gå til fanen Konsol (Console). Her vil browseren spytte alle JavaScript-fejl 
+    ud med rødt, inklusiv hvilket linjenummer i din .js eller .php fil, den er gal med.
+
+
+
+
+hvilke krav i regnskabsloven lever programmet ikke op til09.53Claude responded: Det er et godt og vigtigt spørgsmål.Det er et godt og vigtigt spørgsmål. Lad mig gennemgå dette grundigt baseret på kildekoden og databaseskemaet jeg har set.Searched the webSearched the webNu har jeg et solidt grundlag. Her er en grundig gennemgang:
+
+TinyCash og bogføringsloven – hvad lever systemet ikke op til?
+TinyCash er et ikke-registreret, specialudviklet bogføringssystem. Det betyder at det er den virksomhed, der bruger det, der selv er ansvarlig for at systemet overholder kravene i BEK nr. 205 af 29. februar 2024 (bekendtgørelsen for ikke-registrerede systemer). Nedenfor gennemgås de konkrete krav og TinyCash's status for hvert af dem.
+
+🔴 Krav systemet ikke opfylder
+1. Bogførte transaktioner kan ændres, tilbagedateres og slettes
+Det digitale bogføringssystem skal understøtte, at bogførte transaktioner (registreringer) bevares, så de ikke kan ændres, tilbagedateres eller slettes af virksomheden, når transaktionen er endelig bogført. Skanderby
+TinyCash har ingen beskyttelse mod dette. Poster i ledger- og journal-tabellerne kan frit opdateres og slettes direkte via systemet. Der er hverken et "lås periode"-mekanisme, en immutabel log eller krav om at fejlposteringer rettes via modpostering. Det er et af de mest centrale krav i loven – og et af de tydeligste huller.
+
+2. Manglende bilagsnummer på journalposteringer
+Et felt skal være tilgængeligt for angivelse af et unikt bilagsnummer for hver transaktion. Erhvervsstyrelsen
+journal-tabellen har ingen bilag_nr-kolonne. Der tildeles intet unikt bilagsnummer ved bogføring. Fakturaer har invoice_no, og udgifter har exp_id, men selve journalposterne – som er regnskabets kerne – mangler et obligatorisk bilagsreference-felt.
+
+3. Ingen automatisk ugentlig backup til ekstern part
+Systemet skal automatisk mindst ugentligt tage sikkerhedskopi af alle bogførte transaktioner og bilag (fuld sikkerhedskopi), medmindre der ikke er bogført noget siden seneste sikkerhedskopi. Erhvervsstyrelsen
+For sådanne systemer skal virksomheden sikre, at der automatisk og løbende tages en fuldstændig sikkerhedskopi af registreringer og bilag, og at sikkerhedskopien opbevares hos en "ikkenærtstående til virksomheden" og i et EU-/EØS-land. PwC
+TinyCash har manuel backup via backup_system.php – men den er ikke automatisk, ikke ugentlig, og gemmer ikke kopien hos en tredjepart. Backup-filen gemmes midlertidigt på serveren og slettes straks efter download. Det opfylder ikke kravet.
+
+4. Registreringsdato tildeles ikke automatisk
+Systemet skal automatisk tildele en registreringsdato for hver bogført transaktion. Denne dato er tidspunktet, hvor transaktionen er blevet indført i systemet. Erhvervsstyrelsen
+journal-tabellen har en created_at-timestamp, men ledger-tabellen (de faktiske dobbeltposteringslinjer) har ingen created_at. Systemet skelner heller ikke tydeligt mellem transaktionsdato (hvornår noget skete) og registreringsdato (hvornår det blev bogført). Det er et krav at begge gemmes.
+
+5. Systemet mangler en beskrivelse af bogføringsprocedurer
+Virksomheder med årsrapportpligt eller en nettoomsætning over 300.000 kr. skal desuden udarbejde og vedligeholde en beskrivelse af deres bogføringsprocedurer. Azets UK
+TinyCash har ingen funktion til at oprette, gemme eller vedligeholde en sådan beskrivelse. For de virksomheder der er over grænsen, skal dette håndteres manuelt uden for systemet.
+
+6. Købs- og salgsbilag opbevares ikke struktureret i systemet
+Det er udelukkende købs- og salgsbilag, der skal opbevares i bogføringssystemet. PwC
+Udgiftsmodulet (expenses-tabellen) har et attachment-felt der gemmer et filnavn, og filer lægges i storage/attachments/. Men der er ingen systematisk sikring af at bilag faktisk er vedhæftet en postering, ingen validering af at filerne stadig eksisterer, og ingen opbevaringsgaranti over 5 år – filer kan bare slettes fra servermappen.
+
+🟡 Krav der er delvist opfyldt
+7. Kontrolspor og transaktionsspor – delvist
+Der stilles krav om, at nødvendige afstemninger foretages rettidigt i forhold til frister for moms, skat og regnskabsaflæggelse. Erhvervsstyrelsen
+TinyCash har en journal → ledger-struktur der teknisk skaber et transaktionsspor. Men da posteringer kan slettes og der ikke gemmes ændringshistorik, er kontrolsporet i praksis ufuldstændigt. Der logges ikke, hvem der har lavet en postering (bruger-ID mangler på ledger-linjer).
+8. Felter til transaktionsoplysninger – delvist
+Det digitale bogføringssystem skal indeholde felter til oplysning af: transaktionsdato, beløb, tidsmæssig placering i bogføringen (bogføringsdato), bilagsnummer, initialer eller lignende for vedkommende, der har registreret i systemet, transaktionstekst og transaktionsdagens kurs eller anden omregningsfaktor, hvis registrering foretages i andet end DKK. Skanderby
+TinyCash har: ✅ transaktionsdato, ✅ beløb, ✅ transaktionstekst, ✅ valutafelt på fakturaer. Men mangler: ❌ bilagsnummer på journalposter, ❌ initialer/bruger-ID på ledger-linjer, ❌ eksplicit bogføringsdato adskilt fra transaktionsdato.
+9. 5-årig opbevaring i struktureret maskinlæsbart format – uafklaret
+Alle registreringer opbevares i et struktureret og maskinlæsbart format i 5 år fra udgangen af det regnskabsår registreringen vedrører. Skanderby
+Data ligger i MySQL og er teknisk maskinlæsbart. Men der er ingen garanti i systemet for at data ikke slettes, og ingen mekanisme der forhindrer at databasen bare droppes. Ansvaret hviler helt på serverejeren.
+
+🟢 Krav der er opfyldt
+
+✅ Digital registrering af transaktioner (journal + ledger)
+✅ Fakturaer gemmes digitalt
+✅ Momsberegning og momsrapport
+✅ OIOUBL e-faktura eksport (understøtter elektronisk samhandel)
+✅ Brugerstyring med roller (admin/user)
+✅ Login-log
+✅ Registrering i DKK med valutafelt
+
+
+Samlet vurdering
+TinyCash er et godt og funktionelt faktureringssystem, men det er ikke klar til at bruges som primært bogføringssystem for virksomheder med bogføringspligt under den nye bogføringslov – uden supplerende foranstaltninger. De tre største mangler er uænderlighed af posteringer, automatisk backup til ekstern part og manglende bilagsnummer på journalposter. Disse ville kræve deciderede arkitekturændringer, ikke blot smårettelser.
