@@ -1,6 +1,6 @@
 <?php # inc/db_connect.inc.php v:1.2.0 d:2026-08-11 i:evs 
-define('APP_VERSION', '1.1.0');
-define('APP_DATE', '2026-07-05');
+define('APP_VERSION', '1.2.0');
+define('APP_DATE', '2026-08-11');
 /* 
 // --- 1. SIKKER SESSIONSSTART & SPROGVÆLGER-LOGIK ---
 if (session_status() === PHP_SESSION_NONE) {
