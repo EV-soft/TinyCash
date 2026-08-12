@@ -1,5 +1,5 @@
-<?php # /inc/notepad.inc.php v:1.2.0 d:2026-08-11 i:evs 
-# (Rettet: manglede session_name() før session_start() i gem-grenen)
+<?php # /inc/notepad.inc.php v:1.4.0 d:2026-08-12 i:claude
+# (Selv-helbredende storage/; </>-knap: vis/redigér HTML-kilde)
 ob_start();
 
 $file_path = __DIR__ . '/../storage/global_notepad.html';
@@ -28,9 +28,17 @@ if (isset($_GET['notepad_action']) && $_GET['notepad_action'] === 'save') {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $notes_content = file_get_contents('php://input');
-        if (file_put_contents($file_path, $notes_content) !== false) {
+        // Selv-helbredende: en frisk installation har ofte ikke storage/-mappen
+        // endnu. Opret den før skrivning, så notesblokken virker uden manuelt
+        // setup. (Deny-from-all .htaccess i storage/ rammer kun HTTP, ikke PHP.)
+        $dir = dirname($file_path);
+        if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+        if (@file_put_contents($file_path, $notes_content) !== false) {
             echo "saved";
         } else {
+            // Kommer man hertil trods mappen findes, er det næsten altid
+            // fil-rettigheder: web-brugeren må ikke skrive i storage/.
+            error_log('Notepad: kunne ikke skrive til ' . $file_path . ' - tjek at storage/ er skrivbar for web-brugeren (chmod/ejer).');
             echo "error_write";
         }
         exit;
@@ -91,10 +99,15 @@ if (file_exists($file_path)) {
 
         <button type="button" onclick="formatDoc('insertUnorderedList')" style="padding: 3px 6px; background: white; border: 1px solid #ccc; border-radius: 3px; cursor: pointer;" title="<?php echo lang('@Bullet List'); ?>">• <?php echo lang('@List'); ?></button>
         <button type="button" onclick="formatDoc('removeFormat')" style="padding: 3px 6px; background: #ffeaa7; border: 1px solid #ccc; border-radius: 3px; cursor: pointer;" title="<?php echo lang('@Clear Formatting'); ?>"><?php echo lang('@Clear'); ?></button>
+
+        <span style="border-left: 1px solid #ccc; margin: 0 4px;"></span>
+
+        <button type="button" id="notepadCodeBtn" onclick="toggleNotepadSource()" style="padding: 3px 8px; font-family: monospace; background: white; border: 1px solid #ccc; border-radius: 3px; cursor: pointer;" title="<?php echo lang('@View/edit HTML source'); ?>">&lt;/&gt;</button>
     </div>
     
     <div style="flex: 1; padding: 12px; display: flex; flex-direction: column; background: #fff; height: calc(100% - 110px); overflow-y: auto;">
         <div id="globalNotesArea" contenteditable="true" oninput="saveGlobalNotes()" style="width: 100%; height: 100%; min-height: 100%; font-size: 14px; line-height: 1.6; outline: none; box-sizing: border-box; color: #2c3e50; font-family: sans-serif;"><?php echo $notepad_content; ?></div>
+        <textarea id="globalNotesSource" oninput="saveGlobalNotes()" spellcheck="false" style="display:none; width:100%; height:100%; min-height:100%; box-sizing:border-box; border:none; outline:none; resize:none; font-family:monospace; font-size:12px; line-height:1.5; color:#2c3e50; background:#fff;"></textarea>
     </div>
     
     <div style="background: #f4f6f7; padding: 6px 12px; font-size: 11px; color: #7f8c8d; text-align: right; border-top: 1px solid #edf2f7; user-select: none;">
@@ -120,9 +133,41 @@ function toggleGlobalNotes() {
     }
 }
 
+// Skift mellem normal (WYSIWYG) visning og redigerbar HTML-kilde.
+var notepadSourceMode = false;
+function getNotepadContent() {
+    return notepadSourceMode
+        ? document.getElementById('globalNotesSource').value
+        : document.getElementById('globalNotesArea').innerHTML;
+}
+function toggleNotepadSource() {
+    var area = document.getElementById('globalNotesArea');
+    var src  = document.getElementById('globalNotesSource');
+    var btn  = document.getElementById('notepadCodeBtn');
+    if (!notepadSourceMode) {
+        // Til kilde-visning: vis den rå HTML som redigerbar tekst.
+        src.value = area.innerHTML;
+        area.style.display = 'none';
+        src.style.display  = 'block';
+        btn.style.background = '#2c3e50';
+        btn.style.color = '#fff';
+        notepadSourceMode = true;
+        src.focus();
+    } else {
+        // Tilbage til normal visning: fortolk den redigerede HTML og gem.
+        area.innerHTML = src.value;
+        src.style.display  = 'none';
+        area.style.display = 'block';
+        btn.style.background = 'white';
+        btn.style.color = '';
+        notepadSourceMode = false;
+        saveGlobalNotes();
+    }
+}
+
 var saveTimeout;
 function saveGlobalNotes() {
-    var htmlContent = document.getElementById('globalNotesArea').innerHTML;
+    var htmlContent = getNotepadContent();
     var status = document.getElementById('notesStatus');
     status.innerText = "<?php echo lang('@Saving...'); ?>";
     

@@ -1750,7 +1750,7 @@
                 "@Save Company Settings": "Gem virksomhedsindstillinger",
                 "@Settings": "Indstillinger",
                 "@Company - Information": "Virksomhed - Oplysninger",
-                "@Accounting - Settings / Export": "Regnskab - Indstillinger / export",
+                "@Accounting - Settings \/ Export": "Regnskab - Indstillinger \/ export",
                 "@Program - Module Settings": "Program - Modulindstillinger",
                 "@Security - About Backup": "Sikkerhed - Om backup",
                 "@Save Configuration as Profile": "",
@@ -2188,7 +2188,8 @@
                 "@Warning: Restoring OVERWRITES all current data — database, JSON settings and uploaded files — with the contents of the backup. This cannot be undone.": "Advarsel: Gendannelse OVERSKRIVER alle nuværende data — database, JSON-indstillinger og uploadede filer — med backuppens indhold. Dette kan ikke fortrydes.",
                 "@Warning: openssl not available — backups will be sent unencrypted": "Advarsel: openssl er ikke tilgængelig — backups sendes ukrypteret",
                 "@Your master password is still stored in the database, where it leaks into unencrypted data backups. Move it to inc\/env.ini using the snippet below, then remove the database copy.": "Dit master-kodeord ligger stadig i databasen, hvor det lækker i ukrypterede data-backups. Flyt det til inc\/env.ini med uddraget nedenfor, og fjern derefter database-kopien.",
-                "@days ago": "dage siden"
+                "@days ago": "dage siden",
+                "@View\/edit HTML source": "Vis\/redigér HTML-kilde"
             }
         },
         {
