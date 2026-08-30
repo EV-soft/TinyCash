@@ -1,4 +1,5 @@
-<?php # /install_check.php v:1.0.0 d:2026-05-11 i:evs
+<?php # /install_check.php v:1.3.0 d:2026-08-30 i:evs
+# fjernet risiko for permanent åbent diagnose-endpoint: selvlåser når accounts har data
 ob_start();
 session_start();
 
@@ -51,6 +52,27 @@ if ($db_file) {
     if (isset($conn) && $conn) {
         $db_conn = true;
         $db_msg = "Forbindelse til MySQL er etableret.";
+
+        // SELVLÅS (2026-08-19): denne side er bevidst uden login (skal kunne
+        // køres FØR admin-kontoen findes), og var derfor et permanent,
+        // ubeskyttet diagnose-/fingerprinting-endpoint hvis den blev glemt
+        // efter installation. Ligesom setup_chart.php's egen spærring: hvis
+        // accounts-tabellen allerede indeholder data, er installationen
+        // tydeligvis gennemført, og siden nægter derfor at vise mere.
+        $res = DB::query($conn, "SELECT COUNT(*) FROM accounts");
+        if ($res) {
+            $row = DB::fetch_row($res);
+            if ((int)($row[0] ?? 0) > 0) {
+                ob_clean();
+                echo "<div style='font-family:sans-serif;max-width:600px;margin:60px auto;text-align:center;padding:30px;background:#fff3cd;border:1px solid #ffeeba;border-radius:8px;color:#856404;'>
+                        <h2>⚠️ Installation allerede gennemført</h2>
+                        <p>Systemet indeholder allerede data. Denne diagnoseside er slået fra af sikkerhedshensyn.</p>
+                        <p><strong>Slet denne fil (" . htmlspecialchars(basename(__FILE__)) . ") fra serveren.</strong></p>
+                      </div>";
+                ob_end_flush();
+                exit;
+            }
+        }
     } else {
         $db_msg = "Forbindelse mislykkedes. Tjek koderne i filen.";
     }

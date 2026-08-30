@@ -1,18 +1,37 @@
-<?php # /company_settings.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /company_settings.php v:1.3.0 d:2026-08-30 i:evs
+# logger nu ændringer af de særlige conf_acc_*-posteringskonti til revisionssporet
 # (Opdelt i fire tematiske kort med side-overskrift "Indstillinger" - gemme-logik uaendret)
+# v1.3.0: selskabsform/ledelsesnavn/by tilføjet - bruges på årsrapportens
+# ledelsespåtegning (annual_report.php, §regnskabslov-status)
+# v1.3.1: fjernet ubetinget DEBUG-logning ved hver gemning (leftover fra en
+# tidligere fejlsøgning af linjeskift i company_address) - fyldte fejlloggen
+# med støj og udløste falske "frisk fejl"-visninger i about.php (v1.3.0)
+# KRITISK (§bugs-batch-15-review): siden havde INTET niveau-tjek overhovedet,
+# selvom den styrer de fem conf_acc_*-posteringskonti (allerede logget til
+# revisionssporet netop pga. deres høje følsomhed, se ovenfor), valuta,
+# datoformat, modul-til/fra samt destinations-mailen for den automatiske
+# krypterede backup - enhver logget-ind niveau-1-bruger kunne ændre dem alle.
+$rLev = 3;
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
+require_once 'inc/audit.inc.php';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_settings'])) {
 
-    if (strpos($_POST['set']['company_address'], "\n") !== false) {
-        error_log("DEBUG: Linjeskift fundet i POST-data!");
-    } else {
-        error_log("DEBUG: INGEN linjeskift i POST-data. Browseren sender dem ikke.");
-    }
+    // Hent de nuværende conf_acc_*-værdier FØR gemning, til revisionssporet -
+    // disse styrer, hvor ALT fremtidig automatisk postering lander (bank,
+    // debitor, salg, moms), kvalitativt anderledes end almindelige felter
+    // som firmanavn/adresse. En ændring her kunne stille og roligt omdirigere
+    // fremtidige posteringer uden spor. Bruger-anmodet.
+    // RETTET (leverandørmodul, se db-setup/migrate_suppliers.php): tilføjet
+    // conf_acc_creditor til revisionslisten - styrer, hvor "Ikke betalt
+    // endnu"-udgifter krediteres i stedet for banken, lige så følsom som de
+    // øvrige særlige posteringskonti.
+    $conf_acc_keys = ['conf_acc_bank', 'conf_acc_debitor', 'conf_acc_creditor', 'conf_acc_sales', 'conf_acc_vat', 'conf_acc_purchase_vat', 'conf_acc_fx'];
+    $before_settings = get_settings($conn);
 
     foreach ($_POST['set'] as $key => $val) {
         $clean_key = DB::escape($conn, $key);
@@ -39,6 +58,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_settings'])) {
             }
         }
     }
+
+    // Log kun hvis en eller flere af de særlige conf_acc_*-konti faktisk
+    // ændrede sig - ikke ved en almindelig gemning der ikke rørte dem.
+    $acc_old = []; $acc_new = [];
+    foreach ($conf_acc_keys as $k) {
+        $old_val = $before_settings[$k] ?? null;
+        $new_val = isset($_POST['set'][$k]) ? trim($_POST['set'][$k]) : $old_val;
+        if ((string)$old_val !== (string)$new_val) {
+            $acc_old[$k] = $old_val;
+            $acc_new[$k] = $new_val;
+        }
+    }
+    if (!empty($acc_new)) {
+        log_action($conn, 'UPDATE_POSTING_ACCOUNTS', 'settings', 0, $acc_old, $acc_new);
+    }
+
     header("Location: company_settings.php?msg=updated");
     exit;
 }
@@ -59,16 +94,38 @@ echo '</div>';
 // Alle indstillinger gemmes via EN faelles form, saa den enkelte Gem-knap
 // under kortene sender felter fra alle tre kort paa en gang (uaendret handler).
 echo '<form method="post">';
+csrf_field();
 
 // =====================================================================
 // KORT 1: VIRKSOMHED - OPLYSNINGER
 // =====================================================================
 htm_Card_(capt: '@Company - Information', wdth: 650);
 
-htm_InputGroup(icon: 'fa-building', labl: '@Company Name', name: 'set[company_name]', valu: $comp['company_name'] ?? '', legd:'align-left');
-htm_InputGroup(icon: 'fa-id-card', labl: '@CVR Number', name: 'set[company_cvr]', valu: $comp['company_cvr'] ?? '', wdth: '34%', legd:'align-left');
-htm_InputGroup(icon: 'fa-envelope', labl: '@Email', name: 'set[company_email]', valu: $comp['company_email'] ?? '', type: 'email', wdth: '66%', legd:'align-left');
-htm_InputGroup(
+htm_Field(icon: 'fa-building', labl: '@Company Name', name: 'set[company_name]', valu: $comp['company_name'] ?? '', legd:'align-left');
+htm_Field(icon: 'fa-id-card', labl: '@CVR Number', name: 'set[company_cvr]', valu: $comp['company_cvr'] ?? '', wdth: '34%', legd:'align-left');
+htm_Field(icon: 'fa-envelope', labl: '@Email', name: 'set[company_email]', valu: $comp['company_email'] ?? '', type: 'email', wdth: '66%', legd:'align-left');
+htm_Field(
+    icon: 'fa-scale-balanced',
+    labl: '@Legal Form',
+    name: 'set[company_legal_form]',
+    valu: $comp['company_legal_form'] ?? '',
+    type: 'sele',
+    opti: [
+        '' => '-- ' . lang('@Select') . ' --',
+        'Enkeltmandsvirksomhed' => 'Enkeltmandsvirksomhed',
+        'I/S' => 'I/S (Interessentskab)',
+        'IVS' => 'IVS',
+        'ApS' => 'ApS',
+        'A/S' => 'A/S',
+        'Andet' => lang('@Other'),
+    ],
+    wdth: '48%',
+    legd:'align-left',
+    hint: '@Used on the annual report cover page.'
+);
+htm_Field(icon: 'fa-user-tie', labl: '@Management Name (for signing)', name: 'set[company_management_name]', valu: $comp['company_management_name'] ?? '', wdth: '52%', legd:'align-left', hint: '@Name of the director/owner who signs the annual report.');
+htm_Field(icon: 'fa-city', labl: '@City (for signing location)', name: 'set[company_city]', valu: $comp['company_city'] ?? '', wdth: '48%', legd:'align-left');
+htm_Field(
     icon: 'fa-map-marker-alt',
     labl: '@Address',
     name: 'set[company_address]',
@@ -76,12 +133,12 @@ htm_InputGroup(
     type: 'textarea',
     legd: 'align-left'
 );
-htm_InputGroup(icon: 'fa-phone', labl: '@Phone Number', name: 'set[company_phone]', valu: $comp['company_phone'] ?? '', wdth: '33%', extr:'align-right', legd:'align-center');
-htm_InputGroup(icon: 'fa-university', labl: '@Reg. No.', name: 'set[bank_reg]', valu: $comp['bank_reg'] ?? '', wdth: '34%', legd:'align-left');
-htm_InputGroup(icon: 'fa-piggy-bank', labl: '@Account No.', name: 'set[bank_acc]', valu: $comp['bank_acc'] ?? '', wdth: '33%', legd:'align-left');
-htm_InputGroup(icon: 'fa-info-circle', labl: '@Extra Info', name: 'set[company_extra]', valu: $comp['company_extra'] ?? '', wdth: '100%', legd:'align-left');
+htm_Field(icon: 'fa-phone', labl: '@Phone Number', name: 'set[company_phone]', valu: $comp['company_phone'] ?? '', wdth: '33%', extr:'align-right', legd:'align-center');
+htm_Field(icon: 'fa-university', labl: '@Reg. No.', name: 'set[bank_reg]', valu: $comp['bank_reg'] ?? '', wdth: '34%', legd:'align-left');
+htm_Field(icon: 'fa-piggy-bank', labl: '@Account No.', name: 'set[bank_acc]', valu: $comp['bank_acc'] ?? '', wdth: '33%', legd:'align-left');
+htm_Field(icon: 'fa-info-circle', labl: '@Extra Info', name: 'set[company_extra]', valu: $comp['company_extra'] ?? '', wdth: '100%', legd:'align-left');
 echo '<br><br><hr><br>';
-htm_InputGroup(icon: 'fa-comment-alt', labl: '@Default Email Message', name: 'set[default_mail_body]', valu: $comp['default_mail_body'] ?? "Please find your invoice attached.\n\nBest regards,", type: 'textarea', legd: 'align-left', extr: 'rows="3"');
+htm_Field(icon: 'fa-comment-alt', labl: '@Default Email Message', name: 'set[default_mail_body]', valu: $comp['default_mail_body'] ?? "Please find your invoice attached.\n\nBest regards,", type: 'textarea', legd: 'align-left', extr: 'rows="3"');
 
 htm_Card_end();
 
@@ -92,12 +149,12 @@ htm_Card_(capt: '@Accounting - Settings / Export', wdth: 650);
 
 echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-sizing: border-box;">';
 
-    htm_InputGroup(
+    htm_Field(
         icon: 'fa-calendar-days',
         labl: '@Date Format',
         name: 'set[date_format]',
         valu: CONF_DATE_FORMAT,
-        type: 'select',
+        type: 'sele',
         opti: [
             'd.m.Y' => '09.06.2026 (DD.MM.ÅÅÅÅ)',
             'Y-m-d' => '2026-06-09 (ÅÅÅÅ-MM-DD)',
@@ -116,7 +173,7 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
         'NOK' => 'NOK - Norske Kroner'
     ];
 
-    htm_InputGroup(
+    htm_Field(
         icon: 'fa-money-bill-wave',
         labl: '@Currency',
         name: 'set[currency]',
@@ -134,29 +191,101 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
         $account_options[$row['acc_id']] = $row['acc_id'] . ' - ' . $row['acc_name'];
     }
 
-    htm_InputGroup(
+    htm_Field(
         icon: 'fa-university',
         labl: '@Default Bank Account',
         name: 'set[conf_acc_bank]',
         valu: $comp['conf_acc_bank'] ?? 5000,
-        type: 'select',
+        type: 'sele',
         opti: $account_options,
         wdth: 'calc(50% - 8px)',
         legd: 'align-left'
     );
 
-    htm_InputGroup(
+    htm_Field(
         icon: 'fa-users',
         labl: '@Default Debitor Account',
         name: 'set[conf_acc_debitor]',
         valu: $comp['conf_acc_debitor'] ?? 8100,
-        type: 'select',
+        type: 'sele',
         opti: $account_options,
         wdth: 'calc(50% - 8px)',
         legd: 'align-left'
     );
 
-    htm_InputGroup(
+    htm_Field(
+        icon: 'fa-truck-ramp-box',
+        labl: '@Default Creditor Account',
+        name: 'set[conf_acc_creditor]',
+        valu: $comp['conf_acc_creditor'] ?? 4000,
+        type: 'sele',
+        opti: $account_options,
+        wdth: 'calc(50% - 8px)',
+        legd: 'align-left',
+        hint: lang('@Used when an expense is registered as "not yet paid" - credited instead of the bank account until it is marked paid.')
+    );
+
+    htm_Field(
+        icon: 'fa-cash-register',
+        labl: '@Default Sales Account',
+        name: 'set[conf_acc_sales]',
+        valu: $comp['conf_acc_sales'] ?? 1000,
+        type: 'sele',
+        opti: $account_options,
+        wdth: 'calc(50% - 8px)',
+        legd: 'align-left'
+    );
+
+    htm_Field(
+        icon: 'fa-percent',
+        labl: '@Default Output VAT Account',
+        name: 'set[conf_acc_vat]',
+        valu: $comp['conf_acc_vat'] ?? 6900,
+        type: 'sele',
+        opti: $account_options,
+        wdth: 'calc(50% - 8px)',
+        legd: 'align-left'
+    );
+
+    htm_Field(
+        icon: 'fa-percent',
+        labl: '@Default Input (Purchase) VAT Account',
+        name: 'set[conf_acc_purchase_vat]',
+        valu: $comp['conf_acc_purchase_vat'] ?? 6910,
+        type: 'sele',
+        opti: $account_options,
+        wdth: 'calc(50% - 8px)',
+        legd: 'align-left'
+    );
+
+    // NYT (§reel-multi-valuta-bogforing): bruges af reconcile_action.php når
+    // en udenlandsk faktura afsluttes med en kursforskel mellem det bogførte
+    // DKK-beløb og det faktisk indbetalte - se db-setup/migrate_currency_
+    // gainloss.php.
+    htm_Field(
+        icon: 'fa-money-bill-transfer',
+        labl: '@Currency Gain/Loss Account',
+        name: 'set[conf_acc_fx]',
+        valu: $comp['conf_acc_fx'] ?? 7200,
+        type: 'sele',
+        opti: $account_options,
+        wdth: 'calc(50% - 8px)',
+        legd: 'align-left',
+        hint: lang('@Used when a foreign-currency invoice is settled at a different exchange rate than it was invoiced at - the difference is posted here as a currency gain or loss.')
+    );
+
+    htm_Field(
+        icon: 'fa-paperclip',
+        labl: '@Attachment required above (kr)',
+        name: 'set[conf_attachment_limit]',
+        valu: $comp['conf_attachment_limit'] ?? 500,
+        type: 'text',
+        hint: '@Expenses at or above this amount require an attached voucher. Below it, a reason for the missing attachment must be given instead.',
+        wdth: 'calc(50% - 8px)',
+        legd: 'align-left'
+    );
+
+    htm_Field(
         icon: 'fa-lock',
         labl: '@Accounting Lock Date',
         name: 'set[accounting_lock_date]',
@@ -170,14 +299,34 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
 echo '</div>';
 
 // --- EXPORT ---
+// RETTET (§bugs-batch-12-review): knappen kaldte export_saft.php, som ikke
+// fandtes noget sted i projektet - hvert klik endte på en rå 404. Filen er
+// nu bygget (rigtig OECD SAF-T Financial-lignende eksport af kontoplan,
+// kunder, leverandører og hele hovedbogen for et valgt år) - knappen linker
+// til dens periode-valgsside i stedet for at forsøge et direkte download.
 echo '<div style="margin-top:20px; border-top:1px solid var(--border-color); padding-top:15px; text-align:left;">';
-htm_Button(
-    icon: 'fa-download',
-    labl: '@Export SAF-T',
-    type: 'info',
-    attr: 'onclick="triggerSaftExport(this); return false;" id="saftBtn"
-          data-hint="@Eksporter virksomhedens regnskabsdata i XML-standardformat kaldet SAF-T (Standard Audit File for Tax)"'
-);
+// RETTET (§currency-setting-is-cosmetic-label, Fase 2): SAF-T er en dansk
+// SKAT-specifik eksport - knappen er derfor grå/deaktiveret når firmaets
+// bogføringsvaluta ikke er DKK (siden selv spærrer stadig direkte adgang
+// via require_dkk_base_currency(), dette er kun for at undgå en dødt link).
+$__base_currency_saft = strtoupper($comp['currency'] ?? 'DKK');
+if ($__base_currency_saft === 'DKK') {
+    htm_Button(
+        icon: 'fa-download',
+        labl: '@Export SAF-T',
+        type: 'info',
+        link: 'export_saft.php',
+        attr: 'data-hint="@Eksporter virksomhedens regnskabsdata i XML-standardformat kaldet SAF-T (Standard Audit File for Tax)"'
+    );
+} else {
+    htm_Button(
+        icon: 'fa-download',
+        labl: '@Export SAF-T',
+        type: 'secondary',
+        link: '',
+        attr: 'disabled data-hint="'.lang('@This feature follows Danish-specific tax and bookkeeping rules, and is only available when your company\'s base currency is DKK.').'"'
+    );
+}
 echo '</div>';
 
 htm_Card_end();
@@ -190,7 +339,7 @@ htm_Card_(capt: '@Program - Module Settings', wdth: 650);
 $proj_active = !empty($comp['module_projects']) && $comp['module_projects'] == '1';
 echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-sizing: border-box; align-items: center;">';
 
-    htm_InputGroup(
+    htm_Field(
         icon: 'fa-folder-open',
         labl: '@Project Module',
         name: 'set[module_projects]',
@@ -216,7 +365,7 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
 
     // --- Valuta-modul (fremmed valuta på fakturaer/udgifter + omregner) ---
     $curr_active = !empty($comp['module_currency']) && $comp['module_currency'] == '1';
-    htm_InputGroup(
+    htm_Field(
         icon: 'fa-coins',
         labl: '@Foreign Currency Module',
         name: 'set[module_currency]',
@@ -244,56 +393,31 @@ htm_Card_end();
 
 // --- FAELLES GEM-KNAP (gemmer felter fra alle tre kort ovenfor) ---
 echo '<div style="max-width:650px; margin:0 auto 20px; padding:0 5px;">';
-    htm_Button(icon: 'fa-save', labl: '@Save Company Settings', type: 'success', attr: 'name="save_settings"', styl: 'width:100%; padding:15px; font-weight:bold;');
+    htm_Button(icon: 'fa-save', labl: '@Save Company Settings', type: 'success', attr: 'name="save_settings" data-hint="'.lang('@Save all company and accounting settings above').'"', styl: 'width:100%; padding:15px; font-weight:bold;');
 echo '</div>';
 
 echo '</form>';
 
-// =====================================================================
-// KORT 4: SIKKERHED - OM BACKUP
-// =====================================================================
-htm_Card_(capt: '@Security - About Backup', wdth: 650);
+// RETTET (bruger-rapporteret, samme oprydning som automatisk-backup-boksen
+// nedenfor): "Sikkerhed - Om Backup"-kortet er flyttet til backup.php's
+// Manuel Backup-sektion (det handler om backups/-mappen, som kun de manuelle
+// handlinger reelt skriver til - se rettelsen der for hvorfor "automatically"
+// i den gamle tekst selv var en del af forvirringen).
 
-echo '<div style="padding: 15px; background: var(--bg-panel); border-left: 4px solid var(--color-warning); border-radius: 4px; text-align: left; box-sizing: border-box; width: 100%;">';
-    echo '<strong style="color: var(--color-warning); font-size: 14px;">';
-        echo '<i class="fa-solid fa-cloud-arrow-down"></i> ' . lang('@Important regarding backup (Bookkeeping Act):');
-    echo '</strong>';
-    echo '<p style="margin: 5px 0 0 0; font-size: 13px; color: var(--text-main); line-height: 1.5;">';
-        echo lang('@The system automatically saves backup files in the backups folder on the server. To comply with legal data protection requirements, you must regularly download these .zip files and store them on an external data medium (e.g., a local hard drive, USB drive, or secure cloud storage).');
-    echo '</p>';
-    echo '<div style="margin-top: 10px;">';
-        echo '<a href="storage_browser.php?folder=backups" style="font-size: 13px; color: var(--color-primary); text-decoration: none; font-weight: bold;">';
-            echo '<i class="fa-solid fa-folder-open"></i> ' . lang('@Go to System File Browser to Download Backups');
-        echo '</a>';
-    echo '</div>';
+// RETTET (bruger-rapporteret: "backup" var ikke et klart begreb): den fulde
+// automatisk-backup-boks (status/fejl/opsætning) er flyttet til backup.php,
+// under sin egen "🤖 Automatisk Backup"-sektion, samlet med resten af alt
+// der hedder backup i stedet for spredt ud på en helt anden side om
+// firmaindstillinger. Et kort krydslink herfra, så man stadig finder den.
+echo '<div style="max-width:650px; margin:0 auto 20px; padding:0 5px;">';
+echo '<a href="backup.php" style="display:block; background:var(--bg-panel); border:1px solid var(--border-color); border-radius:8px; padding:14px 18px; text-decoration:none; color:var(--text-main); font-size:0.9em;">';
+echo '<i class="fa-solid fa-shield-halved" style="color:var(--color-primary); margin-right:8px;"></i>' . lang('@Automatic backup status and setup has moved to Backup Management') . ' <i class="fa-solid fa-arrow-right" style="margin-left:4px;"></i>';
+echo '</a>';
 echo '</div>';
-
-htm_Card_end();
-
-// --- AUTOMATISK KRYPTERET OFF-SITE BACKUP (21-dages interval) ---
-require_once 'inc/auto_backup_integration.php';
-render_auto_backup_settings($conn);
 
 htm_Footer();
 ?>
 <script>
-function triggerSaftExport(btn) {
-    const oldIcon = 'fa-download';
-    const oldText = "<?php echo lang('@Export SAF-T'); ?>";
-    btn.disabled = true;
-    btn.innerHTML = `<i class="fa fa-spinner fa-spin"></i> <?php echo lang('@Generating...'); ?>`;
-    window.location.href = 'export_saft.php';
-    setTimeout(() => {
-        btn.innerHTML = `<i class="fa fa-check"></i> <?php echo lang('@Export Complete'); ?>`;
-        btn.className = btn.className.replace('btn-info', 'btn-success');
-        setTimeout(() => {
-            btn.disabled = false;
-            btn.className = btn.className.replace('btn-success', 'btn-info');
-            btn.innerHTML = `<i class="fa ${oldIcon}"></i> ${oldText}`;
-        }, 3000);
-    }, 1000);
-}
-
 document.querySelector('form').addEventListener('submit', function(e) {
     const currencyInput = document.querySelector('select[name="set[currency]"]');
     const originalValue = "<?php echo $comp['currency'] ?? 'DKK'; ?>";

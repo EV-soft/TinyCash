@@ -1,6 +1,11 @@
-<?php # /currency_proxy.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /currency_proxy.php v:1.3.0 d:2026-08-30 i:evs
 # Proxy til frankfurter.app — cacher kurser i 6 timer så API'et ikke overbelastes
 # Kræver: allow_url_fopen = On i php.ini (standard på NordicWay/cPanel)
+# v1.3.0: manglede login-krav, i modsætning til resten af systemet. Ingen
+# hemmeligheder lækkes (proxier en offentlig valutakurs-API), men tilføjet
+# for konsekvens. Gennemgang af tilbageværende sider.
+chdir(__DIR__);
+require_once 'inc/auth.inc.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store');

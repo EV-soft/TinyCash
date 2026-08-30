@@ -1,16 +1,33 @@
-<?php
-# tools/translate_system.php - HTML-optimeret version til PHP 8.5+
-set_time_limit(0); 
+<?php # /inc/translate_system.php v:1.3.0 d:2026-08-30 i:evs
+# HTML-optimeret version til PHP 8.5+ - ser ud til at være en duplikat af
+# tools/translate_system.php, se [[php-header-standardization]].
+# RETTET (§bugs-batch-21-review): KRITISK - denne fil havde INTET PHP-niveau
+# adgangstjek overhovedet (kun inc/.htaccess' "Require all denied" som
+# standard, som Nginx slet ikke respekterer, i modsætning til Apache), og
+# havde en ægte DeepL API-nøgle hårdkodet direkte i kildekoden i stedet for i
+# env.ini (projektets egen konvention for hemmeligheder, se OPENAI_API_KEY).
+# Kræver nu admin-niveau (samme mønster som TranslationExtractor.php/
+# Master_Advisor.php) og læser nøglen fra env.ini.
+chdir(dirname(__DIR__));
+$rLev = 3;
+require_once 'inc/auth.inc.php';
+require_once 'inc/db_connect.inc.php';
+
+set_time_limit(0);
 ini_set('max_execution_time', 0);
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 // ==========================================
-// 1. INDSTIL DIN API-NØGLE HER
+// 1. API-NØGLEN HENTES NU FRA env.ini (se ovenfor)
+// RETTET: env.ini flyttet til inc/data/env.ini - genbruger $env_file, som
+// inc/db_connect.inc.php (allerede kørt ovenfor) selv fandt frem til, i
+// stedet for at gætte en hårdkodet sti igen.
 // ==========================================
-define('DEEPL_API_KEY', '0fedee4f-a820-42d0-8f09-e4d27558bd79:fx'); 
+$env_ini = parse_ini_file($env_file);
+define('DEEPL_API_KEY', trim($env_ini['DEEPL_API_KEY'] ?? '', '"\' '));
 
-define('SOURCE_JSON', dirname(__DIR__) . '/json-data/help_system.json'); 
+define('SOURCE_JSON', dirname(__DIR__) . '/json-data/help_system.json');
 define('TARGET_DIR', dirname(__DIR__) . '/json-data/languages/'); 
 
 $apiUrl = (substr(trim(DEEPL_API_KEY), -3) === ':fx') 

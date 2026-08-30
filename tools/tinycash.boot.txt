@@ -1,0 +1,377 @@
+====================================================================
+ TinyCash - Quick Install (2-file package) / Hurtig installation (2-fils-pakke)
+====================================================================
+
+This file documents tools/tinycash.boot.zip + tools/tinycash.boot.php
+(built by tools/build_boot_zip.php). It is not read by any PHP script -
+it is a plain instruction sheet meant to be distributed alongside the
+two files.
+
+--------------------------------------------------------------------
+ ENGLISH
+--------------------------------------------------------------------
+
+WHAT YOU HAVE
+
+Two files:
+  - tinycash.boot.zip   The full TinyCash application, with a demo
+                         database already built in (theme: H.C.
+                         Andersen's fairy tales) - no setup wizard,
+                         no database configuration needed.
+  - tinycash.boot.php   A small installer script that unpacks the
+                         zip file for you.
+
+REQUIREMENTS
+
+  - A normal PHP web host (PHP 8.1 or newer recommended).
+  - The PHP "zip" extension enabled (ext-zip) - practically always
+    the case on shared hosting; ask your provider if unsure.
+  - No database server required for this quick-start package - it
+    uses SQLite, which needs nothing but a writable folder.
+
+INSTALLATION
+
+  1. Create a NEW, EMPTY folder on your web server (a fresh
+     subdomain or subfolder - never an existing TinyCash install).
+  2. Upload BOTH files into that folder (FTP/SFTP or your hosting
+     control panel's file manager). Use binary mode for the .zip.
+  3. Open tinycash.boot.php in your browser, e.g.:
+       https://your-domain.example/tinycash.boot.php
+  4. The script unpacks the package automatically and shows a
+     confirmation page with your login details.
+  5. Click "Continue to login" and sign in.
+
+LOGIN
+
+  Username: admin
+  Password: eventyr123
+
+INSTALLATION TRACKING (transparency note)
+
+  The success page you see right after installing loads a single Matomo
+  page-view ping to the package maintainer's own self-hosted analytics
+  instance (viuff.info/piwik/) - purely to count how many times this
+  installer is actually run. It fires once, only on that one success page,
+  and nowhere else in the installed application (login.php, the dashboard
+  etc. are untouched). There is currently no setting to disable it.
+
+AFTER INSTALLING - IMPORTANT
+
+  - Change the admin password immediately after your first login
+    (Users menu).
+  - Delete tinycash.boot.php AND tinycash.boot.zip from the server
+    once the install has finished - they should never be left
+    reachable on a live site.
+  - Do NOT delete the db-setup/ folder, even though older TinyCash
+    install guides tell you to - this package's Database migration
+    page (System -> Maintenance) and the Accounts/Regnskaber feature
+    both depend on files in there for ongoing use, not just initial
+    setup. Only the two boot files above should be removed.
+  - The installed demo is registered as its own "ledger" (regnskab).
+    Under System -> Accounts (Regnskaber) you can later create
+    additional demo ledgers, convert this one from demo to a real,
+    empty ledger ready for actual bookkeeping, or register another
+    already-existing TinyCash database - all without reinstalling
+    anything.
+
+TURNING THIS INTO A FULL PRODUCTION SYSTEM (OPTIONAL)
+
+  What you get out of the box is a complete, fully working single-
+  user SQLite demo. Everything below is OPTIONAL, off by default,
+  and configured in exactly ONE file: inc/data/env.ini (edit it with
+  any plain text editor via FTP/SFTP or your host's file manager).
+  PHP re-reads this file on every page load - just save and reload,
+  no restart or redeploy needed.
+
+  TIP: the package also includes inc/data/template_env.ini - the
+  same file with every field left blank, fully commented, and never
+  read by TinyCash itself. Use it as a reference for the exact key
+  names if you're unsure of something below, or as a starting point
+  if you want to reset a section back to blank (copying it over
+  your real env.ini will erase whatever you've already filled in,
+  so treat it as a reference, not something to overwrite with
+  casually).
+
+  Your own company details
+    Before issuing any real invoice, replace the demo company's
+    name/address/CVR/logo with your own under System -> Settings
+    (company_settings.php) - otherwise your customers receive
+    invoices from "TinyCash Eventyr-Demo ApS". If your business is
+    outside Denmark, also review the currency setting there.
+
+  Your fiscal year (only needed before Year-End Close / Annual
+  Report - not required for day-to-day invoicing/bookkeeping)
+    The fiscal_years table ships empty. Run
+    db-setup/migrate_fiscal_years.php once to enter your real
+    fiscal year's start/end date (supports an offset year, not just
+    the calendar year) before using Year-End Close or the Annual
+    Report.
+
+  Unlocking optional modules (suppliers, fixed assets, quotes,
+  time tracking)
+    This package deliberately ships only the BASELINE schema - the
+    newer optional modules (Suppliers, Fixed Assets, Quotes, Time
+    Tracking) need their database structure added separately. Log
+    in as admin and go to System -> Maintenance -> Database
+    migration (run_migrate.php): it lists every known migration
+    with a live "missing/present" status and its own "run" link -
+    run the ones for whichever modules you actually want (there is
+    no single "run everything" button by design, each migration is
+    independent). Skip this entirely if you only need the core
+    invoicing/bookkeeping features already active out of the box.
+
+  Switching to a MySQL database
+    In env.ini's [mysql_config] section, fill in DB_HOST/DB_USER/
+    DB_PASS/DB_NAME for an already-created, EMPTY MySQL database
+    (TinyCash never runs CREATE DATABASE itself), then change
+    ACTIVE_DB to "mysql_config". Log in as admin and open
+    db-setup/create_all_tables.php once to build the schema there.
+    Note: this starts a fresh, EMPTY database - the demo data does
+    NOT move over automatically, there is no built-in SQLite-to-
+    MySQL migration. If you'd rather keep this SQLite demo AND add
+    a MySQL ledger alongside it, use System -> Accounts (Regnskaber)
+    instead - it lets both run side by side without touching env.ini.
+
+  Sending email (invoices, payment reminders, backup notifications)
+    Fill in [mail_config]: MAIL_HOST, MAIL_USER, MAIL_PASS,
+    MAIL_PORT, MAIL_FROM, MAIL_FROM_NAME, MAIL_REPLY_TO - your
+    normal outgoing SMTP mailbox details.
+
+  Receiving email (auto-importing receipts/invoices sent by mail)
+    Three separate, independent inboxes, each its own IMAP mailbox:
+      IMAP_INVOICE_SERVER/USER/PASS - copies of invoices you send
+                                       out yourself (Invoice Copies
+                                       Inbox)
+      IMAP_VOUCHER_SERVER/USER/PASS - receipts / small expenses
+                                       (Voucher Inbox)
+      IMAP_VENDOR_SERVER/USER/PASS  - real supplier/purchase
+                                       invoices (Supplier Invoices)
+    Server format example:
+      "{mail.yourdomain.com:993/imap/ssl/novalidate-cert}INBOX"
+
+  AI features (receipt scanning + translation help)
+    OPENAI_API_KEY powers two independent features: automatically
+    reading the amount/date/supplier off an uploaded receipt when
+    you add an expense, and the "Get AI suggestion" button in
+    System -> Language Editor. DEEPL_API_KEY powers a separate,
+    DeepL-based bulk translation option. Both are entirely optional
+    - each feature simply stays hidden/inactive while its key is
+    blank, nothing else is affected.
+
+  Encrypted off-site backup
+    Two things are needed, not just one: [backup_config]
+    BACKUP_PASSWORD in env.ini (the master password used to encrypt
+    the backup - never emailed, never stored in the database, keep
+    it somewhere safe such as a password manager, losing it means
+    losing access to any backup already encrypted with it), AND a
+    destination email address entered under System -> Backup
+    Management -> Automatic Backup - without that second step,
+    automatic backups have nowhere to send themselves and silently
+    do nothing (also requires outgoing mail to be configured, see
+    "Sending email" above).
+
+  Bank integration (PSD2 / Enable Banking)
+    Requires a free developer account at enablebanking.com - see
+    the comments directly above [enablebanking_config] in env.ini
+    for the exact steps. Leave it blank to leave Bank Integration
+    inactive; it shows setup instructions instead of failing.
+
+TROUBLESHOOTING
+
+  - "PHP mangler zip-understøttelse" / zip extension missing:
+    ask your host to enable ext-zip, or unpack tinycash.boot.zip
+    yourself via FTP/file manager instead.
+  - "Databasen er ikke skrivbar" / database not writable:
+    make sure the web server user can write to the folder (and its
+    inc/data/ subfolder) - typically permissions 775 on folders,
+    664 on files.
+  - "Der findes allerede en installation her" / already installed:
+    this script refuses to run over an existing index.php or
+    inc/data/env.ini, on purpose - use a genuinely empty folder.
+
+--------------------------------------------------------------------
+ DANSK
+--------------------------------------------------------------------
+
+HVAD DU HAR FÅET
+
+To filer:
+  - tinycash.boot.zip   Hele TinyCash-programmet, med en færdig
+                         demo-database allerede bygget ind (tema:
+                         H.C. Andersens eventyr) - ingen opsætnings-
+                         guide, ingen database at konfigurere.
+  - tinycash.boot.php   Et lille installations-script, der udpakker
+                         zip-filen for dig.
+
+KRAV
+
+  - Et almindeligt PHP-webhotel (PHP 8.1 eller nyere anbefales).
+  - PHP's "zip"-udvidelse skal være aktiveret (ext-zip) - er
+    praktisk talt altid tilfældet på delt hosting; spørg din
+    udbyder, hvis du er i tvivl.
+  - Ingen databaseserver nødvendig til denne hurtig-pakke - den
+    bruger SQLite, som kun kræver en skrivbar mappe.
+
+INSTALLATION
+
+  1. Opret en NY, TOM mappe på din webserver (et frisk subdomæne
+     eller en undermappe - aldrig en eksisterende TinyCash-
+     installation).
+  2. Upload BEGGE filer til den mappe (FTP/SFTP eller dit
+     hostingkontrolpanels filhåndtering). Brug binær tilstand til
+     .zip-filen.
+  3. Åbn tinycash.boot.php i din browser, fx:
+       https://dit-domæne.eksempel/tinycash.boot.php
+  4. Scriptet udpakker pakken automatisk og viser en bekræftelses-
+     side med dine login-oplysninger.
+  5. Klik "Fortsæt til login" og log ind.
+
+LOGIN
+
+  Brugernavn: admin
+  Kodeord:    eventyr123
+
+INSTALLATIONSSPORING (gennemsigtighedsnote)
+
+  Succes-siden du ser lige efter installationen indlæser ét enkelt Matomo-
+  sidevisnings-kald til pakke-vedligeholderens egen selv-hostede analytics-
+  instans (viuff.info/piwik/) - udelukkende for at tælle hvor mange gange
+  installeren reelt bliver kørt. Det udløses kun ÉN gang, kun på selve den
+  ene succes-side, og ingen andre steder i den installerede applikation
+  (login.php, dashboardet osv. er urørt). Der findes i øjeblikket ingen
+  indstilling til at slå det fra.
+
+EFTER INSTALLATIONEN - VIGTIGT
+
+  - Skift admin-kodeordet med det samme efter første login
+    (Brugere-menuen).
+  - Slet tinycash.boot.php OG tinycash.boot.zip fra serveren, når
+    installationen er gennemført - de må aldrig ligge tilgængelige
+    på en rigtig, kørende installation.
+  - Slet IKKE db-setup/-mappen, selvom ældre TinyCash-installations-
+    vejledninger siger det - denne pakkes Database migration-side
+    (System -> Vedligeholdelse) og Regnskaber-funktionen afhænger
+    begge af filer derinde til løbende brug, ikke kun til selve
+    opsætningen. Kun de to boot-filer ovenfor skal fjernes.
+  - Den installerede demo er registreret som sit eget "regnskab".
+    Under System -> Regnskaber kan du senere oprette flere demo-
+    regnskaber, konvertere dette fra demo til et rigtigt, tomt
+    regnskab klar til reel bogføring, eller registrere en anden,
+    allerede eksisterende TinyCash-database - alt sammen uden at
+    geninstallere noget.
+
+GØR DET TIL ET FULDGYLDIGT PROGRAM (VALGFRIT)
+
+  Det du får ud af æsken er en komplet, fuldt fungerende ét-bruger
+  SQLite-demo. Alt herunder er VALGFRIT, slået fra som standard, og
+  sættes op i ÉN eneste fil: inc/data/env.ini (rediges med et
+  almindeligt tekstredigeringsprogram via FTP/SFTP eller din
+  udbyders filhåndtering). PHP genindlæser filen ved hver side-
+  visning - blot gem og genindlæs siden, ingen genstart nødvendig.
+
+  TIP: pakken indeholder også inc/data/template_env.ini - samme fil
+  med alle felter tomme, fuldt kommenteret, og aldrig læst af
+  TinyCash selv. Brug den som opslag over de præcise nøglenavne,
+  hvis du er i tvivl om noget herunder, eller som udgangspunkt hvis
+  du vil nulstille en sektion til tom (kopierer du den hen over din
+  rigtige env.ini, sletter det alt hvad du allerede har udfyldt -
+  betragt den som et opslagsværk, ikke noget du overskriver med
+  tilfældigt).
+
+  Dine egne firmaoplysninger
+    Før du udsteder en rigtig faktura, skal du udskifte demo-
+    firmaets navn/adresse/CVR/logo med dine egne under System ->
+    Indstillinger (company_settings.php) - ellers modtager dine
+    kunder fakturaer fra "TinyCash Eventyr-Demo ApS". Driver du
+    virksomhed uden for Danmark, så tjek også valuta-indstillingen
+    der.
+
+  Dit regnskabsår (kun nødvendigt før Årsafslutning/Årsrapport -
+  ikke nødvendigt til daglig fakturering/bogføring)
+    fiscal_years-tabellen leveres tom. Kør
+    db-setup/migrate_fiscal_years.php én gang for at angive dit
+    faktiske regnskabsårs start-/slutdato (understøtter forskudt
+    regnskabsår, ikke kun kalenderår) inden du bruger Årsafslutning
+    eller Årsrapporten.
+
+  Lås op for valgfrie moduler (leverandører, anlægsaktiver, tilbud,
+  timeregistrering)
+    Denne pakke leverer bevidst kun GRUNDSKEMAET - de nyere valgfrie
+    moduler (Leverandører, Anlægsaktiver, Tilbud, Timeregistrering)
+    kræver deres database-struktur tilføjet separat. Log ind som
+    admin og gå til System -> Vedligeholdelse -> Database migration
+    (run_migrate.php): den lister alle kendte migrationer med en
+    live "mangler/til stede"-status og sit eget "kør"-link - kør
+    dem for de moduler du faktisk ønsker at bruge (der findes
+    bevidst ingen "kør alt"-knap, hver migration er selvstændig).
+    Spring dette helt over, hvis du kun har brug for de kerne-
+    funktioner til fakturering/bogføring der allerede er aktive.
+
+  Skift til en MySQL-database
+    Udfyld [mysql_config]-sektionen med DB_HOST/DB_USER/DB_PASS/
+    DB_NAME for en allerede oprettet, TOM MySQL-database (TinyCash
+    kører aldrig selv CREATE DATABASE), og sæt derefter ACTIVE_DB
+    til "mysql_config". Log ind som admin og åbn
+    db-setup/create_all_tables.php én gang for at bygge skemaet der.
+    Bemærk: dette starter en frisk, TOM database - demo-dataen
+    flyttes IKKE automatisk med, der findes ingen indbygget SQLite-
+    til-MySQL-migrering. Vil du hellere beholde denne SQLite-demo OG
+    tilføje et MySQL-regnskab ved siden af, så brug i stedet System
+    -> Regnskaber - der kan de køre side om side uden at røre
+    env.ini.
+
+  Afsendelse af mail (fakturaer, rykkere, backup-notifikationer)
+    Udfyld [mail_config]: MAIL_HOST, MAIL_USER, MAIL_PASS,
+    MAIL_PORT, MAIL_FROM, MAIL_FROM_NAME, MAIL_REPLY_TO - dine
+    almindelige udgående SMTP-postkasseoplysninger.
+
+  Modtagelse af mail (auto-import af kvitteringer/fakturaer via mail)
+    Tre selvstændige, uafhængige postkasser, hver sin egen IMAP-
+    konto:
+      IMAP_INVOICE_SERVER/USER/PASS - kopier af fakturaer du selv
+                                       udsteder (Fakturakopi-postkasse)
+      IMAP_VOUCHER_SERVER/USER/PASS - kvitteringer/småudgifter
+                                       (Bilag-postkasse)
+      IMAP_VENDOR_SERVER/USER/PASS  - rigtige leverandør-/købs-
+                                       fakturaer (Leverandørfakturaer)
+    Eksempel på server-format:
+      "{mail.dindomæne.dk:993/imap/ssl/novalidate-cert}INBOX"
+
+  AI-funktioner (bilagsskanning + oversættelseshjælp)
+    OPENAI_API_KEY driver to uafhængige funktioner: automatisk
+    aflæsning af beløb/dato/leverandør fra en uploadet kvittering
+    ved oprettelse af en udgift, samt "Hent AI-forslag"-knappen i
+    System -> Sprogeditor. DEEPL_API_KEY driver en separat, DeepL-
+    baseret bulk-oversættelsesmulighed. Begge er fuldstændig
+    valgfrie - hver funktion forbliver blot skjult/inaktiv, mens
+    dens nøgle er tom, uden at påvirke noget andet.
+
+  Krypteret off-site backup
+    To ting er nødvendige, ikke kun én: [backup_config]
+    BACKUP_PASSWORD i env.ini (master-kodeordet der krypterer
+    backuppen - sendes aldrig med mail, gemmes aldrig i databasen,
+    opbevar det et sikkert sted som en password manager; mister du
+    det, mister du adgangen til alle backups allerede krypteret med
+    det), OG en modtager-mailadresse angivet under System -> Backup-
+    administration -> Automatisk Backup - uden dette andet trin har
+    automatiske backups intet sted at sende sig selv hen og gør
+    stille og roligt ingenting (kræver desuden at udgående mail er
+    sat op, se "Afsendelse af mail" ovenfor).
+
+  Bankintegration (PSD2 / Enable Banking)
+    Kræver en gratis udviklerkonto på enablebanking.com - se
+    kommentarerne lige over [enablebanking_config] i env.ini for de
+    præcise trin. Lad den stå tom for at holde Bankintegration
+    inaktiv; den viser opsætningsvejledning i stedet for at fejle.
+
+FEJLFINDING
+
+  - "PHP mangler zip-understøttelse": bed din udbyder aktivere
+    ext-zip, eller udpak selv tinycash.boot.zip via FTP/
+    filhåndtering i stedet.
+  - "Databasen er ikke skrivbar": sørg for at webserverens bruger
+    kan skrive til mappen (og dens inc/data/-undermappe) - typisk
+    rettighed 775 på mapper, 664 på filer.
+  - "Der findes allerede en installation her": scriptet nægter
+    bevidst at køre oven på en eksisterende index.php eller
+    inc/data/env.ini - brug en helt tom mappe.

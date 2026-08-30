@@ -1,8 +1,15 @@
-<?php # account_edit.php v:1.0.0 d:2026-07-13 i:claude (Porteret fra rå mysqli til DB::-abstraktionen - virker nu på både SQLite og MySQL)
+<?php # /account_edit.php v:1.3.0 d:2026-08-30 i:evs
+# Opret/redigér en konto i kontoplanen. Kontotype-dropdown dækker de typer
+# resten af systemet reelt bruger (income/expense/asset/liability/bank/vat/
+# equity). Ændring af kontotype/momskode logges til revisionssporet.
+# Samme niveau-3-krav som chart_of_accounts.php (se dens header for hvorfor -
+# manglede FØR helt på denne side, selvom den kun nås derfra).
+$rLev = 3;
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/php2htm.lib.php';
 require_once 'inc/menu.inc.php';
+require_once 'inc/audit.inc.php';
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $message = "";
@@ -28,22 +35,39 @@ if (isset($_POST['save_account'])) {
         }
     }
 
+    // Hent kontoens data FØR en evt. opdatering, til revisionssporet - en
+    // ændret kontotype (fx udgift -> indtægt) eller momskode kan stille
+    // omklassificere både historiske og fremtidige posteringer i rapporter.
+    // Bruger-anmodet.
+    $before_row = null;
+    if ($id > 0) {
+        $before_res = DB::query($conn, "SELECT acc_type, vat_code FROM accounts WHERE acc_id = $id");
+        $before_row = $before_res ? DB::fetch_assoc($before_res) : null;
+    }
+
     if ($id == 0) {
         // OPRET NY KONTO
-        $sql = "INSERT INTO accounts (acc_id, acc_name, acc_type, vat_rate, vat_code, std_ref_id) 
+        $sql = "INSERT INTO accounts (acc_id, acc_name, acc_type, vat_rate, vat_code, std_ref_id)
                 VALUES ($new_id, '$name', '$type', $vat_rate, '$vat_code', $std_ref_sql)";
     } else {
         // OPDATER EKSISTERENDE
-        $sql = "UPDATE accounts SET 
-                    acc_name = '$name', 
-                    acc_type = '$type', 
+        $sql = "UPDATE accounts SET
+                    acc_name = '$name',
+                    acc_type = '$type',
                     vat_rate = $vat_rate,
                     vat_code = '$vat_code',
-                    std_ref_id = $std_ref_sql 
+                    std_ref_id = $std_ref_sql
                 WHERE acc_id = $id";
     }
 
     if (DB::query($conn, $sql)) {
+        // Log kun ved en reel ændring af type/momskode, ikke ved en
+        // gemning af rene navne-/rate-redigeringer.
+        if ($before_row && ((string)$before_row['acc_type'] !== (string)$_POST['acc_type'] || (string)($before_row['vat_code'] ?? '') !== (string)$vat_code)) {
+            log_action($conn, 'UPDATE_ACCOUNT', 'accounts', $id,
+                ['acc_type' => $before_row['acc_type'], 'vat_code' => $before_row['vat_code']],
+                ['acc_type' => $_POST['acc_type'], 'vat_code' => $vat_code]);
+        }
         header("Location: chart_of_accounts.php?msg=updated");
         exit;
     } else {
@@ -62,7 +86,7 @@ if ($id > 0) {
     $row = [
         'acc_id'     => '', 
         'acc_name'   => '', 
-        'acc_type'   => 'revenue', 
+        'acc_type'   => 'income',
         'vat_code'   => '', 
         'vat_rate'   => 0,
         'std_ref_id' => ''
@@ -95,6 +119,7 @@ echo $message;
 ?>
 
 <form method="post">
+    <?php csrf_field(); ?>
     <div style="margin-bottom: 15px;">
         <label style="display:block; font-weight:bold; margin-bottom:5px;"><?php echo lang('@Account Number'); ?>:</label>
         <input type="number" name="acc_id" value="<?php echo htmlspecialchars($row['acc_id']); ?>" 
@@ -112,11 +137,19 @@ echo $message;
         <label style="display:block; font-weight:bold; margin-bottom:5px;"><?php echo lang('@Account Type'); ?>:</label>
         <select name="acc_type" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-card); color:var(--text-main);">
             <?php 
+            // RETTET 2026-08-15: manglede 'income'/'bank'/'vat'/'equity' - kun
+            // 'revenue'/'expense'/'asset'/'liability' var mulige at vælge, selv
+            // om resten af systemet (posteringer, rapporter, årsafslutning)
+            // forudsætter 'income' (ikke 'revenue'), samt 'bank'/'vat'/'equity'.
+            // Se regnskabslov-status i hukommelsen for den fulde analyse.
             $types = [
-                'revenue'   => '@Revenue (Income)',
+                'income'    => '@Income (Revenue)',
                 'expense'   => '@Expense (Costs)',
+                'bank'      => '@Bank / Cash',
+                'vat'       => '@VAT (Settlement)',
                 'asset'     => '@Asset (Balance)',
-                'liability' => '@Liability (Debt)'
+                'liability' => '@Liability (Debt)',
+                'equity'    => '@Equity'
             ];
             foreach ($types as $key => $label) {
                 $sel = ($row['acc_type'] == $key) ? 'selected' : '';
@@ -171,8 +204,8 @@ echo $message;
 
     <div style="display: flex; justify-content: space-between; margin-top: 20px;">
         <?php 
-            htm_Button('fa-save', ($id == 0 ? '@Create Account' : '@Update Account'), 'primary', '', '', 'name="save_account"'); 
-            htm_Button('fa-arrow-left', '@Back', 'secondary', 'chart_of_accounts.php'); 
+            htm_Button('fa-save', ($id == 0 ? '@Create Account' : '@Update Account'), 'primary', '', '', 'name="save_account" data-hint="'.lang($id == 0 ? '@Add this account to the chart of accounts' : '@Save changes to this account').'"');
+            htm_Button('fa-arrow-left', '@Back', 'secondary', 'chart_of_accounts.php', '', 'data-hint="'.lang('@Discard changes and return to the chart of accounts').'"');
         ?>
     </div>
 </form>

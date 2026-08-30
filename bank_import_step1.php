@@ -1,4 +1,5 @@
-<?php # /bank_import_step1.php v:1.1.0 d:2026-07-05 i:evs
+<?php # /bank_import_step1.php v:1.3.0 d:2026-08-30 i:evs
+# profil-gem virkede ikke på SQLite - ON DUPLICATE KEY UPDATE var MySQL-kun; htm_InputGroup->htm_Field
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -22,8 +23,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['profile_name'])) {
         'skip_lines' => $_POST['skip_lines']
     ];
     $val = json_encode($setup);
-    DB::query($conn, "INSERT INTO settings (setting_key, setting_value) VALUES ('$key', '$val') ON DUPLICATE KEY UPDATE setting_value = '$val'");
-    $msg_html = htm_Alert(text: '@Profile saved successfully!', type: 'success', echo: false);
+    // RETTET 2026-08-19: "ON DUPLICATE KEY UPDATE" er ren MySQL-syntaks og
+    // fejlede stille på SQLite (bekræftet: SQLSTATE[HY000] syntax error) -
+    // DB::query() fangede fejlen og returnerede false, men resultatet blev
+    // aldrig tjekket, så "gemt"-beskeden vistes uanset. Følger nu samme
+    // mønster som annual_report.php/company_settings.php.
+    $upsert_sql = DB::is_sqlite()
+        ? "INSERT INTO settings (setting_key, setting_value) VALUES ('$key', '$val')
+           ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value"
+        : "INSERT INTO settings (setting_key, setting_value) VALUES ('$key', '$val')
+           ON DUPLICATE KEY UPDATE setting_value = '$val'";
+    $save_ok = DB::query($conn, $upsert_sql);
+    $msg_html = $save_ok
+        ? htm_Alert(text: '@Profile saved successfully!', type: 'success', echo: false)
+        : htm_Alert(text: '@Error: Could not save profile.' . ' (' . DB::error($conn) . ')', type: 'danger', echo: false);
 }
 
 // --- 2. HENT PROFIL LOGIK ---
@@ -42,9 +55,28 @@ if (isset($_GET['load_profile']) && !empty($_GET['load_profile'])) {
 // --- 3. HÅNDTER UPLOAD ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
     if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
-    $original_filename = $_FILES['csv_file']['name'];
-    $file_path = $upload_dir . time() . '_' . $original_filename;
-    
+    $original_filename = basename($_FILES['csv_file']['name']);
+
+    // RETTET (§bugs-batch-20-review): KRITISK - det uploadede filnavn kom
+    // FØR direkte fra klienten, ubeskåret og med endelsen ukontrolleret, lige
+    // ind i stien i uploads/ (offentligt tilgængelig uden login). Et
+    // håndlavet (ikke browser-genereret) POST kunne sætte filnavnet til fx
+    // "../../../shell.php" (filsti-gennembrud UD AF uploads/) eller blot
+    // "shell.php" (direkte kørbar PHP-fil i uploads/) forklædt som en
+    // "CSV-fil". basename() ovenfor fjerner ethvert stikomponent, og denne
+    // hvidliste tillader kun .csv - samme sårbarhedsklasse som lige rettet i
+    // expense_edit.php, se den for uddybning. uploads/.htaccess blokerer nu
+    // også farlige endelser direkte på Apache-niveau som endnu et lag.
+    $ext = strtolower(pathinfo($original_filename, PATHINFO_EXTENSION));
+    if ($ext !== 'csv') {
+        die(lang('@Error: Only CSV files can be imported.'));
+    }
+    // Tilfældigt filnavn i stedet for det forudsigelige "time()_originalnavn"
+    // - samme begrundelse som expense_edit.php's bilags-upload (se
+    // [[bugs-batch-18-review]]): uploads/ er offentligt tilgængelig, så et
+    // gættet/kendt filnavn ville afsløre andre brugeres importerede CSV-data.
+    $file_path = $upload_dir . 'BANK_' . date('Ymd') . '_' . bin2hex(random_bytes(8)) . '.csv';
+
     if (move_uploaded_file($_FILES['csv_file']['tmp_name'], $file_path)) {
         $handle = fopen($file_path, "r");
         $first_line = fgets($handle);
@@ -89,7 +121,7 @@ while ($row = DB::fetch_assoc($res)) {
 
 // Profil-vælger via InputGroup
 echo '<form method="get" id="profile_form" style="margin-bottom:25px;">';
-htm_InputGroup(
+htm_Field(
     icon: 'fa-folder-open', 
     labl: '@Load Saved Profile', 
     name: 'load_profile', 
@@ -104,17 +136,18 @@ echo '</form>';
 
 <?php if (empty($preview_data)): ?>
     <form method="post" enctype="multipart/form-data" style="text-align:center; padding:40px;">
+        <?php csrf_field(); ?>
         <div style="margin-bottom: 25px;">
             <input type="file" name="csv_file" required style="font-size: 1.1em;">
         </div>
         <?php 
         htm_Button(
-            icon: 'fa-upload', 
-            labl: '@Upload and Preview Data', 
-            type: 'primary', 
-            attr: 'type="submit"', 
+            icon: 'fa-upload',
+            labl: '@Upload and Preview Data',
+            type: 'primary',
+            attr: 'type="submit" data-hint="'.lang('@Read the file and show a preview before importing').'"',
             echo: true
-        ); 
+        );
         ?>
     </form>
 <?php else: ?>
@@ -154,25 +187,27 @@ echo '</form>';
         ?>
     </div>
 
-    <form method="post" action="bank_import_process.php">
+    <form method="post" action="bank_import_process.php" id="import_config_form" onsubmit="return tcBuildColumnMap(this);">
+        <?php csrf_field(); ?>
         <input type="hidden" name="file_path" value="<?php echo htmlspecialchars($file_path); ?>">
         <input type="hidden" name="delimiter" value="<?php echo htmlspecialchars($delimiter); ?>">
-        
+        <input type="hidden" name="col_count" value="<?php echo count($preview_data[0]); ?>">
+
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:20px;">
             <?php
-            htm_InputGroup(icon: 'fa-calendar', labl: '@Date Column #', name: 'col_date', valu: $suggested['date'], type: 'number', extr: 'required', echo: true);
-            htm_InputGroup(icon: 'fa-font', labl: '@Text Column #', name: 'col_text', valu: $suggested['text'], type: 'number', extr: 'required', echo: true);
-            htm_InputGroup(icon: 'fa-money-bill', labl: '@Amount Column #', name: 'col_amount', valu: $suggested['amount'], type: 'number', extr: 'required', echo: true);
+            htm_Field(icon: 'fa-calendar', labl: '@Date Column #', name: 'col_date', valu: $suggested['date'], type: 'number', extr: 'required', echo: true);
+            htm_Field(icon: 'fa-font', labl: '@Text Column #', name: 'col_text', valu: $suggested['text'], type: 'number', extr: 'required', echo: true);
+            htm_Field(icon: 'fa-money-bill', labl: '@Amount Column #', name: 'col_amount', valu: $suggested['amount'], type: 'number', extr: 'required', echo: true);
             ?>
         </div>
 
         <div style="display:grid; grid-template-columns: 1fr 2fr auto; gap:15px; margin-top:15px; align-items: end;">
             <div>
-                <?php htm_InputGroup(icon: 'fa-step-forward', labl: '@Skip Lines', name: 'skip_lines', valu: $suggested['skip'], type: 'number', echo: true); ?>
+                <?php htm_Field(icon: 'fa-step-forward', labl: '@Skip Lines', name: 'skip_lines', valu: $suggested['skip'], type: 'number', echo: true); ?>
             </div>
             <div>
                 <?php 
-                htm_InputGroup(
+                htm_Field(
                     icon: 'fa-save', 
                     labl: '@Save Configuration as Profile', 
                     name: 'profile_name', 
@@ -186,10 +221,10 @@ echo '</form>';
             <div style="padding-bottom: 2px;">
                 <?php
                 htm_Button(
-                    icon: 'fa-floppy-o', 
-                    labl: '@Save Profile Only', 
-                    type: 'info', 
-                    attr: 'type="submit" name="save_only" formaction="bank_import_step1.php" style="height: 44px; display: flex; align-items: center;"', 
+                    icon: 'fa-floppy-o',
+                    labl: '@Save Profile Only',
+                    type: 'info',
+                    attr: 'type="submit" name="save_only" formaction="bank_import_step1.php" style="height: 44px; display: flex; align-items: center;" data-hint="'.lang('@Save this column mapping as a reusable profile, without importing now').'"',
                     echo: true
                 );
                 ?>
@@ -200,17 +235,55 @@ echo '</form>';
         
         <?php
         htm_Button(
-            icon: 'fa-arrow-right', 
-            labl: '@Complete Import', 
-            type: 'success', 
-            attr: 'type="submit" style="padding:15px; font-size:1.1em; width:100%;"', 
+            icon: 'fa-arrow-right',
+            labl: '@Complete Import',
+            type: 'success',
+            attr: 'type="submit" style="padding:15px; font-size:1.1em; width:100%;" data-hint="'.lang('@Import the mapped transactions into the reconciliation queue').'"',
             echo: true
         );
         ?>
     </form>
-<?php endif; 
+    <script>
+    // RETTET (§bugs-batch-24-review): ALVORLIGT FUND - denne formular
+    // sendte ALDRIG det map[]-array bank_import_process.php rent faktisk
+    // læser (map[kolonneindeks] = 'trans_date'/'text_val'/'amount'/'ignore').
+    // Den sendte kun col_date/col_text/col_amount (kolonneNUMRE, ikke et
+    // map[]), som bank_import_process.php slet ikke kender noget til.
+    // Resultatet: $_POST['map'] var altid udefineret dér, foreach()-løkken
+    // der rent faktisk udtrækker dato/tekst/beløb fra CSV-rækken kørte
+    // derfor ALDRIG, og hver eneste importeret transaktion endte i
+    // bank_statement_temp med dagens dato, tom tekst og 0 kr i beløb -
+    // ALDRIG de rigtige CSV-data. Ingen fejl blev vist ("msg=imported&
+    // count=N" så ud som en succesfuld import). Bekræftet direkte mod en
+    // rigtig import: to rækker med reelle beløb endte som ÉN tom 0-kr-
+    // "dublet" (den blanke pladsholder-række matchede sig selv i
+    // dublet-tjekket). Bygger nu det rigtige map[]-array her i browseren
+    // ud fra de samme tre kolonnenumre, umiddelbart før formularen sendes.
+    function tcBuildColumnMap(form) {
+        var colCount = parseInt(form.col_count.value, 10) || 0;
+        var dateCol   = parseInt(form.col_date.value, 10);
+        var textCol   = parseInt(form.col_text.value, 10);
+        var amountCol = parseInt(form.col_amount.value, 10);
+        for (var i = 1; i <= colCount; i++) {
+            var fieldName = 'ignore';
+            if (i === dateCol)        fieldName = 'trans_date';
+            else if (i === textCol)   fieldName = 'text_val';
+            else if (i === amountCol) fieldName = 'amount';
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            // map[]-nøglerne er 0-baserede array-indekser (fra fgetcsv()),
+            // mens kolonnenumrene vist til brugeren ("Kolonne #") er
+            // 1-baserede - konverteres her (i - 1).
+            input.name = 'map[' + (i - 1) + ']';
+            input.value = fieldName;
+            form.appendChild(input);
+        }
+        return true;
+    }
+    </script>
+<?php endif;
 
 htm_Card_end();
 htm_Footer();
-ob_end_flush(); 
+ob_end_flush();
 ?>

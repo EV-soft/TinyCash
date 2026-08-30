@@ -1,9 +1,22 @@
-<?php # export.php v:0.9.0 d:2026-05-08 i:evs
+<?php # /export.php v:1.3.0 d:2026-08-30 i:evs
+# v1.0.0: CSV-injection-beskyttelse tilføjet (csv_safe()) - fritekstfelter
+# (kundenavn/-noter/-adresse, fakturalinje-tekst) blev før skrevet råt ind i
+# CSV'en; en celle der starter med =/+/-/@ kan af Excel/LibreOffice blive
+# fortolket som en formel, hvis nogen har fået et sådant indhold ind i et
+# fritekstfelt. Fundet ved en rapport-/eksportgennemgang.
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/auth.inc.php';
 
 // Deaktiver fejlvisning for at sikre en ren CSV-fil
 ini_set('display_errors', 0);
+
+// Foranstiller et anførselstegn på celler der starter med =/+/-/@, så
+// Excel/LibreOffice aldrig fortolker fritekst-indhold som en formel
+// (CSV/formel-injektion). Rører kun strenge - tal/int-felter er upåvirkede.
+function csv_safe($v) {
+    if (!is_string($v) || $v === '') return $v;
+    return (strpbrk($v[0], '=+-@') !== false) ? "'" . $v : $v;
+}
 
 $type = $_GET['type'] ?? '';
 $filename = "TinyCash_Export_" . $type . "_" . date('Y-m-d') . ".csv";
@@ -29,9 +42,13 @@ if ($type == 'customers') {
         // Rens tekstfelter for linjeskift så CSV-strukturen ikke knækker
         $row['cust_address'] = str_replace(["\r", "\n"], " ", $row['cust_address'] ?? '');
         $row['cust_notes'] = str_replace(["\r", "\n"], " ", $row['cust_notes'] ?? '');
+        // CSV-injection-beskyttelse på alle fritekstfelter
+        foreach (['cust_name', 'cust_contact_person', 'cust_address', 'cust_email', 'cust_phone', 'cust_cvr', 'cust_notes'] as $f) {
+            if (isset($row[$f])) $row[$f] = csv_safe($row[$f]);
+        }
         fputcsv($output, $row, $sep);
     }
-} 
+}
 elseif ($type == 'invoices') {
     // Kombineret oversigt over fakturaer og deres linjer
     fputcsv($output, [
@@ -52,7 +69,10 @@ elseif ($type == 'invoices') {
         // Formater tal til dansk format (valgfrit, men godt for Excel)
         $row['line_total'] = number_format($row['line_total'], 2, ',', '');
         $row['price_each'] = number_format($row['price_each'], 2, ',', '');
-        
+        // CSV-injection-beskyttelse på fritekstfelter
+        foreach (['cust_name', 'line_text'] as $f) {
+            if (isset($row[$f])) $row[$f] = csv_safe($row[$f]);
+        }
         fputcsv($output, $row, $sep);
     }
 }

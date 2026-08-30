@@ -1,4 +1,4 @@
-<?php # backup_system.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /backup_system.php v:1.3.0 d:2026-08-30 i:evs
 # (Cross-engine dump via DB::dump_to_sql())
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -26,11 +26,18 @@ $sqlDump = DB::dump_to_sql($conn);
 $zip->addFromString('database_dump.sql', $sqlDump);
 
 // 2. SYSTEMFILER (Sprogfiler og andre konfigurationer i JSON)
+// RETTET (§bugs-batch-17-review): scandir() lister kun json-data/ selv, ikke
+// dens undermapper - json-data/languages/ (de AI-genererede hjælpesystem-
+// oversættelser, én pr. sprog) blev derfor aldrig taget med her, selvom
+// denne sides egen beskrivelse ("language files") netop lover dem.
 if (is_dir($jsonDir)) {
-    $files = scandir($jsonDir);
-    foreach ($files as $file) {
-        if ($file !== '.' && $file !== '..' && str_ends_with($file, '.json')) {
-            $zip->addFile($jsonDir . $file, 'json-data/' . $file);
+    $items = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($jsonDir, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
+    );
+    foreach ($items as $item) {
+        if ($item->isFile() && strtolower($item->getExtension()) === 'json') {
+            $zip->addFile($item->getRealPath(), 'json-data/' . str_replace('\\', '/', $items->getSubPathName()));
         }
     }
 }

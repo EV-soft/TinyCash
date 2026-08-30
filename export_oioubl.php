@@ -1,5 +1,9 @@
-<?php # /export_oioubl.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /export_oioubl.php v:1.3.0 d:2026-08-30 i:evs
 # (Genskabt: OIOUBL-2.02 e-faktura eksport med korrekte beløb)
+# v1.3.0: linjebeløb/-moms afrundes nu til øre PR. LINJE før summering -
+# undgår at "rund summen til sidst" kan afvige 1 øre fra summen af de viste
+# linjebeløb (BR-CO-10/BR-CO-14), som kunne få en formel e-fakturavalidering
+# til at afvise filen.
 /* ==========================================================================
    OIOUBL e-faktura eksport (dansk offentlig UBL-2.02 profil).
 
@@ -15,6 +19,11 @@ require_once 'inc/db_connect.inc.php';
 require_once 'inc/auth.inc.php';        // kræver login (redirect til login.php ellers)
 require_once 'inc/php2htm.lib.php';     // lang()
 
+// NYT (§currency-setting-is-cosmetic-label, Fase 2): OIOUBL er et dansk
+// offentligt e-faktura-format (NemHandel) og giver ikke mening for en
+// virksomhed, der bruger en anden bogføringsvaluta end DKK.
+require_dkk_base_currency($conn);
+
 $inv_id = (int)($_GET['id'] ?? 0);
 if ($inv_id <= 0) { ob_end_clean(); http_response_code(400); die('Invalid invoice id'); }
 
@@ -25,6 +34,17 @@ $sql = "SELECT i.*, c.cust_name, c.cust_email, c.cust_address, c.cust_cvr
 $res = DB::query($conn, $sql);
 $inv = $res ? DB::fetch_assoc($res) : null;
 if (!$inv) { ob_end_clean(); http_response_code(404); die(lang('@Invoice not found.')); }
+
+// En kladde har intet invoice_no endnu (tildeles først af next_invoice_no()
+// ved bogføring, se invoice_post_action.php) - uden dette tjek ville
+// $doc_id nedenfor falde tilbage til det interne $inv_id, og en helt
+// ubogført faktura kunne genereres og arkiveres i storage/einvoices/ som en
+// formelt gyldig OIOUBL-fil, præcis samme klasse fejl som blev rettet i
+// send_invoice_action.php (en kladde må aldrig kunne sendes/eksporteres som
+// om den var en rigtig faktura).
+if (strtolower($inv['inv_status'] ?? '') === 'draft') {
+    ob_end_clean(); http_response_code(409); die(lang('@Invoice must be posted before it can be exported.'));
+}
 
 // --- 2. FIRMA-STAMDATA ---
 $settings = get_settings($conn);
@@ -56,8 +76,15 @@ while ($res_l && ($l = DB::fetch_assoc($res_l))) {
     $qty   = (float)$l['quantity'];
     $price = (float)$l['price_each'];
     $rate  = (float)($l['line_vat_rate'] ?? $l['vat_rate'] ?? 25);
-    $line_ext = $qty * $price;
-    $line_vat = $line_ext * ($rate / 100);
+    // Afrundes til øre PR. LINJE, før noget som helst summeres. UBL/OIOUBL's
+    // egne konsistens-regler (bl.a. BR-CO-10/BR-CO-14) kræver at summen af de
+    // viste linjebeløb er PRÆCIS lig totalen - "rund summen til sidst" kan
+    // afvige med 1 øre fra "summér de rundede linjer" (klassisk rundings-
+    // rækkefølge-fælde), hvilket kan få en formel e-fakturavalidering (fx
+    // NemHandel/PEPPOL) til at afvise filen. Ved at runde her, arves
+    // konsistensen automatisk af alt der summeres nedenfor.
+    $line_ext = round($qty * $price, 2);
+    $line_vat = round($line_ext * ($rate / 100), 2);
 
     $subtotal  += $line_ext;
     $vat_total += $line_vat;
@@ -69,7 +96,7 @@ while ($res_l && ($l = DB::fetch_assoc($res_l))) {
 
     $lines[] = ['text' => $l['line_text'], 'qty' => $qty, 'price' => $price, 'rate' => $rate, 'ext' => $line_ext];
 }
-$grand_total = $subtotal + $vat_total;
+$grand_total = round($subtotal + $vat_total, 2);
 
 // --- 5. HJÆLPERE ---
 function esc($s) { return htmlspecialchars((string)$s, ENT_XML1 | ENT_QUOTES, 'UTF-8'); }
@@ -120,6 +147,29 @@ $x .= '        <cbc:RegistrationName>' . esc($inv['cust_name']) . '</cbc:Registr
 if ($cust_cvr) $x .= '        <cbc:CompanyID schemeID="DK:CVR">' . esc($cust_cvr) . '</cbc:CompanyID>' . "\n";
 $x .= '      </cac:PartyLegalEntity>' . "\n";
 $x .= '    </cac:Party>' . "\n" . '  </cac:AccountingCustomerParty>' . "\n";
+
+// Leveringsadresse (valgfri cac:Delivery - samme placering i sekvensen som
+// UBL 2.0/OIOUBL's egen XSD kræver: lige efter AccountingCustomerParty, før
+// PaymentMeans/PaymentTerms). Kun med når fakturaen faktisk har en
+// leveringsadresse, der afviger fra faktureringsadressen - samme betingelse
+// og datakilde som invoice_view.php's block-delivery, se [[bugs-batch-21-review]].
+// Adressen er ligesom køberens et fritekstfelt uden strukturerede
+// vej/by/postnr-dele - lægges derfor i StreetName, samme forenkling som
+// AccountingCustomerParty's egen adresse allerede bruger ovenfor.
+$deliv_addr = trim($inv['delivery_address'] ?? '');
+$bill_addr  = trim($inv['cust_address'] ?? '');
+if ($deliv_addr !== '' && $deliv_addr !== $bill_addr) {
+    $x .= '  <cac:Delivery>' . "\n";
+    $x .= '    <cac:DeliveryLocation>' . "\n";
+    $x .= '      <cac:Address>' . "\n";
+    $x .= '        <cbc:StreetName>' . esc($deliv_addr) . '</cbc:StreetName>' . "\n";
+    $x .= '        <cbc:CityName/>' . "\n";
+    $x .= '        <cbc:PostalZone>0000</cbc:PostalZone>' . "\n";
+    $x .= '        <cac:Country><cbc:IdentificationCode>DK</cbc:IdentificationCode></cac:Country>' . "\n";
+    $x .= '      </cac:Address>' . "\n";
+    $x .= '    </cac:DeliveryLocation>' . "\n";
+    $x .= '  </cac:Delivery>' . "\n";
+}
 
 // Betaling
 $x .= '  <cac:PaymentMeans>' . "\n";

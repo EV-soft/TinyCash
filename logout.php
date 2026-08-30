@@ -1,4 +1,5 @@
-<?php # logout.php v:1.2.0 d:2026-07-13 i:claude (Rettet: manglende session_name() gjorde at logout ikke rensede den rigtige session)
+<?php # /logout.php v:1.3.0 d:2026-08-30 i:evs
+# Rettet: manglende session_name() gjorde at logout ikke rensede den rigtige session
 
 // RETTET: session_start() blev kaldt uden session_name('TCC_V100_SESSION')
 // først - præcis samme fejl som blev fundet og rettet i set_lang.php. Uden

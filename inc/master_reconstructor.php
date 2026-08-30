@@ -1,4 +1,13 @@
-<?php # /inc/master_reconstructor.php v:1.1.0 d:2026-07-02 i:evs
+<?php # /inc/master_reconstructor.php v:1.3.0 d:2026-08-30 i:evs
+# v1.2.0: KRITISK - intet PHP-login-tjek. Skriver filer ud fra indhold
+# parset fra tekstfiler, kun beskyttet af inc/.htaccess's "afvis alt"-
+# standard. Tilføjet admin-tjek som et uafhængigt, ekstra lag. Samme
+# fundklasse som Master_Advisor.php. Gennemgang af resterende inc-filer.
+chdir(dirname(__DIR__));
+require_once 'inc/auth.inc.php';
+if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
+    deny_access_gracefully();
+}
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);

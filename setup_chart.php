@@ -1,4 +1,9 @@
-<?php # /setup_chart.php v:1.1.0 d:2026-07-02 i:gemini ok
+<?php # /setup_chart.php v:1.3.0 d:2026-08-30 i:evs
+# v1.2.0: forhåndsvisningens farvelogik fulgte 'revenue' som ikke længere
+# findes i coa_*.json (nu 'income') - se regnskabslov-status i hukommelsen
+# v1.3.0: TRUNCATE/SET FOREIGN_KEY_CHECKS/ON DUPLICATE KEY UPDATE var ren
+# MySQL-syntaks uden SQLite-gren - fejlede stille på SQLite (fanget af
+# DB::query()'s try/catch, aldrig tjekket)
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -23,26 +28,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['template']) && !$coaI
 
     if (file_exists($json_file)) {
         $accounts = json_decode(file_get_contents($json_file), true);
-      
-        DB::query($conn, "SET FOREIGN_KEY_CHECKS = 0");  // 1. Slå foreign key checks fra midlertidigt
-        DB::query($conn, "TRUNCATE TABLE accounts");     // 2. Dine nuværende TRUNCATE / slette-kommandoer
-        // DB::query($conn, "TRUNCATE TABLE ledger");    // Tømmer også ledger, hvis det er meningen
-        DB::query($conn, "SET FOREIGN_KEY_CHECKS = 1");  // 3. Slå foreign key checks til igen
 
-        $stmt = DB::prepare($conn, "INSERT INTO accounts (acc_id, acc_name, acc_type, vat_code, vat_rate) VALUES (?, ?, ?, ?, ?)");
-        
-        foreach ($accounts as $acc) {
-            $acc_id   = (int)$acc['account_no'];
-            $acc_name = $acc['name'];
-            $acc_type = $acc['type'];
-            $vat_code = $acc['vat_code'] ?? null;
-            $vat_rate = $acc['vat_rate'] ?? 0.00;
+        // RETTET (bruger-anmodet "find 5 fejl"-runde): $coaInUse ovenfor er
+        // et engangs-tjek FØR selve gemmet - to samtidige indsendelser (fx et
+        // dobbeltklik der nåede at sende begge requests, eller to åbne faner)
+        // kunne begge se $coaInUse=false og begge nå herned, uden nogen
+        // transaktion til at beskytte DELETE+INSERT-loopet. Kombineret med
+        // den allerede kendte, dokumenterede stille fejl-sluging på SQLite
+        // (se 2026-08-19-noten nedenfor) kunne det efterlade en tavst
+        // ufuldstændig/dobbelt-indsat kontoplan uden nogen synlig fejl.
+        // Genbekræfter derfor ATOMISK inde i en transaktion at accounts
+        // stadig er tom, umiddelbart før den destruktive del - indsnævrer
+        // kapløbsvinduet fra "hele sidevisningen" til få millisekunder, og
+        // en fejl midtvejs ruller nu hele installationen tilbage i stedet
+        // for at efterlade en delvis kontoplan.
+        DB::begin_transaction($conn);
+        try {
+            $race_row = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM accounts"));
+            if ((int)($race_row[0] ?? 0) > 0) {
+                // En anden, samtidig indsendelse nåede at installere kontoplanen
+                // først - siden viser nu automatisk den låste tilstand
+                // ($coaInUse genberegnes ved næste sidevisning), ingen særskilt
+                // fejlbesked nødvendig.
+                DB::rollback($conn);
+                header("Location: setup_chart.php");
+                exit;
+            }
 
-            DB::stmt_bind_param($stmt, "isssd", $acc_id, $acc_name, $acc_type, $vat_code, $vat_rate);
-            DB::stmt_execute($stmt);
+            // RETTET 2026-08-19: TRUNCATE TABLE / SET FOREIGN_KEY_CHECKS er ren
+            // MySQL-syntaks og fejlede stille på SQLite (fanget af DB::query()'s
+            // try/catch, aldrig tjekket). Harmløst i praksis lige nu, fordi
+            // denne gren kun kan nås når accounts allerede er tom (se $coaInUse
+            // ovenfor), men DELETE FROM virker uændret på begge databaser og
+            // kræver ikke FK-afbrydelse, når tabellen alligevel er tom.
+            if (!DB::is_sqlite()) {
+                DB::query($conn, "SET FOREIGN_KEY_CHECKS = 0");
+            }
+            DB::query($conn, "DELETE FROM accounts");
+            if (!DB::is_sqlite()) {
+                DB::query($conn, "SET FOREIGN_KEY_CHECKS = 1");
+            }
+
+            $stmt = DB::prepare($conn, "INSERT INTO accounts (acc_id, acc_name, acc_type, vat_code, vat_rate) VALUES (?, ?, ?, ?, ?)");
+
+            foreach ($accounts as $acc) {
+                $acc_id   = (int)$acc['account_no'];
+                $acc_name = $acc['name'];
+                $acc_type = $acc['type'];
+                $vat_code = $acc['vat_code'] ?? null;
+                $vat_rate = $acc['vat_rate'] ?? 0.00;
+
+                DB::stmt_bind_param($stmt, "isssd", $acc_id, $acc_name, $acc_type, $vat_code, $vat_rate);
+                DB::stmt_execute($stmt);
+            }
+
+            // RETTET 2026-08-19: samme MySQL-kun ON DUPLICATE KEY UPDATE-mønster
+            // som ovenfor - fejlede stille på SQLite.
+            $setup_flag_sql = DB::is_sqlite()
+                ? "INSERT INTO settings (setting_key, setting_value) VALUES ('setup_complete', '1')
+                   ON CONFLICT(setting_key) DO UPDATE SET setting_value = '1'"
+                : "INSERT INTO settings (setting_key, setting_value) VALUES ('setup_complete', '1') ON DUPLICATE KEY UPDATE setting_value='1'";
+            DB::query($conn, $setup_flag_sql);
+
+            DB::commit($conn);
+        } catch (Exception $e) {
+            DB::rollback($conn);
+            die("❌ " . lang('@Could not install the chart of accounts') . ': ' . htmlspecialchars($e->getMessage()));
         }
-        
-        DB::query($conn, "INSERT INTO settings (setting_key, setting_value) VALUES ('setup_complete', '1') ON DUPLICATE KEY UPDATE setting_value='1'");
 
         header("Location: sales_hub.php");
         exit;
@@ -75,6 +127,7 @@ echo "<div style='max-width: 1000px; margin: 0 auto;'>";
         </div>
 
         <form method="post" id="coa-form">
+            <?php csrf_field(); ?>
             <div style="display: flex; gap: 15px; margin-bottom: 25px;">
         
                 <div style="flex: 1; border: 2px solid #ddd; border-radius: 8px; padding: 15px; background: #fff; cursor: pointer; transition: all 0.2s;" id="box-simple" onclick="selectTemplate('simple')">
@@ -139,7 +192,13 @@ echo "<div style='max-width: 1000px; margin: 0 auto;'>";
             <div style="text-align: right;">
                 <?php if ($coaInUse): ?>
                     <button type="button" disabled style="padding: 12px 30px; color: #7f8c8d; border: 1px solid #bdc3c7; border-radius: 6px; font-weight: bold; font-size: 1rem; cursor: not-allowed; background-color: #e2e8f0;" title="<?php echo lang('@The system already contains data. Installation is locked.'); ?>">
-                        ❌ <?php echo lang('@Chart of accounts is already in use'); ?>
+                        <?php // RETTET (bruger-rapporteret): "already in use" lyder som om nogen
+                        // lige nu bruger/har åbnet kontoplanen (aktiv session/lås), ikke det
+                        // faktiske forhold - at $coaInUse betyder "accounts-tabellen indeholder
+                        // allerede data, så denne engangs-skabelon-installation er permanent
+                        // spærret". Samme tvetydighed som knappens egen tooltip allerede
+                        // undgår ("already contains data. Installation is locked."). ?>
+                        ❌ <?php echo lang('@Chart of accounts already set up'); ?>
                     </button>
                 <?php else: ?>
                     <button type="submit" class="btn bg-edit" style="padding: 12px 30px; color: #fff; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; cursor: pointer; background-color: #2b6cb0;">
@@ -185,9 +244,15 @@ function selectTemplate(templateName) {
         const row = document.createElement('tr');
         row.style.borderBottom = '1px solid #edf2f7';
         
+        // RETTET 2026-08-15: 'revenue' fandtes ikke længere i JSON-skabelonerne
+        // (erstattet af 'income') - farvelægningen ramte derfor aldrig indtægts-
+        // konti. Tilføjet farver for de øvrige typer skabelonerne nu bruger.
         let typeColor = '#2c3e50';
-        if (acc.type === 'revenue') typeColor = '#2f855a';
+        if (acc.type === 'income') typeColor = '#2f855a';
         if (acc.type === 'expense') typeColor = '#c53030';
+        if (acc.type === 'bank') typeColor = '#2b6cb0';
+        if (acc.type === 'vat') typeColor = '#b7791f';
+        if (acc.type === 'equity') typeColor = '#6b46c1';
         
         const accountNo = acc.account_no !== undefined ? acc.account_no : '';
         const name = acc.name !== undefined ? acc.name : '';

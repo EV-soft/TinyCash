@@ -1,4 +1,5 @@
-<?php # /install_check_dk.php v:1.0.0 d:2026-06-15 i:evs
+<?php # /install_check_dk.php v:1.3.0 d:2026-08-30 i:evs
+# fjernet ukonditioneret phpInfo()-lækage; selvlåser når accounts har data
 ob_start();
 session_start();
 
@@ -50,6 +51,22 @@ if ($db_file) {
     if (isset($conn) && $conn) {
         $db_conn = true;
         $db_msg = "Forbindelse til MySQL er etableret.";
+
+        // SELVLÅS (2026-08-19): se install_check.php for begrundelse.
+        $res = DB::query($conn, "SELECT COUNT(*) FROM accounts");
+        if ($res) {
+            $row = DB::fetch_row($res);
+            if ((int)($row[0] ?? 0) > 0) {
+                ob_clean();
+                echo "<div style='font-family:sans-serif;max-width:600px;margin:60px auto;text-align:center;padding:30px;background:#fff3cd;border:1px solid #ffeeba;border-radius:8px;color:#856404;'>
+                        <h2>⚠️ Installation allerede gennemført</h2>
+                        <p>Systemet indeholder allerede data. Denne diagnoseside er slået fra af sikkerhedshensyn.</p>
+                        <p><strong>Slet denne fil (" . htmlspecialchars(basename(__FILE__)) . ") fra serveren.</strong></p>
+                      </div>";
+                ob_end_flush();
+                exit;
+            }
+        }
     } else {
         $db_msg = "Forbindelse mislykkedes. Tjek dine koder i filen.";
     }
@@ -96,7 +113,12 @@ if ($db_conn && $php_ok) {
 }
 
 echo "</div>";
-phpInfo();
+// FJERNET 2026-08-19: et ukonditioneret phpInfo()-kald stod her og kørte ved
+// hvert eneste kald af siden - denne side er bevidst uden login (skal kunne
+// køres FØR admin-kontoen findes), så det betød et fuldt PHP-konfigurations-
+// dump (moduler, versioner, $_SERVER, deaktiverede funktioner, servermiljø)
+// var permanent tilgængeligt uden login, hvis filen blev glemt efter
+// installation.
 
 ob_end_flush();
 ?>

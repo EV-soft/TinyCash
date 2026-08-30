@@ -1,4 +1,4 @@
-<?php # /inventory_actions.php v:1.1.0 d:2026-07-02 i:evs
+<?php # /inc/inventory_actions.php v:1.3.0 d:2026-08-30 i:evs
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -16,7 +16,7 @@ $prod_id = (int)($_POST['prod_id'] ?? 0);
 $prod_name      = DB::real_escape_string($conn, $_POST['prod_name']);
 $prod_stock     = (int)($_POST['prod_stock'] ?? 0);
 $prod_min_stock = (int)($_POST['prod_min_stock'] ?? 5);
-$prod_price     = (float)str_replace(',', '.', $_POST['prod_price'] ?? 0);
+$prod_price     = parse_dk_number($_POST['prod_price'] ?? 0);
 $acc_id         = isset($_POST['acc_id']) ? (int)$_POST['acc_id'] : "NULL"; // Valgfri konto-tilknytning
 
 $success = false;

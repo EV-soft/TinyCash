@@ -13,12 +13,13 @@ Require all denied
     Require all granted
 </Files>
 
-# 4. Din eksisterende undtagelse for advisor-filen
-<Files "Master_Advisor.php">
-    <RequireAll>
-        Require all granted
-    </RequireAll>
-</Files>
+# 4. RETTET 2026-08-19: undtagelsen for Master_Advisor.php er fjernet.
+# Filen (og master_advisor2.php/master_reconstructor.php) dumper hele
+# kildekoden + databaseskemaet og sletter gamle eksportfiler - havde INTET
+# PHP-login-tjek, og var derfor reelt offentligt tilgængelig for enhver på
+# internettet på grund af netop denne undtagelse. De tre filer har nu deres
+# eget admin-tjek i selve PHP-koden i stedet (defensivt lag, uafhængigt af
+# denne .htaccess) - ingen af dem behøver længere en undtagelse her.
 
 # 5. Tillad adgang til notepads gemme-funktion
 <Files "notepad.inc.php">

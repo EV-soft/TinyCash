@@ -1,4 +1,11 @@
-<?php # /setup/init_demo_data.php v:1.1.0 d:2026-07-08 i:claude
+<?php # /init_demo_data.php v:1.3.0 d:2026-08-30 i:evs
+# RETTET (§bugs-batch-23-review): fjernet invoices.inv_status_new - se
+# db-setup/create_all_tables.core.php samme dato for baggrunden (død kolonne,
+# ikke retroaktiv).
+# v1.2.0: kontoplan udvidet fra 10 til 19 konti + korrekt egenkapital/gæld -
+# matcher nu den kontoplan der faktisk kører på dev/live (var før inkonsistent)
+# v1.3.0: invoices/invoice_lines/journal/ledger manglede kolonner - se
+# db-setup/init_demo_data.php v1.3.0 og db-setup/README.md for detaljer
 /* ==========================================================================
    MINIMAL DEMO-DATABASE - Tema: H.C. Andersens eventyr
 
@@ -88,7 +95,11 @@ $tables_sqlite = [
     inv_status TEXT DEFAULT 'draft',
     inv_note TEXT,
     jou_id INTEGER,
-    inv_status_new VARCHAR(20)
+    cust_reference TEXT,
+    proj_id INTEGER,
+    orig_currency VARCHAR(3),
+    exch_rate NUMERIC,
+    credit_ref INTEGER
 )",
 'invoice_lines' => "CREATE TABLE IF NOT EXISTS invoice_lines (
     line_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,7 +110,11 @@ $tables_sqlite = [
     acc_id INTEGER,
     line_vat_rate NUMERIC,
     prod_id INTEGER,
-    currency VARCHAR(3) DEFAULT 'DKK'
+    currency VARCHAR(3) DEFAULT 'DKK',
+    proj_id INTEGER,
+    orig_currency VARCHAR(3),
+    orig_amount NUMERIC,
+    exch_rate NUMERIC
 )",
 'journal' => "CREATE TABLE IF NOT EXISTS journal (
     jou_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,14 +124,17 @@ $tables_sqlite = [
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_cancelled INTEGER DEFAULT 0,
     trans_type VARCHAR(20),
-    currency VARCHAR(3) DEFAULT 'DKK'
+    currency VARCHAR(3) DEFAULT 'DKK',
+    proj_id INTEGER
 )",
 'ledger' => "CREATE TABLE IF NOT EXISTS ledger (
     led_id INTEGER PRIMARY KEY AUTOINCREMENT,
     jou_id INTEGER,
     acc_id INTEGER,
     amount NUMERIC,
-    voucher_no INTEGER
+    voucher_no INTEGER,
+    created_at TIMESTAMP,
+    user_id INTEGER
 )",
 'settings' => "CREATE TABLE IF NOT EXISTS settings (
     setting_key TEXT PRIMARY KEY,
@@ -191,7 +209,11 @@ $tables_mysql = [
     inv_status VARCHAR(20) DEFAULT 'draft',
     inv_note TEXT,
     jou_id INT,
-    inv_status_new VARCHAR(20)
+    cust_reference VARCHAR(100),
+    proj_id INT,
+    orig_currency VARCHAR(3),
+    exch_rate DECIMAL(12,6),
+    credit_ref INT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 'invoice_lines' => "CREATE TABLE IF NOT EXISTS invoice_lines (
     line_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -202,7 +224,11 @@ $tables_mysql = [
     acc_id INT,
     line_vat_rate DECIMAL(5,2),
     prod_id INT,
-    currency VARCHAR(3) DEFAULT 'DKK'
+    currency VARCHAR(3) DEFAULT 'DKK',
+    proj_id INT,
+    orig_currency VARCHAR(3),
+    orig_amount DECIMAL(12,2),
+    exch_rate DECIMAL(12,6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 'journal' => "CREATE TABLE IF NOT EXISTS journal (
     jou_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -212,14 +238,17 @@ $tables_mysql = [
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_cancelled TINYINT DEFAULT 0,
     trans_type VARCHAR(20),
-    currency VARCHAR(3) DEFAULT 'DKK'
+    currency VARCHAR(3) DEFAULT 'DKK',
+    proj_id INT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 'ledger' => "CREATE TABLE IF NOT EXISTS ledger (
     led_id INT AUTO_INCREMENT PRIMARY KEY,
     jou_id INT,
     acc_id INT,
     amount DECIMAL(12,2),
-    voucher_no INT
+    voucher_no INT,
+    created_at TIMESTAMP NULL DEFAULT NULL,
+    user_id INT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 'settings' => "CREATE TABLE IF NOT EXISTS settings (
     setting_key VARCHAR(100) PRIMARY KEY,
@@ -260,28 +289,48 @@ if ($check2) {
 }
 
 // -------------------------------------------------------------------------
-// 2. KONTOPLAN (minimal, dansk standard-inspireret)
+// 2. KONTOPLAN (dansk standard-inspireret, eventyr-tema)
+// RETTET 2026-08-15: denne liste var FØR ude af trit med den kontoplan der
+// reelt er i brug (kun 10 konti, forkerte typer 'revenue' i stedet for
+// 'income', 'liability' brugt for BÅDE egenkapital OG moms). En frisk
+// installation fik derfor en kontoplan der var inkonsistent med resten af
+// systemets antagelser (conf_acc_*, rapporter, årsafslutning). Erstattet med
+// den fulde, verificerede 19-konto kontoplan + korrekt egenkapital-/gælds-
+// konto - se regnskabslov-status i hukommelsen.
+// Type-vokabular (kanonisk i hele systemet): income, expense, bank, vat,
+// asset, liability, equity - se account_edit.php's dropdown.
 // -------------------------------------------------------------------------
 $accounts = [
-    [1000, 'Salg af eventyrvarer',      'revenue', 25.00, 'S25'],
-    [1010, 'Salg, EU',                  'revenue', 0.00,  null],
-    [2100, 'Vareforbrug - eventyrlager','expense', 25.00, 'K25'],
-    [2200, 'Lokaleomkostninger',        'expense', 25.00, 'K25'],
-    [2300, 'Kontorhold og gebyrer',     'expense', 25.00, 'K25'],
-    [2320, 'Bankgebyrer',               'expense', 0.00,  null],
-    [3000, 'Egenkapital / Overført resultat', 'liability', 0.00, null],
-    [5800, 'Bank - Den Gyldne Skatkiste','asset',   0.00,  null],
-    [6900, 'Moms, salg',                'liability', 0.00, null],
-    [6910, 'Moms, køb',                 'asset',   0.00,  null],
+    [1000, 'Salg af eventyrvarer',                 'income',    'S25', 25.00],
+    [1010, 'Salg, EU',                             'income',    null,  0.00],
+    [1020, 'Salg af tryllestave',                  'income',    'S25', 25.00],
+    [1030, 'Salg af flyvende tæpper',               'income',    'S25', 25.00],
+    [1040, 'Salg af drageblod (flasker)',          'income',    'S25', 25.00],
+    [1050, 'Konsulentbistand i forbandelser',      'income',    'S25', 25.00],
+    [2100, 'Vareforbrug - eventyrlager',           'expense',   'K25', 25.00],
+    [2200, 'Lokaleomkostninger',                   'expense',   'K25', 25.00],
+    [2210, 'El og vand i slottet',                 'expense',   'K25', 25.00],
+    [2220, 'Vedligeholdelse af vindebro',          'expense',   'K25', 25.00],
+    [2300, 'Kontorhold og gebyrer',                'expense',   'K25', 25.00],
+    [2320, 'Bankgebyrer',                          'expense',   null,  0.00],
+    [2400, 'Rejseomkostninger (fejer/dragejagt)',  'expense',   null,  0.00],
+    [2500, 'Markedsføring i Kongeriget',           'expense',   'K25', 25.00],
+    [3000, 'Egenkapital / Overført resultat',      'equity',    null,  0.00],
+    [4000, 'Leverandørgæld og anden gæld',         'liability', null,  0.00],
+    [5800, 'Bank - Den Gyldne Skatkiste',          'bank',      null,  0.00],
+    [5900, 'Kassebeholdning - Slottets skatkammer','bank',      null,  0.00],
+    [6900, 'Moms, salg',                           'vat',       null,  0.00],
+    [6910, 'Moms, køb',                            'vat',       null,  0.00],
+    [8100, 'Tilgodehavender fra salg (Debitorer)', 'asset',     null,  0.00],
 ];
 
-foreach ($accounts as [$id, $name, $type, $rate, $vat]) {
+foreach ($accounts as [$id, $name, $type, $vat, $rate]) {
     DB::insert($conn, 'accounts', [
         'acc_id' => $id, 'acc_name' => $name, 'acc_type' => $type,
         'vat_code' => $vat, 'vat_rate' => $rate
     ]);
 }
-echo "[OK] " . count($accounts) . " konti oprettet (inkl. egenkapitalkonto til year_end_close.php).\n";
+echo "[OK] " . count($accounts) . " konti oprettet (inkl. egenkapital- og gældskonto til year_end_close.php).\n";
 
 // -------------------------------------------------------------------------
 // 3. MOMSKODER

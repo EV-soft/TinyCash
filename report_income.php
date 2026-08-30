@@ -1,4 +1,10 @@
-<?php # /report_income.php v:1.0.0 d:2026-06-15 i:evs
+<?php # /report_income.php v:1.3.0 d:2026-08-30 i:evs
+# RETTET 2026-08-15: rapporten hentede FØR omsætning direkte fra
+# invoices/invoice_lines (status='paid') og udgifter fra den afkoblede
+# transactions-tabel, som expense_edit.php (det rigtige udgiftsflow) aldrig
+# skriver til - tallene afspejlede derfor IKKE den faktiske bogføring
+# (journal+ledger). Henter nu alt fra ledger/journal, ligesom resten af
+# systemets rapporter og posteringer. Se regnskabsloven-analysen 2026-08-15.
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
@@ -7,50 +13,60 @@ require_once 'inc/php2htm.lib.php';
 htm_Header('@Income Statement');
 showMenu();
 
-// 1. Hent valuta fra indstillinger (lodret tabel struktur)
-$sql = "SELECT setting_value FROM settings WHERE setting_key = 'currency' LIMIT 1";
-$res_settings = DB::query($conn, $sql);
-$currency = 'DKK'; // Standard fallback
-if ($res_settings && DB::num_rows($res_settings) > 0) {
-    $row = DB::fetch_assoc($res_settings);
-    $currency = $row['setting_value'];
-}
+// 1. Hent valuta fra indstillinger
+$s = get_settings($conn);
+$currency = $s['currency'] ?? 'DKK';
 
-// --- 2. DATA BEREGNING ---
-// Hent Omsætning
-$res_sales = DB::query($conn, "SELECT SUM(il.quantity * il.price_each) as total 
-                                  FROM invoice_lines il 
-                                  JOIN invoices i ON il.inv_id = i.inv_id 
-                                  WHERE i.inv_status = 'paid'");
-$row_sales = DB::fetch_assoc($res_sales);
-$revenue = $row_sales['total'] ?? 0;
+// Konfigurerbare moms-konti (samme som resten af posteringsflowet) - bruges
+// til at vise salgs-/købsmoms hver for sig, uden at forudsætte faste ID'er.
+$acc_vat          = (int)($s['conf_acc_vat'] ?? 6900);          // udgående moms
+$acc_purchase_vat = (int)($s['conf_acc_purchase_vat'] ?? 6910); // indgående moms
 
-// Hent Udgifter
-$sql_costs = "SELECT s.std_name, s.std_id, SUM(t.amount) as cat_total 
-              FROM transactions t
-              JOIN accounts a ON t.acc_id = a.acc_id
-              JOIN std_accounts s ON a.std_ref_id = s.std_id
-              GROUP BY s.std_id 
-              ORDER BY s.std_id ASC";
-$res_costs = DB::query($conn, $sql_costs);
+// --- 2. DATA FRA DEN RIGTIGE BOGFØRING (journal + ledger) ---
+// Annullerede posteringer (is_cancelled) og deres modposteringer indgår
+// begge - de balancerer hinanden ud automatisk, ligesom year_end_close.php.
 
-// Hent Salgsmoms
-$sql_sales_vat = "SELECT SUM((il.quantity * il.price_each) * (a.vat_rate / 100)) as total_vat 
-                  FROM invoice_lines il 
-                  JOIN invoices i ON il.inv_id = i.inv_id 
-                  JOIN accounts a ON il.acc_id = a.acc_id 
-                  WHERE i.inv_status = 'paid'";
-$res_sales_vat = DB::query($conn, $sql_sales_vat);
-$sales_vat = DB::fetch_assoc($res_sales_vat)['total_vat'] ?? 0;
+// Omsætning: indtægtskonti er KREDIT (negativt) ved en normal salgspostering,
+// så beløbet negeres for at vise et positivt tal.
+$res_sales = DB::query($conn, "
+    SELECT SUM(-l.amount) AS total
+    FROM ledger l
+    JOIN journal j ON l.jou_id = j.jou_id
+    JOIN accounts a ON l.acc_id = a.acc_id
+    WHERE a.acc_type = 'income'");
+$revenue = (float)(DB::fetch_assoc($res_sales)['total'] ?? 0);
 
-// Hent Købsmoms
-$res_purchase_vat = DB::query($conn, "SELECT SUM(vat_amount) as vat FROM transactions");
-$purchase_vat = DB::fetch_assoc($res_purchase_vat)['vat'] ?? 0;
+// Udgifter pr. konto: udgiftskonti er DEBET (positivt) ved en normal postering.
+$res_costs = DB::query($conn, "
+    SELECT a.acc_id, a.acc_name, SUM(l.amount) AS cat_total
+    FROM ledger l
+    JOIN journal j ON l.jou_id = j.jou_id
+    JOIN accounts a ON l.acc_id = a.acc_id
+    WHERE a.acc_type = 'expense'
+    GROUP BY a.acc_id, a.acc_name
+    HAVING SUM(l.amount) != 0
+    ORDER BY a.acc_id ASC");
+
+// Moms: de to specifikke, konfigurerede momskonti - IKKE en generisk
+// 'vat'-gruppe, da den dækker både salgs- og købsmoms under ét.
+$res_sales_vat = DB::query($conn, "
+    SELECT SUM(-l.amount) AS total FROM ledger l
+    JOIN journal j ON l.jou_id = j.jou_id
+    WHERE l.acc_id = $acc_vat");
+$sales_vat = (float)(DB::fetch_assoc($res_sales_vat)['total'] ?? 0);
+
+$res_purchase_vat = DB::query($conn, "
+    SELECT SUM(l.amount) AS total FROM ledger l
+    JOIN journal j ON l.jou_id = j.jou_id
+    WHERE l.acc_id = $acc_purchase_vat");
+$purchase_vat = (float)(DB::fetch_assoc($res_purchase_vat)['total'] ?? 0);
 
 $vat_to_pay = $sales_vat - $purchase_vat;
-$total_costs = 0; 
+$total_costs = 0;
 
 echo "<div style='max-width:900px; margin:0 auto;'>";
+
+    htm_Banner('@This report sums the entire bookkeeping (all dates). For a specific fiscal year, use Close Fiscal Year, which lets you calculate a period-limited result.', 'warning');
 
     // --- CARD 1: RESULTATOPGØRELSE ---
     htm_Card_(lang('@Official Income Statement'), '600');
@@ -70,20 +86,20 @@ echo "<div style='max-width:900px; margin:0 auto;'>";
             <td style="padding:15px; text-align:right;"><?php echo lang('@AMOUNT'); ?></td>
         </tr>
 
-        <?php 
-        if($res_costs && DB::num_rows($res_costs) > 0): 
-            while($cost = DB::fetch_assoc($res_costs)): 
-                $total_costs += $cost['cat_total']; ?>
+        <?php
+        if ($res_costs && DB::num_rows($res_costs) > 0):
+            while ($cost = DB::fetch_assoc($res_costs)):
+                $total_costs += (float)$cost['cat_total']; ?>
                 <tr style="border-bottom:1px solid #eee;">
                     <td style="padding:12px 15px;">
-                        <span style="color:#95a5a6; font-size:0.8em; margin-right: 10px;"><?php echo $cost['std_id']; ?></span> 
-                        <?php echo htmlspecialchars($cost['std_name']); ?>
+                        <span style="color:#95a5a6; font-size:0.8em; margin-right: 10px;"><?php echo $cost['acc_id']; ?></span>
+                        <?php echo htmlspecialchars($cost['acc_name']); ?>
                     </td>
                     <td style="padding:12px 15px; text-align:right; color:#e74c3c;">
                         - <?php echo number_format($cost['cat_total'], 2, ',', '.'); ?>
                     </td>
                 </tr>
-            <?php endwhile; 
+            <?php endwhile;
         endif; ?>
 
         <tr style="background:#2c3e50; color:white; font-weight:bold; font-size:1.2em;">

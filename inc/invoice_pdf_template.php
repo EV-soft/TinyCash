@@ -1,5 +1,4 @@
-<?php
-# invoice_pdf_template.php
+<?php # /inc/invoice_pdf_template.php v:1.3.0 d:2026-08-30 i:evs
 // Hvis filen kaldes direkte i bufferen, sikrer vi os adgang til variablerne
 if (!isset($pdf_inv)) {
     $pdf_inv = $GLOBALS['pdf_inv'] ?? [];

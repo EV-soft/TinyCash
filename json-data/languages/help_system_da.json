@@ -1,296 +1,366 @@
 {
-    "index.php": [
-        "<h3>Hjælp til oversigt over kontrolpanelet<\/h3>",
-        "<p>Velkommen til dit hovedkontrolpanel. Denne side samler aktuelle finansielle nøgletal og vigtige indikatorer direkte fra databasen.<\/p>",
-        "<ul><li><strong>Omsætning i år:<\/strong> Viser den samlede bruttomsætning fra alle afsluttede fakturaer i det aktuelle kalenderår.<\/li><\/ul>",
-        "<li><strong>Ubetalte fakturaer:<\/strong> Det samlede antal fakturaer, der er blevet sendt, men som i øjeblikket afventer betaling.<\/li>",
-        "<li><strong>Advarsel om lagerbeholdning:<\/strong> Viser antallet af produkter, hvor den aktuelle lagerbeholdning er faldet til eller under det fastsatte minimumsniveau for sikkerhedslageret. Hvis antallet er større end nul, skifter widgeten farve for at gøre dig opmærksom på det.<\/li>",
-        "<li><strong>Samlet antal kunder:<\/strong> Det samlede antal unikke kundeprofiler, der er registreret i dit system.<\/li>",
-        "<p>Brug listen <em>»Seneste fakturaer«<\/em> til at se detaljer, eller klik på et referencenummer for at redigere det direkte. Panelet <em>»Hurtige handlinger<\/em>« giver hurtige genveje til at oprette poster uden at bruge hovednavigationsmenuen.<\/p>"
-    ],
-    "sales_hub.php": [
-        "<h3>Salgscenter og fakturahåndtering<\/h3>",
-        "<p>Med dette centrale modul kan du overvåge, filtrere og administrere alle kundefakturaer og salgsdokumenter.<\/p>",
-        "<ul><li><strong>Fakturaregister:<\/strong> Viser en liste over alle udstedte fakturaer, som kan søges i, herunder fakturanumre, udstedelsesdatoer, kundenavne og samlede beløb inklusive moms.<\/li><\/ul>",
-        "<li><strong>Statusovervågning:<\/strong> Fakturaer inddeles efter deres livscyklusstatus: <em>Udkast<\/em> (kan redigeres, endnu ikke sendt), <em>Sendt<\/em> (åben og afventer betaling) og <em>Betalt<\/em> (afregnet).<\/li>",
-        "<li><strong>Praktiske genveje:<\/strong> Klik på en hvilken som helst fakturarække eller et fakturanummer for at åbne redigeringsvinduet. Brug de primære kontrolelementer til at oprette en helt ny faktura, eksportere data eller udstede en kreditnota for returvarer.<\/li>",
-        "<p>Brug søgeparametrene ovenfor tabellen til hurtigt at udvælge poster efter bestemte datointervaller, kundenavne eller bestemte betalingsstatus.<\/p>"
-    ],
-    "invoice_edit.php": [
-        "<h3>Hjælp til oprettelse og redigering af fakturaer<\/h3>",
-        "<p>Her kan du oprette eller redigere fakturaer til dine kunder. Følg disse generelle retningslinjer:<\/p>",
-        "<ul><li>Vælg en kunde fra listen for at oprette en ny faktura.<\/li><\/ul>",
-        "<li>Indtast den korrekte fakturadato og forfaldsdatoen.<\/li>",
-        "<li>Vælg et produkt fra rullemenuen for at indsætte det i en linje.<\/li>",
-        "<li>Systemet henter automatisk prisen og momssatsen fra databasen.<\/li>",
-        "<li>Antal og pris kan justeres manuelt på hver enkelt linje.<\/li>",
-        "<li>Delsummen, moms og den samlede sum beregnes automatisk nederst på siden.<\/li>",
-        "<li>Interne bemærkninger vil ikke fremgå af kundens udskrevne faktura.<\/li>",
-        "<li>Husk at klikke på <strong>»Gem faktura«<\/strong> for at gemme dine ændringer sikkert.<\/li>"
-    ],
-    "invoice_view.php": [
-        "<h3>Hjælp til forhåndsvisning og afsendelse af fakturaer<\/h3>",
-        "<p>Her kan du få et eksempel på det fulde fakturaoplayout, inden du godkender det.<\/p>",
-        "<ul><li>Klik på<i class='fa-solid fa-pencil-ruler'><\/i><b>»Designtilstand«<\/b> for at låse elementerne op og tilpasse deres placering på siden.<\/li><\/ul>",
-        "<li>Træk elementerne frit rundt for at justere den visuelle afstand i dit fakturalayout.<\/li>",
-        "<li>Du kan ændre størrelsen på elementerne ved at trække i deres højre kant, så de passer til din officielle forretningsskabelon.<\/li>",
-        "<li>Dine ændringer gemmes automatisk i databasen, hver gang du frigiver et element.<\/li>",
-        "<li>Indtast en brugerdefineret tekst i feltet <b>»E-mail-besked«<\/b> for at tilpasse din digitale forsendelse.<\/li>",
-        "<li>Klik på<i class='fa-solid fa-envelope'><\/i><b>»Send via e-mail«<\/b> for automatisk at generere en PDF-fil og sende den direkte til kunden via e-mail.<\/li>",
-        "<li>Brug knappen<i class='fa-solid fa-file-code'><\/i><b>»OIOUBL XML«<\/b> til at eksportere en e-faktura, der overholder de danske krav til NemHandel.<\/li>",
-        "<li>Klik<i class='fa-solid fa-print'><\/i>på <b>»Udskriv«<\/b> for at åbne browserdialogen; alle systemknapper skjules automatisk på udskriften.<\/li>",
-        "<li>Klik<i class='fa-solid fa-door-open'><\/i>på <b>»Forlad«<\/b> for sikkert at vende tilbage til salgsportalen, når du er færdig.<\/li>"
-    ],
-    "setup_chart.php": [
-        "<h3>Hjælp til opsætning af kontoplan og sikkerhed ved installation<\/h3>",
-        "<p>Dette initialiseringsarbejdsområde varetager udvælgelsen, verifikationen og oprettelsen i databasen af de primære kontoplan-skabeloner (COA), der er nødvendige for transaktionssporing.<\/p>",
-        "<ul><li><strong>Valg af skabeloner:<\/strong> Du kan vælge mellem tre forskellige skabeloner: <em>Enkel<\/em> (ideel til freelancere og servicevirksomheder uden lagerbeholdning), <em>Standard<\/em> (egnet til små virksomheder med standardregistrering af moms, køretøjer og administration) og <em>Udvidet<\/em> (omfattende layout til virksomhedsstrukturer med ansatte, afskrivninger og finansielle aktiver).<\/li><\/ul>",
-        "<li><strong>Vurdering af belægning før udførelse:<\/strong> Inden justeringerne behandles, udfører rutinen en isoleret rækkeberegningsforespørgsel (<em>COUNT(*)<\/em>) på måltabellen for konti. Hvis systemet finder eksisterende profildata-arrays, låses installationskontakten automatisk for at sikre datapersistens.<\/li>",
-        "<li><strong>Grænser for destruktiv tabelafkortning:<\/strong> Ved initialisering af et nyt hovedbogsystem sletter databaseinterfacet eksisterende strukturer ved hjælp af en sletningskommando (<em>TRUNCATE<\/em>). Dette nulstiller nøglesporingsmatricerne fuldstændigt, inden registreringssekvensen påbegyndes.<\/li>",
-        "<li><strong>Parametriseret matrix til batchindsættelse:<\/strong> Array-linjer, der er udlæst fra kildedatablokkene (<em>coa_*.json<\/em>), kompileres via standardiserede databasestrukturer (<em>mysqli_prepare<\/em>). Rutinen knytter heltalsidentifikatorer, navnestrengene og skattefraktionerne korrekt sammen for at undgå undtagelser ved typekonvertering.<\/li>",
-        "<li><strong>Statisk afbrydelseslåsning (ved duplikatnøgle):<\/strong> Når tabellen er oprettet, registrerer en dedikeret tracker implementeringsstatusmarkøren i indstillingsarrayet. Initialiseringsprocessen tilføjer et permanent valideringsflag, der sikrer, at operatører ved fremtidige opstarter omdirigeres direkte forbi konfigurationslayoutet.<\/li>",
-        "<li><strong>Asynkron synkronisering af DOM-forhåndsvisning:<\/strong> Udvalgte databasestrukturer overføres straks til hukommelsesområderne på klientsiden via løbende dataparsingsscripts (<em>json_encode<\/em>). Interaktive funktioner manipulerer skabelonblokke dynamisk for at opdatere tabelvisninger og justere typeflag på en overskuelig måde på tværs af brugergrænsefladen uden at tvinge siden til at genindlæses.<\/li>",
-        "<p>Gennemgå konfigurationsmodellerne for hovedbøgerne omhyggeligt, inden de udføres, da en fuldstændig initialisering af en skabelon rydder tomme måltabeller og etablerer din permanente sporingsarkitektur.<\/p>"
-    ],
-    "customer_edit.php": [
-        "<h3>Hjælp til kundehåndtering<\/h3>",
-        "<p>På denne side kan du oprette en ny kundeprofil eller opdatere oplysningerne om en eksisterende kunde i din database.<\/p>",
-        "<ul><li><strong>Nødvendige oplysninger:<\/strong> <em>Kundens navn<\/em> skal udfyldes for at gemme profilen. Alle øvrige oplysninger er valgfri, men anbefales for at sikre en korrekt fakturering.<\/li><\/ul>",
-        "<li><strong>Virksomhedsoplysninger:<\/strong> Ved at indtaste <em>CVR<\/em>-nummeret (virksomhedsregistreringsnummeret) og angive en <em>kontaktperson<\/em> sikres der et professionelt og korrekt layout, når der udarbejdes regnskabsdokumenter.<\/li>",
-        "<li><strong>Betalingsbetingelser:<\/strong> Feltet <em>»Betalingsdage«<\/em> angiver standardkreditperioden for denne specifikke kunde (forudindstillet til 8 dage). Når der oprettes en ny faktura til denne kunde, tilpasses forfaldsdatoen automatisk ud fra denne værdi.<\/li>",
-        "<li><strong>Interne bemærkninger:<\/strong> Feltet <em>»Bemærkninger«<\/em> er udelukkende beregnet til intern opfølgning og administration. Oplysninger, der indtastes her, vil aldrig fremgå af kundens udskrevne fakturaer.<\/li>",
-        "<p>Klik på <strong>»Gem ændringer«<\/strong> for at gemme ændringerne sikkert. Brug knappen <strong>»Tilbage«<\/strong> for at vende tilbage til Sales Hub uden at ændre nogen data.<\/p>"
-    ],
-    "bank_import_step1.php": [
-        "<h3>Hjælp til import af kontoudtog<\/h3>",
-        "<p>Dette modul hjælper dig med at importere finansielle transaktioner fra din bank ved hjælp af en standard CSV-fil, så du undgår at skulle indtaste dem manuelt i hovedbogen.<\/p>",
-        "<ul><li><strong>Indlæs gemt profil:<\/strong> Hvis du ofte importerer data fra den samme bank, kan du vælge en tidligere gemt profil fra rullemenuen for straks at gendanne dine brugerdefinerede kolonnemappinger.<\/li><\/ul>",
-        "<li><strong>Datavisning og automatisk genkendelse af skilletegn:<\/strong> Når du uploader din CSV-fil, vises et eksempel på 6 rækker. Systemet genkender automatisk, om din fil bruger semikoloner (;) eller kommaer (,) som skilletegn, og nummererer kolonnerne som <em>Kol. 1, Kol. 2<\/em> osv.<\/li>",
-        "<li><strong>Kolonne-tilknytningsfelter:<\/strong> Angiv de nøjagtige kolonnenumre, der indeholder dine data. Motoren forsøger at udfylde disse felter på forhånd ved at analysere overskrifterne for ord som <em>»Date\/Dato«<\/em>, <em>»Text\/Tekst<\/em>« eller <em>»Amount\/Beløb<\/em>«.<\/li>",
-        "<li><strong>Spring linjer over:<\/strong> De fleste bankfiler indeholder en overskriftsrække eller metainformation øverst. Indstil denne værdi til 1 (eller højere) for at forhindre, at importmodulet læser tekstoverskrifter som finansielle poster.<\/li>",
-        "<li><strong>Gem layoutprofil:<\/strong> For at undgå at skulle tilknytte kolonner manuelt næste gang skal du indtaste bankens navn under <em>»Gem som profil«<\/em> og klikke på disketteikonet (💾) for at gemme konfigurationen.<\/li>",
-        "<p>Kontroller omhyggeligt, at dine konfigurationer stemmer overens med oversigtstabellen, og klik derefter på <strong>»Afslut import«<\/strong> for at overføre de strukturerede data til behandlingsmiljøet.<\/p>"
-    ],
-    "reconcile_list.php": [
-        "<h3>Hjælp til bankafstemning<\/h3>",
-        "<p>I dette arbejdsområde kan du sammenholde de importerede poster fra dit kontoudtog med dine udestående salgsfakturaer eller hurtigt fordele driftsudgifterne på de korrekte hovedbogsposter.<\/p>",
-        "<ul><li><strong>Grønne beløb (indgående betalinger):<\/strong> Disse linjer viser kundebetalinger. Systemet gennemgår automatisk dit system for ubetalte fakturaer med samme samlet beløb. Hvis der findes et nøjagtigt match, fremhæves fakturaens rullemenu med <span style='color:#2ecc71; font-weight:bold;'>grønt<\/span> og er forudvalgt for dig.<\/li><\/ul>",
-        "<li><strong>Gebyrberegninger (⚡ Gebyr):<\/strong> Hvis en betaling stammer fra en betalingsgateway (f.eks. Stripe, MobilePay), skal du klikke på linket <em>⚡ Gebyr<\/em>. Dette beregner og påfører behandlingsgebyrer dynamisk direkte på din angivne gebyrkonto ved hjælp af dine forudindstillede faste, relative eller blandede beregningsmodeller.<\/li>",
-        "<li><strong>Røde beløb (udgående betalinger):<\/strong> Disse omfatter kortudgifter, betalinger til leverandører eller overførsler. Vælg den relevante omkostnings- eller aktivkonto fra rullelisten for at kategorisere posteringen.<\/li>",
-        "<li><strong>Databasehandlinger ved bekræftelse:<\/strong> Når du klikker på <strong>OK<\/strong>, udfører programmet en tre-trins sekvens med dobbeltbogføring: Der tildeles et unikt sporings-id i <em>journal<\/em>en, de tilsvarende afstemningsposter tilføjes til <em>hovedbogen<\/em>, og den midlertidige post markeres som endeligt behandlet.<\/li>",
-        "<li><strong>Sletning af poster:<\/strong> Klik på papirkurv-ikonet (🗑️) for at slette enkelte midlertidige poster, der ikke hører hjemme i dine regnskabskonti.<\/li>",
-        "<p>Gennemgå hver enkelt transaktionslinje omhyggeligt. Når du har bekræftet oplysningerne, skal du klikke på den grønne handlingsknap for at behandle dataene sikkert og bogføre dem i dine permanente regnskabsbøger.<\/p>"
-    ],
-    "settings_fees.php": [
-        "<h3>Hjælp til konfiguration af gebyrregler<\/h3>",
-        "<p>Via dette administrationspanel kan du automatisere beregningen af de behandlingsgebyrer, der opkræves af eksterne betalingsgateways eller forhandlerkonti (f.eks. Stripe, MobilePay eller PayPal).<\/p>",
-        "<ul><li><strong>Kildenavn:<\/strong> Angiv den unikke identifikator for transaktionsudbyderen (f.eks. <em>stripe<\/em>). Denne værdi skal stemme overens med transaktionens importkildekode, når linjerne behandles i afstemningssystemet.<\/li><\/ul>",
-        "<li><strong>Beregningsmodeller:<\/strong> Vælg, hvordan gebyrerne beregnes: <ul><li><em>Fast beløb:<\/em> Der trækkes et fast beløb pr. transaktionslinje uanset volumen.<\/li><li><em>Procentdel:<\/em> Der trækkes en variabel procentdel, der udelukkende er baseret på bruttosummen.<\/li><li><em>Blandet:<\/em> Kombinerer både faste komponenter og dynamiske procenter for transaktionskortlægning med høj nøjagtighed.<\/li><\/ul><\/li>",
-        "<li><strong>Felter for satser og faste satser:<\/strong> Indtast de dynamiske variabler, der bruges i dine beregningsskabeloner. Ved procentuelle satser skal beløbet angives med standarddecimaler (f.eks. skal du indtaste <em>0,014<\/em> for at tilknytte en 1,4 %-behandlingsskabelon). Ved faste justeringer skal du definere den nøjagtige numeriske prisværdi direkte (f.eks. 1,00).<\/li>",
-        "<li><strong>Aktiv regelstyring:<\/strong> Det nederste panel viser en komplet oversigt over de konfigurationer, der er aktive i din nuværende motorinstans. Klik på papirkurvikonet (🗑️) for permanent at slette overflødige regler fra hovedsystemindstillingerne.<\/li>",
-        "<p>Klik på <strong>»Gem regel«<\/strong> for straks at gemme ændringerne. Når reglerne er gemt, kan du straks få adgang til dem i dit live-afstemningsarbejdsområde via lynikonet.<\/p>"
-    ],
-    "inventory_status.php": [
-        "<h3>Hjælp til lagerstatus<\/h3>",
-        "<p>Dette dashboard giver et komplet overblik i realtid over dit produktkatalog, hvor det viser aktuelle lagerbeholdninger, gældende prisstrukturer og finansielle oversigter.<\/p>",
-        "<ul><li><strong>SKU og identifikation:<\/strong> Kolonnen <em>»SKU«<\/em> (Stock Keeping Unit) viser din unikke identifikator. Hvis der ikke er angivet en brugerdefineret SKU for et produkt, anvendes kernesystemets identifikator (ID) automatisk.<\/li><\/ul>",
-        "<li><strong>Kontotilknytning:<\/strong> Kolonnen <em>»Konto«<\/em> angiver, hvilken finansiel konto i dit kontoplan der skal modtage omsætningen, når dette produkt føjes til en salgsfaktura. Hvis der står <span style='color:red; font-style:italic;'>»Ingen konto«<\/span> ved et produkt, bør dette straks opdateres for at sikre præcise dobbeltbogføringsopstillinger.<\/li>",
-        "<li><strong>Priser og valuta:<\/strong> Priserne vises automatisk ud fra dine indstillinger for systemkonfigurationen (f.eks. <em>DKK<\/em> eller <em>EUR<\/em>) og følger det standardlayout, der er defineret på produktopsætningssiden.<\/li>",
-        "<li><strong>Datahåndtering og eksport:<\/strong> Brug knapperne i værktøjslinjen øverst til højre til at arbejde med dit datakatalog: Klik på <strong>»Nyt produkt«<\/strong> (➕) for at udvide din samling, eller brug <strong>»CSV«<\/strong> til at generere en ren, uredigeret regnearkeksport af dit aktuelle lagerkatalog.<\/li>",
-        "<li><strong>Redigering af poster:<\/strong> Klik på blyantikonet (📝) i handlingskolonnen for at gå direkte til redigeringsvinduet for den pågældende linje.<\/li>",
-        "<p>Gennemgå regelmæssigt dine produktlinjer for at sikre, at dine aktive lagerbeholdninger stemmer fuldt ud overens med dine arbejdsgange for sporing af fysiske aktiver.<\/p>"
-    ],
-    "product_edit.php": [
-        "<h3>Hjælp til produkt- og lagerstyring<\/h3>",
-        "<p>Med denne formular kan du oprette en ny produktpost eller opdatere oplysninger, priser og lagertærskler for en eksisterende katalogpost.<\/p>",
-        "<ul><li><strong>Salgspris og nettoindtægt:<\/strong> Indtast den grundlæggende salgspris ekskl. moms. Systemet håndterer automatisk indtastninger med både komma (,) og punktum (.) for at sikre korrekte dataposter.<\/li><\/ul>",
-        "<li><strong>Kortlægning af omsætningskonti:<\/strong> Vælg den relevante omsætningskategori fra dit kontoplan. Denne rullemenu viser udelukkende omsætningskonti. Når du ændrer denne konto, justeres momsberegningerne automatisk i henhold til kontos aktive momsklasse.<\/li>",
-        "<li><strong>Dynamisk bruttoprisfastsættelse (pris inkl. moms):<\/strong> Det nederste oversigtspanel beregner og viser den endelige detailpris for kunden i realtid. Det sammenholder de indtastede nettotal med den integrerede momssats for den valgte omsætningskonto.<\/li>",
-        "<li><strong>Lagerstatus og advarselsgrænser:<\/strong> <ul><li><em>På lager:<\/em> Angiver den aktuelle fysiske mængde, der er tilgængelig på dit lager.<\/li><li><em>Minimumsniveau:<\/em> Fastlægger den kritiske lagertærskel. Når dit aktuelle lager falder til eller under dette niveau, udløses automatiske advarselsindikatorer på dit dashboard for at signalere, at der skal foretages genopfyldning.<\/li><\/ul><\/li>",
-        "<p>Klik på <strong>»Gem ændringer«<\/strong> eller <strong>»Opret produkt«<\/strong> for at sende konfigurationsdataene til dit centrale behandlingsmodul. Brug knappen <strong>»Annuller«<\/strong> for at annullere ændringerne og vende sikkert tilbage til hovedgrænsefladen for lageret.<\/p>"
-    ],
-    "expense_list.php": [
-        "<h3>Hjælp til udgiftsoversigt<\/h3>",
-        "<p>Dette arbejdsområde fungerer som en central log til sporing og styring af alle driftsudgifter, indkøb hos leverandører og digitale kvitteringer.<\/p>",
-        "<ul><li><strong>Leverandør- og kategorisporing:<\/strong> Hver linje angiver den nøjagtige forretningsleverandør sammen med en kort beskrivelse. Kolonnen <em>»Konto«<\/em> angiver, hvilken specifik drifts- eller anlægskonto fra dit kontoplan der er berørt af posteringen.<\/li><\/ul>",
-        "<li><strong>Indikatorer for vedhæftede filer:<\/strong> Kolonnen <em>»Fil«<\/em> markerer vedhæftede bilag eller dokumenter ved hjælp af unikke markører: <ul><li><span style='color:#3498db;'>Papirclips (📎):<\/span> Angiver en standard ekstern filvedhæftning (f.eks. en uploadet kvittering eller et billede).<\/li><li><span style='color:#e74c3c;'>Faktura-dollar-ikon ():<\/span> Identificerer internt genererede bilagsfiler, der administreres sikkert inden for dit systemlayout.<\/li><li><em>Tre bindestreger (---):<\/em> Angiver, at der ikke er knyttet nogen digital dokumentkopi til denne udgiftslinje.<\/li><\/ul><\/li>",
-        "<li><strong>Udvidelse af loggen:<\/strong> Klik på knappen <strong>»Tilføj udgift«<\/strong> (➕) i kontrolfeltet øverst til højre for at skifte direkte til modulet til oprettelse af udgifter.<\/li>",
-        "<li><strong>Handlingsrække:<\/strong> Brug handlingsudløserne til at ændre eller slette elementer. Hvis du klikker på papirkurvikonet, vises en sikkerhedsadvarsel, inden der udføres nogen sletningssekvens i datamotoren.<\/li>",
-        "<p>Hold regelmæssigt øje med dette oversigtsskema for at sikre, at dine dokumenterede bilag er fuldstændige, at kontiene er korrekt tilknyttet, og at udgifterne stemmer overens med dine kontante udbetalinger.<\/p>"
-    ],
-    "ledger_view.php": [
-        "<h3>Hjælp til hovedbogen<\/h3>",
-        "<p>Denne skærm viser et revisionsspor over hele dit økonomiske fodaftryk, hvor de rå transaktionsoplysninger er grupperet direkte efter driftslogposter.<\/p>",
-        "<ul><li><strong>Journalgruppering (#):<\/strong> Regnskabsoplysningerne gemmes ved hjælp af dobbeltbogholderi. Flere linjer, der deler det samme unikke <em>journalnummer,<\/em> hører til nøjagtig den samme regnskabstransaktionssekvens.<\/li><\/ul>",
-        "<li><strong>Dokumenthenvisning (Dokumentnr.):<\/strong> Indtast faktura- eller kvitteringsnummeret. Dette knytter dit fysiske dokumentarkiv sammen med systemet. Hvis feltet efterlades tomt, registreres transaktionen uden en ekstern dokumenthenvisning.<\/li>",
-        "<li><strong>Regler for debet og kredit:<\/strong> <ul><li><em>Debet (+):<\/em> Vises i <span style='color:green; font-weight:bold;'>grønt<\/span> og repræsenterer indgående ændringer i aktiver eller driftsomkostninger.<\/li><li><em>Kredit (-):<\/em> Vises i <span style='color:red; font-weight:bold;'>rødt<\/span> og angiver fald i aktivpuljer, ændringer i egenkapitalen eller omsætning.<\/li><\/ul><\/li>",
-        "<li><strong>Kaskadiske sletninger:<\/strong> Papirkurv-ikonet (🗑️) findes udelukkende i overskriftsrækken i en journalpakke. Et klik på dette ikon udløser et beskyttet tilbageførselsscript inden for rammerne af en databasetransaktion, hvilket sikkert sletter den strukturelle <em>journal<\/em>post og alle tilknyttede balanceringslinjer <em>i hovedbogen<\/em> samtidigt.<\/li>",
-        "<p>Brug denne tabelgrænseflade til at opspore uregelmæssigheder i regnskabet, kontrollere, om posteringerne stemmer overens, og sikre, at hele din dobbeltbogføringsstak gennemgår en gennemsigtig revision.<\/p>"
-    ],
-    "vat_report.php": [
-        "<h3>Hjælp til momsrapporten<\/h3>",
-        "<p>Dette analysepanel sammenfatter og beregner dine skatteforpligtelser og refusionsberettigede beløb på baggrund af regnskabsbevægelserne i det aktuelle regnskabsår.<\/p>",
-        "<ul><li><strong>Årsfiltrering:<\/strong> Sætningen behandler værdierne dynamisk på baggrund af den årvariabel, der er angivet i URL-forespørgselsstrengen. Hvis der ikke udtrykkeligt er angivet et år, udvælger beregningsmodulet data fra det aktuelle kalenderår.<\/li><\/ul>",
-        "<li><strong>Kontostyret kortlægning:<\/strong> I stedet for at basere sig på faste transaktionsmærker matcher forespørgslen værdier ved at læse parametrene <em>»vat_code«<\/em> og <em>»vat_rate«<\/em>, som er integreret direkte i din kontoplanopsætning.<\/li>",
-        "<li><strong>Nettobeløbsgrundlag:<\/strong> Systemet sammenlægger den samlede nettoomsætning eller de samlede råomkostninger på tværs af identiske skattegrupper, så der opnås et udgangspunkt for beregningen inden vurderingen.<\/li>",
-        "<li><strong>Modul til beregning af moms:<\/strong> Skattebeløbet beregnes linje for linje ved hjælp af standardregnemæssige procentparametre ($Nettobeløb \\times \\frac{Momssats}{100}$). Denne værdi er en hjælp, når du gennemgår data til officielle rapporter til skattemyndighederne eller udarbejder offentlige balancer.<\/li>",
-        "<p>Kontroller, at dine underliggende konti er tildelt de korrekte koder, hvis tallene ikke stemmer overens. Brug denne dataoversigt til at udføre dine løbende opgaver i forbindelse med selskabsskatteindberetningen korrekt.<\/p>"
-    ],
-    "report_income.php": [
-        "<h3>Hjælp til resultatopgørelse og moms<\/h3>",
-        "<p>Dette analysepanel samler dine økonomiske resultatindikatorer i to driftsoversigter: det officielle strukturelle layout for resultatmålinger og en overskuelig balance, der viser din netto skattestatus.<\/p>",
-        "<ul><li><strong>Beregning af omsætning:<\/strong> Motoren henter kun linjeposter, der er knyttet til kundedokumenter, der er markeret som <em>betalte<\/em>. Ubetalte beløb eller udkast til saldoer udelades fuldstændigt fra disse omsætningsberegninger for at sikre gennemsigtigheden i databasen.<\/li><\/ul>",
-        "<li><strong>Indeksering af driftsomkostninger:<\/strong> Omkostningerne grupperes ved at sammenholde lokale kontoposteringer med standardreferencenumre fra hovedregistret (<em>std_ref_id<\/em>). Dette sikrer, at dine lokale omkostningssteder problemfrit indgår i strukturerede koncernskattegrupper.<\/li>",
-        "<li><strong>Årlige resultatmålinger:<\/strong> Din vurdering af nettomarginen vises nederst i layoutskemaet ($Omsætning - Samlede omkostninger$). Hvis resultatet viser et positivt økonomisk afkast, vises teksten automatisk i <span style='color:#2ecc71; font-weight:bold;'>grønt<\/span>; nettotab vises i <span style='color:#ff7675; font-weight:bold;'>rødt<\/span>.<\/li>",
-        "<li><strong>Detaljeret oversigt over momsafregninger:<\/strong> <ul><li><em>Skyldig moms på salg:<\/em> Samlede skatteforpligtelser, der opgøres dynamisk på baggrund af de endelige fakturalinjetotaler.<\/li><li><em>Fradragsberettiget indgående moms:<\/em> Samlet fradragsberettiget indgående moms hentet fra logfiler over gennemførte transaktioner.<\/li><li><em>Nettosaldo:<\/em> Trækker sporingspuljer fra for at fastslå, om du har en aktiv skatteforpligtelse, der skal afregnes (<span style='color:#e67e22; font-weight:bold;'>moms, der skal betales<\/span>), eller en kredit, der skal tilbagebetales (<span style='color:#27ae60; font-weight:bold;'>moms, der skal modtages<\/span>).<\/li><\/ul><\/li>",
-        "<p>Brug disse tal til ledelsesrapportering, regelmæssig revision og til at sammenstille tal inden indsendelse af obligatoriske skatteoplysninger til de administrative myndigheder.<\/p>"
-    ],
-    "chart_of_accounts.php": [
-        "<h3>Hjælp til kontoplanen<\/h3>",
-        "<p>Dette hovedregister styrer din organisations finansielle struktur og fastlægger, hvordan poster i dobbeltbogholderiet klassificeres, spores og sammenfattes på tværs af rapporteringsmodulerne.<\/p>",
-        "<ul><li><strong>Kortlægning af kontotyper:<\/strong> Hver driftspost er knyttet til en af fire grundlæggende finansielle grupper: <ul><li><em>Indtægter:<\/em> Omsætning og indtægtsstrømme.<\/li><li><em>Udgifter:<\/em> Driftsudgifter og generelle omkostninger.<\/li><li><em>Aktiver:<\/em> Virksomhedens ressourcer, likvide midler og tilgodehavender.<\/li><li><em>Passiver:<\/em> Virksomhedens forpligtelser, gæld og egenkapital.<\/li><\/ul><\/li><\/ul>",
-        "<li><strong>Skatteoplysninger (momsnummer og -sats):<\/strong> Viser aktive skatteparametre, der hentes direkte fra dit tilknyttede register <em>over momsnumre<\/em>. Hvis en konto er undtaget fra beregningerne, vises den som <em>»Ingen«<\/em> med en tom, vandret linje i oversigten (-).<\/li>",
-        "<li><strong>Standard Reference Alignment (Std Ref):<\/strong> Tilpasser dine brugerdefinerede lokale finansielle konfigurationer direkte til de overordnede layoutdefinitioner (<em>std_accounts<\/em>). Denne strukturerede tilpasning sikrer, at de lokaliserede forretningskonti præcist overføres til ensartede koncernregnskabs- og skatteoversigter.<\/li>",
-        "<li><strong>Dynamiske værktøjsindstillinger:<\/strong> Klik på knappen <strong>»Tilføj ny konto«<\/strong> (➕) for at tilføje en ny finansiel node. Brug de lokaliserede handlingsrække-udløsere til at redigere kerneparametre eller slette overflødige konti sikkert fra databasestrukturen.<\/li>",
-        "<p>Vær forsigtig, når du ændrer dine konti. Strukturelle ændringer påvirker dynamisk den måde, hvorpå transaktionsposteringerne udfylder saldoerne i din hovedbog og de historiske regnskabsoplysninger.<\/p>"
-    ],
-    "company_settings.php": [
-        "<h3>Automatisk krypteret off-site backup<\/h3>",
-        "<p>Hver 21. dag — når noget er ændret siden sidste backup — bygger TinyCash en fuld backup, krypterer den og sender den til den adresse, du angiver her. Den beskytter dig, når selve serveren går tabt (brand, tyveri, nedbrud).<\/p>",
-        "<h3>Master-kodeordet<\/h3>",
-        "<p>Krypteringens master-kodeord ligger i <code>inc\/env.ini<\/code> under <code>[backup_config]<\/code>. Det <strong>gemmes aldrig i databasen og sendes aldrig i backup-mailen<\/strong> — kun du kender det. Gem det i en password manager eller et pengeskab: mister du det, kan backuppene ikke dekrypteres.<\/p>",
-        "<h3>Gendannelse af en krypteret backup<\/h3>",
-        "<p>Dekrypter på en hvilken som helst maskine med standard-OpenSSL, og pak derefter ZIP-filen ud:<\/p>",
-        "<pre>openssl enc -d -aes-256-cbc -pbkdf2 -md sha256 -in tinycash_backup.zip.enc -out backup.zip -pass pass:DIT_MASTER_KODEORD<\/pre>",
-        "<p>Angiv det master-kodeord, du selv har gemt — det er ikke i mailen.<\/p>",
-        "<h3>Hjælp til virksomhedsoplysninger<\/h3>",
-        "<p>Dette kontrolcenter administrerer din virksomheds identitetsprofil, officielle systemparametre, bankinfrastruktur og standarder for automatiseret kommunikation.<\/p>",
-        "<ul><li><strong>Virksomhedsidentitet og registreringsfelter:<\/strong> Definer officielle oplysninger såsom din juridiske enheds betegnelse, kontaktpersoner og identifikationsoplysninger (f.eks. dine lokale <em>CVR<\/em>-nummerverifikationsdata). Disse oplysninger udfyldes dynamisk i udgående transaktionsdata.<\/li><\/ul>",
-        "<li><strong>Opbygning af bankinfrastruktur:<\/strong> Registrer nøjagtigt dine strukturelle bankregistreringer og sekvenser for opbevaringskonti. Disse datasegmenter integreres direkte i fakturaopbygningen for at sikre en problemfri håndtering af indgående automatiske betalingsafstemningsprocesser.<\/li>",
-        "<li><strong>Standardkommunikationsprofil:<\/strong> Konfigurer de standardtekster, der skal anvendes i hele systemet ved transaktionsmeddelelser. Denne blok fungerer som den forudindlæste standardtekst, der anvendes, når der sendes fakturaer til kunderne.<\/li>",
-        "<li><strong>Datalagringsmekanismer (UPSERT):<\/strong> Når dette layout indsendes, udløses et aktivt sporingsscript, der gennemløber parametrene ved hjælp af en standard nøgle-værdi-opsætning. Det anvender en intern databaserutine til sikkert at udføre et »indsæt-eller-opdater«-layout (<em>ON DUPLICATE KEY UPDATE<\/em>) på dit centrale indstillingsindeks.<\/li>",
-        "<li><strong>Eksport af SAF-T-data i henhold til lovgivningen:<\/strong> Klik på knappen <strong>»Eksporter SAF-T«<\/strong> () for at udtrække alle dine historiske regnskabsoplysninger i et standardiseret XML-format (Standard Audit File for Tax). Denne funktion sikrer, at filerne er klar til eksterne regnskabsrevisioner eller obligatoriske overensstemmelseskontroller.<\/li>",
-        "<p>Gennemgå alle opdaterede poster omhyggeligt, inden du klikker på <strong>»Gem virksomhedsindstillinger<\/strong>«. Hvis du ændrer kerneegenskaberne dynamisk, overskrives de oplysninger, der vises både på de aktive kundeportaler og i de systemomfattende rapporteringslogfiler.<\/p>"
-    ],
-    "about.php": [
-        "<h3>Om TinyCash – Hjælp og sikkerhedskontrol – Hjælp<\/h3>",
-        "<p>Dette informationsoversigt holder styr på metadatamålinger, baselinjer for aktiv arkitekturs kørselstid samt adgangskontrol ved infrastrukturgrænser på tværs af applikationsøkosystemet.<\/p>",
-        "<ul><li><strong>Parametre for kerneversion:<\/strong> Panelet henter disse dynamisk fra systemkonfigurationsdefinitionerne og registrerer den aktuelle <em>APP_VERSION<\/em>-streng sammen med tidsstemplet for den seneste strukturelle udgivelse (<em>APP_DATE<\/em>).<\/li><\/ul>",
-        "<li><strong>Miljø-kørselstidstelemetri:<\/strong> Præsentationspanelet samler direkte konfigurationsmetadatadefinitioner fra kerneindstillingsmatricer og viser aktive motorversioner (<em>APP_VERSION<\/em>), valg af lokaliseringssprog og dynamiske motorstatistikker (<em>phpversion<\/em>) overskueligt i det aktive visningsvindue.<\/li>",
-        "<li><strong>Automatiske kontroller af directory-interception:<\/strong> Sideskriptet opretter en instans af et sikkerhedskontrolmodul (<em>check_security_lock<\/em>) for at foretage en søgning efter målet for en lokal netværksanmodning blandt beskyttede afhængighedsskripter (<em>db_connect.inc.php<\/em>). Denne diagnostiske løkke gennemgår den returnerede HTTP-headerpakke for at kontrollere, om der er serverundtagelser.<\/li>",
-        "<li><strong>Verifikation af adgangsbegrænsninger (status 403\/404):<\/strong> Hvis reglerne for beskyttelse af adgangsveje (<em>.htaccess<\/em>) fungerer, blokeres den pågældende anmodning af servercontaineren, hvilket resulterer i en undtagelse om fuldstændig adgang nægtet eller manglende ressource. Modulet afkoder denne undtagelsestilstand for at bekræfte, at adgangsbegrænsningerne for mappen er aktive.<\/li>",
-        "<li><strong>Advarsler om eksponeringsundtagelser:<\/strong> Når aflytningssløjfen opfanger et gyldigt standardrespons i stedet for en barriereundtagelse, fjerner motoren sikkerhedsstatusindikatoren og viser en lokaliseret advarsel om eksponering, der informerer administratorer om, at ressourcer i kernekodebasen i øjeblikket er ubeskyttede.<\/li>",
-        "<li><strong>Specifikationer for økosystemmål:<\/strong> Systemregistreringerne sporer miljøprofiler som regnskabskontekster med én valuta, der er udformet med henblik på at bevare hastigheden i den strukturelle sporing, samtidig med at den lokale isolering af strukturelle data forbliver under fuld administratorstyring.<\/li>",
-        "<p>Hvis der udløses en advarsel om en undtagelse vedrørende eksponering på produktionsknudepunkter, skal du straks gennemgå dine overstyringer af serverregler for at forhindre, at tredjeparter kan udarbejde profiler af kritiske konfigurationsfiler.<\/p>"
-    ],
-    "backup.php": [
-        "<h3>Backup — to formål<\/h3>",
-        "<p>Backup har to forskellige formål. Hold dem adskilt, så du altid ved hvad der beskytter hvad:<\/p>",
-        "<ul>",
-        "<li><strong>Program-backup<\/strong> — tages af den systemansvarlige før og efter en programopdatering (nye PHP-filer eller ændret databasestruktur).<\/li>",
-        "<li><strong>Regnskabs-backup<\/strong> — tages når bogholderen har været flittig. Husk: du kan miste alt, hvad du har lavet siden den nyeste backup.<\/li>",
-        "<\/ul>",
-        "<h3>Hvor dine backups havner<\/h3>",
-        "<p>Når en backup dannes, gemmes den på webserveren i <code>\/backups\/<\/code>. Det er ikke et sikkert sted. Download den til din PC, og kopiér den videre — til en ekstern USB-disk eller en cloud-udbyder — og bevar den i mindst 5 år.<\/p>",
-        "<h3>Kun den aktive database sikkerhedskopieres<\/h3>",
-        "<p>En backup dækker kun den databasemotor, du er logget ind på. Bruger du både MySQL og SQLite, skal du logge ud og ind igen på den anden motor og gentage backuppen.<\/p>",
-        "<h3>Test dine backups<\/h3>",
-        "<p>En backup er kun noget værd, hvis den faktisk kan gendannes. Prøv at indlæse den i en frisk installation på en anden vært — en god øvelse inden brand, tyveri, nedbrud eller værre.<\/p>",
-        "<h3>Dokumentation: Overholdelse af regler uden for virksomheden<\/h3>",
-        "<p>I henhold til regnskabsbestemmelserne skal økonomiske data og digitale kvitteringer opbevares sikkert uden for den primære serverhosts miljø. Udfør denne manuelle kontrol mindst én gang om måneden:<\/p>",
-        "<ol style=\"padding-left: 20px; margin-bottom: 15px;\"><\/ol>",
-        "<li>Download den komplette ZIP-arkivfil til din lokale computer via brugergrænsefladen ovenfor.<\/li>",
-        "<li>Upload ZIP-filen til virksomhedens eksterne lagringsplads (f.eks. OneDrive, Jottacloud eller pCloud).<\/li>",
-        "",
-        "<p style='font-weight: bold; color: #1e3a8a; margin-bottom: 5px;'>Sådan verificerer du filen i din cloud (OneDrive \/ Jottacloud):<\/p>",
-        "<ul style=\"padding-left: 20px;\"><\/ul>",
-        "<li><strong>Størrelsesafstemning:<\/strong> Åbn brugergrænsefladen til dit cloud-lager, og find den uploadede fil. Sørg for, at den byte-størrelse, der er angivet i OneDrive\/Jottacloud, stemmer overens med den størrelse, som systemet har registreret ovenfor.<\/li>",
-        "<li><strong>Validering af overførsel:<\/strong> Hvis din cloududbyder eller dit operativsystems værktøjer viser filegenskaber, skal du kontrollere, at cloud-kontrolsummen stemmer overens med det unikke <strong>lokale MD5<\/strong>-token, der er angivet ovenfor. Dette garanterer matematisk, at der ikke sker noget datatab under overførslen.<\/li>",
-        "<li><strong>Statuskontrol:<\/strong> Kontroller, at synkroniseringen af den eksterne fil er afsluttet, og at der vises et permanent bekræftelsesmærke for skyen.<\/li>",
-        ""
-    ],
-    "error_log.php": [
-        "<h3>Dokumentation: Systemlogfiler og HTTP-statuskoder<\/h3>",
-        "<p>Når systemet udviser uventet adfærd, låste brugergrænsefladeelementer eller manglende layoutknapper, registreres årsagen i serverlogfilerne. Fejlfinding kræver sammenligning af disse tre forskellige miljøer:<\/p>",
-        "<ol style=\"padding-left: 20px; margin-bottom: 15px;\"><\/ol>",
-        "<li><strong>Systemfejllog (PHP-fejllog):<\/strong> Registrerer kritiske fejl på backend-serveren (f.eks. <em>»Fatal Error: Call to undefined function lang()<\/em>«). Hvis en side holder op med at blive vist midt i udførelsen, går ned eller viser en tom hvid skærm, logges det nøjagtige filnavn og PHP-linjenummeret her. <span style='color: #2b6cb0; font-weight: bold;'>Sådan vises loggen: Du ser denne log direkte på denne side (error_log.php).<\/span><\/li>",
-        "<li><strong>Apache-adgangslog:<\/strong> Registrerer alle indgående HTTP-netværksanmodninger i realtid. Brug denne log til at kontrollere, om browserens asynkrone AJAX-anmodninger når frem til serveren, og til at se den nøjagtige svarkode, der returneres. <span style='color: #2b6cb0; font-weight: bold;'>Sådan vises den: Du får adgang via dit webhosting-kontrolpanel (f.eks. cPanel\/Plesk under &#x27;Logs&#x27;) eller via FTP\/SSH på \/var\/log\/apache2\/access.log.<\/span><\/li>",
-        "<li><strong>Browserkonsol (F12):<\/strong> Registrerer fejl på klientsiden, der opstår direkte i brugerens browser (f.eks. JavaScript <em>ReferenceError: isNotepadMaximized er ikke defineret<\/em>). Hvis et modalvindue ikke kan trækkes, eller et klik på en knap mislykkes uden at siden genindlæses, skal du tjekke denne log. <span style='color: #2b6cb0; font-weight: bold;'>Sådan vises den: Højreklik et vilkårligt sted på denne webside, vælg &#x27;Inspect&#x27; og klik på fanen &#x27;Console&#x27;.<\/span><\/li>",
-        "",
-        "<p style='font-weight: bold; color: #1e3a8a; margin-bottom: 5px;'>Sådan fortolkes statuskoder i fanen »Adgangslog \/ Netværk«:<\/p>",
-        "<ul style=\"padding-left: 20px;\"><\/ul>",
-        "<li><strong>Status 200 (OK):<\/strong> Anmodningen blev gennemført, og dataene blev udvekslet korrekt (f.eks. når Notepad-scriptet viser »saved«).<\/li>",
-        "<li><strong>Status 403 (Forbudt):<\/strong> Adgang nægtet. Dette skyldes typisk strenge sikkerhedsregler i din .htaccess-fil, eller at din PHP-session (auth.inc.php) har afvist anmodningen på grund af en timeout.<\/li>",
-        "<li><strong>Status 404 (Ikke fundet):<\/strong> Filstien er forkert. Dette sker, hvis et script forsøger at indlæse en inkluderingsfil fra et mappe, der ikke findes, eller ved hjælp af et forkert filnavn.<\/li>",
-        "<li><strong>Status 500\/503 (intern fejl):<\/strong> Serveren gik ned under udførelsen af scriptet. Dette indikerer altid en alvorlig fejl i PHP-koden, og den nøjagtige fejlbeskrivelse skal hentes fra serverens PHP-fejllog.<\/li>",
-        "",
-        "<p style='margin-top: 10px; font-style: italic; color: #4b5563;'>Bemærk: Når du ændrer kildefiler, skal du altid tvinge en fuldstændig genindlæsning af browseren (<strong>Ctrl + F5<\/strong> eller <strong>Cmd + Shift + R<\/strong>) for at rydde gammel, cachelagret JavaScript-logik fra browserens lokale hukommelse.<\/p>"
-    ],
-    "login.php": [
-        "<h3>Hjælp til godkendelse og adgangskontrol<\/h3>",
-        "<p>Denne indgangsport fungerer som den primære firewall for applikationsøkosystemet og varetager validering af brugersessioner, defensive kørselskontroller samt løbende telemetrisporing.<\/p>",
-        "<ul><li><strong>Kontrol ved første installation (Setup Intercept):<\/strong> Ved initialiseringen udfører kerneproceduren en automatisk forespørgsel for at vurdere antallet af rækker i det centrale brugerdatarray. Hvis søgningen finder et resultat på nul (0) og registrerer tilstedeværelsen af systeminstallationsblokken (<em>inc\/user_create_admin.php<\/em>), omdirigerer systemet automatisk trafikken til standardopsætningslayoutet.<\/li><\/ul>",
-        "<li><strong>Defensive parametriske forespørgsler:<\/strong> Kontrol af indgående legitimationsoplysninger forhindrer sårbarheder over for rå injektion ved eksplicit at lede verifikationsparametre gennem standardiserede, forberedte databaseskabeloner (<em>mysqli_prepare<\/em>). Brugernavne valideres sikkert via parametriserede strenge, inden den interne logik udfører hash-beregninger.<\/li>",
-        "<li><strong>Kryptografisk hash-integritet:<\/strong> Ubehandlede adgangskodeindtastninger fra klienter gemmes eller sammenlignes aldrig i klartekst. I stedet gennemgår de en sikker, envejs kryptografisk verifikationsproces (<em>password_verify<\/em>), hvor de sammenlignes direkte med de lagrede hash-strenge i databasen.<\/li>",
-        "<li><strong>Revisionslogningsmatrix (telemetri):<\/strong> Hver unik godkendelsesinteraktion logger permanente metadata i det centrale <em>login_log<\/em>-indeks. Routing-motoren registrerer dynamisk klientens netværksvektor (<em>REMOTE_ADDR<\/em>), miljømæssige software-fingeraftryk (<em>HTTP_USER_AGENT<\/em>) og statusflagget for resultatet (<em>Success<\/em> eller <em>Failed<\/em>) for at forenkle sikkerhedsrevisioner.<\/li>",
-        "<li><strong>Optimering af sessionssikkerhed:<\/strong> Når der er fundet et match mellem legitimationsoplysningerne, udløser godkendelsesmodulet en procedure til øjeblikkelig genoprettelse af id’et (<em>session_regenerate_id(true)<\/em>). Denne cyklus ugyldiggør straks den gamle sessionsprofilkontekst og neutraliserer dermed session-fixation-angreb, inden de globale tilladelsesvariabler udfyldes.<\/li>",
-        "<li><strong>Dynamiske grænsefladeskripter:<\/strong> Et DOM-skript, der kører efter rendering, overvåger brugerens feltkonfigurationer (<em>#pwd_inside<\/em>). Det indsætter dynamisk et synlighedsikon (👁️) med absolut positionering i feltets overordnede ramme, hvilket skaber en sikker mekanisme på klientsiden til at skifte indtastningsmasker smidigt mellem skjulte adgangskoder og læsbare streng med almindelig tekst.<\/li>",
-        "<p>Vær omhyggelig med administrationen af adgangsoplysninger. Sørg for, at reserveinstallationsfiler automatisk slettes eller låses på produktionssystemer efter implementering for at forhindre uautoriseret adgang udefra.<\/p>"
-    ],
-    "expense_edit.php": [
-        "<h3>Hjælp til udgiftsregistrering<\/h3>",
-        "<p>På denne skærm kan du registrere eller redigere en driftsudgift. Du kan bruge dokumentarkivet med delt skærm til venstre til at se og vedhæfte filer, mens du skriver.<\/p>",
-        "<ul><li><strong>Bilagsnummer (Voucher No.):<\/strong> Indtast faktura- eller kvitteringsnummeret (bilagsnummer). Dette knytter dit fysiske eller digitale dokumentarkiv sammen med regnskabspositionen. Hvis feltet ikke udfyldes, forbliver det tomt.<\/li><\/ul>",
-        "<li><strong>Arbejdsgang i Document Depot:<\/strong> Klik på en vilkårlig fil i venstre kolonne for at åbne et interaktivt forhåndsvisningsvindue, hvor du kan rulle. Klik på knappen <em>»Tilknyt<\/em>« for at knytte det pågældende dokument til denne udgiftspost.<\/li>",
-        "<li><strong>Traditionel upload:<\/strong> Hvis filen ikke findes i dit arkiv, kan du stadig bruge den traditionelle filvælger nederst i formularen til at uploade et dokument direkte fra din computer.<\/li>",
-        "<p>Når du klikker på »Gem«, kopierer systemet automatisk filen til dit permanente upload-arkiv, rydder op i kildedepotmappen og opretter de afstemningsposteringer.<\/p>",
-        "<h3>Hjælp til indlæsning af dokumenter og arkiver<\/h3>",
-        "<p>Denne brugergrænseflade tilbyder et integreret arbejdsmiljø til behandling af forretningsudgifter, der omfatter et synkroniseret filarkiv med flere datakilder, en AI-drevet dokumentudtrækning og automatisering af transaktioner i hovedbogen.<\/p>",
-        "<ul><li><strong>Ruting af filer fra flere kilder til depotet:<\/strong> Asset-manageren opdeler indgående kildedokumenter i forskellige konceptuelle kanaler, der administreres af <em>getDepotFiles()<\/em>. Infrastrukturen behandler aktiver fra baggrundspipelines til e-mailsynkronisering, fysiske multifunktionshardwareenheder, mobiloptimerede fotoindlæsninger og lokale downloadregistre.<\/li><\/ul>",
-        "<li><strong>Integration af automatiske scannere:<\/strong> Fysiske kontordokumenter indlæses ved at konfigurere fysiske netværksscannere til at overføre digitale filer via sikre FTP- eller SMB-protokoller direkte til servermappen (<em>depot\/scanner\/<\/em>), hvorved de straks bliver tilgængelige i arbejdsområdets brugergrænseflade.<\/li>",
-        "<li><strong>Mobil- og fotooptimering:<\/strong> Medarbejdere i felten kan indscanne fysiske kvitteringer direkte via en mobilbrowser. Billeder af dokumenter kan behandles direkte på enheden ved hjælp af indscanningsskabeloner med øjeblikkelig upload eller synkroniseres sekventielt via tilknyttede cloud-daemons, der kører i baggrunden.<\/li>",
-        "<li><strong>Download »Lifecycle Automation«:<\/strong> Digitale leverandørkvitteringer kan håndteres ved at tilpasse lokale klientbrowserstrukturer, så de gemmer filerne i dedikerede faktureringsmapper. Automatiserede, sikre scripts til filoverførsel i baggrunden overvåger disse mapper og udfører øjeblikkelige overførsler direkte til den centrale behandlingsmotor.<\/li>",
-        "<li><strong>Optisk AI-udtrækningmatrix:<\/strong> Når flaget for automatisk scanning er aktivt, udløser de uploadede filer asynkrone dataoverførsler til strukturerede dokumentmodeller (OpenAI API-integration). Rutinen udtrækker specifikke transaktionsmetadata og udfylder automatisk de primære felter i formularen med leverandøroplysninger, datoer og valutatotaler.<\/li>",
-        "<li><strong>Integritet i dobbeltbogholderiet:<\/strong> Når en udgift gemmes, udløses en transaktionsforespørgsel, der kortlægger parametre på tværs af både <em>udgifts-<\/em> og <em>journ<\/em>altabellerne samtidigt. Systemet udleder den kronologiske rækkefølge ud fra historiske poster for at generere unikke sporings-ID’er for bilagene, hvilket sikrer fuldstændig datakonsistens på tværs af alle revisionsspor.<\/li>",
-        "<p>Sørg for, at skrivetilladelserne i filsystemet er strengt begrænset (chmod 775\/755), så verificerede eksterne scanningsprocesser og cloud-indlæsningsagenter kan overføre data uden at forstyrre systemdriften.<\/p>"
-    ],
-    "user_list.php": [
-        "<h3>Hjælp til brugeradministration og adgangskontrol<\/h3>",
-        "<p>Dette arbejdsområde giver administratorer mulighed for at kontrollere, ændre og administrere systemprofiler og adgangsrettigheder på tværs af applikationsøkosystemet.<\/p>",
-        "<ul><li><strong>Gateway-beskyttelse forbeholdt administratorer:<\/strong> Kørselsmotoren foretager en lokal sikkerhedsvurdering (<em>_SESSION[&#x27;user_role&#x27;]<\/em>) inden elementerne vises. Hvis den aktive profil ikke har administratorrettigheder, standses udførelsen straks via en undtagelse vedrørende terminaladgang.<\/li><\/ul>",
-        "<li><strong>Dynamisk rolleidentifikation:<\/strong> Brugerroller vurderes direkte ud fra databasearrayer. Profiler, der identificeres som <em>administratorer<\/em>, får et særligt, tydeligt badge-layout, mens sekundære profiler mærkes som standardoperatører.<\/li>",
-        "<li><strong>Logiske forsvarsmekanismer mod utilsigtet målretning:<\/strong> Den aktive brugerprofil er beskyttet af logiske betingelser. Administratorer kan ikke slette eller nedgradere deres egne aktive konti, hvilket forhindrer, at de ved et uheld helt mister deres administratorrettigheder.<\/li>",
-        "<p>Gennemgå brugertabellerne systematisk for at sikre, at der føres nøjagtige logfiler over ansvarsfordelingen i hele dit lokale driftsnetværk.<\/p>"
-    ],
-    "backup_restore.php": [
-        "<h3>Gendannelse fra en backup<\/h3>",
-        "<p>Gendan-formularen på denne side håndterer kun <strong>data-backups<\/strong>: den overskriver databasen og gendanner dine indstillinger og uploadede bilag fra en TinyCash-ZIP lavet med \"Fuld data-arkiv\" eller \"System-konfiguration\".<\/p>",
-        "<p><strong>Gendannelse overskriver alle nuværende data og kan ikke fortrydes.<\/strong> Sørg for at have en frisk backup af den nuværende tilstand, før du fortsætter.<\/p>",
-        "<h3>Backuppen skal matche databasemotoren<\/h3>",
-        "<p>En backup lavet på SQLite kan ikke gendannes i MySQL eller omvendt — SQL-dialekterne er ikke kompatible. Er motorerne forskellige, afbrydes gendannelsen, før noget ændres. Skift den aktive motor, så den matcher backuppen, og prøv igen.<\/p>",
-        "<h3>Gendannelse af en program-backup (manuelt)<\/h3>",
-        "<p>En program-backup (programkoden) — og <code>program\/<\/code>-mappen inde i en samlet 21-dages auto-backup — gendannes manuelt, fordi det er usikkert at overskrive live PHP-filer gennem browseren:<\/p>",
-        "<ol>",
-        "<li>Download og pak ZIP-filen ud på din egen computer.<\/li>",
-        "<li>Kopiér programfilerne over projektmappen på serveren (via SFTP eller værtens filhåndtering), så den gamle kode erstattes.<\/li>",
-        "<li><strong>Overskriv ikke <code>inc\/env.ini<\/code><\/strong> — den er bevidst udeladt af backuppen. Behold serverens egen env.ini, så dine database- og mail-oplysninger bevares.<\/li>",
-        "<li>Er databasestrukturen ændret, så importér <code>program\/schema.sql<\/code> — men kun i en tom eller ny database, da den indeholder struktur uden dine regnskabsdata.<\/li>",
-        "<li>Kopiér aldrig programfiler ind i dine live data-mapper (<code>uploads\/<\/code>, <code>data\/<\/code>, <code>backups\/<\/code>); de er ikke en del af en program-backup.<\/li>",
-        "<\/ol>",
-        "<p>Tip: test en program-tilbagerulning på en separat vært først, præcis som du ville teste enhver backup.<\/p>"
-    ],
-    "program_backup.php": [
-        "<h3>Program-backup<\/h3>",
-        "<p>Tag denne før <strong>og<\/strong> efter en programopdatering — når PHP-filer eller databasestrukturen ændres. Den arkiverer programkoden (PHP- og konfigurationsfiler) plus databasens <em>struktur<\/em>, så du kan rulle kode og skema tilbage, hvis en opdatering går galt.<\/p>",
-        "<h3>Hvad den bevidst udelader<\/h3>",
-        "<p>Af hensyn til din sikkerhed indeholder arkivet aldrig:<\/p>",
-        "<ul>",
-        "<li><code>inc\/env.ini<\/code> — database-, mail- og API-hemmeligheder.<\/li>",
-        "<li>Dine regnskabsdata — <code>uploads\/<\/code>, databasefilen og <code>storage\/<\/code>.<\/li>",
-        "<li>Tidligere backups.<\/li>",
-        "<\/ul>",
-        "<p>Brug et <strong>Fuld data-arkiv<\/strong> til regnskabsdataene — de to backups supplerer hinanden.<\/p>",
-        "<h3>Automatisk samlet backup<\/h3>",
-        "<p>Når den automatiske 21-dages off-site backup kører, medtages denne program-backup automatisk under en <code>program\/<\/code>-mappe, så den planlagte backup er ét samlet arkiv af både dine data og dit program.<\/p>"
-    ]
+  "index.php": [
+    "<h3>Hjælp til oversigt over kontrolpanelet</h3>",
+    "<p>Velkommen til dit hovedkontrolpanel. Denne side opsummerer dine vigtigste nøgletal og viser to interaktive grafer, opbygget af aktuelle data fra dine fakturaer, udgifter og banktransaktioner.</p>",
+    "<ul><li><strong>Samlet Salg:</strong> Det samlede beløb fra alle bogførte fakturaer (kladder og annullerede fakturaer tælles ikke med - en kladde er endnu ikke et reelt salg).</li><li><strong>Samlede Udgifter:</strong> Det samlede beløb fra alle udgifter, der ikke er annulleret.</li><li><strong>Nettoresultat / Saldo:</strong> Samlet Salg minus Samlede Udgifter. Vises med grønt ved overskud og rødt ved underskud.</li></ul>",
+    "<p>Hvis din database endnu ikke har rigtigt salg (under 100 kr. i alt), viser både nøgletalskortene og begge grafer i stedet simuleret demo-data, tydeligt markeret med en informationsboks. Pengestrøms-grafen kan også vise sin egen, separate demo-note, hvis der simpelthen ikke er nogen bogført aktivitet inden for netop den valgte periode, selvom resten af siden viser rigtige tal.</p>",
+    "<p><strong>Saldo-udvikling:</strong> En kurve over din løbende bankbeholdning, opbygget ud fra importerede banktransaktioner. Brug rullemenuen til at skifte periode (1/3/6/12 måneder) - grafen slutter altid i dag.</p>",
+    "<p><strong>Finansiel udvikling (Pengestrøm):</strong> Et søjlediagram over dit faktiske bogførte salg og dine faktiske udgifter, opdelt i rigtige, dato-afgrænsede perioder inden for det valgte interval (3/6/12 måneder) - ikke et skøn.</p>"
+  ],
+  "sales_hub.php": [
+    "<h3>Salgscenter og fakturahåndtering</h3>",
+    "<p>Med dette centrale modul kan du overvåge, filtrere og administrere alle kundefakturaer og salgsdokumenter.</p>",
+    "<ul><li><strong>Fakturaregister:</strong> Viser en liste over alle udstedte fakturaer, som kan søges i, herunder fakturanumre, udstedelsesdatoer, kundenavne og samlede beløb inklusive moms.</li></ul>",
+    "<li><strong>Statusovervågning:</strong> Fakturaer inddeles efter deres livscyklusstatus: <em>Udkast</em> (kan redigeres, endnu ikke sendt), <em>Sendt</em> (åben og afventer betaling) og <em>Betalt</em> (afregnet).</li>",
+    "<li><strong>Praktiske genveje:</strong> Klik på en hvilken som helst fakturarække eller et fakturanummer for at åbne redigeringsvinduet. Brug de primære kontrolelementer til at oprette en helt ny faktura, eksportere data eller udstede en kreditnota for returvarer.</li>",
+    "<p>Brug søgeparametrene ovenfor tabellen til hurtigt at udvælge poster efter bestemte datointervaller, kundenavne eller bestemte betalingsstatus.</p>",
+    "<p><strong>Øvrige statusser:</strong> Fakturaer kan også være <em>Annulleret</em> (void, aldrig opkrævet) eller <em>Krediteret</em> (der er udstedt en kreditnota mod den) - disse vises ikke som filterknapper, men fremgår som statusmærkater på selve fakturaen.</p>",
+    "<p><strong>Delvis betaling:</strong> En \"sendt\" faktura, der har modtaget en delvis betaling (registreret via bankafstemning), viser sit restbeløb som en lille \"Rest:\"-linje under beløbet.</p>"
+  ],
+  "invoice_edit.php": [
+    "<h3>Hjælp til oprettelse og redigering af fakturaer</h3>",
+    "<p>Her kan du oprette eller redigere fakturaer til dine kunder. Følg disse generelle retningslinjer:</p>",
+    "<ul><li>Vælg en kunde fra listen for at oprette en ny faktura.</li></ul>",
+    "<li>Indtast den korrekte fakturadato og forfaldsdatoen.</li>",
+    "<li>Vælg et produkt fra rullemenuen for at indsætte det i en linje.</li>",
+    "<li>Systemet henter automatisk prisen og momssatsen fra databasen.</li>",
+    "<li>Antal og pris kan justeres manuelt på hver enkelt linje.</li>",
+    "<li>Delsummen, moms og den samlede sum beregnes automatisk nederst på siden.</li>",
+    "<li>Interne bemærkninger vil ikke fremgå af kundens udskrevne faktura.</li>",
+    "<li>Husk at klikke på <strong>»Gem faktura«</strong> for at gemme dine ændringer sikkert.</li>",
+    "<p><strong>Fremmed valuta:</strong> Hvis valutamodulet er aktivt, kan du fakturere i en fremmed valuta ved at angive den sammen med en valutakurs - fakturaen vises i den valuta, mens din bogføring stadig omregner og bogfører i DKK.</p>"
+  ],
+  "invoice_view.php": [
+    "<h3>Hjælp til forhåndsvisning og afsendelse af fakturaer</h3>",
+    "<p>Her kan du få et eksempel på det fulde fakturaoplayout, inden du godkender det.</p>",
+    "<ul><li>Klik på<i class='fa-solid fa-pencil-ruler'></i><b>»Designtilstand«</b> for at låse elementerne op og tilpasse deres placering på siden.</li></ul>",
+    "<li>Træk elementerne frit rundt for at justere den visuelle afstand i dit fakturalayout.</li>",
+    "<li>Du kan ændre størrelsen på elementerne ved at trække i deres højre kant, så de passer til din officielle forretningsskabelon.</li>",
+    "<li>Dine ændringer gemmes automatisk i databasen, hver gang du frigiver et element.</li>",
+    "<li>Indtast en brugerdefineret tekst i feltet <b>»E-mail-besked«</b> for at tilpasse din digitale forsendelse.</li>",
+    "<li>Klik på<i class='fa-solid fa-envelope'></i><b>»Send via e-mail«</b> for automatisk at generere en PDF-fil og sende den direkte til kunden via e-mail.</li>",
+    "<li>Brug knappen<i class='fa-solid fa-file-code'></i><b>»OIOUBL XML«</b> til at eksportere en e-faktura, der overholder de danske krav til NemHandel.</li>",
+    "<li>Klik<i class='fa-solid fa-print'></i>på <b>»Udskriv«</b> for at åbne browserdialogen; alle systemknapper skjules automatisk på udskriften.</li>",
+    "<li>Klik<i class='fa-solid fa-door-open'></i>på <b>»Forlad«</b> for sikkert at vende tilbage til salgsportalen, når du er færdig.</li>",
+    "<p><strong>Fakturaer i fremmed valuta:</strong> Hvis fakturaen er oprettet i en fremmed valuta, vises og printes den i den valuta her - din bogføring registrerer stadig det DKK-omregnede beløb bag kulisserne.</p>",
+    "<p><strong>Betalingshistorik:</strong> Hvis der er registreret betalinger via bankafstemning, vises de her sammen med restbeløbet - eller en \"Fuldt betalt\"-bekræftelse, når det fulde beløb er modtaget.</p>"
+  ],
+  "setup_chart.php": [
+    "<h3>Hjælp til opsætning af kontoplan</h3>",
+    "<p>Denne engangs-opsætningsside lader dig vælge og installere den indledende kontoplan-skabelon til en frisk installation.</p>",
+    "<ul><li><strong>Skabelonvalg:</strong> Vælg mellem tre skabeloner: <em>Simpel</em> (freelancere og servicevirksomheder uden lager), <em>Standard</em> (mindre virksomheder med standard moms-, køretøjs- og administrationskonti), og <em>Udvidet</em> (fuld opsætning til selskaber med ansatte, afskrivninger og finansielle aktiver).</li><li><strong>Låst når den er i brug:</strong> Hvis din kontotabel allerede indeholder data, er installationen låst for at beskytte din eksisterende bogføring - du kan ikke overskrive den herfra.</li><li><strong>Live-forhåndsvisning:</strong> Kontolisten opdateres øjeblikkeligt, når du vælger en anden skabelon, så du kan gennemgå den, før du installerer.</li></ul>",
+    "<p>Gennemgå skabelonen omhyggeligt, inden du installerer - når dine konti er i aktiv brug, kræver senere strukturændringer i stedet manuel redigering af de enkelte konti.</p>"
+  ],
+  "customer_edit.php": [
+    "<h3>Hjælp til kundehåndtering</h3>",
+    "<p>På denne side kan du oprette en ny kundeprofil eller opdatere oplysningerne om en eksisterende kunde i din database.</p>",
+    "<ul><li><strong>Nødvendige oplysninger:</strong> <em>Kundens navn</em> skal udfyldes for at gemme profilen. Alle øvrige oplysninger er valgfri, men anbefales for at sikre en korrekt fakturering.</li></ul>",
+    "<li><strong>Virksomhedsoplysninger:</strong> Ved at indtaste <em>CVR</em>-nummeret (virksomhedsregistreringsnummeret) og angive en <em>kontaktperson</em> sikres der et professionelt og korrekt layout, når der udarbejdes regnskabsdokumenter.</li>",
+    "<li><strong>Betalingsbetingelser:</strong> Feltet <em>»Betalingsdage«</em> angiver standardkreditperioden for denne specifikke kunde (forudindstillet til 8 dage). Når der oprettes en ny faktura til denne kunde, tilpasses forfaldsdatoen automatisk ud fra denne værdi.</li>",
+    "<li><strong>Interne bemærkninger:</strong> Feltet <em>»Bemærkninger«</em> er udelukkende beregnet til intern opfølgning og administration. Oplysninger, der indtastes her, vil aldrig fremgå af kundens udskrevne fakturaer.</li>",
+    "<p>Klik på <strong>»Gem ændringer«</strong> for at gemme ændringerne sikkert. Brug knappen <strong>»Tilbage«</strong> for at vende tilbage til Sales Hub uden at ændre nogen data.</p>",
+    "<p><strong>Sletning af en kunde:</strong> En kunde, der er tilknyttet eksisterende fakturaer eller projekter, kan ikke slettes - fjern eller omfordel disse først, hvis du har brug for at slette kundeposten.</p>"
+  ],
+  "bank_import_step1.php": [
+    "<h3>Hjælp til import af kontoudtog</h3>",
+    "<p>Dette modul hjælper dig med at importere finansielle transaktioner fra din bank ved hjælp af en standard CSV-fil, så du undgår at skulle indtaste dem manuelt i hovedbogen.</p>",
+    "<ul><li><strong>Indlæs gemt profil:</strong> Hvis du ofte importerer data fra den samme bank, kan du vælge en tidligere gemt profil fra rullemenuen for straks at gendanne dine brugerdefinerede kolonnemappinger.</li></ul>",
+    "<li><strong>Datavisning og automatisk genkendelse af skilletegn:</strong> Når du uploader din CSV-fil, vises et eksempel på 6 rækker. Systemet genkender automatisk, om din fil bruger semikoloner (;) eller kommaer (,) som skilletegn, og nummererer kolonnerne som <em>Kol. 1, Kol. 2</em> osv.</li>",
+    "<li><strong>Kolonne-tilknytningsfelter:</strong> Angiv de nøjagtige kolonnenumre, der indeholder dine data. Motoren forsøger at udfylde disse felter på forhånd ved at analysere overskrifterne for ord som <em>»Date/Dato«</em>, <em>»Text/Tekst</em>« eller <em>»Amount/Beløb</em>«.</li>",
+    "<li><strong>Spring linjer over:</strong> De fleste bankfiler indeholder en overskriftsrække eller metainformation øverst. Indstil denne værdi til 1 (eller højere) for at forhindre, at importmodulet læser tekstoverskrifter som finansielle poster.</li>",
+    "<li><strong>Gem layoutprofil:</strong> For at undgå at skulle tilknytte kolonner manuelt næste gang skal du indtaste bankens navn under <em>»Gem som profil«</em> og klikke på disketteikonet (💾) for at gemme konfigurationen.</li>",
+    "<p>Kontroller omhyggeligt, at dine konfigurationer stemmer overens med oversigtstabellen, og klik derefter på <strong>»Afslut import«</strong> for at overføre de strukturerede data til behandlingsmiljøet.</p>",
+    "<p><strong>Efter import:</strong> Når importen er fuldført, sendes du videre til Bankafstemning, hvor hver importeret linje matches mod fakturaer eller kategoriseres som en udgift.</p>"
+  ],
+  "reconcile_list.php": [
+    "<h3>Hjælp til bankafstemning</h3>",
+    "<p>I dette arbejdsområde kan du sammenholde de importerede poster fra dit kontoudtog med dine udestående salgsfakturaer eller hurtigt fordele driftsudgifterne på de korrekte hovedbogsposter.</p>",
+    "<ul><li><strong>Grønne beløb (indgående betalinger):</strong> Disse linjer viser kundebetalinger. Systemet gennemgår automatisk dit system for ubetalte fakturaer med samme samlet beløb. Hvis der findes et nøjagtigt match, fremhæves fakturaens rullemenu med <span style='color:#2ecc71; font-weight:bold;'>grønt</span> og er forudvalgt for dig.</li></ul>",
+    "<li><strong>Gebyrberegninger (⚡ Gebyr):</strong> Hvis en betaling stammer fra en betalingsgateway (f.eks. Stripe, MobilePay), skal du klikke på linket <em>⚡ Gebyr</em>. Dette beregner og påfører behandlingsgebyrer dynamisk direkte på din angivne gebyrkonto ved hjælp af dine forudindstillede faste, relative eller blandede beregningsmodeller.</li>",
+    "<li><strong>Røde beløb (udgående betalinger):</strong> Disse omfatter kortudgifter, betalinger til leverandører eller overførsler. Vælg den relevante omkostnings- eller aktivkonto fra rullelisten for at kategorisere posteringen.</li>",
+    "<li><strong>Databasehandlinger ved bekræftelse:</strong> Når du klikker på <strong>OK</strong>, udfører programmet en tre-trins sekvens med dobbeltbogføring: Der tildeles et unikt sporings-id i <em>journal</em>en, de tilsvarende afstemningsposter tilføjes til <em>hovedbogen</em>, og den midlertidige post markeres som endeligt behandlet.</li>",
+    "<li><strong>Sletning af poster:</strong> Klik på papirkurv-ikonet (🗑️) for at slette enkelte midlertidige poster, der ikke hører hjemme i dine regnskabskonti.</li>",
+    "<p>Gennemgå hver enkelt transaktionslinje omhyggeligt. Når du har bekræftet oplysningerne, skal du klikke på den grønne handlingsknap for at behandle dataene sikkert og bogføre dem i dine permanente regnskabsbøger.</p>",
+    "<p><strong>Periodelås:</strong> Transaktioner dateret før din regnskabslåsedato (sat i Firmaindstillinger eller via Afslut regnskabsår) kan ikke afstemmes - dette beskytter allerede lukkede perioder mod ændringer.</p>",
+    "<p><strong>Delvis betaling:</strong> Hvis bankbeløbet er mindre end fakturaens fulde beløb, registreres det som en delbetaling - fakturaen forbliver \"sendt\", og dens restbeløb (vist i dropdownen) mindskes tilsvarende. Når indbetalingerne tilsammen dækker det fulde beløb, markeres fakturaen automatisk \"betalt\".</p>"
+  ],
+  "settings_fees.php": [
+    "<h3>Hjælp til konfiguration af gebyrregler</h3>",
+    "<p>Via dette administrationspanel kan du automatisere beregningen af de behandlingsgebyrer, der opkræves af eksterne betalingsgateways eller forhandlerkonti (f.eks. Stripe, MobilePay eller PayPal).</p>",
+    "<ul><li><strong>Kildenavn:</strong> Angiv den unikke identifikator for transaktionsudbyderen (f.eks. <em>stripe</em>). Denne værdi skal stemme overens med transaktionens importkildekode, når linjerne behandles i afstemningssystemet.</li></ul>",
+    "<li><strong>Beregningsmodeller:</strong> Vælg, hvordan gebyrerne beregnes: <ul><li><em>Fast beløb:</em> Der trækkes et fast beløb pr. transaktionslinje uanset volumen.</li><li><em>Procentdel:</em> Der trækkes en variabel procentdel, der udelukkende er baseret på bruttosummen.</li><li><em>Blandet:</em> Kombinerer både faste komponenter og dynamiske procenter for transaktionskortlægning med høj nøjagtighed.</li></ul></li>",
+    "<li><strong>Felter for satser og faste satser:</strong> Indtast de dynamiske variabler, der bruges i dine beregningsskabeloner. Ved procentuelle satser skal beløbet angives med standarddecimaler (f.eks. skal du indtaste <em>0,014</em> for at tilknytte en 1,4 %-behandlingsskabelon). Ved faste justeringer skal du definere den nøjagtige numeriske prisværdi direkte (f.eks. 1,00).</li>",
+    "<li><strong>Aktiv regelstyring:</strong> Det nederste panel viser en komplet oversigt over de konfigurationer, der er aktive i din nuværende motorinstans. Klik på papirkurvikonet (🗑️) for permanent at slette overflødige regler fra hovedsystemindstillingerne.</li>",
+    "<p>Klik på <strong>»Gem regel«</strong> for straks at gemme ændringerne. Når reglerne er gemt, kan du straks få adgang til dem i dit live-afstemningsarbejdsområde via lynikonet.</p>"
+  ],
+  "inventory_status.php": [
+    "<h3>Hjælp til lagerstatus</h3>",
+    "<p>Dette dashboard giver et komplet overblik i realtid over dit produktkatalog, hvor det viser aktuelle lagerbeholdninger, gældende prisstrukturer og finansielle oversigter.</p>",
+    "<ul><li><strong>SKU og identifikation:</strong> Kolonnen <em>»SKU«</em> (Stock Keeping Unit) viser din unikke identifikator. Hvis der ikke er angivet en brugerdefineret SKU for et produkt, anvendes kernesystemets identifikator (ID) automatisk.</li></ul>",
+    "<li><strong>Kontotilknytning:</strong> Kolonnen <em>»Konto«</em> angiver, hvilken finansiel konto i dit kontoplan der skal modtage omsætningen, når dette produkt føjes til en salgsfaktura. Hvis der står <span style='color:red; font-style:italic;'>»Ingen konto«</span> ved et produkt, bør dette straks opdateres for at sikre præcise dobbeltbogføringsopstillinger.</li>",
+    "<li><strong>Priser og valuta:</strong> Priserne vises automatisk ud fra dine indstillinger for systemkonfigurationen (f.eks. <em>DKK</em> eller <em>EUR</em>) og følger det standardlayout, der er defineret på produktopsætningssiden.</li>",
+    "<li><strong>Datahåndtering og eksport:</strong> Brug knapperne i værktøjslinjen øverst til højre til at arbejde med dit datakatalog: Klik på <strong>»Nyt produkt«</strong> (➕) for at udvide din samling, eller brug <strong>»CSV«</strong> til at generere en ren, uredigeret regnearkeksport af dit aktuelle lagerkatalog.</li>",
+    "<li><strong>Redigering af poster:</strong> Klik på blyantikonet (📝) i handlingskolonnen for at gå direkte til redigeringsvinduet for den pågældende linje.</li>",
+    "<p>Gennemgå regelmæssigt dine produktlinjer for at sikre, at dine aktive lagerbeholdninger stemmer fuldt ud overens med dine arbejdsgange for sporing af fysiske aktiver.</p>"
+  ],
+  "product_edit.php": [
+    "<h3>Hjælp til produkt- og lagerstyring</h3>",
+    "<p>Denne formular lader dig oprette et nyt produkt eller opdatere detaljer, pris og lagergrænser for en eksisterende vare.</p>",
+    "<ul><li><strong>Salgspris &amp; netto-indtastning:</strong> Indtast basissalgsprisen ekskl. moms. Systemet håndterer automatisk både komma (,) og punktum (.) som decimaltegn.</li><li><strong>Kontotilknytning:</strong> Vælg hvilken konto i din fulde kontoplan, salget af dette produkt skal posteres til. Valg af en konto med en momskode tilknyttet bestemmer den momssats, der anvendes på dette produkt.</li><li><strong>Dynamisk bruttopris (pris inkl. moms):</strong> Nederste opsummeringspanel beregner og viser den endelige kundepris i realtid, ud fra din nettopris og den valgte kontos momssats.</li><li><strong>Lagerstyring &amp; advarselsgrænser:</strong> <ul><li><em>På lager:</em> Den nuværende fysiske mængde på lager.</li><li><em>Min. niveau:</em> Den kritiske lagergrænse - når beholdningen når ned til eller under denne, vises automatiske advarselsindikatorer i systemet.</li></ul></li></ul>",
+    "<p>Klik på <strong>Gem ændringer</strong> eller <strong>Opret produkt</strong> for at gemme. Brug <strong>Annuller</strong> for at kassere ændringer og vende tilbage til lageroversigten.</p>"
+  ],
+  "expense_list.php": [
+    "<h3>Hjælp til udgiftsoversigt</h3>",
+    "<p>Dette arbejdsområde fungerer som en central log til sporing og styring af alle driftsudgifter, indkøb hos leverandører og digitale kvitteringer.</p>",
+    "<ul><li><strong>Leverandør- og kategorisporing:</strong> Hver linje angiver den nøjagtige forretningsleverandør sammen med en kort beskrivelse. Kolonnen <em>»Konto«</em> angiver, hvilken specifik drifts- eller anlægskonto fra dit kontoplan der er berørt af posteringen.</li></ul>",
+    "<li><strong>Indikatorer for vedhæftede filer:</strong> Kolonnen <em>»Fil«</em> markerer vedhæftede bilag eller dokumenter ved hjælp af unikke markører: <ul><li><span style='color:#3498db;'>Papirclips (📎):</span> Angiver en standard ekstern filvedhæftning (f.eks. en uploadet kvittering eller et billede).</li><li><span style='color:#e74c3c;'>Faktura-dollar-ikon ():</span> Identificerer internt genererede bilagsfiler, der administreres sikkert inden for dit systemlayout.</li><li><em>Tre bindestreger (---):</em> Angiver, at der ikke er knyttet nogen digital dokumentkopi til denne udgiftslinje.</li></ul></li>",
+    "<li><strong>Udvidelse af loggen:</strong> Klik på knappen <strong>»Tilføj udgift«</strong> (➕) i kontrolfeltet øverst til højre for at skifte direkte til modulet til oprettelse af udgifter.</li>",
+    "<li><strong>Handlingsrække:</strong> Brug handlingsudløserne til at ændre eller slette elementer. Hvis du klikker på papirkurvikonet, vises en sikkerhedsadvarsel, inden der udføres nogen sletningssekvens i datamotoren.</li>",
+    "<p>Hold regelmæssigt øje med dette oversigtsskema for at sikre, at dine dokumenterede bilag er fuldstændige, at kontiene er korrekt tilknyttet, og at udgifterne stemmer overens med dine kontante udbetalinger.</p>"
+  ],
+  "ledger_view.php": [
+    "<h3>Hjælp til hovedbog</h3>",
+    "<p>Denne side viser et fuldt revisionsspor for din bogføring, grupperet efter journalpostering.</p>",
+    "<ul><li><strong>Journalgruppering (#):</strong> Flere linjer med samme journalnummer hører til samme dobbeltpostering.</li><li><strong>Bilagsnummer:</strong> Findes, når en postering er bogført (tildelt automatisk af systemet som en del af den hulfri bilagsnummerering). En bogført postering med et bilagsnummer kan ikke længere redigeres eller slettes direkte.</li><li><strong>Debet vs. kredit:</strong> Debetbeløb vises med <span style='color:green; font-weight:bold;'>grønt</span>, kreditbeløb med <span style='color:red; font-weight:bold;'>rødt</span>.</li><li><strong>Annullering af en postering:</strong> Skraldespandsikonet på en journals hovedrække annullerer den med en rigtig modpostering i stedet for at slette den - både originalen og modposteringen forbliver synlige (vist overstreget), så revisionssporet bevares.</li></ul>",
+    "<p>Brug denne tabel til at spore bogføringsafvigelser, verificere balancering, og holde din dobbeltbogføring fuldt revisionsklar.</p>"
+  ],
+  "vat_report.php": [
+    "<h3>Hjælp til momsindberetning</h3>",
+    "<p>Denne rapport viser den moms, der skal betales eller kan tilbagesøges for en valgt periode, beregnet ud fra din faktiske bogføring - ikke genberegnet fra kontoens sats.</p>",
+    "<ul><li><strong>Periodevalg:</strong> Vælg et år, og indsnævr om nødvendigt til en bestemt måned, kvartal eller halvår - de faktiske afregningsperioder, de fleste danske virksomheder bruger over for SKAT.</li><li><strong>Salgsmoms / Købsmoms:</strong> Disse tal læses direkte fra de beløb, der faktisk er bogført på dine konfigurerede momskonti (sat i Firmaindstillinger) - ikke genberegnet fra en procentsats. Det sikrer, at rapporten altid matcher din reelle bogføring, selv når en enkelt postering har brugt en anden momssats end kontoens standard (fx et momsfrit køb på en ellers 25%-konto).</li><li><strong>Moms at betale:</strong> Salgsmoms minus Købsmoms, afrundet til hele kroner som krævet af SKATs TastSelv Erhverv. Det er dette tal, der skal indberettes.</li><li><strong>Detaljetabel:</strong> Viser nettobeløb grupperet efter momskode, kun til reference og kontrol - det er hovedtallene ovenfor, der gælder.</li></ul>",
+    "<p>Hvis tal ser forkerte ud, så tjek at dine konti har den korrekte momskode tilknyttet i Kontoplanen.</p>"
+  ],
+  "report_income.php": [
+    "<h3>Hjælp til resultatopgørelse og moms</h3>",
+    "<p>Denne rapport samler din officielle resultatopgørelse og en præcis momsopgørelse, beregnet direkte ud fra din bogførte regnskab (journal og hovedbog) - ikke ud fra fakturaer eller udgifter direkte.</p>",
+    "<ul><li><strong>Omsætning:</strong> Summen af alle bogførte posteringer på indtægtskonti (dobbelt bogholderi), uanset fakturastatus - dette afspejler din faktiske bogføring, ikke kun betalte fakturaer.</li><li><strong>Udgifter:</strong> Grupperet efter den enkelte udgiftskonto, de er bogført på, hentet direkte fra din hovedbog.</li><li><strong>Årsresultat:</strong> Omsætning minus Samlede Udgifter, vist med grønt ved overskud og rødt ved underskud.</li><li><strong>Præcis momsopgørelse:</strong> Salgsmoms og fradragsberettiget købsmoms læses fra dine to konfigurerede momskonti (sat i Firmaindstillinger), hvilket giver dig den moms, der skal betales eller kan tilbagesøges.</li></ul>",
+    "<p>Denne rapport summerer hele din bogføring på tværs af alle datoer. For kun et specifikt regnskabsår, brug i stedet <strong>Afslut regnskabsår</strong>.</p>"
+  ],
+  "chart_of_accounts.php": [
+    "<h3>Hjælp til kontoplan</h3>",
+    "<p>Dette hovedregister styrer virksomhedens økonomiske struktur. Hver postering i journalen og hovedbogen er knyttet til en af disse konti.</p>",
+    "<ul><li><strong>Momskode &amp; sats:</strong> Viser momskoden og -satsen, der er arvet fra den tilknyttede momskode. Konti uden momskode viser \"-\".</li><li><strong>Særlige konti:</strong> Konti, der er sat op i Firmaindstillinger til automatisk postering (Bank, Debitor, Salg, Udgående moms, Indgående moms), er markeret med et farvet mærkat. Vær forsigtig med at omdøbe eller slette disse - ret rollen i Firmaindstillinger først, ikke her.</li><li><strong>Tilføj &amp; rediger:</strong> Klik på <strong>Tilføj ny konto</strong> for at oprette en ny konto. Brug handlingsknapperne i rækken til at redigere eller slette en eksisterende.</li></ul>",
+    "<p>Rediger dine konti med omtanke - strukturelle ændringer påvirker, hvordan transaktioner udfylder din journal, hovedbog og økonomiske rapporter.</p>"
+  ],
+  "company_settings.php": [
+    "<h3>Hjælp til firmaindstillinger</h3>",
+    "<p>Denne side styrer din virksomhedsprofil, bankoplysninger, standardkonti og systemdækkende præferencer.</p>",
+    "<ul><li><strong>Virksomhedsoplysninger:</strong> Dit juridiske navn, adresse, CVR-nummer og kontaktinfo - bruges på fakturaer og i årsrapporten.</li><li><strong>Bankoplysninger:</strong> Dit registrerings- og kontonummer, vist på fakturaer, så kunder kan betale dig korrekt.</li><li><strong>Standardkonti:</strong> Vælg hvilke konti i din kontoplan, der automatisk skal modtage bank-, debitor-, salgs- og momsposteringer. Ændring af disse påvirker alle fremtidige automatiske posteringer.</li><li><strong>Datoformat &amp; valuta:</strong> Bestemmer, hvordan datoer vises i hele systemet, og din primære forretningsvaluta. Skift af valuta kan påvirke, hvordan historiske data vises.</li><li><strong>Standard mailtekst:</strong> Den tekst, der bruges som standard, når fakturaer sendes til kunder pr. e-mail, medmindre den overskrives pr. faktura.</li><li><strong>SAF-T-eksport:</strong> Eksporterer hele din bogføring i det standardiserede SAF-T-format til skatterevision.</li></ul>",
+    "<p>Gennemgå dine ændringer omhyggeligt, før du gemmer - disse indstillinger påvirker fakturaer, rapporter og automatiske posteringer i hele systemet.</p>"
+  ],
+  "about.php": [
+    "<h3>Hjælp til Om &amp; systemstatus</h3>",
+    "<p>Denne side viser grundlæggende information om din TinyCash-installation og et hurtigt sundhedstjek af systemet.</p>",
+    "<ul><li><strong>Version &amp; systemstatus:</strong> Viser den kørende app-version, PHP-version, webserver, databasemotor og aktuelt sprog.</li><li><strong>Sikkerhedslås-tjek:</strong> Bekræfter, at kernefiler (som din databasekonfiguration) er korrekt blokeret for direkte webadgang via .htaccess. En rød advarsel her betyder, at din server muligvis ikke håndhæver disse beskyttelser - tjek din serverkonfiguration.</li><li><strong>Seneste fejl (kun admin):</strong> Hvis en fejl er logget inden for de sidste 24 timer, vises et kort resumé her, med den fulde besked tilgængelig ved museover - nyttigt til hurtigt at opdage problemer uden at grave i logfiler.</li></ul>",
+    "<p>Hvis sikkerhedstjekket viser en advarsel på en live-server, så tag det alvorligt og bekræft, at dine .htaccess-filer er aktive.</p>"
+  ],
+  "backup.php": [
+    "<h3>Backup — to formål</h3>",
+    "<p>Backup har to forskellige formål. Hold dem adskilt, så du altid ved hvad der beskytter hvad:</p>",
+    "<ul>",
+    "<li><strong>Program-backup</strong> — tages af den systemansvarlige før og efter en programopdatering (nye PHP-filer eller ændret databasestruktur).</li>",
+    "<li><strong>Regnskabs-backup</strong> — tages når bogholderen har været flittig. Husk: du kan miste alt, hvad du har lavet siden den nyeste backup.</li>",
+    "</ul>",
+    "<h3>Hvor dine backups havner</h3>",
+    "<p>Når en backup dannes, gemmes den på webserveren i <code>/backups/</code>. Det er ikke et sikkert sted. Download den til din PC, og kopiér den videre — til en ekstern USB-disk eller en cloud-udbyder — og bevar den i mindst 5 år.</p>",
+    "<h3>Kun den aktive database sikkerhedskopieres</h3>",
+    "<p>En backup dækker kun den databasemotor, du er logget ind på. Bruger du både MySQL og SQLite, skal du logge ud og ind igen på den anden motor og gentage backuppen.</p>",
+    "<h3>Test dine backups</h3>",
+    "<p>En backup er kun noget værd, hvis den faktisk kan gendannes. Prøv at indlæse den i en frisk installation på en anden vært — en god øvelse inden brand, tyveri, nedbrud eller værre.</p>",
+    "<h3>Dokumentation: Overholdelse af regler uden for virksomheden</h3>",
+    "<p>I henhold til regnskabsbestemmelserne skal økonomiske data og digitale kvitteringer opbevares sikkert uden for den primære serverhosts miljø. Udfør denne manuelle kontrol mindst én gang om måneden:</p>",
+    "<ol style=\"padding-left: 20px; margin-bottom: 15px;\">",
+    "<li>Download den komplette ZIP-arkivfil til din lokale computer via brugergrænsefladen ovenfor.</li>",
+    "<li>Upload ZIP-filen til virksomhedens eksterne lagringsplads (f.eks. OneDrive, Jottacloud eller pCloud).</li>",
+    "</ol>",
+    "<p style='font-weight: bold; color: #1e3a8a; margin-bottom: 5px;'>Sådan verificerer du filen i din cloud (OneDrive / Jottacloud):</p>",
+    "<ul style=\"padding-left: 20px;\">",
+    "<li><strong>Størrelsesafstemning:</strong> Åbn brugergrænsefladen til dit cloud-lager, og find den uploadede fil. Sørg for, at den byte-størrelse, der er angivet i OneDrive/Jottacloud, stemmer overens med den størrelse, som systemet har registreret ovenfor.</li>",
+    "<li><strong>Validering af overførsel:</strong> Hvis din cloududbyder eller dit operativsystems værktøjer viser filegenskaber, skal du kontrollere, at cloud-kontrolsummen stemmer overens med det unikke <strong>lokale MD5</strong>-token, der er angivet ovenfor. Dette garanterer matematisk, at der ikke sker noget datatab under overførslen.</li>",
+    "<li><strong>Statuskontrol:</strong> Kontroller, at synkroniseringen af den eksterne fil er afsluttet, og at der vises et permanent bekræftelsesmærke for skyen.</li>",
+    "</ul>"
+  ],
+  "error_log.php": [
+    "<h3>Dokumentation: Systemlogfiler og HTTP-statuskoder</h3>",
+    "<p>Når systemet udviser uventet adfærd, låste brugergrænsefladeelementer eller manglende layoutknapper, registreres årsagen i serverlogfilerne. Fejlfinding kræver sammenligning af disse tre forskellige miljøer:</p>",
+    "<ol style=\"padding-left: 20px; margin-bottom: 15px;\">",
+    "<li><strong>Systemfejllog (PHP-fejllog):</strong> Registrerer kritiske fejl på backend-serveren (f.eks. <em>»Fatal Error: Call to undefined function lang()</em>«). Hvis en side holder op med at blive vist midt i udførelsen, går ned eller viser en tom hvid skærm, logges det nøjagtige filnavn og PHP-linjenummeret her. <span style='color: #2b6cb0; font-weight: bold;'>Sådan vises loggen: Du ser denne log direkte på denne side (error_log.php).</span></li>",
+    "<li><strong>Apache-adgangslog:</strong> Registrerer alle indgående HTTP-netværksanmodninger i realtid. Brug denne log til at kontrollere, om browserens asynkrone AJAX-anmodninger når frem til serveren, og til at se den nøjagtige svarkode, der returneres. <span style='color: #2b6cb0; font-weight: bold;'>Sådan vises den: Du får adgang via dit webhosting-kontrolpanel (f.eks. cPanel/Plesk under &#x27;Logs&#x27;) eller via FTP/SSH på /var/log/apache2/access.log.</span></li>",
+    "<li><strong>Browserkonsol (F12):</strong> Registrerer fejl på klientsiden, der opstår direkte i brugerens browser (f.eks. JavaScript <em>ReferenceError: isNotepadMaximized er ikke defineret</em>). Hvis et modalvindue ikke kan trækkes, eller et klik på en knap mislykkes uden at siden genindlæses, skal du tjekke denne log. <span style='color: #2b6cb0; font-weight: bold;'>Sådan vises den: Højreklik et vilkårligt sted på denne webside, vælg &#x27;Inspect&#x27; og klik på fanen &#x27;Console&#x27;.</span></li>",
+    "</ol>",
+    "<p style='font-weight: bold; color: #1e3a8a; margin-bottom: 5px;'>Sådan fortolkes statuskoder i fanen »Adgangslog / Netværk«:</p>",
+    "<ul style=\"padding-left: 20px;\">",
+    "<li><strong>Status 200 (OK):</strong> Anmodningen blev gennemført, og dataene blev udvekslet korrekt (f.eks. når Notepad-scriptet viser »saved«).</li>",
+    "<li><strong>Status 403 (Forbudt):</strong> Adgang nægtet. Dette skyldes typisk strenge sikkerhedsregler i din .htaccess-fil, eller at din PHP-session (auth.inc.php) har afvist anmodningen på grund af en timeout.</li>",
+    "<li><strong>Status 404 (Ikke fundet):</strong> Filstien er forkert. Dette sker, hvis et script forsøger at indlæse en inkluderingsfil fra et mappe, der ikke findes, eller ved hjælp af et forkert filnavn.</li>",
+    "<li><strong>Status 500/503 (intern fejl):</strong> Serveren gik ned under udførelsen af scriptet. Dette indikerer altid en alvorlig fejl i PHP-koden, og den nøjagtige fejlbeskrivelse skal hentes fra serverens PHP-fejllog.</li>",
+    "</ul>",
+    "<p style='margin-top: 10px; font-style: italic; color: #4b5563;'>Bemærk: Når du ændrer kildefiler, skal du altid tvinge en fuldstændig genindlæsning af browseren (<strong>Ctrl + F5</strong> eller <strong>Cmd + Shift + R</strong>) for at rydde gammel, cachelagret JavaScript-logik fra browserens lokale hukommelse.</p>"
+  ],
+  "login.php": [
+    "<h3>Hjælp til godkendelse og adgangskontrol</h3>",
+    "<p>Denne indgangsport fungerer som den primære firewall for applikationsøkosystemet og varetager validering af brugersessioner, defensive kørselskontroller samt løbende telemetrisporing.</p>",
+    "<ul><li><strong>Kontrol ved første installation (Setup Intercept):</strong> Ved initialiseringen udfører kerneproceduren en automatisk forespørgsel for at vurdere antallet af rækker i det centrale brugerdatarray. Hvis søgningen finder et resultat på nul (0) og registrerer tilstedeværelsen af systeminstallationsblokken (<em>inc/user_create_admin.php</em>), omdirigerer systemet automatisk trafikken til standardopsætningslayoutet.</li></ul>",
+    "<li><strong>Defensive parametriske forespørgsler:</strong> Kontrol af indgående legitimationsoplysninger forhindrer sårbarheder over for rå injektion ved eksplicit at lede verifikationsparametre gennem standardiserede, forberedte databaseskabeloner (<em>mysqli_prepare</em>). Brugernavne valideres sikkert via parametriserede strenge, inden den interne logik udfører hash-beregninger.</li>",
+    "<li><strong>Kryptografisk hash-integritet:</strong> Ubehandlede adgangskodeindtastninger fra klienter gemmes eller sammenlignes aldrig i klartekst. I stedet gennemgår de en sikker, envejs kryptografisk verifikationsproces (<em>password_verify</em>), hvor de sammenlignes direkte med de lagrede hash-strenge i databasen.</li>",
+    "<li><strong>Revisionslogningsmatrix (telemetri):</strong> Hver unik godkendelsesinteraktion logger permanente metadata i det centrale <em>login_log</em>-indeks. Routing-motoren registrerer dynamisk klientens netværksvektor (<em>REMOTE_ADDR</em>), miljømæssige software-fingeraftryk (<em>HTTP_USER_AGENT</em>) og statusflagget for resultatet (<em>Success</em> eller <em>Failed</em>) for at forenkle sikkerhedsrevisioner.</li>",
+    "<li><strong>Optimering af sessionssikkerhed:</strong> Når der er fundet et match mellem legitimationsoplysningerne, udløser godkendelsesmodulet en procedure til øjeblikkelig genoprettelse af id’et (<em>session_regenerate_id(true)</em>). Denne cyklus ugyldiggør straks den gamle sessionsprofilkontekst og neutraliserer dermed session-fixation-angreb, inden de globale tilladelsesvariabler udfyldes.</li>",
+    "<li><strong>Dynamiske grænsefladeskripter:</strong> Et DOM-skript, der kører efter rendering, overvåger brugerens feltkonfigurationer (<em>#pwd_inside</em>). Det indsætter dynamisk et synlighedsikon (👁️) med absolut positionering i feltets overordnede ramme, hvilket skaber en sikker mekanisme på klientsiden til at skifte indtastningsmasker smidigt mellem skjulte adgangskoder og læsbare streng med almindelig tekst.</li>",
+    "<p>Vær omhyggelig med administrationen af adgangsoplysninger. Sørg for, at reserveinstallationsfiler automatisk slettes eller låses på produktionssystemer efter implementering for at forhindre uautoriseret adgang udefra.</p>"
+  ],
+  "expense_edit.php": [
+    "<h3>Hjælp til udgiftsregistrering</h3>",
+    "<p>Her kan du registrere eller redigere en driftsudgift. Du kan bruge Bilagsdepotet i venstre side til at se og vedhæfte filer, mens du taster, eller uploade en fil direkte.</p>",
+    "<ul><li><strong>Bilagsnummer:</strong> Tildeles automatisk af systemet, når du gemmer en bogført udgift - en del af den hulfri, lovpligtige bilagsnummerering. Du behøver ikke indtaste det selv.</li><li><strong>Bilag påkrævet over en grænse:</strong> Hvis beløbet er lig med eller over din konfigurerede bilagsgrænse (sat i Firmaindstillinger, standard 500 kr), skal der et bilag til, før du kan gemme. Under grænsen kan du gemme uden, men skal angive en kort begrundelse.</li><li><strong>Bilagsdepot:</strong> Klik på en fil i venstre kolonne for at forhåndsvise den, og klik derefter <em>Tilknyt</em> for at koble den til denne udgift. Filer havner her fra scannere, e-mail eller mobilfoto, afhængigt af opsætningen.</li><li><strong>AI-bilagsscanning:</strong> Hvis slået til, kan et uploadet kvitteringsfoto eller -PDF (også rene, scannede billed-PDF'er uden tekstlag) automatisk udfylde leverandør, dato og beløb.</li><li><strong>Bogførte udgifter er låst:</strong> Når en udgift er bogført (har et bilagsnummer og journalposteringer), kan dens kernefelter ikke længere redigeres eller slettes, jf. bogføringsloven - den kan kun annulleres med en modpostering.</li></ul>",
+    "<p>Når du gemmer, oprettes de tilhørende dobbelt-posteringer i journalen automatisk, og den vedhæftede fil flyttes til permanent opbevaring.</p>"
+  ],
+  "user_list.php": [
+    "<h3>Hjælp til brugerstyring</h3>",
+    "<p>Denne side viser alle brugerkonti og lader administratorer styre, hvem der har adgang til TinyCash.</p>",
+    "<ul><li><strong>Roller:</strong> Administratorer vises med et tydeligt mærkat. Rollerne er <em>Administrator</em> (fuld adgang), <em>Bruger</em> (daglig adgang) og <em>Accountant</em> (kan sættes ved redigering af en eksisterende bruger).</li><li><strong>Rediger / Slet:</strong> Brug handlingsknapperne i rækken til at redigere en brugers detaljer eller fjerne kontoen. Du kan ikke slette eller nedgradere din egen konto, så du ikke ved en fejl låser dig selv ude.</li><li><strong>Ny bruger:</strong> Klik på <strong>Ny bruger</strong> for at oprette endnu en konto.</li></ul>",
+    "<p>Kun administratorer kan se og bruge denne side.</p>"
+  ],
+  "backup_restore.php": [
+    "<h3>Gendannelse fra en backup</h3>",
+    "<p>Gendan-formularen på denne side håndterer kun <strong>data-backups</strong>: den overskriver databasen og gendanner dine indstillinger og uploadede bilag fra en TinyCash-ZIP lavet med \"Fuld data-arkiv\" eller \"System-konfiguration\".</p>",
+    "<p><strong>Gendannelse overskriver alle nuværende data og kan ikke fortrydes.</strong> Sørg for at have en frisk backup af den nuværende tilstand, før du fortsætter.</p>",
+    "<p><strong>Automatisk sikkerhedskopi:</strong> Før gendannelsen gemmer systemet automatisk en kopi af din nuværende database i backups/-mappen (pre_restore_safety_*.sql), så du har en vej tilbage, hvis gendannelsen var en fejl.</p>",
+    "<h3>Backuppen skal matche databasemotoren</h3>",
+    "<p>En backup lavet på SQLite kan ikke gendannes i MySQL eller omvendt — SQL-dialekterne er ikke kompatible. Er motorerne forskellige, afbrydes gendannelsen, før noget ændres. Skift den aktive motor, så den matcher backuppen, og prøv igen.</p>",
+    "<h3>Gendannelse af en program-backup (manuelt)</h3>",
+    "<p>En program-backup (programkoden) — og <code>program/</code>-mappen inde i en samlet ugentlig auto-backup — gendannes manuelt, fordi det er usikkert at overskrive live PHP-filer gennem browseren:</p>",
+    "<ol><li>Download og pak ZIP-filen ud på din egen computer.</li><li>Kopiér programfilerne over projektmappen på serveren (via SFTP eller værtens filhåndtering), så den gamle kode erstattes.</li><li><strong>Overskriv ikke <code>inc/data/env.ini</code></strong> — den er bevidst udeladt af backuppen. Behold serverens egen env.ini, så dine database- og mail-oplysninger bevares.</li><li>Er databasestrukturen ændret, så importér <code>program/schema.sql</code> — men kun i en tom eller ny database, da den indeholder struktur uden dine regnskabsdata.</li><li>Kopiér aldrig programfiler ind i dine live data-mapper (<code>uploads/</code>, <code>data/</code>, <code>backups/</code>); de er ikke en del af en program-backup.</li></ol>",
+    "<p>Tip: test en program-tilbagerulning på en separat vært først, præcis som du ville teste enhver backup.</p>"
+  ],
+  "program_backup.php": [
+    "<h3>Program-backup</h3>",
+    "<p>Tag denne før <strong>og</strong> efter en programopdatering — når PHP-filer eller databasestrukturen ændres. Den arkiverer programkoden (PHP- og konfigurationsfiler) plus databasens <em>struktur</em>, så du kan rulle kode og skema tilbage, hvis en opdatering går galt.</p>",
+    "<h3>Hvad den bevidst udelader</h3>",
+    "<p>Af hensyn til din sikkerhed indeholder arkivet aldrig:</p>",
+    "<ul>",
+    "<li><code>inc/data/env.ini</code> — database-, mail- og API-hemmeligheder.</li>",
+    "<li>Dine regnskabsdata — <code>uploads/</code>, databasefilen og <code>storage/</code>.</li>",
+    "<li>Tidligere backups.</li>",
+    "</ul>",
+    "<p>Brug et <strong>Fuld data-arkiv</strong> til regnskabsdataene — de to backups supplerer hinanden.</p>",
+    "<h3>Automatisk samlet backup</h3>",
+    "<p>Når den automatiske ugentlige off-site backup kører, medtages denne program-backup automatisk under en <code>program/</code>-mappe, så den planlagte backup er ét samlet arkiv af både dine data og dit program.</p>"
+  ],
+  "year_end_close.php": [
+    "<h3>Hjælp til afslut regnskabsår</h3>",
+    "<p>Dette afslutter et regnskabsår: nulstiller dine indtægts- og udgiftskonti og overfører nettoresultatet til en valgt egenkapitalkonto i én balanceret journalpostering.</p>",
+    "<ul><li><strong>Forhåndsvisning først:</strong> Siden viser en forhåndsvisning af årets resultat, før noget bogføres - gennemgå den grundigt.</li><li><strong>Egenkapitalkonto:</strong> Vælg hvilken egenkapitalkonto der skal modtage nettoresultatet. Kun konti af typen \"Egenkapital\" vises.</li><li><strong>Låser perioden:</strong> At afslutte et år flytter regnskabslåsedatoen frem, hvilket forhindrer yderligere posteringer før den dato - en del af bogføringslovens krav. Den kan ikke flyttes tilbage.</li><li><strong>Faktura-/bilagsnumre påvirkes ikke:</strong> Nummereringen fortsætter ubrudt hen over årsskiftet, som loven kræver.</li></ul>",
+    "<p>Dette kan ikke fortrydes. Kun administratorer kan afslutte et regnskabsår - sørg for at alle transaktioner for perioden er bogført først.</p>"
+  ],
+  "annual_report.php": [
+    "<h3>Hjælp til årsrapport</h3>",
+    "<p>Denne side samler et udkast til en årsrapport (balance, resultatopgørelse og noter) for et valgt regnskabsår, i ét printvenligt A4-layout med PDF-download.</p>",
+    "<ul><li><strong>Kun udkast:</strong> Dette dokument er et udkast, ikke en indberetning. Officielle årsrapporter for selskaber skal indsendes digitalt via XBRL gennem virk.dk, ikke som en PDF - brug dette som udgangspunkt til den proces eller til din revisor.</li><li><strong>Regnskabspraksis-note:</strong> En fritekst-note, der beskriver dine regnskabsprincipper, redigerbar og gemt pr. installation.</li><li><strong>Valg af regnskabsår:</strong> Vælg hvilket regnskabsår, der skal rapporteres på, fra rullemenuen - kun år registreret under Afslut regnskabsår er tilgængelige.</li></ul>",
+    "<p>Målrettet regnskabsklasse B (mindre virksomheder) - ledelsesberetning er bevidst udeladt, da den er undtaget for denne klasse.</p>"
+  ],
+  "balance_sheet.php": [
+    "<h3>Hjælp til balance</h3>",
+    "<p>Dette viser et øjebliksbillede af dine Aktiver, Passiver og Egenkapital pr. en valgt dato, beregnet direkte ud fra din bogføring.</p>",
+    "<ul><li><strong>Status pr.:</strong> Vælg en hvilken som helst dato - balancen genberegnes for netop det tidspunkt.</li><li><strong>Balancetjek:</strong> En grøn besked bekræfter, at Aktiver er lig med Passiver + Egenkapital. En rød advarsel betyder, at noget er bogført uden om de normale flows og bør undersøges.</li><li><strong>Kun udkast:</strong> Ligesom Årsrapporten er dette et udkast til intern brug eller din revisor - ikke egnet til direkte indberetning.</li></ul>",
+    "<p>Brug denne til at stikprøvetjekke din bogførings sundhed på et hvilket som helst tidspunkt i løbet af året, ikke kun ved årsafslutning.</p>"
+  ],
+  "vat_codes.php": [
+    "<h3>Hjælp til momskoder &amp; -satser</h3>",
+    "<p>Denne side styrer de momskoder, der er tilgængelige, når du opsætter konti i din kontoplan.</p>",
+    "<ul><li><strong>ID:</strong> En kort kode (fx S25 for 25% salgsmoms), der bruges til at identificere denne momssats andre steder i systemet.</li><li><strong>Sats:</strong> Den momsprocent, denne kode repræsenterer.</li><li><strong>Konto:</strong> Valgfrit link af denne momskode til en bestemt konto til reference.</li></ul>",
+    "<p>Klik på skraldespandsikonet for at slette en kode, der ikke længere er brug for. Bemærk at de faktiske momskonti, der bruges til indberetning, sættes separat under Firmaindstillinger.</p>"
+  ],
+  "project_view.php": [
+    "<h3>Hjælp til projektoversigt</h3>",
+    "<p>Denne side viser alle dine projekter, og når du åbner et, vises dets finansielle detaljer: tilknyttede udgifter, andre indtægter og fakturaer.</p>",
+    "<ul><li><strong>Projektliste:</strong> Viser kode, kunde, status, start-/slutdato og en løbende saldo (indtægter minus udgifter) for hvert projekt.</li><li><strong>Projektdetaljer:</strong> Klik på et projekt for at se dets enkelte udgifts-, indtægts- og fakturalinjer, samt den samlede saldo.</li><li><strong>Kræver projektmodulet:</strong> Aktivér det fra Ny/Rediger projekt-siden for at vise Projektkode-feltet på udgifts- og fakturaformularer.</li></ul>",
+    "<p>Brug denne til at spore rentabilitet pr. projekt eller kundeengagement, ikke kun samlet.</p>"
+  ],
+  "project_edit.php": [
+    "<h3>Hjælp til opret/rediger projekt</h3>",
+    "<p>Denne formular opretter et nyt projekt eller redigerer et eksisterende.</p>",
+    "<ul><li><strong>Projektkode:</strong> En påkrævet, unik identifikator for projektet - bruges til at tagge udgifter og fakturaer til det.</li><li><strong>Kunde:</strong> Valgfri kobling af projektet til en bestemt kunde.</li><li><strong>Start-/slutdato:</strong> Valgfrie datoer, der vises i rapporter og projektoversigten.</li><li><strong>Fakturakoncept:</strong> En foreslået faktureringstekst, du kan genbruge, når du fakturerer dette projekt.</li><li><strong>Projektmodul til/fra:</strong> Et separat kort øverst lader dig aktivere eller deaktivere hele projektmodulet, som styrer, om Projektkode-feltet vises på udgifts- og fakturaformularer.</li></ul>",
+    "<p>Sletning af et projekt kan ikke fortrydes - det sletter ikke dets tilknyttede udgifter eller fakturaer, kun selve projektposten.</p>"
+  ],
+  "account_edit.php": [
+    "<h3>Hjælp til opret/rediger konto</h3>",
+    "<p>Denne formular opretter en ny konto eller redigerer en eksisterende i din kontoplan.</p>",
+    "<ul><li><strong>Kontonummer:</strong> Kan ikke ændres, når kontoen er oprettet - det er kontoens permanente identifikator, der bruges gennem hele hovedbogen.</li><li><strong>Kontotype:</strong> Bestemmer, hvordan kontoen opfører sig i rapporter og posteringer: Indtægt, Udgift, Bank/Kontant, Moms, Aktiv, Gæld eller Egenkapital. Valg af forkert type kan give forkert klassificerede rapporter.</li><li><strong>Standard kontoreference:</strong> Valgfri kobling af denne konto til en standard referencekategori, brugt til samlet skatte-/statistisk rapportering.</li><li><strong>Momskode &amp; sats:</strong> Tilknyt en momskode fra dine eksisterende koder (eller indtast en ny) for automatisk at anvende den momssats på posteringer til denne konto.</li></ul>",
+    "<p>Særlige konti brugt til automatisk postering (Bank, Debitor, Salg, Moms) opsættes separat i Firmaindstillinger - redigering her ændrer kun deres navn/type, ikke deres særlige rolle.</p>"
+  ],
+  "user_create.php": [
+    "<h3>Hjælp til opret bruger</h3>",
+    "<p>Denne formular opretter en ny brugerkonto til TinyCash.</p>",
+    "<ul><li><strong>Brugernavn &amp; kodeord:</strong> Vælg et unikt brugernavn; kodeordet krypteres sikkert og gemmes eller vises aldrig i klartekst.</li><li><strong>Rolle:</strong> <em>Administrator</em> har fuld adgang, inklusive brugerstyring og systemindstillinger. <em>Bruger</em> har almindelig dagligdags adgang. Giv kun admin-rettigheder til betroede personer.</li></ul>",
+    "<p>Kun administratorer kan oprette nye brugerkonti.</p>"
+  ],
+  "user_edit.php": [
+    "<h3>Hjælp til rediger bruger</h3>",
+    "<p>Denne formular redigerer en eksisterende brugers brugernavn, rolle og kodeord.</p>",
+    "<ul><li><strong>Rolle:</strong> Ændringer træder i kraft ved brugerens næste login. Vær forsigtig med at ændre din egen rolle - du kan risikere at låse dig selv ude af admin-funktioner.</li><li><strong>Skift kodeord:</strong> Lad begge kodeordsfelter stå tomme for at beholde det nuværende kodeord uændret. Udfyld dem (ens) for at sætte et nyt.</li></ul>",
+    "<p>Kun administratorer kan redigere andre brugeres konti.</p>",
+    "<p><strong>Tilgængelige roller:</strong> Administrator (fuld adgang), Bruger (daglig adgang) og Accountant (revisor-orienteret adgang) - Accountant kan kun tildeles her, ikke ved oprettelse af kontoen.</p>"
+  ],
+  "mail_inbox.php": [
+    "<h3>Hjælp til mail-indbakke</h3>",
+    "<p>Denne side læser indgående mail direkte fra konfigurerede postkasser, så du kan behandle vedhæftninger uden at forlade TinyCash.</p>",
+    "<ul><li><strong>Tre postkasser:</strong> Skift mellem <em>Bilag &amp; kvitteringer</em>, <em>Leverandørfakturaer</em> og <em>Fakturakopier (salg)</em> - hver læser en separat konfigureret postkasse.</li><li><strong>Vedhæftninger:</strong> Klik på en vedhæftning for at forhåndsvise den, eller download den direkte.</li><li><strong>Hurtig registrering:</strong> I bilags-/leverandør-postkasserne kan du klikke <em>Registrer</em> på en vedhæftning for at springe direkte til en ny udgift med det dokument vedhæftet.</li></ul>",
+    "<p>Postkasse-adgangsoplysninger konfigureres i serverens env.ini - kontakt din administrator, hvis en postkasse ikke kan indlæses.</p>"
+  ],
+  "storage_browser.php": [
+    "<h3>Hjælp til fillager</h3>",
+    "<p>Denne side lader dig gennemse, forhåndsvise, downloade og slette filer på tværs af systemets lagermapper (fakturaer, e-fakturaer, uploads, backups med mere).</p>",
+    "<ul><li><strong>Mappevælger:</strong> Skift mellem de forskellige lagerområder via sidepanelet.</li><li><strong>Forhåndsvisning:</strong> Klik på en fil for at forhåndsvise PDF'er, billeder og tekstfiler direkte i browseren.</li><li><strong>Sletning er begrænset af bogføringshensyn:</strong> En fil, der er bilaget til en bogført udgift, kan ikke slettes herfra, i overensstemmelse med det lovpligtige opbevaringskrav - selv hvis du forsøger fra denne side i stedet for selve udgiften.</li></ul>",
+    "<p>Brug denne til generel filhåndtering og oprydning - ikke til at røre bogføringsbilag, som er beskyttet med vilje.</p>"
+  ],
+  "audit_log.php": [
+    "<h3>Hjælp til revisionsspor</h3>",
+    "<p>Denne side viser et skrivebeskyttet spor af følsomme handlinger - annulleringer, sletninger og posteringer - på tværs af systemet: hvem gjorde det, hvornår, og præcis hvad der ændrede sig.</p>",
+    "<ul><li><strong>Filtre:</strong> Indsnævr listen efter handling, tabel, bruger eller datointerval - kombinér lige så mange, du har brug for.</li><li><strong>Detaljer:</strong> Hold musen over den understregede tekst i Detaljer-kolonnen for at se de fulde før/efter-værdier, som de blev registreret på tidspunktet.</li><li><strong>Ikke alt logges:</strong> Kun bestemte følsomme handlinger skriver til denne log (fx annullering af en udgift, bogføring af en faktura, sletning af en journalpostering) - det er ikke en komplet aktivitetslog over hvert klik.</li></ul>",
+    "<p>Kun administratorer kan se denne side, da posterne kan indeholde detaljer fra andre brugeres data.</p>"
+  ],
+  "reminders.php": [
+    "<h3>Hjælp til rykkere</h3>",
+    "<p>Denne side viser bogførte fakturaer (status \"sendt\"), hvor forfaldsdatoen er overskredet, og som endnu ikke er markeret betalt.</p>",
+    "<ul><li><strong>Dage overskredet:</strong> Vises med orange efter 7 dage og rødt efter 14 - et hurtigt visuelt indtryk af, hvor akut hver enkelt er.</li><li><strong>Send rykker:</strong> Sender en mail direkte til kunden på fakturaens kontaktadresse, med beløb, forfaldsdato og antal dage overskredet udfyldt automatisk.</li><li><strong>Seneste rykker:</strong> Viser, hvornår der sidst blev sendt en rykker for denne faktura, og hvor mange gange - så du hurtigt kan se, hvem der allerede er rykket.</li></ul>",
+    "<p>Kun fakturaer med en reel forfaldsdato og status \"sendt\" vises her - kladder og allerede betalte fakturaer udelukkes automatisk.</p>"
+  ],
+  "customer_statement.php": [
+    "<p><strong>Kontoudtog:</strong> En kronologisk liste over denne kundes bogførte fakturaer og registrerede indbetalinger, med en løbende saldo - det klassiske kontoudtog. Kladdefakturaer vises ikke, da de endnu ikke er reelle transaktioner.</p>",
+    "<p>Hver faktura øger saldoen (det kunden skylder); hver indbetaling nedbringer den. Kreditnotaer vises som negative fakturaer, da de gemmes med negative linjebeløb.</p>",
+    "<p><strong>Periodefilter:</strong> Indsnævrer du datointervallet, ændres den løbende saldoberegning ikke - en \"Saldo primo\"-linje viser, hvad der blev skyldt lige inden den valgte periode startede, så tallene altid er korrekte.</p>",
+    "<p>Brug CSV-eksport-knappen på tabellen, eller Udskriv-knappen, til at gemme eller udlevere en kopi af kontoudtoget.</p>"
+  ],
+  "recurring_invoices.php": [
+    "<p><strong>Gentagne fakturaer:</strong> Skabeloner til fakturaer der gentages automatisk - fx månedlig husleje, et abonnement eller en fast aftale. Hver skabelon har en kunde, et gentagelsesinterval (månedligt/kvartalsvis/årligt) og sine egne fakturalinjer.</p>",
+    "<p>En ny <strong>kladde</strong>-faktura genereres automatisk, når den planlagte dato indtræffer - det tjekkes ved hver side du besøger mens du er logget ind (der findes ingen rigtig baggrundsplanlægger på almindelig webhosting). Kladden bogføres aldrig automatisk; du skal stadig selv gennemgå og bogføre den, ligesom enhver manuelt oprettet faktura.</p>",
+    "<p>Brug <strong>Generér nu</strong> til at oprette den næste faktura med det samme, uden at vente på den planlagte dato. Brug <strong>Sæt på pause</strong> til midlertidigt at stoppe en skabelon fra at generere fakturaer, uden at slette den.</p>"
+  ],
+  "recurring_invoice_edit.php": [
+    "<p><strong>Skabelon for gentagen faktura:</strong> Angiv kunde, gentagelsesinterval og næste kørselsdato, samt de fakturalinjer der kopieres ind i hver genereret kladde.</p>",
+    "<p><strong>Betalingsdage</strong> udfyldes automatisk ud fra kundens egne betalingsbetingelser, når du vælger kunden, men kan ændres for netop denne skabelon. Fremmed valuta understøttes ikke for gentagne fakturaer - genererede kladder er altid i DKK.</p>"
+  ],
+  "bank_integration.php": [
+    "<p><strong>Bankintegration (PSD2):</strong> Forbinder TinyCash direkte til din bank via Enable Banking (Open Banking) - et alternativ til manuelt at eksportere og importere en CSV-fil. Kræver en Enable Banking-konto og API-nøgler sat op i inc/data/env.ini. (GoCardless, som tidligere blev brugt her, lukkede for nye tilmeldinger i juli 2025.)</p>",
+    "<p>Når du forbinder en bank, sendes du til bankens egen login-side for at give samtykke - TinyCash ser aldrig dit netbank-kodeord, kun læse-adgang til konto-/transaktionsdata, når du har godkendt det.</p>",
+    "<p><strong>Synkronisér nu</strong> henter de seneste transaktioner og lægger dem i samme kø som CSV-importen bruger - åbn <strong>Bankafstemning</strong> bagefter for at matche og bogføre dem, ligesom ved en manuel import.</p>",
+    "<p>Adgangen er givet af banken for en begrænset periode - når den udløber, vises forbindelsen som \"Udløbet\" og skal forbindes på ny.</p>",
+    "<p><strong>Bemærk:</strong> Enable Bankings pris for reel produktionsbrug er ikke offentliggjort og kræver kontakt til deres salgsafdeling - en application og sandbox kan dog oprettes uden en salgssamtale, så du kan afprøve selve forbindelsesflowet inden du forpligter dig.</p>"
+  ],
+  "my_2fa.php": [
+    "<p><strong>To-faktor-login (2FA):</strong> Tilføjer et ekstra trin ved login - efter dit kodeord indtaster du også en 6-cifret kode fra en authenticator-app på din telefon (Google Authenticator, Authy, 1Password, Bitwarden m.fl.). Det er pr. konto: hver bruger slår det til for sig selv, det kan ikke slås til for andre.</p>",
+    "<p>Når du slår det til, vises en hemmelig nøgle du indtaster manuelt i din app (ingen QR-kode - manuel indtastning understøttes fuldt ud af enhver authenticator-app, og undgår at skulle stole på en tredjepartstjeneste til at generere et billede der indeholder din hemmelighed). Du bekræfter derefter med en rigtig kode fra appen, før 2FA reelt slås til, så du aldrig kan låse dig selv ude ved at indtaste nøglen forkert.</p>",
+    "<p><strong>Gendannelseskoder</strong> vises én gang, når du slår 2FA til (eller genererer nye) - hver kan bruges i stedet for en app-kode, én enkelt gang, hvis du mister adgangen til din telefon. Gem dem et sikkert sted.</p>",
+    "<p>At slå 2FA fra, eller generere nye gendannelseskoder, kræver at du indtaster dit kodeord igen - det forhindrer at nogen med en kapret, men ubevogtet session kan slå din kontos beskyttelse fra.</p>"
+  ],
+  "run_migrate.php": [
+    "<p><strong>Databasemigrering:</strong> Lister alle kendte databasemigrations-scripts og tjekker direkte, om hver enkelt allerede er anvendt på netop denne installation - \"Anvendt\" eller \"Mangler\".</p>",
+    "<p>Alle migrationer er idempotente (sikre at køre mere end én gang - en migration der allerede er kørt, rapporterer blot \"findes allerede\" og gør ingenting). Klik på \"Kør nu\" / \"Kør igen\" for at åbne den enkelte migrations-script i en ny fane; genindlæs denne side bagefter for at se den opdaterede status.</p>",
+    "<p>Siden kører bevidst ikke alt med ét klik - hver migration har sin egen selvstændige resultatside, så du kan se præcis hvad der skete for hver enkelt, i stedet for én samlet, sværere-at-læse log.</p>"
+  ],
+  "menu_visibility.php": [
+    "<p><strong>Menu-synlighed:</strong> En fuld liste over alle menu-punkter, med et afkrydsningsfelt pr. brugerniveau (1 Begynder, 2 Erfaren, 3 Udvikler), der styrer om punktet vises i menuen for det niveau.</p>",
+    "<p><strong>Dette er et oprydningsværktøj, ikke adgangskontrol.</strong> At skjule et punkt her fjerner det kun fra menuen - det forhindrer ikke nogen i at indtaste sidens adresse direkte, medmindre siden selv også har sin egen adgangsbegrænsning for det niveau. Brug det til at holde menuen enkel for begyndere, ikke til at beskytte følsomme sider.</p>",
+    "<p>Punkter uden en gemt række bruger de oprindelige indbyggede standardværdier (vist forudfyldt). <strong>Nulstil alt til standard</strong> rydder alle gemte indstillinger og vender tilbage til de indbyggede standardværdier.</p>"
+  ]
 }

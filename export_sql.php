@@ -1,4 +1,14 @@
-<?php # /export_sql.php v:1.0.0 d:2026-06-15 i:evs
+<?php # /export_sql.php v:1.3.0 d:2026-08-30 i:evs
+# v1.1.0: ALVORLIGT FUND - denne fil brugte ren MySQL-syntaks direkte
+# ("SHOW TABLES", "SHOW CREATE TABLE") i strid med projektets egen DB-lag-
+# regel (se CLAUDE.md: "Never call mysqli_* or PDO directly") - fejlede
+# derfor 100% på SQLite (dette dev-miljøs og mindst én live-installations
+# motor). Brugte også den udefinerede konstant DB_NAME i filnavnet (fatal
+# error i PHP 8). En korrekt, cross-engine udgave af PRÆCIS denne funktion
+# fandtes allerede (DB::dump_to_sql(), brugt af auto_backup.inc.php) - denne
+# fil var en overflødig, ringere, MySQL-only gendannelse af samme logik.
+# Rettet ved at genbruge DB::dump_to_sql() i stedet. Fundet ved en rapport-/
+# eksportgennemgang.
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 
@@ -11,48 +21,10 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
 // Sæt tidsbegrænsning op, hvis databasen er stor
 set_time_limit(300);
 
-$tables = [];
-$result = DB::query($conn, "SHOW TABLES");
-while ($row = DB::fetch_row($result)) {
-    $tables[] = $row[0];
-}
-
-$sql_dump = "-- ERP System Database Export\n";
-$sql_dump .= "-- Genereret: " . date('Y-m-d H:i:s') . "\n";
-$sql_dump .= "-- --------------------------------------------------------\n\n";
-$sql_dump .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
-
-foreach ($tables as $table) {
-    // 1. Drop & Create Table struktur
-    $row2 = DB::fetch_row(DB::query($conn, "SHOW CREATE TABLE `" . $table . "`"));
-    $sql_dump .= "\n\n" . $row2[1] . ";\n\n";
-    
-    // 2. Hent data ud af tabellen
-    $result_data = DB::query($conn, "SELECT * FROM `" . $table . "`");
-    $num_fields = DB::num_fields($result_data);
-    
-    while ($row = DB::fetch_row($result_data)) {
-        $sql_dump .= "INSERT INTO `" . $table . "` VALUES(";
-        for ($j = 0; $j < $num_fields; $j++) {
-            if (isset($row[$j])) {
-                // Undgå SQL injection i selve dumpet og bevar linjeskift
-                $escaped = DB::real_escape_string($conn, $row[$j]);
-                $sql_dump .= '"' . $escaped . '"';
-            } else {
-                $sql_dump .= 'NULL';
-            }
-            if ($j < ($num_fields - 1)) {
-                $sql_dump .= ',';
-            }
-        }
-        $sql_dump .= ");\n";
-    }
-}
-
-$sql_dump .= "\n\nSET FOREIGN_KEY_CHECKS=1;\n";
+$sql_dump = DB::dump_to_sql($conn);
 
 // Forbered browseren på en fil-download (Vigtigt: Ingen HTML/print før dette!)
-$filename = 'db_backup_' . DB_NAME . '_' . date('Y-m-d_H-i-s') . '.sql';
+$filename = 'tinycash_export_' . $db_type . '_' . date('Y-m-d_H-i-s') . '.sql';
 
 header('Content-Description: File Transfer');
 header('Content-Type: application/octet-stream');

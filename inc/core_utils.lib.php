@@ -1,4 +1,4 @@
-<?php # /inc/core_utils.lib.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /inc/core_utils.lib.php v:1.3.0 d:2026-08-30 i:evs
 /* ==========================================================================
    KERNE-UTILITY-FUNKTIONER (IKKE HTML-BYGGENDE)
 

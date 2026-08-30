@@ -1,9 +1,12 @@
-<?php # /inc/program_backup.lib.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /inc/program_backup.lib.php v:1.3.0 d:2026-08-30 i:evs
+# backup-manifest-dato brugte hårdkodet d.m.Y i stedet for CONF_DATE_FORMAT
 # Program-backup: zipper selve programkoden (PHP m.m.) + DB-struktur, så en
 # programopdatering kan rulles tilbage. Indeholder BEVIDST hverken env.ini
 # (hemmeligheder), regnskabsdata (uploads/, data/, storage/) eller tidligere
 # backups. Genbruges af program_backup.php (manuel) og auto_backup.inc.php
-# (foldet ind i den samlede 21-dages backup).
+# (foldet ind i den samlede ugentlige backup).
+# v1.3.0: '.claude', 'ai_export' og 'sessions_tmp' tilføjet til udelukkelses-
+# listen - se program_backup_excluded_dirs().
 
 // Projektroden, normaliseret til '/' så Windows og Linux behandles ens.
 function program_backup_root() {
@@ -11,8 +14,14 @@ function program_backup_root() {
 }
 
 // Mapper der aldrig medtages (hemmeligheder, regnskabsdata, tidligere backups).
+// UDVIDET 2026-08-19 (fundet ved en backup-/gendannelsesgennemgang): '.claude'
+// (Claude Codes egne sessions-/konfigurationsfiler), 'ai_export' (ophobede
+// AI-samtaleeksporter - kan blive store og indeholder ikke programkode) og
+// 'sessions_tmp' (PHP-sessionsfiler - kan indeholde andre brugeres session-
+// data, som ikke bør havne i en ekstern backup-mail) blev før pakket ind i
+// HVER ENESTE program-backup, inkl. den ugentlige automatiske, uden grund.
 function program_backup_excluded_dirs() {
-    return ['backups', 'uploads', 'storage', 'data', 'temp_restore', 'temp', 'tmp', 'cache', '.git', 'node_modules', 'vendor'];
+    return ['backups', 'uploads', 'storage', 'data', 'temp_restore', 'temp', 'tmp', 'cache', '.git', 'node_modules', 'vendor', '.claude', 'ai_export', 'sessions_tmp'];
 }
 
 // Filnavne/endelser der aldrig medtages.
@@ -61,7 +70,7 @@ function program_backup_add_to_zip(ZipArchive $zip, $conn, $prefix = '') {
     // Manifest
     $zip->addFromString($prefix . 'program_backup_info.txt',
         "TinyCash Program Backup\n" .
-        "Dato:    " . date('d.m.Y H:i:s') . "\n" .
+        "Dato:    " . date(CONF_DATE_FORMAT . ' H:i:s') . "\n" .
         "Version: " . (defined('APP_VERSION') ? APP_VERSION : '?') . "\n" .
         "Motor:   " . (DB::is_sqlite() ? 'SQLITE' : 'MYSQL') . "\n" .
         "Filer:   " . $count . "\n" .

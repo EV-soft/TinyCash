@@ -1,71 +1,77 @@
-<?php # inc/menu.inc.php v:1.2.0 d:2026-08-11 i:evs
-function showMenu() {
-    global $conn;
-
-    $uLev = isset($_SESSION['user_level']) ? (int)$_SESSION['user_level'] : 1;
-
-    $adminExists = true;
-    if ($conn) {
-        $res = @DB::query($conn, "SELECT COUNT(*) FROM users WHERE user_role = 'admin'");
-        if ($res) {
-            $row = DB::fetch_row($res);
-            $adminExists = ($row[0] > 0);
-        }
-    }
-
-    $company_name    = '';
+<?php # /inc/menu.inc.php v:1.3.0 d:2026-08-30 i:evs
+# v1.10.0: Menu-strukturen udtrukket til get_menu_structure() (genbruges nu
+# af den nye menu_visibility.php, tilføjet under System -> Maintenance), +
+# niveau-synlighed er nu konfigurerbar pr. menu-punkt (tabellen
+# menu_visibility, ny admin-side) i stedet for hårdkodet i showMenu() selv.
+# Bruger-anmodet.
+# v1.9.0: Maintenance (undermenu med 7 punkter) flyttet op over
+# Brugerstyring/2FA/Storage Browser - som en flyout-undermenu placeret nær
+# bunden af System-menuen risikerede den at blive skåret af i bunden af
+# vinduet (Fejllog/Revisionsspor, de to sidste punkter, var svære at se).
+# Bruger-rapporteret.
+# v1.8.0: tilføjet my_2fa.php under System (to-faktor-login, fra
+# forslagslisten, §Sikkerhed)
+# v1.7.0: tilføjet bank_integration.php under Accounting (rigtig
+# bankintegration/PSD2, fra forslagslisten)
+# v1.6.0: tilføjet recurring_invoices.php under Sales (nye gentagne/faste
+# fakturaer, fra forslagslisten)
+# v1.5.0: tilføjet reminders.php under Sales (ny rykkerfunktion for forfaldne
+# fakturaer, bruger-anmodet, fra forslagslisten)
+# v1.4.0: tilføjet audit_log.php under System -> Maintenance (ny revisionsspor-
+# visning, bruger-anmodet)
+# v1.3.0: #tc-sidebar z-index hævet fra 9200 til 10001 - logud-knappen nederst
+# blev delvist skjult bag floating-action-bar (bruger-rapporteret); desuden
+# niveau-knap flyttet til visnings-gruppen i topnav og logud-knappen forenklet
+// Selve menu-træet, udtrukket til sin egen funktion (v1.10.0) - genbruges nu
+// af BÅDE showMenu() (rendering) OG menu_visibility.php (den nye admin-side
+// til at styre hvilke punkter der vises pr. brugerniveau). Før lå hele
+// strukturen kun inline i showMenu(), så en separat "liste alle menu-
+// punkter"-side ville have skullet vedligeholde sin egen kopi og uundgåeligt
+// glide ud af sync med den ægte menu over tid. $conn kan være null (fx før
+// login) - modul-baserede punkter (Projekter) udelades i så fald.
+function get_menu_structure($conn): array {
     $module_projects = false;
+    // NYT (§currency-setting-is-cosmetic-label, Fase 2): momsrapporten
+    // (vat_report.php) er formet efter dansk momsindberetning (TastSelv-
+    // afrunding) og udelades derfor af menuen for en virksomhed, der bruger
+    // en anden bogføringsvaluta end DKK - siden selv spærrer stadig direkte
+    // adgang via require_dkk_base_currency().
+    $is_dkk_base = true;
     if ($conn) {
         $company_settings = get_settings($conn);
-        $company_name     = trim($company_settings['company_name'] ?? '');
         $module_projects  = !empty($company_settings['module_projects']) && $company_settings['module_projects'] == '1';
+        $is_dkk_base      = strtoupper($company_settings['currency'] ?? 'DKK') === 'DKK';
     }
 
-    $current_page = explode('?', basename($_SERVER['SCRIPT_NAME']))[0];
-    $current_box  = isset($_GET['box']) ? $_GET['box'] : '';
-
-    // ── Hjælpefunktion: er dette menu-punkt aktivt? ──────────────────────────
-    $isActiveItem = function($url, $config) use ($current_page, $current_box) {
-        if ($current_page === $url) return true;
-        if (!isset($config['submenu'])) return false;
-        foreach (array_keys($config['submenu']) as $subKey) {
-            if (strpos((string)$subKey, $current_page) === false) continue;
-            if ($current_page === 'mail_inbox.php') {
-                $target_box = (strpos((string)$subKey, 'box=invoice') !== false) ? 'invoice' : 'voucher';
-                $actual_box = ($current_box === 'invoice') ? 'invoice' : 'voucher';
-                if ($target_box === $actual_box) return true;
-            } else {
-                return true;
-            }
-        }
-        return false;
-    };
-
-    // ── Hjælpefunktion: må dette punkt vises for $uLev? ──────────────────────
-    $isAllowed = function($url) use ($uLev) {
-        if ($uLev < 2 && ($url === 'accounting' || $url === 'system')) return false;
-        if ($uLev < 3 && $url === 'production') return false;
-        return true;
-    };
-
-    $isSubAllowed = function($subUrl) use ($uLev) {
-        if ($uLev < 3 && in_array($subUrl, ['settings_fees.php','chart_of_accounts.php','user_list.php','storage_browser.php','control_panel'])) return false;
-        return true;
-    };
-
-    // ── Menu-array ────────────────────────────────────────────────────────────
     $menu = [
         'index.php'  => ['label' => '🏠 ' . lang('@Overview'),   'hint' => lang('@Dashboard and quick stats')],
         'sales'      => ['label' => '📄 ' . lang('@Sales'),      'hint' => lang('@Manage invoices and customers'),
             'submenu' => [
                 'sales_hub.php'              => '🚀 ' . lang('@Sales Hub Dashboard'),
                 'invoice_edit.php?id=0'      => '➕ ' . lang('@Create New Invoice'),
+                // NYT (bruger-anmodet): Tilbud/Ordrebekræftelse - se
+                // db-setup/migrate_quotes.php for den fulde begrundelse.
+                'quote_list.php'             => '📝 ' . lang('@Quotes'),
+                'quote_edit.php?id=0'        => '➕ ' . lang('@Create New Quote'),
+                // NYT (bruger-anmodet): "Indkøb" har et direkte underpunkt til
+                // leverandørlisten (supplier_list.php), men "Salg" havde intet
+                // tilsvarende direkte punkt til kundelisten - kun den
+                // kombinerede fakturaoversigt (sales_hub.php, allerede linket
+                // ovenfor). Kundelisten lever selv inde i sales_hub.php (der
+                // findes ingen separat customer_list.php), så punktet her
+                // peger på samme side med et anker (#c_card, sales_hub.php's
+                // kundekort-formular-id) direkte til kundesektionen, i stedet
+                // for at duplikere kundelisten i en helt ny fil.
+                'sales_hub.php#c_card'       => '👥 ' . lang('@Customers'),
+                'reminders.php'              => '⏰ ' . lang('@Payment Reminders'),
+                'recurring_invoices.php'     => '🔁 ' . lang('@Recurring Invoices'),
                 'mail_inbox.php?box=invoice' => '🗂️ ' . lang('@Invoice Copies Inbox'),
             ]],
         'expenses'   => ['label' => '🛒 ' . lang('@Purchases'),   'hint' => lang('@Manage expenses, vouchers and supplier invoices'),
             'submenu' => [
                 'expense_list.php'           => '📋 ' . lang('@Expense List'),
                 'expense_edit.php?id=0'      => '📥 ' . lang('@Register Expense'),
+                'supplier_list.php'          => '🏭 ' . lang('@Suppliers'),
                 '---'                        => '---',
                 'mail_inbox.php?box=voucher' => '📬 ' . lang('@Voucher Inbox'),
             ]],
@@ -76,14 +82,34 @@ function showMenu() {
             ]],
         'accounting' => ['label' => '💰 ' . lang('@Accounting'),  'hint' => lang('@Ledger, banking, reports and settings'),
             'submenu' => [
+                // RETTET (bruger-anmodet): et menu-punkt der selv åbner endnu en
+                // undermenu (en "flyout") placeres nu ØVERST i sin forældre-liste
+                // - ikke fordi det er vigtigere, men fordi flyout'en (i top-
+                // navigations-tilstand) altid åbner ud for SIN EGEN vandrette
+                // position i den overliggende dropdown (se .sub-submenu's
+                // "top:0" i CSS'en). Jo længere nede i listen punktet står, jo
+                // højere nede på skærmen begynder flyout'en - og med seks
+                // undermenu-punkter (Rapporter) kunne den nemt løbe ud over
+                // vinduets underkant på et almindeligt skærmhøjde. Placeret
+                // øverst giver flyout'en mest mulig plads nedad.
+                'reports' => ['label' => '📊 ' . lang('@Reports') . ' <span style="float:right">▶</span>',
+                    'submenu' => array_merge(
+                        ['ledger_view.php'        => '📖 ' . lang('@General Ledger')],
+                        $is_dkk_base ? ['vat_report.php' => '🧾 ' . lang('@VAT Report')] : [],
+                        [
+                            'aging_report.php'       => '📆 ' . lang('@Aging Report'),
+                            'report_income.php'      => '📊 ' . lang('@Profit & Loss Report'),
+                            'balance_sheet.php'      => '⚖️ ' . lang('@Balance Sheet'),
+                            'annual_report.php'      => '📜 ' . lang('@Annual Report'),
+                        ]
+                    )],
+                '---_1'                      => '---',
                 'bank_import_step1.php'      => '📥 ' . lang('@Import Bank File'),
+                'bank_integration.php'       => '🏦 ' . lang('@Bank Integration (PSD2)'),
                 'reconcile_list.php'         => '⚖️ ' . lang('@Bank Reconciliation'),
                 'settings_fees.php'          => '⚙️ ' . lang('@Fee Rules'),
                 '---'                        => '---',
-                'ledger_view.php'            => '📖 ' . lang('@General Ledger'),
-                'vat_report.php'             => '🧾 ' . lang('@VAT Report'),
-                '---_1'                      => '---',
-                'report_income.php'          => '📊 ' . lang('@Profit & Loss Report'),
+                'fixed_asset_list.php'       => '🏗️ ' . lang('@Fixed Assets'),
                 'chart_of_accounts.php'      => '📑 ' . lang('@Chart of Accounts'),
             ]],
         /* 'production' => ['label' => '🛠️ ' . lang('@Production'),  'hint' => lang('@Production lines and management'),
@@ -92,12 +118,11 @@ function showMenu() {
             ]], */ 
         'system'     => ['label' => '⚙️ ' . lang('@System'),      'hint' => lang('@Settings and user management'),
             'submenu' => [
-                'company_settings.php'       => '🏢 ' . lang('@Settings'),
-                'vat_codes.php'              => '🧾 ' . lang('@VAT Codes & Rates'),
-                'user_list.php'              => '🔑 ' . lang('@User Management'),
-                'storage_browser.php'        => '📁 ' . lang('@Storage Browser'),
-                '---_2'                      => '---',
-                'control_panel'              => ['label' => '🛠️ ' . lang('@Control Panel') . ' <span style="float:right">▶</span>',
+                // RETTET (bruger-anmodet, samme begrundelse som Regnskab ->
+                // Rapporter ovenfor): "Vedligeholdelse" åbner selv en flyout med
+                // otte punkter - endnu mere udsat for at løbe ud over vinduets
+                // underkant end Rapporter, og derfor placeret allerøverst.
+                'maintenance'              => ['label' => '🛠️ ' . lang('@Maintenance') . ' <span style="float:right">▶</span>',
                     'submenu' => [
                         'backup.php'              => '📥 ' . lang('@Backup Management'),
                         'backup_restore.php'      => '🔄 ' . lang('@Restore System'),
@@ -105,9 +130,23 @@ function showMenu() {
                         'run_migrate.php'         => ['label' => '📦 ' . lang('@Database migration'),         'hint' => lang('@Update database structure')],
                         'translation_manager.php' => '🌐 ' . lang('@Language Editor'),
                         'error_log.php'           => '⚠️ ' . lang('@Error Log'),
+                        'audit_log.php'           => '📜 ' . lang('@Audit Log'),
+                        'menu_visibility.php'     => '👁️ ' . lang('@Menu Visibility'),
                     ]],
+                '---_2'                      => '---',
+                'account_manage.php'         => '🗂️ ' . lang('@Accounts'),
+                'company_settings.php'       => '🏢 ' . lang('@Settings'),
+                'vat_codes.php'              => '🧾 ' . lang('@VAT Codes & Rates'),
+                'user_list.php'              => '🔑 ' . lang('@User Management'),
+                'my_2fa.php'                 => '🔐 ' . lang('@Two-Factor Login'),
+                'storage_browser.php'        => '📁 ' . lang('@Storage Browser'),
                 '---_3'                      => '---',
                 'ai_help.php'                => 'ℹ️ ' . lang('@AI support'),
+                // NYT (bruger-anmodet): offentlig, login-fri AI-manual (se
+                // docs/ai_manual.md) - en ekstern AI/support-chatbot kan
+                // hente den direkte, men et menu-link her gør den nem at
+                // finde/dele for en administrator.
+                'ai_manual.php'              => '🤖 ' . lang('@AI Manual'),
                 'about.php'                  => 'ℹ️ ' . lang('@About TinyCash'),
             ]],
         'logout.php' => ['label' => '🚪 ' . lang('@Logout'), 'hint' => ''],
@@ -123,18 +162,146 @@ function showMenu() {
                     'submenu' => [
                         'project_view.php'      => '📊 ' . lang('@Project Overview'),
                         'project_edit.php?id=0' => '➕ ' . lang('@New Project'),
+                        // NYT (bruger-anmodet): Timeregistrering - kræver selv
+                        // Projekt-modulet aktivt, se db-setup/migrate_time_tracking.php.
+                        'time_list.php'         => '⏱️ ' . lang('@Time Tracking'),
                     ]];
             }
         }
         $menu = $new_menu;
     }
 
+    return $menu;
+}
+
+// Standardsynlighed for et menu-punkt, INDEN der er gemt nogen eksplicit
+// overstyring i menu_visibility - de oprindelige hårdkodede regler fra før
+// denne funktion fandtes. Delt mellem showMenu() OG menu_visibility.php
+// (som forudfylder sine afkrydsningsfelter herfra for punkter uden en gemt
+// række endnu), så de to aldrig kan glide fra hinanden.
+function get_menu_visibility_defaults(string $url): array {
+    if (in_array($url, ['accounting', 'system'], true)) return [1 => false, 2 => true, 3 => true];
+    if (in_array($url, ['production', 'system'], true)) return [1 => false, 2 => false, 3 => true];
+    if (in_array($url, ['settings_fees.php','chart_of_accounts.php','user_list.php','storage_browser.php','maintenance'], true)) return [1 => false, 2 => false, 3 => true];
+    return [1 => true, 2 => true, 3 => true];
+}
+
+// Læser de gemte niveau-synligheds-overstyringer fra menu_visibility.php
+// (tabellen menu_visibility) - ét opslag pr. sidevisning, ikke pr. menu-
+// punkt. Mangler en række for et givent punkt, er det synligt for alle tre
+// niveauer som standard (bevarer nøjagtig samme adfærd som før denne
+// funktion fandtes, for ethvert punkt der ikke er blevet ændret).
+function get_menu_visibility_overrides($conn): array {
+    $overrides = [];
+    if (!$conn) return $overrides;
+    $res = @DB::query($conn, "SELECT item_key, level_1, level_2, level_3 FROM menu_visibility");
+    if ($res) {
+        while ($row = DB::fetch_assoc($res)) {
+            $overrides[$row['item_key']] = [
+                1 => (int)$row['level_1'] === 1,
+                2 => (int)$row['level_2'] === 1,
+                3 => (int)$row['level_3'] === 1,
+            ];
+        }
+    }
+    return $overrides;
+}
+
+function showMenu() {
+    global $conn;
+
+    $uLev = isset($_SESSION['user_level']) ? (int)$_SESSION['user_level'] : 1;
+
+    $adminExists = true;
+    if ($conn) {
+        $res = @DB::query($conn, "SELECT COUNT(*) FROM users WHERE user_role = 'admin'");
+        if ($res) {
+            $row = DB::fetch_row($res);
+            $adminExists = ($row[0] > 0);
+        }
+    }
+
+    $company_name = '';
+    if ($conn) {
+        $company_settings = get_settings($conn);
+        $company_name     = trim($company_settings['company_name'] ?? '');
+    }
+
+    $menu = get_menu_structure($conn);
+
     if (!$adminExists) {
+        // Bootstrap-punkt, bevidst UNDTAGET fra det konfigurerbare
+        // synligheds-system nedenfor - uden en admin-konto endnu må dette
+        // punkt aldrig kunne skjules, ellers kunne man reelt låse sig selv
+        // ude af at kunne oprette den allerførste admin via menuen.
+        // RETTET (§bugs-batch-16-review): pegede på user_edit.php?id=0 - en
+        // ren REDIGERINGS-side (UPDATE ... WHERE user_id=0, og GET-visningen
+        // dør med "User not found" for id=0) som aldrig kunne oprette noget
+        // som helst. user_create.php er den egentlige opret-side, og har nu
+        // samme "ingen admin findes endnu"-undtagelse.
         $menu['system']['submenu'] = array_merge(
-            ['user_edit.php?id=0' => '🆕 ' . lang('@Create First Admin')],
+            ['user_create.php' => '🆕 ' . lang('@Create First Admin')],
             $menu['system']['submenu']
         );
     }
+
+    $current_page = explode('?', basename($_SERVER['SCRIPT_NAME']))[0];
+    $current_box  = isset($_GET['box']) ? $_GET['box'] : '';
+
+    // ── Hjælpefunktion: er dette menu-punkt aktivt? ──────────────────────────
+    // RETTET (bruger-anmodet menu-omrokering, Regnskab -> Rapporter): tjekkede
+    // kun ÉT niveau af undermenu-nøgler - virkede fint mens hvert punkt i
+    // fx Regnskab's undermenu var en direkte .php-fil, men en NESTET
+    // undermenu (samme mønster som System -> Vedligeholdelse allerede brugte)
+    // har kun nøglen "reports"/"maintenance" på dette niveau, ikke de
+    // faktiske sidenavne længere nede - så det yderste menu-punkt ("Regnskab")
+    // mistede sin aktiv-markering når man besøgte fx balance_sheet.php.
+    // Rekursiv nu, så den finder $current_page uanset hvor dybt den er nestet.
+    $isActiveItem = function($url, $config) use (&$isActiveItem, $current_page, $current_box) {
+        if ($current_page === $url) return true;
+        if (!isset($config['submenu'])) return false;
+        foreach ($config['submenu'] as $subKey => $subVal) {
+            if (is_array($subVal) && isset($subVal['submenu'])) {
+                if ($isActiveItem($subKey, $subVal)) return true;
+                continue;
+            }
+            if (strpos((string)$subKey, $current_page) === false) continue;
+            if ($current_page === 'mail_inbox.php') {
+                $target_box = (strpos((string)$subKey, 'box=invoice') !== false) ? 'invoice' : 'voucher';
+                $actual_box = ($current_box === 'invoice') ? 'invoice' : 'voucher';
+                if ($target_box === $actual_box) return true;
+            } else {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // ── Niveau-synlighed: konfigurerbar via menu_visibility.php, med de
+    // oprindelige hårdkodede regler som fallback-standardværdi for punkter
+    // der ALDRIG er blevet gemt eksplicit (dvs. før denne funktion fandtes,
+    // eller for nye punkter tilføjet siden). VIGTIGT: dette er udelukkende
+    // en menu-oversigt/UX-lag - det er IKKE adgangskontrol. Et skjult punkt
+    // forhindrer ikke direkte URL-adgang til siden - det styres udelukkende
+    // af siden selv (auth.inc.php + $rLev). Se menu_visibility.php's egen
+    // advarselstekst.
+    $overrides = get_menu_visibility_overrides($conn);
+    // RETTET (§bugs-batch-16-review): "Opret første admin"-punktet blev
+    // allerede tvangsindsat i $menu['system']['submenu'] ovenfor "uden at
+    // kunne skjules" - men det hjalp intet, hvis selve FORÆLDRE-kategorien
+    // "system" er skjult for brugerens niveau (get_menu_visibility_defaults()
+    // returnerer [1=>false,2=>true,3=>true] for den) - præcis niveau 1 er
+    // det mest sandsynlige niveau for en bruger der reelt står uden nogen
+    // admin. Hele "System"-sektionen (og dermed bootstrap-punktet i den)
+    // blev derfor aldrig vist til netop den bruger, exemption'en var lavet
+    // til at beskytte. Tvinger nu "system"-kategorien synlig, når ingen
+    // admin findes, uanset niveau.
+    $isAllowed = function($url) use ($uLev, $overrides, $adminExists) {
+        if (!$adminExists && $url === 'system') return true;
+        $allowedByLevel = $overrides[$url] ?? get_menu_visibility_defaults($url);
+        return $allowedByLevel[$uLev] ?? true;
+    };
+    $isSubAllowed = $isAllowed; // samme opslag, samme tabel - blot kaldt fra to render-steder
 
     // ── Fælles kontekst til utility-widgets ──────────────────────────────────
     $currentTheme = $_COOKIE['theme'] ?? 'light';
@@ -145,7 +312,10 @@ function showMenu() {
     $fCode        = $fMap[$current_l] ?? $current_l;
     $uLevI        = (int)$uLev;
     $userName     = htmlspecialchars($_SESSION['user_name'] ?? 'User');
-    $levNames     = [1 => lang('@Beginner'), 2 => lang('@Experienced'), 3 => lang('@Developer')];
+    // RETTET (bruger-anmodet terminologiskift): "Beginner/Experienced/Developer"
+    // beskrev niveauerne som brugerens erfaring - matcher samme skift i
+    // menu_visibility.php's kolonneoverskrifter (se dér for begrundelsen).
+    $levNames     = [1 => lang('@Minimal View'), 2 => lang('@Custom View'), 3 => lang('@Maximum View')];
     $currentName  = $levNames[$uLevI] ?? lang('@Unknown');
     $thHint       = ($currentTheme === 'dark')
         ? lang('@Dark theme: Use Ctrl+A if there is no contrast.')
@@ -185,8 +355,14 @@ function showMenu() {
     body.sidebar-mode { margin-left:214px !important; margin-right:20px !important; margin-top:4px !important; }
     body.sidebar-mode #top-nav { display:none !important; }
 
-    #tc-sidebar { display:none; position:fixed; top:0; left:0; width:210px; height:100vh;
-        background:var(--bg-nav); z-index:9200; overflow-y:auto; overflow-x:hidden;
+    /* z-index hævet fra 9200 til 10001 (bruger-rapporteret): sidebaren spænder
+       height:100vh med .sb-utils/.sb-logout nederst (margin-top:auto), som
+       dermed lå i samme skærmområde som den faste .floating-action-bar
+       (z-index:10000) og blev dækket af den - samme mønster som tidligere
+       fundet på notepad-knappen og tip-boksen i backup.php, se
+       floating-bar-overlap i hukommelsen. */
+    #tc-sidebar { display:none; position:fixed; top:0; left:0; width:215px; height:100vh;
+        background:var(--bg-nav); z-index:10001; overflow-y:auto; overflow-x:hidden;
         flex-direction:column; box-shadow:4px 0 12px rgba(0,0,0,0.35); font-family:sans-serif; color:white; }
     body.sidebar-mode #tc-sidebar { display:flex; }
 
@@ -324,7 +500,11 @@ function showMenu() {
                 continue;
             }
 
-            // Sub-sub (Control Panel)
+            // Sub-sub (Control Panel) - RETTET: de enkelte punkter herunder
+            // (fx backup.php, run_migrate.php) blev FØR aldrig niveau-
+            // tjekket individuelt, kun selve "Maintenance"-punktet ovenfor -
+            // en flad tabel med niveau pr. enkelt menu-punkt giver ikke
+            // mening, hvis punkter tre niveauer nede reelt ikke kan skjules.
             if (is_array($subVal) && isset($subVal['submenu'])) {
                 $ssLabel = strip_tags($subVal['label'] ?? '');
                 if ($mode === 'top') {
@@ -332,6 +512,7 @@ function showMenu() {
                     echo '<a href="#" class="dropdown-item" style="background:rgba(0,0,0,0.1);">'.($subVal['label'] ?? '').'</a>';
                     echo '<div class="sub-submenu">';
                     foreach ($subVal['submenu'] as $ssUrl => $ssVal2) {
+                        if (!$isSubAllowed($ssUrl)) continue;
                         $ssLabel2 = is_array($ssVal2) ? ($ssVal2['label'] ?? '') : $ssVal2;
                         $ssHint   = (is_array($ssVal2) && !empty($ssVal2['hint'])) ? ' data-hint="'.htmlspecialchars($ssVal2['hint']).'"' : '';
                         echo '<a href="'.htmlspecialchars($ssUrl).'" class="dropdown-item"'.$ssHint.'>'.$ssLabel2.'</a>';
@@ -341,6 +522,7 @@ function showMenu() {
                     echo '<div class="sb-subsub-toggle" onclick="sbToggleSubSub(this)">'.$ssLabel.' ▶</div>';
                     echo '<div class="sb-subsub">';
                     foreach ($subVal['submenu'] as $ssUrl => $ssVal2) {
+                        if (!$isSubAllowed($ssUrl)) continue;
                         $ssLabel2 = is_array($ssVal2) ? ($ssVal2['label'] ?? '') : $ssVal2;
                         echo '<a href="'.htmlspecialchars($ssUrl).'">'.$ssLabel2.'</a>';
                     }
@@ -371,9 +553,9 @@ function showMenu() {
     echo '<div class="sb-logo">';
     echo '<button class="sb-toggle" onclick="toggleMenuLayout()" title="'.lang('@Switch to top navigation').'"><i class="ti ti-layout-navbar"></i></button>';
     echo '<div class="sb-logo-block">';
-    echo '<div class="sb-logo-text"><a href="about.php" style="color:white;text-decoration:none;"><span>Tiny</span>Cash</a></div>';
+    echo '<div class="sb-logo-text"><a href="about.php" style="color:white;text-decoration:none;"><img src="favicon.svg" alt="" style="width:28px; height:28px; top: 5px; position: relative;" /><span>Tiny</span>Cash</a></div>';
     if ($company_name !== '')
-        echo '<div class="sb-company" title="'.htmlspecialchars($company_name).'">'.htmlspecialchars($company_name).'</div>';
+        echo '<div class="sb-company" style="text-align: center;" title="'.htmlspecialchars($company_name).'">'.htmlspecialchars($company_name).'</div>';
     echo '</div></div>';
 
     // Menu-items
@@ -457,7 +639,7 @@ function showMenu() {
     // ═════════════════════════════════════════════════════════════════════════
     // B) TOP-NAVIGATION
     // ═════════════════════════════════════════════════════════════════════════
-    echo '<nav id="top-nav" style="background:var(--bg-nav); padding:1px 20px; margin-bottom:20px;
+    echo '<nav id="top-nav" style="background:var(--bg-nav); padding:1px 5px; margin-bottom:20px;
         display:flex; align-items:center; min-height:65px; font-family:sans-serif; color:white;
         position:relative; z-index:9000; overflow:visible !important;">';
 
@@ -467,11 +649,12 @@ function showMenu() {
         <i class="ti ti-layout-sidebar"></i></button>';
 
     // Logo
-    echo '<div style="margin-right:25px; font-size:1.7em; font-weight:bold; flex-shrink:0;">';
-    echo '<a href="about.php" style="color:white;text-decoration:none;"><span style="color:var(--color-primary);">Tiny</span>Cash</a>';
+    echo '<div style="margin-right:10px; font-size:1.7em; font-weight:bold; flex-shrink:0;">';
+    echo '<a href="about.php" style="color:white;text-decoration:none;">
+        <img src="favicon.svg" alt="" style="width:28px; height:28px; top: 5px; position: relative;" /><span style="color:var(--color-primary);">Tiny</span>Cash</a>';
     if ($company_name !== '')
         echo '<div style="font-size:10px; font-weight:600; color:var(--text-light); opacity:0.85; margin-top:2px;
-              white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px;"
+              white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; text-align: center;"
               data-hint="'.htmlspecialchars($company_name).'">'.htmlspecialchars($company_name).'</div>';
     else
         echo '<div style="font-size:10px; font-weight:200; color:var(--color-warning); margin-top:2px;">'.lang('@Develop version w. errors').'</div>';
@@ -512,11 +695,14 @@ function showMenu() {
     // Højre side: zoom/fs/tema + sprog + bruger
     echo '<div style="margin-left:auto; display:flex; align-items:center; gap:10px;">';
     echo '<div style="display:flex; flex-direction:column; align-items:center;">';
-    echo '<div style="display:flex; background:rgba(0,0,0,0.2); padding:2px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); align-items:center; gap:8px;">';
-    echo '<button onclick="adjustZoom(0.02)"  style="background:none;border:none;color:white;cursor:pointer;font-size:14px;padding:0;">+</button>';
+    echo '<div style="display:flex; background:rgba(0,0,0,0.2); padding:2px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); align-items:center; gap:2px;">';
+    echo '<button onclick="adjustZoom(0.02)"  style="background:none;border:none;color:white;cursor:pointer;font-size:14px;padding:0 4px;">+</button>';
     echo '<button onclick="adjustZoom(-0.02)" style="background:none;border:none;color:white;cursor:pointer;font-size:14px;padding:0;">-</button>';
     echo '<button onclick="toggleFullscreen()" data-hint="'.htmlspecialchars($fsHint).'" style="background:none;border:none;color:white;cursor:pointer;font-size:16px;border-left:1px solid rgba(255,255,255,0.2);padding-left:8px;">⛶</button>';
-    echo '<button id="theme-toggle-btn" onclick="toggleTheme()" data-hint="'.htmlspecialchars($thHint).'" style="background:none;border:none;color:white;cursor:pointer;font-size:14px;border-left:1px solid rgba(255,255,255,0.2);padding-left:2px;">'.$currentIcon.'</button>';
+    echo '<button id="theme-toggle-btn" onclick="toggleTheme()" data-hint="'.htmlspecialchars($thHint).'" style="background:none;border:none;color:white;cursor:pointer;font-size:14px;border-left:1px solid rgba(255,255,255,0.2);padding: 0;">'.$currentIcon.'</button>';
+    // Niveau-knappen flyttet hertil fra logud-knappen (bruger-anmodet) - hører
+    // sammen med de øvrige visnings-indstillinger, ikke med log ud-handlingen.
+    echo '<button onclick="toggleTestLevel('.$uLevI.')" data-hint="'.htmlspecialchars($levelHint).'" style="background:none;border:none;color:white;cursor:pointer;font-size:12px;font-family:monospace;font-weight:bold;max-width: 20px;">L'.$uLevI.'</button>';
     echo '</div>';
     echo '<div style="font-size:10px;color:white;text-transform:uppercase;opacity:0.8;margin-top:2px;"
           data-hint="'.lang('@Here you can zoom in and out, <br>Switch to/from full screen, <br>or change color theme').'">'.lang('@VIEW').'</div>';
@@ -541,15 +727,12 @@ function showMenu() {
     echo '<div style="font-size:11px;color:white;text-align:center;text-transform:uppercase;opacity:0.9;">'.lang('@LANGUAGE').'</div>';
     echo '</div>';
 
-    $titleText = $currentName . ' - ' . lang('@Click to change');
-    echo '<a href="logout.php" style="background:var(--color-danger);color:white;padding:5px;border-radius:4px;text-decoration:none;font-size:14px;text-align:center;min-width:110px;display:inline-block;"
-          data-hint="'.lang('@Here you will see your username and a button where you can <br>change user level: L1-L2-L3.<br>which controls the display of menu items.').'">
-        <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:2px;">
-            <small style="opacity:0.9;">"'.$userName.'"</small>
-            <span onclick="event.preventDefault();event.stopPropagation();toggleTestLevel('.$uLevI.');"
-                  data-hint="'.htmlspecialchars($titleText).'"
-                  style="font-size:11px;color:#fff;background:rgba(0,0,0,0.4);padding:1px 4px;border-radius:2px;cursor:pointer;font-family:monospace;font-weight:bold;border:1px solid rgba(255,255,255,0.8);line-height:1;">L'.$uLevI.'</span>
-        </div>
+    // Forenklet og gjort smallere (bruger-anmodet) - niveau-knappen der før sad
+    // indlejret her er flyttet op i visnings-gruppen ovenfor. min-width fjernet,
+    // så knappen nu bare fylder hvad indholdet kræver.
+    echo '<a href="logout.php" style="background:var(--color-danger);color:white;padding:5px 10px;border-radius:4px;text-decoration:none;font-size:13px;text-align:center;display:inline-block;"
+          data-hint="'.htmlspecialchars($currentName).'">
+        <small style="opacity:0.9;display:block;margin-bottom:1px;">"'.$userName.'"</small>
         <b>👤 '.lang('@Logout').'</b>
     </a>';
     echo '</div>'; // højre side

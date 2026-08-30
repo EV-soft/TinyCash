@@ -1,5 +1,7 @@
-<?php # /backup_restore.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /backup_restore.php v:1.3.0 d:2026-08-30 i:evs
 # (Lang vejledning flyttet til hjælpesystemet, vist inline)
+# v1.3.0: viser nu besked om den automatiske sikkerhedskopi (se
+# backup_restore_worker.php) + ny fejlgren (safety_backup_failed)
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
@@ -14,10 +16,13 @@ if (!isset($_SESSION['user_level']) || (int)$_SESSION['user_level'] < 3) {
 htm_Header('@Restore System');
 showMenu();
 
-// Kvittering fra backup_restore_worker.php's redirect (?msg=success|error|engine_mismatch)
+// Kvittering fra backup_restore_worker.php's redirect
+// (?msg=success|error|engine_mismatch|safety_backup_failed)
 if (isset($_GET['msg'])) {
     if ($_GET['msg'] === 'success') {
-        htm_Alert(lang('@Backup restored successfully. Please verify your data.'), 'success');
+        htm_Alert(lang('@Backup restored successfully. Please verify your data.') . ' ' .
+            lang('@A safety copy of your previous database was saved to the backups/ folder before restoring (pre_restore_safety_*.sql), in case you need to go back.'),
+            'success');
     } elseif ($_GET['msg'] === 'engine_mismatch') {
         $src = isset($_GET['src']) ? strtoupper(preg_replace('/[^a-z]/i', '', $_GET['src'])) : '?';
         $dst = isset($_GET['dst']) ? strtoupper(preg_replace('/[^a-z]/i', '', $_GET['dst'])) : '?';
@@ -25,6 +30,16 @@ if (isset($_GET['msg'])) {
             lang('@Restore aborted: the backup was created on a different database engine and cannot be restored here.') .
             ' (' . $src . ' &rarr; ' . $dst . '). ' .
             lang('@Switch the active database engine to match the backup, then try again. No data was changed.'),
+            'error'
+        );
+    } elseif ($_GET['msg'] === 'safety_backup_failed') {
+        htm_Alert(
+            lang('@Restore aborted: could not save a safety copy of the current database before restoring (check that backups/ is writable). No data was changed.'),
+            'error'
+        );
+    } elseif ($_GET['msg'] === 'missing_dump') {
+        htm_Alert(
+            lang('@Restore aborted: the uploaded file does not contain a database_dump.sql and is not a valid TinyCash backup. No data was changed.'),
             'error'
         );
     } elseif ($_GET['msg'] === 'error') {
@@ -48,11 +63,12 @@ echo '<p style="color:#666; line-height:1.5;">' .
 
 echo '<form method="post" action="backup_restore_worker.php" enctype="multipart/form-data" ' .
      'style="margin-top:25px;" onsubmit="return confirm(\'' . $confirm . '\');">';
+csrf_field();
 echo '<input type="file" name="backup_file" accept=".zip" required ' .
      'style="display:block; margin:0 auto 20px auto; max-width:100%;">';
-echo '<button type="submit" ' .
-     'style="background:#e67e22; color:white; padding:14px 28px; border:none; border-radius:8px; font-size:1.1em; cursor:pointer; font-weight:bold;">' .
-     '<i class="fa fa-rotate-left"></i> ' . lang('@Restore from Backup') . '</button>';
+htm_Button(icon: 'fa-rotate-left', labl: '@Restore from Backup', type: 'warning',
+    styl: 'padding:14px 28px; font-size:1.1em; border-radius:8px;',
+    attr: 'data-hint="'.lang('@Overwrite the current database and files with this backup').'"');
 echo '</form>';
 echo '</div>';
 

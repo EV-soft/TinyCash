@@ -1,4 +1,7 @@
-<?php # /product_edit.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /product_edit.php v:1.3.0 d:2026-08-30 i:evs
+# fund 3, produkt-/lagergennemgang - se [[inventory-bugs-review]]
+# v1.3.0: "Opret variant" foreslog altid samme faste "-2"-SKU-suffiks -
+# finder nu det laveste reelt ledige suffiks i stedet.
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php'; 
 require_once 'inc/menu.inc.php';
@@ -26,7 +29,20 @@ if ($id > 0) {
     
     $item['prod_id'] = 0;
     $item['prod_name'] = $item['prod_name'] . ' (Variant)';
-    $item['prod_sku'] = ($item['prod_sku'] ?? '') . '-2';
+    // RETTET (fund 3, produkt-/lagergennemgang [[inventory-bugs-review]]):
+    // foreslog altid det samme faste "-2"-suffiks, uanset hvor mange
+    // varianter der allerede findes af det samme grundprodukt - to
+    // varianter oprettet efter hinanden fik derfor samme foreslåede SKU
+    // ("ABC-2" begge gange), og intet i skemaet håndhæver unikke SKU'er.
+    // Finder nu det laveste ledige "-N"-suffiks i stedet.
+    $base_sku = $item['prod_sku'] ?? '';
+    $suffix = 2;
+    do {
+        $candidate = $base_sku . '-' . $suffix;
+        $exists = DB::num_rows(DB::query($conn, "SELECT prod_id FROM products WHERE prod_sku = '" . DB::escape($conn, $candidate) . "'")) > 0;
+        $suffix++;
+    } while ($exists);
+    $item['prod_sku'] = $candidate;
     $pageTitle = lang('@New Variant');
 } else {
     // Opret nyt produkt - Standardværdier
@@ -61,11 +77,12 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
 ?>
     <!-- Action skifter automatisk baseret på om det er et nyt produkt eller opdatering -->
     <form id="prod_form" action="inventory_actions.php?action=<?php echo ($id > 0 ? 'update_product' : 'create_product'); ?>" method="POST">
+        <?php csrf_field(); ?>
         <input type="hidden" name="prod_id" value="<?php echo $item['prod_id']; ?>">
         
         <div style="display: grid; gap: 15px;">
             <?php 
-                htm_InputGroup(
+                htm_Field(
                     icon: 'fa-barcode',
                     labl: '@SKU / Item number',
                     name: 'prod_sku',
@@ -73,7 +90,7 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
                     extr: ''
                 ); 
 
-                htm_InputGroup(
+                htm_Field(
                     icon: 'fa-tag',
                     labl: '@Product Name',
                     name: 'prod_name',
@@ -86,7 +103,7 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
             <div style="display: flex; gap: 15px;">
                 <div style="flex: 1;">
                     <?php 
-                    htm_InputGroup(
+                    htm_Field(
                         icon: 'fa-boxes',
                         labl: '@In Stock',
                         name: 'prod_stock',
@@ -98,7 +115,7 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
                 </div>
                 <div style="flex: 1;">
                     <?php 
-                    htm_InputGroup(
+                    htm_Field(
                         icon: 'fa-exclamation-triangle',
                         labl: '@Min. Level',
                         name: 'prod_min_stock',
@@ -115,7 +132,7 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
             <div style="display: flex; gap: 15px; align-items: flex-end;">
                 <div style="flex: 3;">
                     <?php 
-                        htm_InputGroup(
+                        htm_Field(
                             icon: 'fa-money-bill-wave',
                             labl: lang('@Sales Price') . ' (' . lang('@excl. VAT') . ')',
                             name: 'prod_price',
@@ -127,7 +144,7 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
                 </div>
                 <div style="flex: 4;">
                     <?php 
-                        htm_InputGroup(
+                        htm_Field(
                             icon: 'fa-book',
                             labl: '@Account',
                             name: 'acc_id',
@@ -143,15 +160,15 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
     <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
         <?php 
             htm_Button(
-                icon: 'fa-save', 
-                labl: ($id > 0 ? '@Save Changes' : '@Create Product'), 
-                type: 'success', 
+                icon: 'fa-save',
+                labl: ($id > 0 ? '@Save Changes' : '@Create Product'),
+                type: 'success',
                 styl: 'padding:12px; font-size:1.1em;',
-                attr: 'form="prod_form"'
-            ); 
+                attr: 'form="prod_form" data-hint="'.lang($id > 0 ? '@Save changes to this product' : '@Add this product to the catalog').'"'
+            );
         ?>
         <a href="inventory_status.php" style="text-decoration:none;">
-            <?php htm_Button(icon: 'fa-times', labl: '@Cancel', type: 'secondary', styl: 'width:100%;'); ?>
+            <?php htm_Button(icon: 'fa-times', labl: '@Cancel', type: 'secondary', styl: 'width:100%;', attr: 'data-hint="'.lang('@Discard changes and return to the product catalog').'"'); ?>
         </a>
     </div>
     

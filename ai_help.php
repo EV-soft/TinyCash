@@ -1,4 +1,10 @@
-<?php # /ai_help.php v:1.1.0 d:2026-07-05 i:evs
+<?php # /ai_help.php v:1.3.0 d:2026-08-30 i:evs
+# Statisk vejledningsside til brugere om hvordan man bruger en AI-assistent
+# (fx Claude Code) effektivt på TinyCash - kontekst-fil, fejlbeskrivelse og
+# Debug=true. Filstier/eksempler holdes ajour med de faktiske filnavne i
+# projektet (fandt og rettede stale referencer: inc/master_advisor.php ->
+# faktisk inc/Master_Advisor.php, og et dødt link til index.page.php ->
+# index.php, en efterladt navnekonvention fra før .page.php-omdøbningen).
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -18,7 +24,7 @@ showMenu();
         <?php htm_Card_('@1. Give AI Context', '100%'); ?>
             <p><?php echo lang('@To allow the AI to fix errors in e.g. VAT or invoicing, it must know your database structure.'); ?></p>
             <ul style="line-height: 1.6;">
-                <li><?php echo lang('@Run the file'); ?> <code>/inc/master_advisor.php</code> <?php echo lang('@in your browser.'); ?></li>
+                <li><?php echo lang('@Run the file'); ?> <code>/inc/Master_Advisor.php</code> <?php echo lang('@in your browser.'); ?></li>
                 <li><?php echo lang('@Copy all content (SQL schema + source code).'); ?></li>
                 <li><?php echo lang('@Paste it into the chat as the very first thing.'); ?></li>
             </ul>
@@ -27,7 +33,7 @@ showMenu();
         <?php htm_Card_('@2. Describe the error precisely', '100%'); ?>
             <p><?php echo lang('@Avoid "It does not work". Instead use:'); ?></p>
             <ul style="line-height: 1.6;">
-                <li><strong><?php echo lang('@Which page?'); ?></strong> (e.g. <code>invoice_view.page.php</code>)</li>
+                <li><strong><?php echo lang('@Which page?'); ?></strong> (e.g. <code>invoice_view.php</code>)</li>
                 <li><strong><?php echo lang('@Which ID?'); ?></strong> (e.g. "<?php echo lang('@When I open ID 12'); ?>")</li>
                 <li><strong><?php echo lang('@What is the error?'); ?></strong> (e.g. "<?php echo lang('@Error 500 or VAT is calculated incorrectly'); ?>")</li>
             </ul>
@@ -51,7 +57,7 @@ showMenu();
         </p>
     </div>
     <div style="text-align: center; margin-top: 40px;">
-        <a href="index.page.php" class="btn-secondary" style="padding: 10px 25px; text-decoration: none; border-radius: 4px;">
+        <a href="index.php" class="btn-secondary" style="padding: 10px 25px; text-decoration: none; border-radius: 4px;">
             <?php echo lang('@Back to Dashboard'); ?>
         </a>
     </div>

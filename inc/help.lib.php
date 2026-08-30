@@ -1,20 +1,85 @@
-<?php # /inc/help.lib.php - v:1.1.0 d:2026-07-02 i:evs
+<?php # /inc/help.lib.php v:1.3.0 d:2026-08-30 i:evs
+# v1.2.0: scanBilagMedOpenAI() sendte PDF-bilag til Chat Completions'
+# image_url, som OpenAI aldrig har understøttet PDF via (kun png/jpeg/webp/
+# gif) - ethvert PDF-bilag (både rene billed-PDF'er og PDF'er med et OCR-
+# tekstlag) fejlede derfor altid ved AI-scanning. PDF sendes nu til Responses
+# API'et som input_file i stedet. Samtidig: fejl blev før slugt tavst
+# (returnerede null) - returnerer nu ['error'=>...] så expense_edit.php's
+# eksisterende fejlvisning rent faktisk vises. Se funktionens egen
+# hoved-kommentar for fuld detalje.
 
 # -------------------------------------------------------------------------
 # INTERN DATA-LOGIK
 # -------------------------------------------------------------------------
 
+// RETTET (§bugs-batch-25-review): ALVORLIGT FUND - begge OpenAI-kaldssteder i
+// denne fil (help-tekst-oversættelse nedenfor OG scanBilagMedOpenAI(), selve
+// bilags-AI-scanningen) læste udelukkende $_ENV/$_SERVER/getenv() for
+// OPENAI_API_KEY - men CLAUDE.md/db_connect.inc.php's egen konvention er at
+// hemmeligheder ALTID ligger i inc/env.ini, indlæst via parse_ini_file(),
+// IKKE som rigtige OS-miljøvariabler. Intet sted i hele kodebasen kopierer
+// nogensinde env.ini's værdier over i $_ENV (bekræftet: ingen putenv()-kald
+// findes noget sted) - så uanset hvor korrekt en bruger udfylder
+// OPENAI_API_KEY i inc/env.ini, ville begge disse funktioner ALTID falde
+// tilbage til den tomme streng og vise "API-nøgle er ikke sat op", som om
+// nøglen aldrig var konfigureret. AI-scan-funktionen (hele drag-drop-UI'en i
+// expense_edit.php) kunne derfor reelt ALDRIG fungere via den dokumenterede
+// opsætning. translation_manager.php havde uafhængigt allerede fundet den
+// rigtige løsning i sin egen getOpenAiApiKey() - samme mønster genbruges her.
+if (!function_exists('_help_get_openai_key')) {
+    function _help_get_openai_key(): string {
+        if (defined('OPENAI_API_KEY') && !empty(OPENAI_API_KEY)) {
+            return OPENAI_API_KEY;
+        }
+        // RETTET: env.ini flyttet til inc/data/env.ini - de to gamle stier
+        // bevaret som bagudkompatibel fallback.
+        $paths = [
+            dirname(__DIR__) . '/inc/data/env.ini',
+            dirname(__DIR__) . '/inc/env.ini',
+            dirname(__DIR__) . '/env.ini',
+        ];
+        foreach ($paths as $path) {
+            if (file_exists($path)) {
+                $ini = parse_ini_file($path);
+                if (!empty($ini['OPENAI_API_KEY'])) {
+                    return trim($ini['OPENAI_API_KEY'], '"\' ');
+                }
+            }
+        }
+        // Bevaret som allersidste udvej, for miljøer der reelt SÆTTER en
+        // rigtig OS-miljøvariabel (fx visse container-/CI-opsætninger).
+        return $_ENV['OPENAI_API_KEY'] ?? $_SERVER['OPENAI_API_KEY'] ?? (function_exists('getenv') ? (getenv('OPENAI_API_KEY') ?: '') : '');
+    }
+}
+
 function _help_get_content($current_page, $target_lang) {
+    // RETTET (§bugs-batch-17-review): kaldes to gange PR. SIDEVISNING -
+    // htm_FloatingActionBar() (via _help_has_text()) for at afgøre om
+    // hjælpe-knappen skal være aktiv, og htm_HelpSystem() lige efter for det
+    // faktiske indhold - begge fra htm_Footer() på hver eneste sidevisning.
+    // Uden caching betyder det: to fulde filindlæsninger+JSON-afkodninger af
+    // master-filen for hver sidevisning, og - værre - hvis oversættelsen for
+    // denne side+sprog endnu ikke er cachet på disk, et fuldt OpenAI-
+    // API-kald (op til 15 sek. timeout) AFFYRET TO GANGE i træk for præcis
+    // samme resultat, før den første besvarelse når at skrive sin egen
+    // disk-cache. Simpel per-request static cache løser det - samme
+    // $current_page+$target_lang genbruger blot det første svar.
+    static $cache = [];
+    $cache_key = $current_page . '|' . $target_lang;
+    if (array_key_exists($cache_key, $cache)) {
+        return $cache[$cache_key];
+    }
+
     // 1. Tving sprogkoden til små bogstaver (så 'DA' bliver til 'da')
     $lang = strtolower(trim($target_lang));
-    
+
     // 2. Definer stien til den specifikke sprogfil
     $lang_file   = dirname(__DIR__) . "/json-data/languages/help_system_" . $lang . ".json";
     $master_file = dirname(__DIR__) . '/json-data/help_system.json';
     
-    if (!file_exists($master_file)) return false;
+    if (!file_exists($master_file)) return $cache[$cache_key] = false;
     $master_data = json_decode(file_get_contents($master_file), true);
-    if (!$master_data || !isset($master_data[$current_page])) return false;
+    if (!$master_data || !isset($master_data[$current_page])) return $cache[$cache_key] = false;
 
     $help_lines = $master_data[$current_page];
 
@@ -30,7 +95,7 @@ function _help_get_content($current_page, $target_lang) {
             $help_lines = $lang_data[$current_page];
         } else {
             // Sektionen mangler! Vi oversætter automatisk via OpenAI API
-            $apiKey = $_ENV['OPENAI_API_KEY'] ?? $_SERVER['OPENAI_API_KEY'] ?? (function_exists('getenv') ? getenv('OPENAI_API_KEY') : '') ?? '';
+            $apiKey = _help_get_openai_key();
             
             if (!empty($apiKey)) {
                 $payload = [
@@ -47,7 +112,7 @@ function _help_get_content($current_page, $target_lang) {
                     ]
                 ];
 
-                $ch = curl_init("https://api.openai.com/v1/chat/completions");
+                $ch = tc_curl_init("https://api.openai.com/v1/chat/completions");
                 curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json", "Authorization: Bearer " . $apiKey]);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
                 curl_setopt($ch, CURLOPT_POST, true);
@@ -75,7 +140,7 @@ function _help_get_content($current_page, $target_lang) {
             }
         }
     }
-    return implode("\n", $help_lines);
+    return $cache[$cache_key] = implode("\n", $help_lines);
 }
 
 function _help_has_text($current_page, $target_lang) {
@@ -171,51 +236,104 @@ function htm_FloatingActionBar() {
 # -------------------------------------------------------------------------
 
 /**
- * Scanner et bilag (billede eller PDF) vha. OpenAI gpt-4o og returnerer strukturerede data.
+ * Scanner et bilag (billede eller PDF) vha. OpenAI og returnerer strukturerede data.
+ *
+ * v1.2.0-RETTELSE (fund: bruger spurgte om både "billed-PDF" (rent scannet,
+ * intet tekstlag) og "OCR-PDF" (har et reelt tekstlag) kunne vises/tolkes):
+ * docblock'en her har ALTID påstået PDF blev understøttet, men funktionen
+ * sendte enhver fil - også PDF'er - som 'image_url' til Chat Completions
+ * (/v1/chat/completions). OpenAIs egen dokumentation (platform.openai.com/
+ * docs/guides/vision) siger image_url KUN understøtter png/jpeg/webp/gif -
+ * aldrig application/pdf. Ethvert PDF-bilag har derfor fejlet ved AI-scanning
+ * siden funktionen blev skrevet - uanset om det var en billed-PDF eller en
+ * OCR-PDF, samme kode ramte begge ens. PDF'er sendes nu i stedet til
+ * Responses API'et (/v1/responses) som 'input_file' - ifølge OpenAIs egen
+ * PDF-guide udtrækker den BÅDE sidernes tekstlag (hvis det findes, dvs. en
+ * OCR-PDF) OG en visuel gengivelse af hver side (til rene billed-PDF'er uden
+ * tekstlag) og sender begge dele til modellen - dækker derfor netop begge de
+ * to sager brugeren spurgte om. Almindelige billedfiler (jpg/png/webp) sendes
+ * fortsat uændret via Chat Completions/image_url.
+ *
+ * Samtidig rettet: enhver fejl (manglende nøgle, curl-fejl, HTTP-fejl fra
+ * OpenAI, uventet svarformat) blev FØR slugt tavst (funktionen returnerede
+ * bare null, og expense_edit.php's eksisterende `isset($ai_data['error'])`-
+ * tjek udløste derfor aldrig) - AI-scan-knappen så ud til bare ikke at gøre
+ * noget. Returnerer nu ['error' => '...'] i alle disse tilfælde, så den
+ * eksisterende fejlvisning i expense_edit.php rent faktisk bliver vist.
+ *
+ * IKKE live-testet mod en rigtig OpenAI-konto (ingen API-nøgle tilgængelig
+ * lokalt) - selve request-formen er verificeret direkte mod OpenAIs egen
+ * dokumentation (pdf-files/vision/structured-outputs-guiderne), men den
+ * fulde rundtur bør bekræftes med et rigtigt PDF-bilag på en installation
+ * med en konfigureret OPENAI_API_KEY.
+ *
  * @param string $file_path Relativ eller absolut sti til filen på serveren
- * @return array|null [dato => 'YYYY-MM-DD', total => 123.45, leverandor => 'Navn'] eller null ved fejl
+ * @return array [dato => 'YYYY-MM-DD', total => 123.45, leverandor => 'Navn'] eller ['error' => '...'] ved fejl
  */
 function scanBilagMedOpenAI($file_path) {
-    $api_key = $_ENV['OPENAI_API_KEY'] ?? $_SERVER['OPENAI_API_KEY'] ?? (function_exists('getenv') ? getenv('OPENAI_API_KEY') : '') ?? '';
+    $api_key = _help_get_openai_key();
 
-    if (empty($api_key) || !file_exists($file_path)) {
-        return null;
+    if (empty($api_key)) {
+        return ['error' => 'OpenAI API-nøgle er ikke sat op (OPENAI_API_KEY i inc/data/env.ini).'];
+    }
+    if (!file_exists($file_path)) {
+        return ['error' => 'Bilagsfilen blev ikke fundet på serveren: ' . $file_path];
     }
 
-    $file_data = file_get_contents($file_path);
-    $mime_type = mime_content_type($file_path);
+    $file_data   = file_get_contents($file_path);
+    $mime_type   = mime_content_type($file_path);
     $base64_file = base64_encode($file_data);
+    $filename    = basename($file_path);
+    $is_pdf      = ($mime_type === 'application/pdf') || strtolower(pathinfo($file_path, PATHINFO_EXTENSION)) === 'pdf';
+    $instruction = 'Analyser dette bilag. Find dato (YYYY-MM-DD), totalbeløb og leverandørnavn.';
 
-    $json_schema = [
-        'name' => 'receipt_extractor',
-        'strict' => true,
-        'schema' => [
-            'type' => 'object',
-            'properties' => [
-                'dato' => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
-                'total' => ['type' => 'number', 'description' => 'Totalbeløb med moms'],
-                'leverandor' => ['type' => 'string', 'description' => 'Leverandørnavn']
-            ],
-            'required' => ['dato', 'total', 'leverandor'],
-            'additionalProperties' => false
-        ]
+    $schema_props = [
+        'dato' => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
+        'total' => ['type' => 'number', 'description' => 'Totalbeløb med moms'],
+        'leverandor' => ['type' => 'string', 'description' => 'Leverandørnavn']
     ];
+    $schema_required = ['dato', 'total', 'leverandor'];
 
-    $payload = [
-        'model' => 'gpt-4o',
-        'messages' => [
-            [
+    if ($is_pdf) {
+        // Responses API - se funktionens hoved-kommentar for hvorfor PDF skal
+        // her hen og ikke til Chat Completions/image_url.
+        $endpoint = 'https://api.openai.com/v1/responses';
+        $payload = [
+            'model' => 'gpt-4o',
+            'input' => [[
                 'role' => 'user',
                 'content' => [
-                    ['type' => 'text', 'text' => 'Analyseer dette bilag. Find dato (YYYY-MM-DD), totalbeløb og leverandørnavn.'],
-                    ['type' => 'image_url', 'image_url' => ['url' => 'data:' . $mime_type . ';base64,' . $base64_file]]
-                ]
-            ]
-        ],
-        'response_format' => ['type' => 'json_schema', 'json_schema' => $json_schema]
-    ];
+                    ['type' => 'input_text', 'text' => $instruction],
+                    ['type' => 'input_file', 'filename' => $filename, 'file_data' => 'data:application/pdf;base64,' . $base64_file],
+                ],
+            ]],
+            'text' => ['format' => [
+                'type' => 'json_schema',
+                'name' => 'receipt_extractor',
+                'strict' => true,
+                'schema' => ['type' => 'object', 'properties' => $schema_props, 'required' => $schema_required, 'additionalProperties' => false],
+            ]],
+        ];
+    } else {
+        $endpoint = 'https://api.openai.com/v1/chat/completions';
+        $payload = [
+            'model' => 'gpt-4o',
+            'messages' => [[
+                'role' => 'user',
+                'content' => [
+                    ['type' => 'text', 'text' => $instruction],
+                    ['type' => 'image_url', 'image_url' => ['url' => 'data:' . $mime_type . ';base64,' . $base64_file]],
+                ],
+            ]],
+            'response_format' => ['type' => 'json_schema', 'json_schema' => [
+                'name' => 'receipt_extractor',
+                'strict' => true,
+                'schema' => ['type' => 'object', 'properties' => $schema_props, 'required' => $schema_required, 'additionalProperties' => false],
+            ]],
+        ];
+    }
 
-    $ch = curl_init('https://api.openai.com/v1/chat/completions');
+    $ch = tc_curl_init($endpoint);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
@@ -223,19 +341,58 @@ function scanBilagMedOpenAI($file_path) {
         'Content-Type: application/json',
         'Authorization: Bearer ' . $api_key
     ]);
-    
-    // Sikrer at forbindelsen ikke fejler på lokale SSL-opsætninger
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    // NYT: eksplicit timeout - der var slet ingen før, så et langsomt/
+    // uopnåeligt api.openai.com kunne hænge selve sidevisningen på ubestemt
+    // tid (samme fejlklasse som auto_backup.inc.php's manglende SMTP-timeout
+    // tidligere i denne session). 60 sek. da PDF-analyse typisk tager længere
+    // end et enkelt billede.
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
 
-    $response = curl_exec($ch);
+    // SSL-certifikatverifikation er cURLs egen standard, bevidst IKKE slået
+    // fra - se scanner-ocr-review/[[scanner-ocr-review]] for hvorfor.
+
+    $response   = curl_exec($ch);
+    $curl_error = curl_error($ch);
+    $http_status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    
-    $result = json_decode($response, true);
-    if (isset($result['choices'][0]['message']['content'])) {
-        return json_decode($result['choices'][0]['message']['content'], true);
+
+    if ($response === false) {
+        return ['error' => 'Kunne ikke kontakte OpenAI: ' . $curl_error];
     }
 
-    return null;
+    $result = json_decode($response, true);
+    if (!is_array($result)) {
+        return ['error' => 'Uventet (ikke-JSON) svar fra OpenAI.'];
+    }
+    if ($http_status >= 400) {
+        return ['error' => $result['error']['message'] ?? ('OpenAI svarede med HTTP ' . $http_status . '.')];
+    }
+
+    if ($is_pdf) {
+        // Se Responses API'ets output-facit: teksten kan IKKE antages at
+        // ligge fast på output[0].content[0].text (OpenAIs egen advarsel) -
+        // find i stedet det content-element hvor type=='message', og deri
+        // det content-element hvor type=='output_text'.
+        $text = null;
+        foreach ($result['output'] ?? [] as $item) {
+            if (($item['type'] ?? '') === 'message') {
+                foreach ($item['content'] ?? [] as $c) {
+                    if (($c['type'] ?? '') === 'output_text') { $text = $c['text']; break 2; }
+                }
+            }
+        }
+        if ($text === null) {
+            return ['error' => 'Uventet svarformat fra OpenAI (intet output_text fundet).'];
+        }
+        $decoded = json_decode($text, true);
+        return is_array($decoded) ? $decoded : ['error' => 'Kunne ikke tolke OpenAI-svaret som JSON.'];
+    }
+
+    if (isset($result['choices'][0]['message']['content'])) {
+        $decoded = json_decode($result['choices'][0]['message']['content'], true);
+        return is_array($decoded) ? $decoded : ['error' => 'Kunne ikke tolke OpenAI-svaret som JSON.'];
+    }
+
+    return ['error' => 'Uventet svarformat fra OpenAI.'];
 }
 ?>

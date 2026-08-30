@@ -1,13 +1,24 @@
-<?php # /mail_inbox.php v:1.2.0 d:2026-07-10 i:claude (Rettet: opdigtede --theme-*-variabler erstattet med de rigtige, eksisterende temavariabler)
+<?php # /mail_inbox.php v:1.3.0 d:2026-08-30 i:evs
+# mail-dato brugte hårdkodet d.m.Y i stedet for CONF_DATE_FORMAT
+# v1.3.0: mail-listen brugte imap_headerinfo()+imap_uid() PR. mail (op til 30
+# IMAP-tur-retur-kald for 15 mails) - erstattet med ét imap_fetch_overview()-
+# kald for hele siden. Tilføjet imap_timeout() så en død mailserver fejler
+# hurtigt i stedet for at hænge sidevisningen (bruger-rapporteret langsom
+# indlæsning af mail_inbox.php).
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/php2htm.lib.php';
 require_once 'inc/menu.inc.php';
 
 // Fejlsikker indlæsning af INI
-$ini_path = __DIR__ . '/inc/env.ini';
+// RETTET: env.ini flyttet til inc/data/env.ini - gammel sti bevaret som
+// bagudkompatibel fallback.
+$ini_path = __DIR__ . '/inc/data/env.ini';
 if (!file_exists($ini_path)) {
-    die(lang('@Critical error: Configuration file inc/env.ini was not found.'));
+    $ini_path = __DIR__ . '/inc/env.ini';
+}
+if (!file_exists($ini_path)) {
+    die(lang('@Critical error: Configuration file inc/data/env.ini was not found.'));
 }
 
 $config = [];
@@ -43,6 +54,12 @@ if ($box_type === 'invoice') {
 if (empty($imap_server) || empty($imap_user)) {
     die(lang('@Critical error: Invalid or unreadable configuration format in env.ini.'));
 }
+
+// Eksplicit timeout - ingen var sat før, så en langsom/utilgængelig mail-
+// server kunne lade sidevisningen hænge i meget lang tid i stedet for at
+// fejle hurtigt (bruger-rapporteret langsom indlæsning).
+@imap_timeout(IMAP_OPENTIMEOUT, 10);
+@imap_timeout(IMAP_READTIMEOUT, 10);
 
 $mbox = @imap_open($imap_server, $imap_user, $imap_pass);
 
@@ -80,11 +97,20 @@ if ($mbox && $view_id > 0 && (!empty($download_part) || !empty($view_part))) {
         elseif ($ext === 'png') $mime = 'image/png';
         elseif ($ext === 'gif') $mime = 'image/gif';
 
+        // RETTET (bruger-anmodet "find 5 fejl"-runde): $file_name stammer fra
+        // vedhæftningens eget navn i en ekstern mail - dvs. en HVILKEN SOM
+        // HELST afsender til den tilkoblede postkasse kontrollerer denne
+        // værdi. basename() fjernede kun sti-separatorer, ikke anførselstegn
+        // - et vedhæftningsnavn som fx foo".pdf kunne bryde ud af
+        // filename="..."-attributten i selve HTTP-headeren. Undslipper nu
+        // også anførselstegn (og fjerner CR/LF for en go'ordens skyld, selvom
+        // PHPs header() allerede nægter at sende dem).
+        $safe_file_name = str_replace(['"', "\r", "\n"], '', basename($file_name));
         header('Content-Type: ' . $mime);
         if (!empty($download_part)) {
-            header('Content-Disposition: attachment; filename="' . basename($file_name) . '"');
+            header('Content-Disposition: attachment; filename="' . $safe_file_name . '"');
         } else {
-            header('Content-Disposition: inline; filename="' . basename($file_name) . '"');
+            header('Content-Disposition: inline; filename="' . $safe_file_name . '"');
         }
         header('Content-Length: ' . strlen($file_content));
         echo $file_content;
@@ -101,10 +127,15 @@ if ($mbox && $view_id > 0) {
     $msg_no = imap_msgno($mbox, $view_id);
     if ($msg_no > 0) {
         $header = imap_headerinfo($mbox, $msg_no);
+        // Subject-headeren er FULDT afsender-kontrolleret (enhver der kan
+        // maile til postkassen bestemmer denne tekst) og skrives direkte ind
+        // i siden nedenfor - skal derfor htmlspecialchars()'es ligesom
+        // $header->fromaddress allerede blev, ellers er det en oplagt
+        // lagret/reflekteret XSS (fx <script>-tag som mail-emne).
         $mail_details = [
-            'subject' => isset($header->subject) ? imap_utf8($header->subject) : lang('@(No subject)'),
+            'subject' => isset($header->subject) ? htmlspecialchars(imap_utf8($header->subject)) : lang('@(No subject)'),
             'from'    => htmlspecialchars($header->fromaddress),
-            'date'    => date('d.m.Y H:i', strtotime($header->date))
+            'date'    => date(CONF_DATE_FORMAT . ' H:i', strtotime($header->date))
         ];
 
         $structure = imap_fetchstructure($mbox, $msg_no);
@@ -204,7 +235,7 @@ echo '<style>
 
 echo '<div class="page-title-bar">';
 echo '  <h1><i class="fa-regular fa-envelope" style="color:var(--color-primary)"></i> ' . lang('@Document Inbox') . '</h1>';
-htm_Button(icon: 'fa-door-open', labl: lang('@Leave'), type: 'danger', link: 'sales_hub.php');
+htm_Button(icon: 'fa-door-open', labl: lang('@Leave'), type: 'danger', link: 'sales_hub.php', attr: 'data-hint="'.lang('@Return to the sales hub').'"');
 echo '</div>';
 
 // VIS INTERNE FANEBLADE (Tabs) TIL SKIFT MELLEM INDBAKKER
@@ -236,12 +267,25 @@ if (!$mbox) {
     if ($total_messages == 0) {
         echo '    <div class="no-mail-selected">' . lang('@The inbox is empty.') . '</div>';
     } else {
+        // RETTET (bruger-rapporteret langsom sideindlæsning): hentede FØR
+        // header og uid med to separate IMAP-kald PR. mail (op til 30 tur-
+        // retur-kald til mailserveren for 15 viste mails). imap_fetch_overview()
+        // henter det hele i ÉT kald for hele det viste interval.
+        $overview_raw = imap_fetch_overview($mbox, $end . ':' . $start, 0);
+        $overview_by_msgno = [];
+        foreach ($overview_raw as $ov) {
+            $overview_by_msgno[$ov->msgno] = $ov;
+        }
+
         for ($i = $start; $i >= $end; $i--) {
-            $header = imap_headerinfo($mbox, $i);
-            $uid = imap_uid($mbox, $i);
-            $date = date("d.m H:i", strtotime($header->date));
-            $subject = isset($header->subject) ? imap_utf8($header->subject) : lang('@(No subject)');
-            $from = htmlspecialchars($header->fromaddress);
+            if (!isset($overview_by_msgno[$i])) continue; // defensivt - bør ikke ske
+            $ov = $overview_by_msgno[$i];
+            $uid = (int)$ov->uid;
+            $date = isset($ov->date) ? date("d.m H:i", strtotime($ov->date)) : '';
+            // Samme XSS-risiko som i detaljevisningen ovenfor - emnet er
+            // fuldt afsender-kontrolleret og skrives uescapet ind i listen.
+            $subject = (isset($ov->subject) && $ov->subject !== '') ? htmlspecialchars(imap_utf8($ov->subject)) : lang('@(No subject)');
+            $from = htmlspecialchars($ov->from ?? '');
             $active_class = ($view_id === $uid) ? ' active' : '';
 
             echo '<a href="' . $base_url . '&uid=' . $uid . '&page=' . $current_page . '" class="mail-item' . $active_class . '">';

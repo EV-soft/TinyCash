@@ -1,4 +1,4 @@
-<?php # /save_layout.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /save_layout.php v:1.3.0 d:2026-08-30 i:evs
 /* ==========================================================================
    Gemmer position/bredde for en design-blok på fakturaen (kaldt fra
    invoice_view.php's Design Mode via saveToDB()-JS-funktionen).
@@ -29,7 +29,7 @@ $width_mm   = $_POST['w'] ?? null;
 // Forhindrer at et vilkårligt element_id kan indsættes/opdateres via dette endpoint.
 $allowed_ids = [
     'block-stamp', 'block-logo', 'block-sender', 'block-recipient',
-    'block-cust-ref', 'block-inv-no', 'block-inv-date', 'block-inv-due', 'block-lines',
+    'block-cust-ref', 'block-delivery', 'block-inv-no', 'block-inv-date', 'block-inv-due', 'block-lines',
     'block-totals', 'block-notes', 'block-foot-pay', 'block-foot-contact', 'block-foot-online', 'block-foot-legal'
 ];
 

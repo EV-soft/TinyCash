@@ -1,4 +1,4 @@
-<?php # /inc/depot_worker.inc.php v:1.1.0 d:2026-07-02 i:evs
+<?php # /inc/depot_worker.inc.php v:1.3.0 d:2026-08-30 i:evs
 
 /**
  * Scanner Bilagsdepotet og sikrer, at kildemapperne eksisterer.

@@ -1,4 +1,7 @@
-<?php # /project_edit.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /project_edit.php v:1.4.0 d:2026-08-23 i:claude
+# v1.4.0: viser nu en fejlbesked hvis en dublet-projektkode blev afvist ved
+# gem (se [[project-bugs-review]] og project_actions.php).
+# htm_InputGroup->htm_Field
 # (Færdiggjort: gem virker, settings-kort opdateret)
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php'; 
@@ -35,6 +38,7 @@ htm_Header($pageTitle);
 showMenu();
 
 if ($err === 'missing_code') htm_Alert(lang('@Project Code is required'), 'error');
+if ($err === 'duplicate_code') htm_Alert(lang('@This project code is already in use by another project.'), 'error');
 
 $cust_opts = ['' => '-- ' . lang('@Select Customer') . ' --'];
 $cust_res  = DB::query($conn, "SELECT cust_id, cust_name FROM customers ORDER BY cust_name ASC");
@@ -45,13 +49,14 @@ if ($cust_res) {
 }
 
 // --- SETTINGS-KORT: modul til/fra ---
-$toggle_tool = htm_InputGroup(
+$toggle_tool = htm_Field(
     '', '@Module', 'module_projects', $module_active ? '1' : '0',
     'sele', ['1' => lang('@Active'), '0' => lang('@Inactive')],
     extr: 'bare onchange="this.form.submit()"', echo: false
 );
 
 echo '<form method="post" action="project_actions.php?action=toggle_module" style="margin:0;">';
+csrf_field();
 echo '<input type="hidden" name="return_to" value="project_edit.php?id=' . $id . '">';
 htm_Card_(lang('@Project Module'), 700, tool: $toggle_tool);
 echo '<p style="margin:0; color: var(--text-muted); font-size:0.9em;">';
@@ -67,10 +72,11 @@ echo "<div style='max-width:800px; margin:20px auto;'>";
 htm_Card_($pageTitle, 700);
 ?>
 <form id="proj_form" action="project_actions.php?action=<?php echo ($id > 0 ? 'update_project' : 'create_project'); ?>" method="POST">
+    <?php csrf_field(); ?>
     <input type="hidden" name="proj_id" value="<?php echo $item['proj_id']; ?>">
 
     <?php
-        htm_InputGroup(
+        htm_Field(
             icon: 'fa-hashtag',
             labl: '@Project Code',
             name: 'proj_no',
@@ -79,7 +85,7 @@ htm_Card_($pageTitle, 700);
             extr: 'required autofocus',
             wdth: '28%'
         );
-        htm_InputGroup(
+        htm_Field(
             icon: 'fa-user',
             labl: '@Client',
             name: 'cust_id',
@@ -88,7 +94,7 @@ htm_Card_($pageTitle, 700);
             opti: $cust_opts,
             wdth: '50%'
         );
-        htm_InputGroup(
+        htm_Field(
             icon: 'fa-toggle-on',
             labl: '@Status',
             name: 'is_active',
@@ -97,7 +103,7 @@ htm_Card_($pageTitle, 700);
             opti: ['1' => lang('@Active'), '0' => lang('@Inactive')],
             wdth: '22%'
         );
-        htm_InputGroup(
+        htm_Field(
             icon: 'fa-calendar',
             labl: '@Start Date',
             name: 'proj_start',
@@ -105,7 +111,7 @@ htm_Card_($pageTitle, 700);
             type: 'date',
             wdth: '50%'
         );
-        htm_InputGroup(
+        htm_Field(
             icon: 'fa-calendar-check',
             labl: '@End Date',
             name: 'proj_stop',
@@ -113,7 +119,7 @@ htm_Card_($pageTitle, 700);
             type: 'date',
             wdth: '50%'
         );
-        htm_InputGroup(
+        htm_Field(
             icon: 'fa-align-left',
             labl: '@Project Description',
             name: 'proj_description',
@@ -121,7 +127,7 @@ htm_Card_($pageTitle, 700);
             type: 'textarea',
             extr: 'rows="3"'
         );
-        htm_InputGroup(
+        htm_Field(
             icon: 'fa-file-invoice',
             labl: '@Invoice Concept',
             name: 'proj_concept',
@@ -139,17 +145,17 @@ htm_Card_($pageTitle, 700);
                 labl: ($id > 0 ? '@Save Changes' : '@Create Project'),
                 type: 'success',
                 styl: 'flex:2; padding:12px; font-size:1.1em;',
-                attr: 'form="proj_form"'
+                attr: 'form="proj_form" data-hint="'.lang($id > 0 ? '@Save changes to this project' : '@Create this project').'"'
             );
         ?>
         <a href="project_view.php<?php echo $id > 0 ? '?id='.$id : ''; ?>" style="text-decoration:none; flex:1;">
-            <?php htm_Button(icon: 'fa-times', labl: '@Cancel', type: 'secondary', styl: 'width:100%; padding:12px;'); ?>
+            <?php htm_Button(icon: 'fa-times', labl: '@Cancel', type: 'secondary', styl: 'width:100%; padding:12px;', attr: 'data-hint="'.lang('@Discard changes and return to the project').'"'); ?>
         </a>
         <?php if ($id > 0): ?>
         <a href="project_actions.php?action=delete_project&id=<?php echo $id; ?>"
            onclick="return confirm('<?php echo addslashes(lang('@Are you sure? This cannot be undone.')); ?>')"
            style="text-decoration:none; flex:1;">
-            <?php htm_Button(icon: 'fa-trash', labl: '@Delete', type: 'danger', styl: 'width:100%; padding:12px;'); ?>
+            <?php htm_Button(icon: 'fa-trash', labl: '@Delete', type: 'danger', styl: 'width:100%; padding:12px;', attr: 'data-hint="'.lang('@Delete this project').'"'); ?>
         </a>
         <?php endif; ?>
     </div>

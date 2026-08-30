@@ -1,4 +1,4 @@
-<?php # /program_backup.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /program_backup.php v:1.3.0 d:2026-08-30 i:evs
 # (Lang vejledning flyttet til hjælpesystemet, vist inline)
 ob_start();
 require_once 'inc/auth.inc.php';
@@ -42,6 +42,7 @@ echo '<div style="text-align:center; padding:20px;">
         . lang('@Archive the program code and database structure before and after an update.')
       . '</p>
         <form method="post" style="margin-top:25px;">
+            '.csrf_field(false).'
             <button type="submit" name="create_program_zip" style="background:#0ea5e9; color:white; padding:15px 30px; border:none; border-radius:8px; font-size:1.2em; cursor:pointer; font-weight:bold;">
                 <i class="fa fa-file-zipper"></i> ' . lang('@Generate Program Backup') . '
             </button>

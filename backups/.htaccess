@@ -1,0 +1,12 @@
+# backups/.htaccess
+#
+# KRITISK (§bugs-batch-14-review): denne mappe havde INTET .htaccess overhovedet,
+# i modsætning til storage/ og inc/, som begge allerede har "Deny from all".
+# backups/ indeholder fulde databasedumps fra tre forskellige kilder
+# (full_project_backup.php, backup_system.php, program_backup.php,
+# inc/auto_backup.inc.php) - inklusive users-tabellens password_hash-kolonne
+# og ALLE kunde-/faktura-/regnskabsdata. Uden denne fil kunne enhver, der
+# kendte eller gættede et backup-filnavn (vist direkte til brugeren som et
+# download-link efter hver oprettelse), hente hele databasen via en helt
+# almindelig, uautentificeret HTTP GET. Samme mønster som storage/.htaccess.
+Deny from all

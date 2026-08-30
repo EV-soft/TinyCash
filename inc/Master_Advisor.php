@@ -1,4 +1,15 @@
-<?php # /inc/master_advisor.php v:1.1.0 d:2026-07-02 i:evs
+<?php # /inc/Master_Advisor.php v:1.3.0 d:2026-08-30 i:evs
+# v1.2.0: KRITISK - denne fil var eksplicit hvidlistet i inc/.htaccess
+# (undtagelse fra "afvis alt"-standarden) og havde INTET PHP-login-tjek -
+# reelt offentligt tilgængelig for enhver på internettet, uden login. Dumper
+# hele kildekoden + databaseskemaet og sletter gamle eksportfiler.
+# .htaccess-undtagelsen er fjernet, og der er tilføjet et admin-tjek her som
+# et uafhængigt, ekstra lag. Fundet ved en gennemgang af resterende inc-filer.
+chdir(dirname(__DIR__));
+require_once 'inc/auth.inc.php';
+if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
+    deny_access_gracefully();
+}
 ob_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);

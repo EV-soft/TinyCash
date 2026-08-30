@@ -1,7 +1,12 @@
-<?php # /inc/auto_backup.inc.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /inc/auto_backup.inc.php v:1.3.0 d:2026-08-30 i:evs
+# gendannelsesvejledning i backup-mailen nævner nu det indbyggede offline-dekrypteringsværktøj før openssl-kommandoen
 # Automatisk krypteret backup sendt til backup-mail
 # Bruger DB::dump_to_sql() og DB::is_sqlite() fra db_connect.inc.php
-# Udløses når: 21+ dage siden sidste backup OG der er sket ændringer siden da
+# Udløses når: 7+ dage (mindst ugentligt, jf. bogføringsloven) siden sidste backup OG ændringer siden da
+# v1.3.0: PHPMailer's $mail->Timeout stod på sin egen standard (300 sek.) -
+# da denne funktion køres synkront i htm_Footer() på HVER sidevisning, kunne
+# en langsom/uopnåelig SMTP-server hænge en helt almindelig side i op til 5
+# minutter. Sat eksplicit til 15 sekunder.
 
 function auto_backup_check($conn) {
     global $db_type, $pdo, $db_settings;
@@ -12,7 +17,7 @@ function auto_backup_check($conn) {
     $row     = $res ? DB::fetch_assoc($res) : null;
     $last_ts = $row ? (int)$row['setting_value'] : 0;
 
-    if ((time() - $last_ts) / 86400 < 21) return;
+    if ((time() - $last_ts) / 86400 < 7) return;
 
     // ── 2. Er der ændringer siden seneste backup? ─────────────────────────────
     $last_dt = date('Y-m-d H:i:s', $last_ts ?: 0);
@@ -21,8 +26,20 @@ function auto_backup_check($conn) {
     $chk = @DB::query($conn, "SELECT COUNT(*) FROM audit_log WHERE log_date > '$last_dt'");
     if ($chk) { $r = DB::fetch_row($chk); if ((int)$r[0] > 0) $changed = true; }
 
+    // RETTET (bruger-rapporteret følgefejl): loopet inkluderede FØR også
+    // 'invoices' og 'transactions'. 'invoices' har slet ingen created_at-
+    // kolonne, så den forespørgsel fejlede tavst (DB::query() returnerer
+    // false, sunket af @-operatoren) - en ny faktura oprettet uden om
+    // expenses/journal blev derfor aldrig opdaget som "ændring", MEDMINDRE
+    // den også blev logget til audit_log (nu rettet direkte ved kilden i
+    // invoice_edit.php, se CREATE_DRAFT_INVOICE). 'transactions' har heller
+    // ingen created_at-kolonne, men mere fundamentalt: en fuld gennemsøgning
+    // af kodebasen viser at INTET sted i hele appen nogensinde skriver til
+    // eller læser fra denne tabel - den er reelt død/legacy (bogføring sker
+    // via journal+ledger). Fjernet begge fra loopet i stedet for at lade dem
+    // stå som meningsløse, altid-fejlende forespørgsler.
     if (!$changed) {
-        foreach (['expenses', 'invoices', 'journal', 'transactions'] as $tbl) {
+        foreach (['expenses', 'journal'] as $tbl) {
             $chk2 = @DB::query($conn, "SELECT COUNT(*) FROM $tbl WHERE created_at > '$last_dt'");
             if ($chk2) { $r2 = DB::fetch_row($chk2); if ((int)$r2[0] > 0) { $changed = true; break; } }
         }
@@ -56,18 +73,32 @@ function auto_backup_check($conn) {
 
     require_once __DIR__ . '/mail_config.inc.php';
 
+    // RETTET (bruger-rapporteret: langsom sidevisning ved sideskift på en
+    // installation): disse to grene glemte at gemme auto_backup_last, i
+    // modsætning til "ingen ændringer"-grenen ovenfor. Uden det tidsstempel
+    // rykker "gået 7 dage"-spærren i selve toppen af funktionen ALDRIG frem
+    // for en installation, der ikke har sat backup-mail op - så funktionen
+    // fortsætter forbi den lette tidsspærre på HVER ENESTE sidevisning
+    // (htm_Footer() kalder denne funktion for enhver logget ind bruger) og
+    // kører de 5 COUNT(*)-forespørgsler nedenfor (§2) igen og igen, for
+    // evigt. Ingen af de berørte tabeller har noget indeks på de filtrerede
+    // kolonner (se migrate_auto_backup_indexes.php) - fulde tabel-scanninger
+    // på hver sidevisning, værre jo mere bogføringshistorik der er.
     if (empty($backup_mail)) {
         _ab_log($conn, 'Auto backup: mangler auto_backup_mail i Firmaindstillinger');
+        _ab_save($conn, 'auto_backup_last', time());
         return;
     }
     if (!defined('MAIL_HOST') || MAIL_HOST === '') {
         _ab_log($conn, 'Auto backup: SMTP-afsender mangler (MAIL_HOST i env.ini/[mail_config])');
+        _ab_save($conn, 'auto_backup_last', time());
         return;
     }
 
     // ── 4. Byg ZIP ───────────────────────────────────────────────────────────
     if (!class_exists('ZipArchive')) {
         _ab_log($conn, 'Auto backup: PHP ZipArchive-extension er ikke aktiveret');
+        _ab_save($conn, 'auto_backup_last', time());
         return;
     }
 
@@ -80,6 +111,7 @@ function auto_backup_check($conn) {
     $zip = new ZipArchive();
     if ($zip->open($zip_file, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
         _ab_log($conn, 'Auto backup: kunne ikke oprette midlertidig ZIP-fil i ' . $tmp_dir);
+        _ab_save($conn, 'auto_backup_last', time());
         return;
     }
 
@@ -98,23 +130,69 @@ function auto_backup_check($conn) {
         }
     }
 
-    // Uploads (kvitteringer og bilag)
+    // Uploads (kvitteringer og bilag). Rekursivt (RecursiveIteratorIterator,
+    // samme mønster som full_project_backup.php) i stedet for det tidligere
+    // glob('*')+is_file() - et almindeligt glob('*') matcher ikke ind i
+    // undermapper, så filer i en eventuel fremtidig undermappe-struktur under
+    // uploads/ ville stille springes over uden varsel. getSubPathName()
+    // returnerer OS-native separator (backslash på Windows) - normaliseres
+    // til forward slash, ellers giver en Linux-udpakning bagefter én flad
+    // fil med et bogstaveligt backslash i navnet i stedet for en rigtig
+    // undermappe (bekræftet direkte for storage/ nedenfor, som rent faktisk
+    // har undermapper - uploads/ har det ikke i praksis her, men samme
+    // fejlklasse gælder kodemæssigt).
     $uploads_dir = __DIR__ . '/../uploads/';
     if (is_dir($uploads_dir)) {
-        foreach (glob($uploads_dir . '*') as $f) {
-            if (is_file($f)) $zip->addFile($f, 'uploads/' . basename($f));
+        $items = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($uploads_dir, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+        foreach ($items as $item) {
+            if ($item->isFile()) $zip->addFile($item->getRealPath(), 'uploads/' . str_replace('\\', '/', $items->getSubPathName()));
+        }
+    }
+
+    // Storage (voucher_depot/einvoices/saf-t) - manglede FØR helt fra den
+    // automatiske off-site backup, samme fund som i full_project_backup.php/
+    // backup_restore_worker.php. Fundet ved en backup-/gendannelsesgennemgang.
+    $storage_dir = __DIR__ . '/../storage/';
+    if (is_dir($storage_dir)) {
+        $items = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($storage_dir, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+        foreach ($items as $item) {
+            if ($item->isFile()) $zip->addFile($item->getRealPath(), 'storage/' . str_replace('\\', '/', $items->getSubPathName()));
+        }
+    }
+
+    // JSON-data (sprogfiler, hjælpesystem, kontoplan-skabeloner, inkl.
+    // json-data/languages/'s AI-genererede hjælpesystem-oversættelser) -
+    // manglede FØR helt fra denne backup (§bugs-batch-17-review), i
+    // modsætning til full_project_backup.php/backup_system.php, som nu
+    // begge er rettet til at tage hele mappen med rekursivt.
+    $json_dir = __DIR__ . '/../json-data/';
+    if (is_dir($json_dir)) {
+        $items = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($json_dir, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+        foreach ($items as $item) {
+            if ($item->isFile() && strtolower($item->getExtension()) === 'json') {
+                $zip->addFile($item->getRealPath(), 'json-data/' . str_replace('\\', '/', $items->getSubPathName()));
+            }
         }
     }
 
     // Program-backup (kildekode + DB-struktur) foldes ind under program/, så den
-    // automatiske 21-dages backup er én samlet backup af BÅDE data og program.
+    // automatiske ugentlige backup er én samlet backup af BÅDE data og program.
     require_once __DIR__ . '/program_backup.lib.php';
     program_backup_add_to_zip($zip, $conn, 'program/');
 
     // Info-fil
     $zip->addFromString('backup_info.txt',
         "TinyCash Auto Backup\n" .
-        "Dato:    " . date('d.m.Y H:i:s') . "\n" .
+        "Dato:    " . date(CONF_DATE_FORMAT . ' H:i:s') . "\n" .
         "Motor:   " . strtoupper($engine) . "\n" .
         "Firma:   " . $company_name . "\n" .
         "Version: " . (defined('APP_VERSION') ? APP_VERSION : '?') . "\n"
@@ -161,6 +239,7 @@ function auto_backup_check($conn) {
 
     if (!$mailer_path) {
         _ab_log($conn, 'Auto backup: PHPMailer ikke fundet — backup ikke afsendt');
+        _ab_save($conn, 'auto_backup_last', time());
         @unlink($send_file);
         return;
     }
@@ -175,15 +254,33 @@ function auto_backup_check($conn) {
     $enc_info = $encrypted
         ? "Kryptering:  AES-256-CBC (PBKDF2-SHA256, 10.000 iterationer)\n" .
           "Kodeord:     Dit MASTER-kodeord. Det sendes ALDRIG i denne mail - kun du kender det.\n"
-        : "Kryptering:  INGEN - sæt et master-kodeord i Firmaindstillinger -> Automatisk backup.\n";
+        // RETTET (samme oprydning som §backup-manual-vs-automatic-separation):
+        // pegede FØR på "Firmaindstillinger -> Automatisk backup" - den
+        // sektion er flyttet til backup.php, så denne henvisning (som står i
+        // selve gendannelses-mailen, afsendt under et rigtigt uheld) pegede
+        // stille på et sted, hvor indstillingen ikke længere findes.
+        : "Kryptering:  INGEN - sæt et master-kodeord i Backup-administration -> Automatisk Backup.\n";
+
+    // Nemmeste metode nævnes først: det indbyggede offline-dekrypteringsværktøj
+    // (backup_decrypt_offline.html) kører 100% i browseren, kræver ingen
+    // terminal/openssl, og virker uden serverforbindelse hvis filen er gemt
+    // lokalt på forhånd - det er præcis den situation, en gendannelses-mail
+    // er skrevet til (se backup.php's egen boks om samme værktøj). openssl-
+    // kommandoen bevares som teknisk alternativ for dem der foretrækker det.
+    $decrypt_tool_note = "Nemmeste metode - indbygget dekrypteringsværktøj (ingen terminal nødvendig):\n" .
+        "   Åbn \"backup_decrypt_offline.html\" (i TinyCash under System -> Maintenance ->\n" .
+        "   Backup Management -> Offline Decryption Tool). Kører fuldstændigt i browseren - gem\n" .
+        "   filen på din egen computer i forvejen, så den også virker hvis serveren er nede.\n" .
+        "   Indtast dit master-kodeord og vælg $attach_name direkte i værktøjet.\n\n" .
+        "Alternativ metode - via terminal (openssl):\n";
 
     // Erstat DIT_MASTER_KODEORD med dit eget. -md sha256 gør nøgleudledningen entydig.
-    $restore_sqlite = "1. Dekrypter (indtast dit master-kodeord):\n   openssl enc -d -aes-256-cbc -pbkdf2 -md sha256 -in $attach_name -out backup.zip -pass pass:DIT_MASTER_KODEORD\n2. Udpak ZIP og erstat tinycash.sqlite på serveren.\n";
-    $restore_mysql  = "1. Dekrypter (indtast dit master-kodeord):\n   openssl enc -d -aes-256-cbc -pbkdf2 -md sha256 -in $attach_name -out backup.zip -pass pass:DIT_MASTER_KODEORD\n2. Udpak ZIP og importer tinycash_mysql.sql:\n   mysql -u BRUGER -p DATABASE < tinycash_mysql.sql\n";
+    $restore_sqlite = $decrypt_tool_note . "1. Dekrypter (indtast dit master-kodeord):\n   openssl enc -d -aes-256-cbc -pbkdf2 -md sha256 -in $attach_name -out backup.zip -pass pass:DIT_MASTER_KODEORD\n2. Udpak ZIP og erstat tinycash.sqlite på serveren.\n";
+    $restore_mysql  = $decrypt_tool_note . "1. Dekrypter (indtast dit master-kodeord):\n   openssl enc -d -aes-256-cbc -pbkdf2 -md sha256 -in $attach_name -out backup.zip -pass pass:DIT_MASTER_KODEORD\n2. Udpak ZIP og importer tinycash_mysql.sql:\n   mysql -u BRUGER -p DATABASE < tinycash_mysql.sql\n";
 
     $body =
         "Automatisk backup fra " . $company_name . "\n\n" .
-        "Dato:        " . date('d.m.Y H:i') . "\n" .
+        "Dato:        " . date(CONF_DATE_FORMAT . ' H:i') . "\n" .
         "Database:    " . strtoupper($engine) . "\n" .
         $enc_info . "\n" .
         "--- Gendannelsesvejledning ---\n" .
@@ -200,9 +297,15 @@ function auto_backup_check($conn) {
         $mail->SMTPSecure = (MAIL_PORT == 465) ? 'ssl' : 'tls';
         $mail->Port       = MAIL_PORT;
         $mail->CharSet    = 'UTF-8';
+        // Kort, eksplicit timeout: dette kald kører synkront inde i hver
+        // sidevisnings htm_Footer() (via auto_backup_check()) - uden denne
+        // falder PHPMailer tilbage til sin egen standard på 300 sekunder,
+        // så en langsom/uopnåelig SMTP-server kan hænge EN HELT SIDE i op
+        // til 5 minutter i stedet for at fejle hurtigt og blive logget.
+        $mail->Timeout    = 15;
         $mail->setFrom(MAIL_FROM, $company_name . ' Backup');
         $mail->addAddress($backup_mail);
-        $mail->Subject    = '[TinyCash] Automatisk backup — ' . $company_name . ' — ' . date('d.m.Y');
+        $mail->Subject    = '[TinyCash] Automatisk backup — ' . $company_name . ' — ' . date(CONF_DATE_FORMAT);
         $mail->Body       = $body;
         $mail->addAttachment($send_file, $attach_name);
         $mail->send();
@@ -215,6 +318,12 @@ function auto_backup_check($conn) {
 
     } catch (Exception $e) {
         _ab_log($conn, 'Auto backup mail-fejl: ' . $e->getMessage());
+        // Vigtigst af alle disse tidsstempel-rettelser: uden den ville en
+        // vedvarende SMTP-fejl (forkert login, uopnåelig server) genopbygge
+        // HELE ZIP'en (database-dump + uploads/ + storage/ + json-data/ +
+        // program-kildekode, se §4 ovenfor) på hver eneste sidevisning, ikke
+        // bare køre de lette COUNT(*)-tjek fra §2.
+        _ab_save($conn, 'auto_backup_last', time());
     }
 
     @unlink($send_file); // Ryd krypteret fil fra server
@@ -238,8 +347,10 @@ function _ab_log($conn, $msg) {
 
 // Master-kodeordet til backup-kryptering hentes fra env.ini [backup_config],
 // IKKE fra databasen - så det ikke havner i database-dumps eller nogen backup.
+// RETTET: env.ini flyttet til inc/data/env.ini - gammel sti bevaret som
+// bagudkompatibel fallback (se db_connect.inc.php's $SøgeStier).
 function _ab_master_password() {
-    $ini = @parse_ini_file(__DIR__ . '/env.ini', true);
+    $ini = @parse_ini_file(__DIR__ . '/data/env.ini', true) ?: @parse_ini_file(__DIR__ . '/env.ini', true);
     return (is_array($ini) && isset($ini['backup_config']['BACKUP_PASSWORD']))
         ? trim($ini['backup_config']['BACKUP_PASSWORD'])
         : '';

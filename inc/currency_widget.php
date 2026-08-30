@@ -1,4 +1,4 @@
-<?php # inc/currency_widget.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /inc/currency_widget.php v:1.3.0 d:2026-08-30 i:evs
 # Valutaomregner-popup — inkluderes i htm_Footer() eller på den ønskede side
 # Bruger frankfurter.app (ECB-data, ingen API-nøgle)
 ?>

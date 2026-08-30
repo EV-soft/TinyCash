@@ -1,4 +1,12 @@
-<?php # /project_view.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /project_view.php v:1.4.0 d:2026-08-23 i:claude
+# v1.4.0: 5 fund ved en projekt-gennemgang - se [[project-bugs-review]]. (1)
+# ALVORLIGT: øverste oversigtstabels invoice-sum manglede momsmultiplikationen
+# helt ("SUM(quantity*price_each)", uden "*(100+rate)/100.0") - viste derfor
+# en ANDEN (for lav) indtægt/balance end selve projektets detaljevisning
+# lige nedenfor på samme side, som allerede har den korrekte momsberegning.
+# Bekræftet direkte: en faktura på 1.000 kr + 25% moms viste 1.000,00 kr i
+# oversigten men 1.250,00 kr i detaljerne. Rettet til samme formel begge steder.
+# ALVORLIGT FUND (tidligere, uændret): fakturatotal ekskluderede momsen helt på SQLite: "(1 + rate/100)" udregner rate/100 som heltalsdivision FØR additionen, hvilket giver 0 for enhver momssats under 100 - "1+0=1" betød momsen aldrig blev lagt til. Rettet til "(100+rate)/100", hvor divisionen sker sidst på hele udtrykket.
 # (Andre indtægter via expenses+exp_type; notefelter pr. sektion)
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -34,6 +42,15 @@ if ($msg === 'deleted') htm_Alert(lang('@Project deleted'), 'success');
 // =========================================================
 // ØVERST: Oversigtstabel
 // =========================================================
+// RETTET (§bugs-batch-22-review): total_inv summerede FØR fakturalinjer for
+// ALLE fakturaer knyttet til projektet, uanset status - inkl. stadig-
+// ubogførte KLADDER, som frit kan redigeres/slettes og ikke er en reel
+// forpligtelse endnu. Samme anti-mønster som report_income.php selv blev
+// omskrevet væk fra tidligere i denne session (se dens egen header-
+// kommentar) - "omsætning" skal ikke tælle noget der endnu ikke reelt er
+// sendt/bogført. Krediterede fakturaers linjer nulstilles allerede korrekt
+// af deres kreditnotas egne (negative) linjer, som arver samme proj_id (se
+// invoice_credit.php) - kun kladder skal ekskluderes her.
 $res_all = DB::query($conn, "
     SELECT p.proj_id, p.proj_no, p.is_active, p.proj_start, p.proj_stop,
            c.cust_name,
@@ -41,8 +58,9 @@ $res_all = DB::query($conn, "
             WHERE e2.proj_id = p.proj_id AND e2.is_cancelled = 0 AND e2.exp_type = 'expense') AS total_exp,
            (SELECT COALESCE(SUM(e3.amount),0) FROM expenses e3
             WHERE e3.proj_id = p.proj_id AND e3.is_cancelled = 0 AND e3.exp_type = 'income')  AS total_other_inc,
-           (SELECT COALESCE(SUM(il.quantity * il.price_each),0) FROM invoice_lines il
-            WHERE il.proj_id = p.proj_id) AS total_inv
+           (SELECT COALESCE(SUM(il.quantity * il.price_each * (100 + il.line_vat_rate) / 100.0),0)
+            FROM invoice_lines il JOIN invoices iv ON il.inv_id = iv.inv_id
+            WHERE il.proj_id = p.proj_id AND LOWER(iv.inv_status) != 'draft') AS total_inv
     FROM projects p
     LEFT JOIN customers c ON p.cust_id = c.cust_id
     ORDER BY p.is_active DESC, p.proj_no ASC
@@ -65,8 +83,8 @@ while ($p = DB::fetch_assoc($res_all)) {
         '<a href="project_view.php?id='.$p['proj_id'].'" style="font-weight:bold;">'.htmlspecialchars($p['proj_no']).'</a>',
         htmlspecialchars($p['cust_name'] ?? '—'),
         $active_badge,
-        $p['proj_start'] ? date('d.m.Y', strtotime($p['proj_start'])) : '—',
-        $p['proj_stop']  ? date('d.m.Y', strtotime($p['proj_stop']))  : '—',
+        $p['proj_start'] ? date(CONF_DATE_FORMAT, strtotime($p['proj_start'])) : '—',
+        $p['proj_stop']  ? date(CONF_DATE_FORMAT, strtotime($p['proj_stop']))  : '—',
         number_format((float)$p['total_exp'], 2, ',', '.') . ' ' . $cur,
         number_format($total_inc, 2, ',', '.') . ' ' . $cur,
         '<span style="font-weight:bold; color:'.$bal_col.';">' . number_format($balance, 2, ',', '.') . ' ' . $cur . '</span>',
@@ -74,7 +92,7 @@ while ($p = DB::fetch_assoc($res_all)) {
     ];
 }
 
-$new_btn = htm_Button('fa-plus', '@New Project', 'success', 'project_edit.php?id=0', '', '', '', false);
+$new_btn = htm_Button('fa-plus', '@New Project', 'success', 'project_edit.php?id=0', '', 'data-hint="'.lang('@Create a new project').'"', '', false);
 htm_Card_('@Projects', 1200, tool: $new_btn);
 htm_Table(
     ['@Code', '@Customer', '@Status', '@Start', '@End', '@Expenses', '@Income', '@Balance', ''],
@@ -110,12 +128,12 @@ $exp_rows = []; $exp_total = 0;
 while ($e = DB::fetch_assoc($exp_res)) {
     $exp_total += (float)$e['amount'];
     $exp_rows[] = [
-        date('d.m.Y', strtotime($e['exp_date'])),
+        date(CONF_DATE_FORMAT, strtotime($e['exp_date'])),
         htmlspecialchars($e['supplier']),
         htmlspecialchars($e['description'] ?? ''),
         htmlspecialchars($e['acc_name'] ?? ''),
         number_format((float)$e['amount'], 2, ',', '.') . ' ' . $cur,
-        htm_ActionButtons([['icon'=>'fa-edit','type'=>'secondary','link'=>'expense_edit.php?id='.$e['exp_id']]], false),
+        htm_ActionButtons([['icon'=>'fa-edit','type'=>'secondary','link'=>'expense_edit.php?id='.$e['exp_id'],'hint'=>'@Edit this expense']], false),
     ];
 }
 
@@ -131,33 +149,40 @@ $inc_rows = []; $inc_total = 0;
 while ($e = DB::fetch_assoc($inc_res)) {
     $inc_total += (float)$e['amount'];
     $inc_rows[] = [
-        date('d.m.Y', strtotime($e['exp_date'])),
+        date(CONF_DATE_FORMAT, strtotime($e['exp_date'])),
         htmlspecialchars($e['supplier']),
         htmlspecialchars($e['description'] ?? ''),
         htmlspecialchars($e['acc_name'] ?? ''),
         number_format((float)$e['amount'], 2, ',', '.') . ' ' . $cur,
-        htm_ActionButtons([['icon'=>'fa-edit','type'=>'secondary','link'=>'expense_edit.php?id='.$e['exp_id']]], false),
+        htm_ActionButtons([['icon'=>'fa-edit','type'=>'secondary','link'=>'expense_edit.php?id='.$e['exp_id'],'hint'=>'@Edit this income entry']], false),
     ];
 }
 
 // Fakturaer
 $inv_res = DB::query($conn, "
     SELECT i.inv_id, i.invoice_no, i.inv_date, i.inv_status, i.inv_due_date,
-           COALESCE((SELECT SUM(il.quantity * il.price_each * (1 + il.line_vat_rate/100))
+           COALESCE((SELECT SUM(il.quantity * il.price_each * (100 + il.line_vat_rate) / 100.0)
                      FROM invoice_lines il WHERE il.inv_id = i.inv_id), 0) AS total
     FROM invoices i WHERE i.proj_id = $id ORDER BY i.inv_date DESC
 ");
 $inv_rows = []; $inv_total = 0;
 while ($i = DB::fetch_assoc($inv_res)) {
-    $inv_total += (float)$i['total'];
-    $status_map = ['DRAFT'=>'secondary','SENT'=>'primary','PAID'=>'success','VOID'=>'danger'];
+    // Case-ufølsom: status kan være 'draft' (backend) eller 'DRAFT' (ældre data).
+    $status_map = ['draft'=>'secondary','sent'=>'primary','paid'=>'success','void'=>'danger','credited'=>'warning'];
+    $st = strtolower($i['inv_status'] ?? '');
+    // RETTET (§bugs-batch-22-review): kladder skal stadig VISES i listen
+    // herunder (så brugeren kan se/redigere dem), men må ikke tælles med i
+    // $inv_total, som fødes ind i selve projektets samlede balance
+    // ($total_income/$balance nedenfor) - se den øverste sql-forespørgsels
+    // samme rettelse for baggrunden.
+    if ($st !== 'draft') { $inv_total += (float)$i['total']; }
     $inv_rows[] = [
         '#' . $i['invoice_no'],
-        date('d.m.Y', strtotime($i['inv_date'])),
-        date('d.m.Y', strtotime($i['inv_due_date'])),
-        htm_Badge('@'.$i['inv_status'], $status_map[$i['inv_status']] ?? 'secondary', false),
+        date(CONF_DATE_FORMAT, strtotime($i['inv_date'])),
+        date(CONF_DATE_FORMAT, strtotime($i['inv_due_date'])),
+        htm_Badge('@'.ucfirst($st), $status_map[$st] ?? 'secondary', false),
         number_format((float)$i['total'], 2, ',', '.') . ' ' . $cur,
-        htm_ActionButtons([['icon'=>'fa-edit','type'=>'secondary','link'=>'invoice_edit.php?id='.$i['inv_id']]], false),
+        htm_ActionButtons([['icon'=>'fa-edit','type'=>'secondary','link'=>'invoice_edit.php?id='.$i['inv_id'],'hint'=>'@Edit this invoice']], false),
     ];
 }
 
@@ -166,12 +191,15 @@ $balance      = $total_income - $exp_total;
 $bal_type     = $balance >= 0 ? 'success' : 'danger';
 
 // --- Projekthoved-kort START ---
-$edit_btn = htm_Button('fa-edit', '@Edit Project', 'secondary', 'project_edit.php?id='.$id, '', '', '', false);
-htm_Card_(htmlspecialchars($proj['proj_no']) . ' — ' . htmlspecialchars($proj['cust_name'] ?? ''), 1200, tool: $edit_btn);
+$edit_btn = htm_Button('fa-edit', '@Edit Project', 'secondary', 'project_edit.php?id='.$id, '', 'data-hint="'.lang('@Edit this project\'s details').'"', '', false);
+// RETTET (§bugs-batch-13-review): htm_Card_() escaper nu selv sit $capt-
+// argument centralt (se dens egen kommentar) - den htmlspecialchars() der
+// tidligere stod her ville nu blive anvendt DOBBELT (fx "&" -> "&amp;amp;").
+htm_Card_($proj['proj_no'] . ' — ' . ($proj['cust_name'] ?? ''), 1200, tool: $edit_btn);
 
 echo '<div style="display:flex; gap:30px; flex-wrap:wrap; font-size:0.95em; color:var(--text-muted); margin-bottom:10px;">';
-if ($proj['proj_start']) echo '<span><i class="fa fa-calendar"></i> ' . lang('@Start') . ': <b>' . date('d.m.Y', strtotime($proj['proj_start'])) . '</b></span>';
-if ($proj['proj_stop'])  echo '<span><i class="fa fa-calendar-check"></i> ' . lang('@End') . ': <b>' . date('d.m.Y', strtotime($proj['proj_stop'])) . '</b></span>';
+if ($proj['proj_start']) echo '<span><i class="fa fa-calendar"></i> ' . lang('@Start') . ': <b>' . date(CONF_DATE_FORMAT, strtotime($proj['proj_start'])) . '</b></span>';
+if ($proj['proj_stop'])  echo '<span><i class="fa fa-calendar-check"></i> ' . lang('@End') . ': <b>' . date(CONF_DATE_FORMAT, strtotime($proj['proj_stop'])) . '</b></span>';
 echo '<span>' . htm_Badge($proj['is_active'] ? '@Active' : '@Inactive', $proj['is_active'] ? 'success' : 'secondary', false) . '</span>';
 echo '</div>';
 if (!empty($proj['proj_description'])) echo '<p style="margin:0 0 10px 0;">'.nl2br(htmlspecialchars($proj['proj_description'])).'</p>';
@@ -183,6 +211,7 @@ if (!empty($proj['proj_concept'])) {
 
 // Note-formular (én POST for alle tre noter)
 echo '<form method="post" action="project_view.php?id='.$id.'" id="notes_form"><input type="hidden" name="save_notes" value="1">';
+csrf_field();
 
 // Helper: sammenklappeligt notefelt (lukket som standard)
 function render_note_field($name, $value, $label) {
@@ -215,7 +244,12 @@ if (empty($exp_rows)) {
         . lang('@Total') . ': ' . number_format($exp_total, 2, ',', '.') . ' ' . $cur . '</div>';
 }
 echo '<div style="margin-top:10px;">';
-htm_Button('fa-plus', '@Register Expense', 'primary', 'expense_edit.php?id=0');
+// RETTET (se [[project-bugs-review]]): knappen sendte ikke projektet med,
+// selvom man allerede står inde på netop dette projekts side - brugeren
+// skulle selv huske at vælge det samme projekt igen på den nye
+// udgiftsside, ellers bliver udgiften reelt ikke sporet på projektet, som
+// hele formålet med at klikke herfra ellers er.
+htm_Button('fa-plus', '@Register Expense', 'primary', 'expense_edit.php?id=0&proj_id='.$id, '', 'data-hint="'.lang('@Register a new expense for this project').'"');
 echo '</div>';
 render_note_field('note_expenses', $proj['note_expenses'] ?? '', '@Notes on expenses');
 htm_SectionEnd();
@@ -258,8 +292,11 @@ if (empty($income_rows)) {
         . lang('@Total Income') . ': ' . number_format($income_total, 2, ',', '.') . ' ' . $cur . '</div>';
 }
 echo '<div style="margin-top:10px; display:flex; gap:8px;">';
-htm_Button('fa-plus', '@Create Invoice', 'primary', 'invoice_edit.php?id=0');
-htm_Button('fa-plus', '@Register Income', 'success', 'expense_edit.php?id=0&type=income');
+// RETTET (se [[project-bugs-review]]): samme fund som ved "Registrér udgift"
+// ovenfor - projektet blev ikke sendt med til hverken den nye faktura eller
+// den nye indtægt.
+htm_Button('fa-plus', '@Create Invoice', 'primary', 'invoice_edit.php?id=0&proj_id='.$id, '', 'data-hint="'.lang('@Create a new invoice for this project').'"');
+htm_Button('fa-plus', '@Register Income', 'success', 'expense_edit.php?id=0&type=income&proj_id='.$id, '', 'data-hint="'.lang('@Register a new income entry for this project').'"');
 echo '</div>';
 render_note_field('note_income', $proj['note_income'] ?? '', '@Notes on income');
 htm_SectionEnd();
@@ -285,7 +322,7 @@ htm_SectionEnd();
 
 // Gem-knap for noter
 echo '<div style="margin-top:15px; text-align:right;">';
-htm_Button('fa-save', '@Save Notes', 'success', '', '', 'type="submit" form="notes_form"');
+htm_Button('fa-save', '@Save Notes', 'success', '', '', 'type="submit" form="notes_form" data-hint="'.lang('@Save the notes above').'"');
 echo '</div>';
 echo '</form>';
 

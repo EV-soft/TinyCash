@@ -1,4 +1,17 @@
-<?php # /invoice_view.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /invoice_view.php v:1.3.0 d:2026-08-30 i:evs
+# bruger-rapporteret: æøå vist forkert i modtagerfeltet - manglede <meta charset>
+# v1.2.4: siden bygger sin egen <head> i stedet for at gå gennem htm_Header()
+# (nødvendigt pga. print-/PDF-layoutet) - og havde derfor ALDRIG en <meta
+# charset="UTF-8">, i modsætning til resten af appen (se inc/htm_page.lib.php).
+# Siden har hidtil kun stolet på PHP's default_charset-baserede HTTP-header
+# (Content-Type: text/html; charset=UTF-8) - virker de fleste steder, men en
+# manglende/overskrevet header (fx pga. en proxy/CDN, en anden default_charset
+# i php.ini på en anden installation, eller når siden gemmes/udskrives til PDF)
+# tvinger browseren til at GÆTTE encoding, hvilket typisk rammer netop æøå.
+# Tilføjet <meta charset="UTF-8"> som fallback, samme mønster som alle andre
+# sider. Fandt samtidig at $inv['cust_name'] (modtagerfeltet) var det ENESTE
+# felt i blokken der ikke gik gennem htmlspecialchars() - rettet for
+# konsistens (kunder-navne med fx "&" kunne før ødelægge HTML-strukturen).
 # (Print: fab og scroll-knap skjules via onbeforeprint)
 require_once 'inc/db_connect.inc.php'; 
 require_once 'inc/auth.inc.php'; 
@@ -31,7 +44,6 @@ function echoFooterBlock($id, $title, $content) {
     echo '<strong>'.lang($title).'</strong><br>'.$content.'</div>';
 }
 
-$df  = $settings['date_format'] ?? 'd.m.Y';
 $coName = $settings['company_name']    ?? 'Company Name ApS';
 $coAddr = $settings['company_address'] ?? 'Street Address 1';
 $coCity = $settings['company_city']    ?? '8000 Aarhus';
@@ -45,6 +57,14 @@ function getStyle($id, $layouts) {
         'block-sender'       => ['pos_x' => 0,   'pos_y' => 22,  'width_mm' => 90],
         'block-recipient'    => ['pos_x' => 0,   'pos_y' => 50,  'width_mm' => 90],
         'block-cust-ref'     => ['pos_x' => 0,   'pos_y' => 76,  'width_mm' => 90],
+        // Standardplacering lige under kundereferencen, i samme venstre kolonne
+        // som modtager/reference - der er kun ca. 6mm luft ned til block-lines
+        // (y=90) herfra, så en flerlinjet leveringsadresse kan ramme kanten af
+        // fakturalinjerne ved standardplaceringen. Samme afvejning gælder
+        // allerede for block-cust-ref oven over den - løsningen er den samme
+        // som for alle andre blokke: admin trækker den på plads i Design Mode
+        // ud fra sit eget firmas typiske indholdslængde.
+        'block-delivery'     => ['pos_x' => 0,   'pos_y' => 84,  'width_mm' => 90],
         'block-inv-no'       => ['pos_x' => 120, 'pos_y' => 50,  'width_mm' => 60],
         'block-inv-date'     => ['pos_x' => 120, 'pos_y' => 62,  'width_mm' => 60],
         'block-inv-due'      => ['pos_x' => 120, 'pos_y' => 74,  'width_mm' => 60],
@@ -65,6 +85,7 @@ function getStyle($id, $layouts) {
 }
 
 echo '<!DOCTYPE html><html><head>
+<meta charset="UTF-8">
 <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
@@ -177,16 +198,24 @@ if (!$is_sent_view) {
     $standard_hilsen = !empty($settings['default_mail_body'])
         ? $settings['default_mail_body']
         : "Hi " . $inv['cust_name'] . ",\n\nPlease find your invoice attached.\n\nBest regards,";
-    htm_InputGroup(icon:'fa-envelope-open-text', labl:'@Email Message', name:'mail_body', valu:$standard_hilsen, type:'textarea', wdth:'320px', hint:'@Write a personal message to the customer here...', extr:'rows="3" style="font-size:12px; line-height:1.3;"');
+    htm_Field(icon:'fa-envelope-open-text', labl:'@Email Message', name:'mail_body', valu:$standard_hilsen, type:'textarea', wdth:'320px', hint:'@Write a personal message to the customer here...', extr:'rows="3" style="font-size:12px; line-height:1.3;"');
 }
 echo '<div style="display:flex; gap:10px; align-items:flex-end;">';
 if (!$is_sent_view) {
-    htm_Button(icon:'fa-pencil-ruler', labl:'@Design Mode',  type:'secondary', attr:'onclick="toggleFineDesign()" id="designBtn"');
-    htm_Button(icon:'fa-envelope',     labl:'@Send via Mail', type:'info',      attr:'onclick="generateAndSendInvoice('.$inv_id.')" id="mailBtn"');
-    htm_Button(icon:'fa-file-code',    labl:'@OIOUBL XML',   type:'warning',   attr:'onclick="window.location.href=\'export_oioubl.php?id='.$inv_id.'\'"');
+    htm_Button(icon:'fa-pencil-ruler', labl:'@Design Mode',  type:'secondary', attr:'onclick="toggleFineDesign()" id="designBtn" data-hint="'.lang('@Reposition invoice elements freely').'"');
+    htm_Button(icon:'fa-envelope',     labl:'@Send via Mail', type:'info',      attr:'onclick="generateAndSendInvoice('.$inv_id.')" id="mailBtn" data-hint="'.lang('@Email this invoice to the customer').'"');
+    // RETTET (§currency-setting-is-cosmetic-label, Fase 2): OIOUBL er et
+    // dansk e-faktura-format - knappen er grå/deaktiveret når firmaets
+    // bogføringsvaluta ikke er DKK (export_oioubl.php spærrer stadig selv
+    // direkte adgang, dette er kun for at undgå et dødt link).
+    if (strtoupper($global_settings['currency'] ?? 'DKK') === 'DKK') {
+        htm_Button(icon:'fa-file-code',    labl:'@OIOUBL XML',   type:'warning',   attr:'onclick="window.location.href=\'export_oioubl.php?id='.$inv_id.'\'" data-hint="'.lang('@Download this invoice as an OIOUBL e-invoice XML file').'"');
+    } else {
+        htm_Button(icon:'fa-file-code',    labl:'@OIOUBL XML',   type:'secondary', attr:'disabled data-hint="'.lang('@This feature follows Danish-specific tax and bookkeeping rules, and is only available when your company\'s base currency is DKK.').'"');
+    }
 }
-htm_Button(icon:'fa-print',     labl:'@Print Invoice',  type:'primary', attr:'onclick="window.print()"');
-htm_Button(icon:'fa-door-open', labl:'@Leave the page', type:'danger',  attr:'onclick="window.location.href=\'sales_hub.php\'"');
+htm_Button(icon:'fa-print',     labl:'@Print Invoice',  type:'primary', attr:'onclick="window.print()" data-hint="'.lang('@Print this invoice').'"');
+htm_Button(icon:'fa-door-open', labl:'@Leave the page', type:'danger',  attr:'onclick="window.location.href=\'sales_hub.php\'" data-hint="'.lang('@Return to the sales hub').'"');
 echo '</div></div></div>';
 
 // ── Faktura-papir ─────────────────────────────────────────────────────────────
@@ -198,8 +227,23 @@ echo '<div class="design-zone zone-footer" style="top:calc(270mm - 15mm); height
 echo '<div class="design-envelope"></div>';
 
 // Stempel
+// RETTET: inv_status er altid småt i databasen ('draft'/'sent'/'paid'/'void'),
+// men de faktiske oversættelsesnøgler er med stort forbogstav (@Draft/@Sent/
+// @Paid/@Void) - lang('@draft') matchede derfor ALDRIG noget, og selve
+// faktura-stemplet (det mest synlige sted af alle) har aldrig kunnet
+// oversættes, uanset sprogvalg. Tidligere fejlagtigt afskrevet i denne
+// sessions egen §danish-translation-batch-fill som "et harmløst scanner-
+// artefakt, ikke en kodefejl" - den vurdering gjaldt kun scannerens optælling,
+// ikke om funktionen selv reelt virkede, hvilket den ikke gjorde.
+// NB (bruger-forslag): lang('@'.ucfirst($dynamisk_værdi)) kan translation_
+// manager.php's egen frase-skanner ikke selv opdage/tilføje, fordi den kun
+// matcher hele, bogstavelige '@...'-strengliteraler, ikke sammensatte PHP-
+// udtryk. De faktiske nøgler, der reelt kan opstå her, angives derfor
+// bevidst som almindelige strengliteraler herunder, udelukkende så
+// skanneren selv finder og registrerer dem: '@Draft', '@Sent', '@Paid',
+// '@Void', '@Credited'
 $status_class = 'status-' . ($inv['inv_status'] ?? 'draft');
-echoBlock('block-stamp', '<div class="status-stamp '.$status_class.'">' . lang('@'.$inv['inv_status']) . '</div>');
+echoBlock('block-stamp', '<div class="status-stamp '.$status_class.'">' . lang('@'.ucfirst($inv['inv_status'])) . '</div>');
 
 // Logo
 $logo_html = file_exists('images/logo.png')
@@ -212,8 +256,29 @@ $sender_html = '<div style="font-size:14px; color:var(--text-main);" contentedit
 echoBlock('block-sender', $sender_html);
 
 // Modtager
-$recip_html = '<div style="width:90mm; font-size:14px;"><small style="color:var(--text-muted);">'.lang('@Recipient').':</small><br><strong>'.$inv['cust_name'].'</strong><br>'.nl2br(htmlspecialchars($inv['cust_address'] ?? '')).'</div>';
+$recip_html = '<div style="width:90mm; font-size:14px;"><small style="color:var(--text-muted);">'.lang('@Recipient').':</small><br><strong>'.htmlspecialchars($inv['cust_name'] ?? '').'</strong><br>'.nl2br(htmlspecialchars($inv['cust_address'] ?? '')).'</div>';
 echoBlock('block-recipient', $recip_html);
+
+// Leveringsadresse - egen designblok (altid i DOM, ligesom block-cust-ref/
+// block-notes), så den kan placeres frit i Design Mode UANSET om den aktuelle
+// faktura har en. RETTET (§bugs-batch-21-review): delivery_address indtastes
+// og gemmes helt normalt på invoice_edit.php, men blev ALDRIG vist noget som
+// helst sted på selve fakturaen (hverken her, i export_oioubl.php eller i
+// den mailede PDF) - feltet forsvandt reelt sporløst efter gem. Vises kun
+// med reelt indhold når den faktisk afviger fra faktureringsadressen -
+// er den identisk (eller tom), er blokken tom på selve fakturaen (men ses
+// stadig med en pladsholder i Design Mode, så den kan placeres på forhånd).
+$deliv_val    = trim($inv['delivery_address'] ?? '');
+$bill_addr    = trim($inv['cust_address'] ?? '');
+$deliv_shown  = ($deliv_val !== '' && $deliv_val !== $bill_addr);
+$deliv_content = $deliv_shown
+    ? nl2br(htmlspecialchars($deliv_val))
+    : '<span class="design-placeholder">(' . lang('@Delivery Address') . ')</span>';
+$deliv_empty  = $deliv_shown ? '' : 'block-empty';
+echoBlock('block-delivery',
+    '<div style="font-size:14px;"><small style="color:var(--text-muted);">'.lang('@Delivery Address').':</small><br>'.$deliv_content.'</div>',
+    $deliv_empty
+);
 
 // Kundens reference (altid i DOM)
 $custref_val     = trim($inv['cust_reference'] ?? '');
@@ -229,8 +294,8 @@ echoBlock('block-cust-ref',
 // Faktura-nr, dato, forfald
 $f_no = $inv['invoice_no'] ? '#'.str_pad($inv['invoice_no'], 6, "0", STR_PAD_LEFT) : lang('@DRAFT');
 echoBlock('block-inv-no',   '<strong>'.lang('@Invoice No').':</strong><br><span style="font-size:16px;">'.$f_no.'</span>');
-echoBlock('block-inv-date', '<strong>'.lang('@Date').':</strong><br>'.date('d.m.Y', strtotime($inv['inv_date'])));
-echoBlock('block-inv-due',  '<strong>'.lang('@Due Date').':</strong><br>'.date('d.m.Y', strtotime($inv['inv_due_date'])));
+echoBlock('block-inv-date', '<strong>'.lang('@Date').':</strong><br>'.date(CONF_DATE_FORMAT, strtotime($inv['inv_date'])));
+echoBlock('block-inv-due',  '<strong>'.lang('@Due Date').':</strong><br>'.date(CONF_DATE_FORMAT, strtotime($inv['inv_due_date'])));
 
 // Linjer
 $lines_html = '<table class="line-table"><thead><tr><th>'.lang('@Description').'</th><th style="text-align:right;">'.lang('@Qty').'</th><th style="text-align:right;">'.lang('@Price').'</th><th style="text-align:right;">'.lang('@Line total').'</th></tr></thead><tbody>';
@@ -274,6 +339,60 @@ echoFooterBlock('foot-legal',   '@Legal',   '<strong>'.($settings['company_name'
 
 echo '</div>'; // .paper
 
+// Betalingshistorik (delvis betaling, 2026-08-20) - kun i den almindelige
+// admin-visning, ikke i den "rene" ?status=sent-visning der bruges til at
+// generere PDF'en til kunden. Viser hver enkelt indbetaling registreret via
+// bankafstemningen (reconcile_action.php), samt restbeløb hvis fakturaen
+// endnu ikke er fuldt betalt.
+//
+// RETTET (§reel-multi-valuta-bogforing, §bugs-batch-32-review): nøjagtig
+// samme fejlklasse som lige fundet og rettet i reconcile_action.php -
+// "$inv_total = $sub + $vat" er fakturaens EGEN valuta (fx EUR, den kunden
+// ser i selve fakturahovedet ovenfor - korrekt DÉR), men blev her
+// sammenlignet direkte mod $total_paid, som ALTID er i DKK (de reelle
+// bankbeløb fra invoice_payments). En udenlandsk faktura viste derfor en
+// helt forkert "restbeløb"/betalingshistorik i admin-visningen - kunne vise
+// penge til gode der reelt ikke var der, eller omvendt. Bruger nu samme
+// invoice_dkk_totals()-hjælpefunktion (inc/db_connect.inc.php) som
+// reconcile_action.php, og mærker DKK-beløbene korrekt som "DKK" i stedet
+// for fakturaens fremmede visningsvaluta ($cur) - selve hoved-totalerne
+// ovenfor (blokken "block-totals") er UÆNDREDE og fortsat korrekt i $cur,
+// det er kun betalingshistorikkens egne, altid-DKK tal der var forkert mærket.
+if (!$is_sent_view && strtolower($inv['inv_status'] ?? '') !== 'draft') {
+    $pay_res = DB::query($conn, "SELECT payment_date, amount, note FROM invoice_payments WHERE inv_id = $inv_id ORDER BY payment_date ASC, payment_id ASC");
+    $payments = [];
+    $total_paid = 0;
+    if ($pay_res) {
+        while ($p = DB::fetch_assoc($pay_res)) {
+            $payments[] = $p;
+            $total_paid += (float)$p['amount'];
+        }
+    }
+    if (!empty($payments)) {
+        $inv_total  = invoice_dkk_totals($conn, $inv_id)['incl'];
+        $remaining  = round($inv_total - $total_paid, 2);
+        $paid_cur   = $settings['currency'] ?? 'DKK'; // betalinger er altid i regnskabets bogføringsvaluta, ikke fakturaens visningsvaluta
+        echo '<div style="max-width:900px; margin:20px auto 0; padding:0 15px;" class="no-print">';
+        echo '<div style="background:var(--bg-panel); border-radius:8px; padding:15px 20px;">';
+        echo '<h4 style="margin:0 0 10px 0;">' . lang('@Payment History') . '</h4>';
+        echo '<table style="width:100%; border-collapse:collapse; font-size:0.9em;">';
+        foreach ($payments as $p) {
+            echo '<tr style="border-bottom:1px solid var(--border-color);">'
+               . '<td style="padding:6px 0;">' . date(CONF_DATE_FORMAT, strtotime($p['payment_date'])) . '</td>'
+               . '<td style="padding:6px 0; text-align:right; color:var(--color-success);">' . number_format((float)$p['amount'], 2, ',', '.') . ' ' . $paid_cur . '</td>'
+               . '</tr>';
+        }
+        echo '</table>';
+        echo '<div style="display:flex; justify-content:space-between; margin-top:10px; padding-top:10px; border-top:2px solid var(--border-dark); font-weight:bold;">';
+        if ($remaining > 0.01) {
+            echo '<span>' . lang('@Remaining balance') . ':</span><span style="color:var(--color-warning);">' . number_format($remaining, 2, ',', '.') . ' ' . $paid_cur . '</span>';
+        } else {
+            echo '<span style="color:var(--color-success);">' . lang('@Fully paid') . '</span><span></span>';
+        }
+        echo '</div></div></div>';
+    }
+}
+
 // Hjælpe-popup
 echo '<div id="help-system-popup">
     <h3><i class="fa-solid fa-circle-question"></i> ' . lang('@Help & Guide') . '</h3>
@@ -281,6 +400,12 @@ echo '<div id="help-system-popup">
 </div>';
 ?>
 <script>
+// RETTET (§bugs-batch-22-review): save_layout.php og send_invoice_action.php
+// kræver nu begge en gyldig CSRF-token (se inc/auth.inc.php) - denne side
+// bygger sin egen <head> fra bunden og går ikke gennem htm_Header(), så
+// tokenen skal indlejres eksplicit her for at de to fetch()-kald nedenfor
+// (saveToDB/generateAndSendInvoice) stadig kan virke.
+const CSRF_TOKEN = <?php echo json_encode(csrf_token()); ?>;
 let designActive = false;
 
 function toggleFineDesign() {
@@ -388,6 +513,7 @@ function saveToDB(target) {
     fd.append('x', posX_mm.toFixed(2));
     fd.append('y', posY_mm.toFixed(2));
     fd.append('w', width_mm.toFixed(2));
+    fd.append('csrf_token', CSRF_TOKEN);
     fetch('save_layout.php', { method: 'POST', body: fd })
         .then(r => { if (!r.ok) throw new Error("status " + r.status); return r.json(); })
         .then(data => {
@@ -421,6 +547,7 @@ function generateAndSendInvoice(invoiceId) {
         formData.append('pdf_file', pdfBlob, 'invoice_' + invoiceId + '.pdf');
         const customBody = document.getElementsByName('mail_body')[0];
         if (customBody) formData.append('custom_body', customBody.value);
+        formData.append('csrf_token', CSRF_TOKEN);
         fetch('send_invoice_action.php?id=' + invoiceId, { method: 'POST', body: formData })
             .then(r => { if (!r.ok) throw new Error("status " + r.status); return r.json(); })
             .then(data => {

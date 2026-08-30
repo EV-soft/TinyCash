@@ -1,0 +1,16 @@
+# inc/data/.htaccess
+# RETTET (§bugs-batch-20-review): denne mappe havde INTET eget .htaccess og
+# rummer den levende SQLite-database (tinycash.sqlite) + et dusin ældre
+# sikkerhedskopier af den (adgangskode-hashes, kundedata, alt), OG en
+# tredjeparts SQLite-administrationsside (phpliteadmin.php) med en
+# hårdkodet, trivielt gættelig adgangskode ('admin') der giver fuld
+# læse/skrive/slette-adgang til hele databasen uden om appens forretnings-
+# logik, adgangsniveauer og revisionslog. inc/.htaccess i den overliggende
+# mappe sætter ganske vist "Require all denied" som udgangspunkt, men denne
+# mappe har sin egen eksplicitte regel her - samme forsvar-i-dybden-mønster
+# som storage/.htaccess, backups/.htaccess og temp_restore/.htaccess allerede
+# bruger (se [[bugs-batch-14-review]]) - både fordi Nginx slet ikke
+# respekterer .htaccess-nedarvning (kun Apache gør), og fordi en isoleret
+# regel her ikke er afhængig af at den overliggende mappes fil forbliver
+# uændret.
+Require all denied

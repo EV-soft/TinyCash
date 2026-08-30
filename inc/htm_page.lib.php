@@ -1,4 +1,4 @@
-<?php # /inc/htm_page.lib.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /inc/htm_page.lib.php v:1.3.0 d:2026-08-30 i:evs
 
 // HEADER og FOOTER flyttet fra php2htm.lib.php
 
@@ -33,8 +33,16 @@ function htm_Header($capt = 'Tiny Cash', $mwidth = 1600, $echo = true, $force_th
         $saved_theme = 'light';
     }
 
+// RETTET (§bugs-batch-13-review): $capt blev skrevet direkte ind i <title>
+// uden nogen escaping. De fleste kald sender en statisk '@Nøgle'-tekst (helt
+// ufarligt), men flere sider (customer_edit.php, customer_statement.php)
+// bygger $capt dynamisk ved at sammensætte det med rå, brugerkontrolleret
+// data (fx et kundenavn) - en kunde med navnet '</title><script>...</script>'
+// kunne dermed bryde ud af <title> og få reel, kørende JavaScript ind i
+// <head> for enhver der åbnede den kundes side. htmlspecialchars() er et
+// no-op for almindelig statisk tekst, så alle andre kald er upåvirkede.
 echo '<!DOCTYPE html><html lang="'.$html_lang.'" data-theme="'.$saved_theme.'"><head><meta charset="UTF-8">
-    <title>'.lang($capt).'</title>';
+    <title>'.htmlspecialchars(lang($capt)).'</title>';
 
     // Denne inline-script læser theme-cookien og overskriver data-theme med
     // det samme (for at undgå et kort "flash" af forkert tema, før PHP-
@@ -56,8 +64,10 @@ echo '<!DOCTYPE html><html lang="'.$html_lang.'" data-theme="'.$saved_theme.'"><
     </script>';
     }
 
+    // <link rel="icon" type="image/x-icon" href="favicon.ico">
+     
 echo '
-     <link rel="icon" type="image/x-icon" href="favicon.ico">
+     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="manifest" href="manifest.json">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -66,7 +76,7 @@ echo '
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
     <style>
-    :root, 
+    :root,
     [data-theme="light"] {
         --bg-main: #f4f7f6; --bg-card: #ffffff; --bg-nav: #4c4e4f;
         --bg-nav-hover: rgba(255,255,255,0.1); --bg-submenu: #34495e;
@@ -76,6 +86,19 @@ echo '
         --color-primary: #3498db; --color-success: #2ecc71; --color-danger: #e74c3c;
         --color-warning: #f1c40f; --color-secondary: #95a5a6; --color-dark: #2c3e50;
         --color-purple: #8e44ad; --color-info: #34495e;
+        /* RETTET (§bugs-batch-22-review-del-b): disse fire (og de nye
+           warning/info-par) lå FØR helt uden for enhver CSS-selector (mellem
+           denne bloks lukning og body{}-reglen) - ugyldig CSS, som browseren
+           stille dropper. htm_Alert() brugte derfor ALTID sin hardkodede
+           fallback-værdi (var(--x, #fallback)), aldrig den faktiske tema-
+           farve, uanset hvilket tema der var valgt. Flyttet ind i hver af de
+           tre temablokke, med selvstændige mørke/lyse værdier hvor relevant.
+           Nye --bg-alert-warning/--text-alert-warning og -info/-info tilføjet
+           samtidig, til htm_Alert()s nye warning/info-typer. */
+        --bg-alert-success: #d4edda;   --text-alert-success: #155724;
+        --bg-alert-error:   #f8d7da;   --text-alert-error:   #721c24;
+        --bg-alert-warning: #fff3cd;   --text-alert-warning: #856404;
+        --bg-alert-info:    #d1ecf1;   --text-alert-info:    #0c5460;
     }
 
     [data-theme="custom"] {
@@ -85,6 +108,10 @@ echo '
         --border-color: #cbd5e1; --border-subtle: #e2e8f0; --border-fieldset: #475569;
         --text-main: #1e293b; --text-muted: #64748b; --text-light: #ffffff;
         --color-primary: #2ecc71; --color-dark: #1a252f; --color-warning: #f39c12;
+        --bg-alert-success: #d4edda;   --text-alert-success: #155724;
+        --bg-alert-error:   #f8d7da;   --text-alert-error:   #721c24;
+        --bg-alert-warning: #fff3cd;   --text-alert-warning: #856404;
+        --bg-alert-info:    #d1ecf1;   --text-alert-info:    #0c5460;
     }
 
     [data-theme="dark"] {
@@ -104,13 +131,15 @@ echo '
         --text-main: #ffffff; --text-muted: #dcdcdc; --text-light: #ffffff;
         --color-primary: #2980b9; --color-success: #27ae60; --color-danger: #c0392b;
         --color-warning: #f39c12; --color-secondary: #7f8c8d; --color-dark: #0f172a;
-        --color-purple: #7d3c98; --color-info: #c4c6c8
+        --color-purple: #7d3c98; --color-info: #c4c6c8;
+        /* Mørkere/mættede baggrunde + lyse tekstfarver, tilpasset det
+           mellemgrå --bg-card (#7d7373) i stedet for lyse light-tema-farver,
+           som ville have dårlig kontrast/virke malplacerede på en mørk side. */
+        --bg-alert-success: #1e4620;   --text-alert-success: #8fd19e;
+        --bg-alert-error:   #4a1e1e;   --text-alert-error:   #f5a3a3;
+        --bg-alert-warning: #4a3c0a;   --text-alert-warning: #f5d576;
+        --bg-alert-info:    #1a3a4a;   --text-alert-info:    #8ecae6;
     }
-
-        --bg-alert-success: #d4edda;
-        --text-alert-success: #155724;
-        --bg-alert-error: #f8d7da;
-        --text-alert-error: #721c24;
 
     body { 
         font-family: "Inter", sans-serif; 
@@ -314,6 +343,14 @@ function htm_Footer($echo = true) {
         }
     }
     function clearSearch(id) { const i = document.getElementById(id + "_search"); if(i){ i.value = ""; filterTable(id); i.focus(); } }
+    // Fold/luk-ikon for htm_Card_(fold: true) - se inc/php2htm.lib.php.
+    function toggleCard(id, btn) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const opening = el.style.display === "none";
+        el.style.display = opening ? "" : "none";
+        if (btn) { btn.classList.toggle("fa-chevron-down", opening); btn.classList.toggle("fa-chevron-right", !opening); }
+    }
     window.onscroll = function() {
         const btn = document.getElementById("fab-scroll-top");
         if (btn) {
@@ -339,6 +376,19 @@ function htm_Footer($echo = true) {
             require_once __DIR__ . '/auto_backup.inc.php';
             if (function_exists('auto_backup_check')) {
                 auto_backup_check($GLOBALS['conn']);
+            }
+        }
+
+        // Gentagne/faste fakturaer: samme "tjek ved hver sidevisning, udfør
+        // kun arbejde hvis forfaldent"-mønster som auto-backup ovenfor (ingen
+        // rigtig cron-adgang på almindelig delt hosting). Opretter altid kun
+        // KLADDER, aldrig bogførte fakturaer direkte. Fejler tavst (try/catch)
+        // hvis tabellerne ikke findes endnu (§migrate_recurring_invoices) - må
+        // ikke kunne vælte en helt almindelig sidevisning.
+        if (isset($GLOBALS['conn']) && $GLOBALS['conn']) {
+            require_once __DIR__ . '/recurring_invoices.inc.php';
+            if (function_exists('recurring_invoices_check')) {
+                try { recurring_invoices_check($GLOBALS['conn']); } catch (\Throwable $e) { /* tabel mangler evt. endnu */ }
             }
         }
     }

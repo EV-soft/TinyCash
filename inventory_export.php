@@ -1,6 +1,15 @@
-<?php # /inventory_export.php v:0.9.1 d:2026-05-08 i:evs
+<?php # /inventory_export.php v:1.3.0 d:2026-08-30 i:evs
+# v1.0.0: CSV-injection-beskyttelse tilføjet (csv_safe()) - se export.php for
+# forklaring. Fundet ved en rapport-/eksportgennemgang.
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
+
+// Foranstiller et anførselstegn på celler der starter med =/+/-/@, så
+// Excel/LibreOffice aldrig fortolker fritekst-indhold som en formel.
+function csv_safe($v) {
+    if (!is_string($v) || $v === '') return $v;
+    return (strpbrk($v[0], '=+-@') !== false) ? "'" . $v : $v;
+}
 
 // 1. Vi rydder bufferen for at undgå uønsket output i filen
 if (ob_get_level()) ob_end_clean();
@@ -42,10 +51,10 @@ while ($row = DB::fetch_assoc($res)) {
     $total_val = $price * $stock;
 
     $line = [
-        $row['prod_sku'],
-        $row['prod_name'],
-        $row['acc_name'],
-        number_format($price, 2, ',', ''), 
+        csv_safe($row['prod_sku']),
+        csv_safe($row['prod_name']),
+        csv_safe($row['acc_name']),
+        number_format($price, 2, ',', ''),
         $stock,
         number_format($total_val, 2, ',', '')
     ];

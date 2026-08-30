@@ -1,4 +1,4 @@
-<?php # inc/audit.inc.php v:1.0.0 d:2026-07-13 i:claude
+<?php # /inc/audit.inc.php v:1.3.0 d:2026-08-30 i:evs
 /* ==========================================================================
    REVISIONSLOG-HJÆLPEFUNKTION
 

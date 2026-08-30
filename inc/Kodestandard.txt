@@ -13,6 +13,7 @@ $data= [ # This is the source for keywords.
             ['capt','Caption','Built-in Translate'],
             ['body','Body (content)','Built-in Translate'],
             ['foot','Footer','Built-in Translate'],
+            ['fold','Fold/collapse toggle (bool) - e.g. htm_Card_(fold: true)',''],
             ['plho','PlaceHolder','Built-in Translate'],
             ['icon','Icon',''],
             ['hint','Hint (user tip / title)','Built-in Translate'],

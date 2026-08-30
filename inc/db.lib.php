@@ -1,4 +1,4 @@
-<?php # inc/db.lib.php v:1.1.0 d:2026-07-02 i:evs
+<?php # /inc/db.lib.php v:1.3.0 d:2026-08-30 i:evs
 
 function getDb() {
     // Vi antager, at din config ligger her eller hentes fra en fil

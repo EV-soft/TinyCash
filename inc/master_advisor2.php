@@ -1,5 +1,15 @@
-<?php # /inc/master_advisor.php v:1.2.0 d:2026-08-11 i:evs 
+<?php # /inc/master_advisor2.php v:1.3.0 d:2026-08-30 i:evs
 # (Skanningsområde: kun rod + 1. underniveau)
+# v1.3.0: KRITISK - intet PHP-login-tjek. Dumper kildekode og sletter gamle
+# eksportfiler, kun beskyttet af inc/.htaccess's "afvis alt"-standard (som
+# ikke gælder på fx nginx eller lokal test uden .htaccess-understøttelse).
+# Tilføjet admin-tjek som et uafhængigt, ekstra lag. Samme fund som
+# Master_Advisor.php - se den fil for detaljer. Gennemgang af resterende inc-filer.
+chdir(dirname(__DIR__));
+require_once 'inc/auth.inc.php';
+if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
+    deny_access_gracefully();
+}
 ob_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);

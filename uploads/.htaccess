@@ -1,0 +1,17 @@
+# uploads/.htaccess
+# RETTET (§bugs-batch-20-review): KRITISK - denne mappe er BEVIDST offentligt
+# web-tilgængelig uden login (bilag/vedhæftninger vises direkte via <a
+# href="uploads/...">), men havde intet som helst der forhindrede en
+# uploadet fil i selv at BLIVE PHP-kode. expense_edit.php og
+# bank_import_step1.php lod begge filnavnets endelse komme direkte fra
+# klientens oplyste filnavn uden nogen tjek (se rettelserne i selve disse
+# filer) - en bruger kunne uploade "shell.php" som et "udgiftsbilag" eller
+# en "CSV-fil", og filen ville blive gemt direkte i denne mappe og dermed
+# være direkte kørbar via sin URL. Dette blokerer eksekvering af de
+# almindelige script-endelser i selve mappen, uafhængigt af om de enkelte
+# upload-håndteringers egne endelses-tjek (som nu også er tilføjet) skulle
+# have et hul et sted - vedhæftninger (pdf/jpg/png/csv/...) forbliver frit
+# tilgængelige som hidtil, kun de farlige endelser afvises.
+<FilesMatch "\.(php|php\d|phtml|pht|phar|cgi|pl|py|asp|aspx|jsp|sh|exe|htaccess)$">
+    Require all denied
+</FilesMatch>

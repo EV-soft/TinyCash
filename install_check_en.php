@@ -1,4 +1,5 @@
-<?php # /install_check_en.php v:1.0.0 d:2026-06-15 i:evs
+<?php # /install_check_en.php v:1.3.0 d:2026-08-30 i:evs
+# self-lock added when accounts table has data
 ob_start();
 session_start();
 
@@ -50,6 +51,27 @@ if ($db_file) {
     if (isset($conn) && $conn) {
         $db_conn = true;
         $db_msg = "Connection to MySQL established successfully.";
+
+        // SELF-LOCK (2026-08-19): this page is deliberately login-free (it
+        // must run BEFORE the admin account exists), which made it a
+        // permanent, unprotected diagnostic/fingerprinting endpoint if
+        // forgotten after installation. Same pattern as setup_chart.php's
+        // own lock: if the accounts table already has data, installation is
+        // clearly complete, so the page refuses to show anything further.
+        $res = DB::query($conn, "SELECT COUNT(*) FROM accounts");
+        if ($res) {
+            $row = DB::fetch_row($res);
+            if ((int)($row[0] ?? 0) > 0) {
+                ob_clean();
+                echo "<div style='font-family:sans-serif;max-width:600px;margin:60px auto;text-align:center;padding:30px;background:#fff3cd;border:1px solid #ffeeba;border-radius:8px;color:#856404;'>
+                        <h2>⚠️ Installation already complete</h2>
+                        <p>The system already contains data. This diagnostic page has been disabled for security reasons.</p>
+                        <p><strong>Please delete this file (" . htmlspecialchars(basename(__FILE__)) . ") from the server.</strong></p>
+                      </div>";
+                ob_end_flush();
+                exit;
+            }
+        }
     } else {
         $db_msg = "Connection failed. Verify your credentials in the config file.";
     }

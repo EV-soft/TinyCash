@@ -1,4 +1,13 @@
-<?php # /depot_sync.php v:1.0.0 d:2026-06-11 i:gemini ok
+<?php # /inc/depot_sync.php v:1.3.0 d:2026-08-30 i:evs
+# v1.0.1: rettet "in-array" (bindestreg) -> "in_array" - gav en fatal
+# runtime-fejl ("Undefined constant 'in'"), ikke fanget af php -l, men
+# bekræftet ved en direkte kørsel. Fundet ved en mail-/notifikationsgennemgang.
+# BEMÆRK: denne fils IMAP-nøgler (IMAP_MAILBOX/IMAP_USERNAME/IMAP_PASSWORD)
+# matcher IKKE resten af projektets konvention (IMAP_INVOICE_*/IMAP_VOUCHER_*/
+# IMAP_VENDOR_* i env.ini) og funktionen er ikke linket fra nogen menu/knap -
+# ser ud til at være en ufærdig, forladt prototype. Kun typo'en er rettet her,
+# ikke funktionens design/tilkobling.
+# /depot_sync.php v:1.0.0 d:2026-06-11 i:gemini ok
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -54,7 +63,7 @@ if (!function_exists('imap_open')) {
                                     $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
                                     
                                     // Tillad kun PDF og billeder
-                                    if (in-array($ext, ['pdf', 'jpg', 'jpeg', 'png', 'webp'])) {
+                                    if (in_array($ext, ['pdf', 'jpg', 'jpeg', 'png', 'webp'])) {
                                         $body = imap_fetchbody($inbox, $email_number, $i+1);
                                         
                                         // Afkod filindholdet (typisk Base64)
