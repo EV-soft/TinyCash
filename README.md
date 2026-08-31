@@ -140,7 +140,7 @@ Det løser dine behov for hurtig, effektiv og selvhjulpen håndtering af fakture
 
 ## 🚀 Quick Demo Installation
 
-Want to try TinyCash without setting up a database by hand? Three files are hosted at **[ev-soft.dk/tc-demo-boot](https://ev-soft.dk/tc-demo-boot/)**:
+Want to try TinyCash without setting up a database by hand? Three files are hosted at **[ev-soft.dk/tc-demo-boot](https://ev-soft.dk/tc1/)**:
 
 - **[tinycash.boot.zip](https://ev-soft.dk/tc-demo-boot/tinycash.boot.zip)** – the full application with a working demo database already built in (theme: H.C. Andersen's fairy tales) – no setup wizard needed.
 - **[tinycash.boot.php](https://ev-soft.dk/tc-demo-boot/tinycash.boot.php)** – a small installer script that unpacks the zip file for you.
@@ -161,7 +161,7 @@ Want to try TinyCash without setting up a database by hand? Three files are host
 
 ## 🚀 Hurtig Demo-installation
 
-Vil du prøve TinyCash uden selv at skulle sætte en database op? Tre filer ligger på **[ev-soft.dk/tc-demo-boot](https://ev-soft.dk/tc-demo-boot/)**:
+Vil du prøve TinyCash uden selv at skulle sætte en database op? Tre filer ligger på **[ev-soft.dk/tc-demo-boot](https://ev-soft.dk/tc1/)**:
 
 - **[tinycash.boot.zip](https://ev-soft.dk/tc-demo-boot/tinycash.boot.zip)** – hele programmet med en færdig demo-database allerede bygget ind (tema: H.C. Andersens eventyr) – ingen opsætningsguide nødvendig.
 - **[tinycash.boot.php](https://ev-soft.dk/tc-demo-boot/tinycash.boot.php)** – et lille installations-script, der udpakker zip-filen for dig.
