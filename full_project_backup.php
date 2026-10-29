@@ -1,7 +1,6 @@
 <?php # /full_project_backup.php v:1.3.0 d:2026-08-30 i:evs
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+// RETTET: fejlvisning var tvunget TIL for alle (viste serverstier og SQL ved enhver advarsel) - styres centralt med
+// ?Debug=true i inc/db_connect.inc.php, samme rettelse som setup_chart.php fik
 
 ob_start();
 require_once 'inc/auth.inc.php';

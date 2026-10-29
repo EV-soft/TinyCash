@@ -4,9 +4,8 @@
 # tilbud SKAL netop kunne sendes mens det stadig er 'draft' (det er selve
 # afsendelsen der gør det til 'sent') - der er intet "bogført"-krav for et
 # tilbud, i modsætning til en faktura.
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+// RETTET: fejlvisning var tvunget TIL - en PHP-advarsel endte midt i JSON-svaret (ødelagt svar i browseren) og viste
+// serverstier. Styres centralt med ?Debug=true (inc/db_connect.inc.php), samme som send_invoice_action.php.
 header('Content-Type: application/json');
 
 try {

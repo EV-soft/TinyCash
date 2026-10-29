@@ -14,7 +14,7 @@
 > resten — brug det aktivt til at svare "nej, det kan den ikke (endnu)" i
 > stedet for at overdrive systemets muligheder.
 >
-> Sidst opdateret: 2026-10-27.
+> Sidst opdateret: 2026-10-29 (version 1.3).
 
 ## Hvad er TinyCash?
 
@@ -80,7 +80,14 @@ afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
 - **Advarsler ved fakturering** (blokerer ikke): kundens forfaldne saldo,
   overskredet kreditgrænse (sat pr. kunde) og salg over lagerbeholdningen.
 - **Afskrivning af tab på debitorer**: En faktura kunden aldrig betaler,
-  kan afskrives som tab, med korrekt bogføring.
+  kan afskrives som tab, med korrekt bogføring. Momsen af tabet reguleres
+  ikke automatisk (momslovens regler om tab) — det må bogholderen eller
+  revisoren gøre manuelt.
+- **Salget bogføres på varens konto**: Hver vare har sin egen salgskonto
+  (Varekartotek → Konto). Fakturaens omsætning fordeles på varernes
+  indtægtskonti; linjer uden vare eller med en vare uden egen indtægtskonto
+  går på standard-salgskontoen fra Firmaindstillinger. Kreditnotaer bruger
+  de samme konti.
 - **Manuel registrering af betaling**: En indbetaling kan registreres
   direkte på fakturaen uden bankimport.
 - **Delvis betaling**: En faktura kan betales i flere rater — systemet
@@ -119,13 +126,21 @@ afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
   faktura i 6 måneder. En slettet kunde eller leverandør havner i en
   papirkurv og kan gendannes. GDPR: alle data om en kunde kan eksporteres
   (kun eksport — ingen automatisk sletning/anonymisering).
-- **Webbutik**: En webbutik kan sende sine ordrer direkte til TinyCash
-  (webhook med egen nøgle pr. butik). Man vælger enten én faktura pr. ordre
-  (evt. bogført og markeret betalt automatisk) eller ét samlet bilag pr.
-  dags salg. Returneringer bliver til kreditnotaer. Lager trækkes ned,
-  hvis man vælger det. Betalinger går til en mellemregningskonto for
-  butikkens betalingsudbyder. Se "Kendte begrænsninger" for hvilke
-  platforme der virker i dag.
+- **Webbutik**: Ordrer fra en webbutik kan komme direkte ind i TinyCash:
+  - **WooCommerce** og **Shopify** sender deres egne ordre-webhooks til
+    TinyCash, signeret med en hemmelighed (opsætningssiden viser adresse og
+    hemmelighed, der skal indsættes i butikken).
+  - **PrestaShop**: TinyCash henter selv nye ordrer via butikkens
+    Webservice-API — med en knap ("Hent nye ordrer") eller automatisk via en
+    cron-adresse, som webhotellet kalder.
+  - **Andre systemer** kan sende ordren i TinyCash' eget JSON-format med en
+    API-nøgle.
+  Kun BETALTE ordrer bogføres; en ordre der venter på fx en bankoverførsel,
+  kommer ind når den er betalt. Man vælger enten én faktura pr. ordre (evt.
+  bogført og markeret betalt automatisk) eller ét samlet bilag pr. dags
+  salg. Refusioner fra Shopify bliver til kreditnotaer automatisk. Lager
+  trækkes ned, hvis man vælger det. Betalingerne går til en
+  mellemregningskonto for butikkens betalingsudbyder.
 - **CVR-opslag**: Ved oprettelse af en kunde (eller leverandør) kan man slå
   et CVR-nummer op og få navn/adresse/telefon udfyldt automatisk fra det
   offentlige CVR-register — kræver ikke egen konto eller nøgle, men er
@@ -172,6 +187,21 @@ afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
   kun tænde for dem, man bruger. Konti som systemet selv bogfører på, kan
   ikke slukkes, kun dæmpes. Kontiene kan knyttes til standardkontoplanens
   numre til SAF-T-eksporten.
+- **Valg af kontoplan**: Et nyt regnskab kan starte med standardkontoplanen
+  eller en af tre skabeloner (Enkel, Traditionel, Udvidet), som alle er
+  udsnit af standardkontoplanen med samme numre. Standardkontoplanen kan ses
+  igennem når som helst — med søgning, filtre pr. kontotype og markering af
+  de standardkonti, der svarer til de konti man bruger.
+- **Skift til standardkontoplanen**: Et regnskab med sin egen kontoplan kan
+  skifte til standardkontoplanen fra en dato. Hver konto får en foreslået
+  afløser; saldiene på balancekonti overføres med ét bilag; indstillinger,
+  momskoder, varer, bankregler, webbutikker, anlæg, budgetter og kladder
+  følger med; de gamle konti slukkes og beholder deres historik. Bruger en
+  af ens egne konti et standardnummer, kan den flyttes (hvis den ingen
+  posteringer har), overtage standardkontoen, eller standardkontoen kan
+  importeres under et ledigt nummer. Bogførte posteringer flyttes aldrig.
+  Momsrapporten og de øvrige rapporter tæller både den gamle og den nye
+  momskonto med i en periode, hvor der er skiftet.
 - **Manuelle posteringer** (kassekladde/journalpost) direkte på konti.
 - **Bilagsnummer**: Hver postering får et fortløbende, hulfrit
   bilagsnummer, adskilt fra det kundevendte fakturanummer.
@@ -182,8 +212,11 @@ afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
 - **Periodelåsning**: Man kan sætte en regnskabsmæssig låsedato, hvorefter
   intet kan bogføres bagom den dato.
 - **Revisorværktøjer**: Saldobalance, kontokort pr. konto, afstemning af
-  debitorer/kreditorer mod hovedbogen og afstemning af moms (genberegnet
-  moms mod bogført moms).
+  debitorer/kreditorer mod hovedbogen, afstemning af moms (genberegnet
+  moms mod bogført moms), kontrol af at bilags- og fakturanumre er
+  hulfri, kontrol af at hvert bilag balancerer, og en rapport over
+  adskillelse af funktioner (hvem oprettede og hvem bogførte — kun til
+  kontrol, den forhindrer ingenting).
 - **Budget**: Et årsbudget pr. konto, vist som budget mod faktisk i
   resultatopgørelsen. Forsiden advarer, når en udgiftskonto har overskredet
   sit budget.
@@ -223,6 +256,13 @@ afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
   (fx et abonnement) og foreslår den rigtige konto ved afstemningen.
 - **Saldoafstemning**: Sammenlign hovedbogens banksaldo med den faktiske
   saldo på kontoudtoget.
+- **Udbetaling fra betalingsudbyder**: En indbetaling fra fx Bambora,
+  Stripe eller Shopify Payments kan afstemmes som "Udbetaling fra webbutik
+  X": banken og udbyderens gebyr bogføres mod butikkens mellemregningskonto.
+  TinyCash foreslår det selv, når banklinjen nævner butikkens navn, og
+  afviser en udbetaling der er større end mellemregningens saldo.
+- En faktura kan kun matches med en indbetaling, og en kreditnota kun med en
+  udbetaling (tilbagebetaling til kunden).
 - Bankimporten advarer om transaktioner der allerede er importeret. Ved
   PSD2-bankforbindelse advares der, før bankens samtykke udløber.
 
@@ -363,13 +403,12 @@ ikke et komplet ERP-system:
   almindelig faktura og et tilbud har derimod en "Tilføj linje"-knap og
   understøtter et vilkårligt antal linjer, uanset hvor de stammer fra (også
   automatisk genererede, fx fra mange timeregistreringer).
-- **Webbutik: kun TinyCash' eget ordreformat virker i dag.** WooCommerce,
-  Shopify, PrestaShop og Magento står som valgmuligheder, men har endnu
-  ingen færdig tilpasning — butikken skal (via et lille plugin/script) sende
-  ordren i TinyCash' JSON-format. Der er heller ingen automatisk afstemning
-  af betalingsudbyderens udbetalinger mod mellemregningskontoen endnu; den
-  sker ved almindelig bankafstemning. Kun ordrer i bogføringsvalutaen
-  modtages.
+- **Webbutik: Magento er ikke understøttet endnu** (WooCommerce, Shopify og
+  PrestaShop er). Refusioner fra WooCommerce og PrestaShop kommer ikke
+  automatisk ind — kreditnotaen laves i TinyCash. Kun ordrer i
+  bogføringsvalutaen modtages, og udbetalinger fra betalingsudbyderen
+  afstemmes manuelt i bankafstemningen (med forslag), ikke via udbyderens
+  egen rapport.
 - **Ingen momsindberetning, ingen årsrapport-indsendelse.** TinyCash
   laver tallene, men indberetter ikke selv til SKAT eller indsender
   årsrapporten til Erhvervsstyrelsen.
