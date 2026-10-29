@@ -10,6 +10,7 @@
 
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
+require_once 'inc/invoice_layouts.inc.php';
 
 header('Content-Type: application/json');
 
@@ -27,11 +28,13 @@ $width_mm   = $_POST['w'] ?? null;
 
 // Whitelist af gyldige bloknøgler - matcher design-block id'erne i invoice_view.php.
 // Forhindrer at et vilkårligt element_id kan indsættes/opdateres via dette endpoint.
-$allowed_ids = [
-    'block-stamp', 'block-logo', 'block-sender', 'block-recipient',
-    'block-cust-ref', 'block-delivery', 'block-inv-no', 'block-inv-date', 'block-inv-due', 'block-lines',
-    'block-totals', 'block-notes', 'block-foot-pay', 'block-foot-contact', 'block-foot-online', 'block-foot-legal'
-];
+// RETTET (bruger-rapporteret: "Fejl ved gem af layout... status 400" -
+// vedvarede efter en tidligere, ANDEN rettelse af samme fejlmelding, se
+// invoice_view.php's egen kommentar for den første). block-foot-message
+// findes på selve fakturasiden (invoice_view.php), men manglede her -
+// ethvert forsøg på at flytte/resize netop DEN blok blev derfor korrekt,
+// men vildledende, afvist som "ugyldigt element-id".
+$allowed_ids = IL_BLOCK_IDS;      // (listen bor nu i inc/invoice_layouts.inc.php - én kilde)
 
 if (!in_array($element_id, $allowed_ids, true)) {
     http_response_code(400);
@@ -48,6 +51,29 @@ if (!is_numeric($pos_x) || !is_numeric($pos_y) || !is_numeric($width_mm)) {
 $pos_x    = (float)$pos_x;
 $pos_y    = (float)$pos_y;
 $width_mm = (float)$width_mm;
+
+// Flere fakturalayouts (migreret): placeringen gemmes i det layout, der redigeres i Design Mode
+if (il_ready($conn)) {
+    $layout_id = il_valid_id($conn, $_POST['layout_id'] ?? 0);
+    if ($layout_id <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Unknown layout']);
+        exit;
+    }
+    $eid = DB::escape($conn, $element_id);
+    $row = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM invoice_layout_blocks WHERE layout_id = $layout_id AND element_id = '$eid'"));
+    $ok = ($row && (int)$row[0] > 0)
+        ? DB::query($conn, "UPDATE invoice_layout_blocks SET pos_x = $pos_x, pos_y = $pos_y, width_mm = $width_mm WHERE layout_id = $layout_id AND element_id = '$eid'")
+        : DB::insert($conn, 'invoice_layout_blocks', ['layout_id' => $layout_id, 'element_id' => $element_id,
+              'pos_x' => $pos_x, 'pos_y' => $pos_y, 'width_mm' => $width_mm, 'is_visible' => 1]);
+    if ($ok) {
+        echo json_encode(['success' => true, 'layout_id' => $layout_id, 'element_id' => $element_id, 'pos_x' => $pos_x, 'pos_y' => $pos_y, 'width_mm' => $width_mm]);
+    } else {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => DB::error($conn)]);
+    }
+    exit;
+}
 
 // Tjek om der allerede findes en gemt position for denne blok (UPDATE),
 // ellers opret en ny række (INSERT) - layout_settings har intet indbygget

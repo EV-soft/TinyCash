@@ -52,7 +52,30 @@ if ($box_type === 'invoice') {
 }
 
 if (empty($imap_server) || empty($imap_user)) {
-    die(lang('@Critical error: Invalid or unreadable configuration format in env.ini.'));
+    // RETTET (bruger-rapporteret "Kritisk fejl: Ugyldigt eller ulæseligt
+    // konfigurationsformat i env.ini") - selve beskeden var faktuelt forkert:
+    // tjekket ovenfor betyder blot at DENNE postkasses IMAP_*-nøgler er tomme
+    // i env.ini (helt normalt og forventet - mail-modtagelse er en valgfri
+    // funktion, se tinycash.boot.txt), ikke at env.ini's FORMAT er ugyldigt/
+    // ulæseligt (det ville i givet fald ramme ALLE indstillinger, ikke kun
+    // denne ene postkasse). Desuden kørte die() FØR htm_Header()/showMenu()
+    // nogensinde blev kaldt, så brugeren endte på en helt bar, ustylet side
+    // uden nogen vej tilbage til resten af programmet - i modstrid med
+    // sidens egen struktur og hele appens ellers gennemgående mønster
+    // (bank_integration.php viser fx en rigtig vejledningsside, ikke et
+    // die(), når dens tilsvarende valgfrie nøgler mangler).
+    $missing_keys = [
+        'invoice' => 'IMAP_INVOICE_SERVER / IMAP_INVOICE_USER / IMAP_INVOICE_PASS',
+        'vendor'  => 'IMAP_VENDOR_SERVER / IMAP_VENDOR_USER / IMAP_VENDOR_PASS',
+    ][$box_type] ?? 'IMAP_VOUCHER_SERVER / IMAP_VOUCHER_USER / IMAP_VOUCHER_PASS';
+    htm_Header(capt: '@Mail Inbox');
+    showMenu();
+    htm_Card_(capt: $page_title, wdth: 700);
+    echo '<p>' . lang('@This mailbox has not been set up yet. Mail receiving is an optional feature.') . '</p>';
+    echo '<p>' . lang('@Fill in these keys in inc/data/env.ini to enable it:') . ' <code>' . htmlspecialchars($missing_keys) . '</code></p>';
+    htm_Card_end();
+    htm_Footer();
+    exit;
 }
 
 // Eksplicit timeout - ingen var sat før, så en langsom/utilgængelig mail-

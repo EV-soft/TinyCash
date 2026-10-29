@@ -1,4 +1,4 @@
-<?php # /sales_hub.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /sales_hub.php v:1.3.1 d:2026-09-15 i:evs
 # Salg & kunder: samlet oversigt med to lister side om side.
 # Kundeliste: navn/email, med knapper til Redigér og Kontoudtog (customer_statement.php).
 # Fakturaliste: nr./dato/kunde/beløb (inkl. moms, viser restbeløb ved delvis
@@ -14,6 +14,7 @@ require_once 'inc/php2htm.lib.php';
 require_once 'inc/menu.inc.php';
 
 $current_status = isset($_GET['status']) ? $_GET['status'] : 'all';
+$current_cust   = (int)($_GET['cust'] ?? 0);      // Fakturalisten for én kunde (knappen "Vis kundens fakturaer" i kundelisten)
 
 htm_Header("@Sales & Customers", 1600);
 showMenu();
@@ -90,6 +91,12 @@ echo '<script>
         document.getElementById("sys-confirm-text").textContent    = msg;
         document.getElementById("sys-confirm-ok").textContent      = opts.okLabel || "' . lang('@Confirm') . '";
         document.getElementById("sys-confirm-ok").style.background = opts.okColor || "var(--color-danger)";
+        // "tc-info-fill" (htm_page.lib.php): kun når DENNE knap rent faktisk
+        // bruger var(--color-info) som baggrund - den er lysegrå i dark-temaet
+        // og gør ellers #sys-confirm-oks faste "color:white" ulæselig. De andre
+        // okColor-varianter (color-danger/color-success) er mørke/mættede i
+        // alle temaer og skal fortsat have almindelig hvid tekst.
+        document.getElementById("sys-confirm-ok").classList.toggle("tc-info-fill", opts.okColor === "var(--color-info)");
         document.getElementById("sys-confirm-cancel").textContent  = opts.cancelLabel || "' . lang('@Cancel') . '";
         _cb = callback;
         document.getElementById("sys-confirm-overlay").classList.add("open");
@@ -142,7 +149,7 @@ function delInv(id) {
 }
 
 function setFilter(status) {
-    window.location.href = "sales_hub.php?status=" + status;
+    window.location.href = "sales_hub.php?status=" + status + "' . ($current_cust > 0 ? '&cust=' . $current_cust : '') . '";
 }
 
 function sendMail(id) {
@@ -152,7 +159,7 @@ function sendMail(id) {
             const btn = document.getElementById("mail_btn_" + id);
             const originalHTML = btn ? btn.innerHTML : "";
             if (btn) { btn.disabled = true; btn.innerHTML = \'<i class="fa fa-spinner fa-spin"></i>\'; btn.style.opacity = "0.6"; }
-            fetch("send_invoice_action.php?id=" + id)
+            fetch("send_invoice_action.php?id=" + id, { method: "POST", body: new URLSearchParams({ csrf_token: ' . json_encode(csrf_token()) . ' }) })
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) { sysAlert("' . lang('@Email sent successfully!') . '"); location.reload(); }
@@ -194,21 +201,100 @@ echo '<div style="flex:2; min-width:400px;">';
     $c_tools .= htm_Button('fa-user-plus', '', 'success', 'customer_edit.php?id=0',     'padding:4px 8px;',                   'data-hint="'.lang('@Create New').'"',                    '', false);
     htm_Card_('@Customers', "100%", "", "c_card", true, $c_tools, fold: true); // TEST: fold-toggle
 
+    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): ingen side i
+    // systemet rangerede kunder efter reel omsætning - man kunne se ÉN
+    // kundes tal ad gangen på kundekortet ([[bookkeeper-wishlist-round10]]),
+    // men ikke sammenligne på tværs. Samme "ekskludér kladder"-princip som
+    // det nye "Bedst sælgende produkter"-panel på inventory_status.php
+    // (samme runde) - en kladde er endnu ikke en reel handel. Ganges med
+    // exch_rate for fremmed-valuta-fakturaer, samme mønster som reminders.php/
+    // reconcile_action.php (§reel-multi-valuta-bogforing) - ellers ville en
+    // stor EUR-faktura tælle med sit rå, uomregnede beløb.
+    $sh_disc = invoice_discount_sql($conn, 'il.');
+    $top_cust_res = DB::query($conn, "
+        SELECT c.cust_id, c.cust_name,
+               SUM(il.quantity * il.price_each $sh_disc * COALESCE(NULLIF(i.exch_rate, 0), 1)) AS revenue      -- RETTET: omsætning er UDEN moms (var inkl. - 25 % for højt mod resultatopgørelse og bestsellerliste)
+        FROM invoice_lines il
+        JOIN invoices i ON il.inv_id = i.inv_id
+        JOIN customers c ON i.cust_id = c.cust_id
+        WHERE LOWER(i.inv_status) != 'draft'
+        GROUP BY c.cust_id, c.cust_name
+        HAVING SUM(il.quantity * il.price_each) != 0
+        ORDER BY revenue DESC
+        LIMIT 10");
+    $top_cust_rows = [];
+    while ($tcr = DB::fetch_assoc($top_cust_res)) {
+        $top_cust_rows[] = [
+            '<a href="customer_edit.php?id='.(int)$tcr['cust_id'].'">'.htmlspecialchars($tcr['cust_name']).'</a>',
+            number_format((float)$tcr['revenue'], 2, ',', '.') . ' ' . ($global_settings['currency'] ?? 'DKK'),
+        ];
+    }
+    if (!empty($top_cust_rows)) {
+        echo '<details style="margin-bottom:15px;"><summary style="cursor:pointer; font-weight:bold; color:var(--text-muted); user-select:none; list-style:none; display:flex; align-items:center; gap:6px;">'
+            . '<i class="fa-solid fa-ranking-star" style="color:var(--color-primary);"></i> ' . lang('@Top Customers by Revenue') . '</summary>';
+        echo '<div style="margin-top:8px;">';
+        htm_Table(['@Customer', '@Revenue'], $top_cust_rows, 'topCustTbl', 10, '', true, ['', 'width:150px; text-align:right;']);
+        echo '</div></details>';
+    }
+
     $data_c = [];
-    $resc = DB::query($conn, "SELECT cust_id, cust_name, cust_email FROM customers ORDER BY cust_name LIMIT 100");
+    $missing_email_cnt = 0;
+    $dormant_cnt = 0;
+    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): sidste
+    // fakturadato pr. kunde hentes i samme forespørgsel (undgår N+1), samme
+    // "ekskludér kladder"-princip som resten af rundens nye paneler - en
+    // kladde er endnu ikke en reel handel og skal ikke tælle som "aktivitet".
+    $resc = DB::query($conn, "SELECT c.cust_id, c.cust_name, c.cust_email,
+        (SELECT MAX(i.inv_date) FROM invoices i WHERE i.cust_id = c.cust_id AND LOWER(i.inv_status) != 'draft') AS last_inv_date
+        FROM customers c WHERE " . customers_active_filter($conn, 'c.') . " ORDER BY c.cust_name");
+    // RETTET: "LIMIT 100" - kunde nr. 101 og frem (alfabetisk) blev aldrig vist i kundelisten, og tællerne
+    // "mangler e-mail" / "ingen faktura i 6 måneder" regnede kun på de første 100. Tabellen sideinddeler selv.
     if ($resc) {
+        $today = date('Y-m-d');
         while ($rowc = DB::fetch_assoc($resc)) {
             $btn = htm_ActionButtons([
                 ['icon' => 'fa-pencil',              'link' => 'customer_edit.php?id='.$rowc['cust_id'],      'hint' => '@Edit', 'type' => 'primary'],
                 ['icon' => 'fa-file-invoice-dollar',  'link' => 'customer_statement.php?id='.$rowc['cust_id'], 'hint' => '@Account Statement', 'type' => 'info'],
+                ['icon' => 'fa-list',                 'link' => 'sales_hub.php?cust='.$rowc['cust_id'].'#i_card', 'hint' => '@Show the invoices of this customer', 'type' => ((int)$rowc['cust_id'] === $current_cust ? 'success' : 'secondary')],
             ], false);
+            // RETTET (bruger-anmodet, "kan bogholderen ønske sig mere"): en
+            // manglende mailadresse blot viste et tomt felt her, uden
+            // nogen forklaring på at det stille blokerer flere andre
+            // funktioner (reminders.php/customer_statement_send.php/
+            // quote_followup.php springer alle en kunde uden mail over
+            // uden varsel). Fremhæver nu tomme mailfelter i rødt.
+            $email_cell = !empty($rowc['cust_email'])
+                ? htmlspecialchars($rowc['cust_email'])
+                : '<span style="color:var(--color-danger); font-weight:bold;" data-hint="'.htmlspecialchars(lang('@No email registered - this customer will silently be skipped by payment reminders, account statement emails and quote follow-ups')).'"><i class="fa-solid fa-triangle-exclamation"></i> '.lang('@Missing').'</span>';
+            if (empty($rowc['cust_email'])) $missing_email_cnt++;
             // RETTET (§bugs-batch-13-review): cust_name/cust_email skrevet
             // direkte ind i tabellen uden escaping - htm_Table() antager at
             // hver celle allerede er den HTML der skal vises (mange kald
             // sender bevidst <a>/<span>), så uescaped fritekst som et
             // kundenavn er en lagret XSS (fx et kundenavn "<script>...").
-            $data_c[] = [$rowc['cust_id'], htmlspecialchars($rowc['cust_name']), htmlspecialchars($rowc['cust_email']), $btn];
+            $name_cell = htmlspecialchars($rowc['cust_name']);
+            // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): en
+            // kunde der har haft mindst én rigtig faktura, men intet i 180+
+            // dage, flages som "inaktiv" - nyttigt til at fange kunder der
+            // er ved at forsvinde, før det er for sent at genaktivere dem.
+            // En kunde der ALDRIG har fået en faktura flages IKKE her - det
+            // er en anden situation (en helt ny/potentiel kunde), ikke et
+            // tegn på at nogen er ved at forsvinde.
+            if (!empty($rowc['last_inv_date'])) {
+                $days_since = days_between($rowc['last_inv_date'], $today);
+                if ($days_since > 180) {
+                    $dormant_cnt++;
+                    $name_cell .= ' <span style="color:var(--color-warning); font-size:0.85em;" data-hint="'.htmlspecialchars(sprintf(lang('@No invoice in %d days (last: %s)'), $days_since, date(CONF_DATE_FORMAT, strtotime($rowc['last_inv_date'])))).'"><i class="fa-solid fa-moon"></i></span>';
+                }
+            }
+            $data_c[] = [$rowc['cust_id'], $name_cell, $email_cell, $btn];
         }
+    }
+    if ($dormant_cnt > 0) {
+        htm_Banner('<i class="fa-solid fa-moon"></i> ' . sprintf(lang('@%d customer(s) have had no invoice in over 6 months (marked with a moon icon below).'), $dormant_cnt), 'info');
+    }
+    if ($missing_email_cnt > 0) {
+        htm_Banner('<i class="fa-solid fa-triangle-exclamation"></i> ' . sprintf(lang('@%d customer(s) have no email address - they are silently skipped by payment reminders, account statement emails and quote follow-ups.'), $missing_email_cnt), 'warning');
     }
     htm_Table(['@ID', '@Name', '@Email', '@Action'], $data_c, 'hub_cust', 20, '', true,
         ['width:50px;', 'width:120px;', 'width:150px;', 'width:130px; text-align:center;']);
@@ -239,15 +325,25 @@ echo '<div style="flex:3;">';
         $color    = $isActive ? '#fff' : 'var(--theme-text, #333)';
         $i_filter .= '<button type="button" onclick="setFilter(\''.$f.'\')" class="filter-btn" style="background:'.$bg.'; color:'.$color.'; font-weight:'.($isActive?'bold':'normal').';">'.$l.'</button>';
     }
+    // Kun én kundes fakturaer: navnet vises som et filter, der kan fjernes (status-filteret virker stadig)
+    if ($current_cust > 0) {
+        $cf_row = DB::fetch_assoc(DB::query($conn, "SELECT cust_name FROM customers WHERE cust_id = $current_cust"));
+        $i_filter .= '<span class="filter-btn" style="background:var(--theme-primary, #3498db); color:#fff; font-weight:bold; margin-left:8px;">'
+                   . '<i class="fa-solid fa-user"></i> ' . htmlspecialchars($cf_row['cust_name'] ?? ('#' . $current_cust))
+                   . ' <a href="sales_hub.php?status=' . urlencode($current_status) . '#i_card" style="color:#fff; text-decoration:none; margin-left:6px;" data-hint="' . lang('@Show the invoices of all customers') . '">✕</a></span>';
+    }
     $i_filter .= '</div>';
 
-    $where_clause = "";
+    $where = [];
     if ($current_status !== 'all') {
         $safe_status  = DB::real_escape_string($conn, strtolower($current_status));
-        $where_clause = "WHERE LOWER(i.inv_status) = '$safe_status'";
+        $where[] = "LOWER(i.inv_status) = '$safe_status'";
     }
+    if ($current_cust > 0) $where[] = "i.cust_id = $current_cust";
+    $where_clause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
     $data_i = [];
+    if (!defined('SALES_HUB_INV_LIMIT')) define('SALES_HUB_INV_LIMIT', 500);
     // RETTET 2026-08-20: ALVORLIGT FUND - "SUM(l.quantity * l.price_each)"
     // manglede momsen HELT (intet moms-udtryk overhovedet) - "Beløb"-kolonnen
     // viste nettobeløbet, ikke det kunden reelt skylder, i modsætning til
@@ -269,15 +365,30 @@ echo '<div style="flex:3;">';
     // beløb pga. afrundingsrækkefølgen (invoice_dkk_totals() runder netto og
     // moms hver for sig FØR kursomregning) - uden betydning for en oversigts-
     // kolonne, i modsætning til den hidtidige fejl på op til hele kursfaktoren.
-    $query  = "SELECT i.inv_id, i.invoice_no, i.inv_date, c.cust_name, i.inv_status,
-                      SUM(l.quantity * l.price_each * (100 + l.line_vat_rate) / 100.0 * COALESCE(NULLIF(i.exch_rate, 0), 1)) as total_amount,
-                      COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE inv_id = i.inv_id), 0) as amount_paid
+    $sh_disc2 = invoice_discount_sql($conn, 'l.');
+    // NYT (runde 33): credit_note_no findes kun efter db-setup/migrate_
+    // credit_note_no.php er kørt - samme "stille degradering"-mønster som
+    // andre nyere kolonner i denne kodebase.
+    $has_cn_no_col = false;
+    if (DB::is_sqlite()) {
+        $cnc = DB::query($conn, "PRAGMA table_info(invoices)");
+        if ($cnc) { while ($cncr = DB::fetch_assoc($cnc)) { if ($cncr['name'] === 'credit_note_no') { $has_cn_no_col = true; break; } } }
+    } else {
+        $cnc = DB::query($conn, "SHOW COLUMNS FROM invoices LIKE 'credit_note_no'");
+        $has_cn_no_col = ($cnc && DB::num_rows($cnc) > 0);
+    }
+    $sh_cn_no_select = $has_cn_no_col ? ", i.credit_note_no" : "";
+    $query  = "SELECT i.inv_id, i.invoice_no, i.credit_ref$sh_cn_no_select, i.inv_date, c.cust_name, i.inv_status,
+                      SUM(l.quantity * l.price_each $sh_disc2 * (100 + l.line_vat_rate) / 100.0 * COALESCE(NULLIF(i.exch_rate, 0), 1)) as total_amount,
+                      COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE inv_id = i.inv_id), 0) as amount_paid,
+                      " . invoice_credited_sql($conn) . " as amount_credited,
+                      (SELECT COUNT(*) FROM invoices x WHERE x.credit_ref = i.inv_id) as n_credit_notes
                FROM invoices i
                LEFT JOIN customers c ON i.cust_id = c.cust_id
                LEFT JOIN invoice_lines l ON i.inv_id = l.inv_id
                $where_clause
                GROUP BY i.inv_id
-               ORDER BY i.inv_id DESC LIMIT 100";
+               ORDER BY i.inv_id DESC LIMIT " . SALES_HUB_INV_LIMIT;
     $resi = DB::query($conn, $query);
     if ($resi) {
         while ($rowi = DB::fetch_assoc($resi)) {
@@ -287,8 +398,9 @@ echo '<div style="flex:3;">';
             // fulde beløb, viser nu restbeløbet i stedet for at se ud som
             // helt ubetalt.
             $paid_so_far = (float)($rowi['amount_paid'] ?? 0);
-            if (strtolower($rowi['inv_status']) === 'sent' && $paid_so_far > 0.01) {
-                $remaining = max(0, (float)($rowi['total_amount'] ?? 0) - $paid_so_far);
+            $credited_so_far = (float)($rowi['amount_credited'] ?? 0);      // (negativ: en delvis kreditnota)
+            if (strtolower($rowi['inv_status']) === 'sent' && ($paid_so_far > 0.01 || $credited_so_far < -0.01)) {
+                $remaining = max(0, (float)($rowi['total_amount'] ?? 0) + $credited_so_far - $paid_so_far);
                 $amou .= '<br><small style="color:var(--color-warning); font-weight:normal;">' . lang('@Remaining:') . ' ' . number_format($remaining, 2, ',', '.') . '</small>';
             }
             $row_actions = [
@@ -302,7 +414,7 @@ echo '<div style="flex:3;">';
                 $row_actions[] = ['icon' => 'fa-pencil', 'link'    => 'invoice_edit.php?id='.$rowi['inv_id'], 'hint' => '@Edit',                        'type' => 'primary'];
                 $row_actions[] = ['icon' => 'fa-gavel',  'onclick' => 'postInv('.$rowi['inv_id'].')',          'hint' => '@Post Invoice (Assign No.)',    'type' => 'success'];
                 $row_actions[] = ['icon' => 'fa-trash',  'onclick' => 'delInv('.$rowi['inv_id'].')',           'hint' => '@Delete',                       'type' => 'danger'];
-            } elseif (!in_array(strtolower($rowi['inv_status']), ['credited', 'credit'], true)) {
+            } elseif (!in_array(strtolower($rowi['inv_status']), ['credited', 'credit'], true) && (int)($rowi['n_credit_notes'] ?? 0) === 0) {     // (én kreditnota pr. faktura - også en delvis)
                 // RETTET (se [[bugs-batch-10-review]]): knappen blev vist for
                 // ALLE ikke-kladde-fakturaer, inkl. allerede krediterede
                 // fakturaer og kreditnota-rækkerne selv - samme "vis aldrig en
@@ -311,7 +423,26 @@ echo '<div style="flex:3;">';
                 $row_actions[] = ['icon' => 'fa-undo',   'link'    => 'invoice_edit.php?id=0&credit_ref='.$rowi['inv_id'], 'hint' => '@Credit this invoice (Auto-create)', 'type' => 'warning'];
             }
 
-            $invoice_display_no = (strtolower($rowi['inv_status']) === 'draft') ? lang('@Draft') : ($rowi['invoice_no'] ?: '---');
+            // RETTET (bruger-anmodet, "kan bogholderen ønske sig mere"): en
+            // kladde der har ligget i månedsvis så identisk ud som en fra i
+            // går - dashboardets "Kladdefakturaer"-tæller viser kun et råt
+            // antal, uden nogen alders-dimension. Fremhæver nu kladder
+            // ældre end 30 dage med en rød "(N dage)"-markering direkte i
+            // listen, hvor man rent faktisk beslutter om de skal ryddes op.
+            // RETTET (runde 33): en kreditnota-række har intet invoice_no -
+            // viste før blot '---'. Bruger nu dens eget credit_note_no, hvis
+            // migrationen er kørt og nummeret er tildelt.
+            if (!empty($rowi['credit_ref'])) {
+                $invoice_display_no = !empty($rowi['credit_note_no']) ? 'KN-'.str_pad($rowi['credit_note_no'], 6, "0", STR_PAD_LEFT) : '---';
+            } else {
+                $invoice_display_no = (strtolower($rowi['inv_status']) === 'draft') ? lang('@Draft') : ($rowi['invoice_no'] ?: '---');
+            }
+            if (strtolower($rowi['inv_status']) === 'draft' && !empty($rowi['inv_date'])) {
+                $draft_age_days = days_between($rowi['inv_date'], date('Y-m-d'));
+                if ($draft_age_days > 30) {
+                    $invoice_display_no .= ' <span style="color:var(--color-danger); font-weight:bold; font-size:0.85em;" data-hint="'.htmlspecialchars(sprintf(lang('@This draft was created %d days ago and may have been forgotten'), $draft_age_days)).'">(' . sprintf(lang('@%d days'), $draft_age_days) . ')</span>';
+                }
+            }
             // RETTET (§bugs-batch-13-review): samme uescapede cust_name som
             // kundelisten ovenfor - lagret XSS via et fritekst-kundenavn.
             $data_i[] = [
@@ -323,6 +454,11 @@ echo '<div style="flex:3;">';
                 htm_ActionButtons($row_actions, false)
             ];
         }
+    }
+    // RETTET: listen stoppede stille ved de 100 nyeste fakturaer - ældre fakturaer kunne ikke findes herfra,
+    // uden at noget sagde det. Nu 500, og en besked når grænsen er nået.
+    if (count($data_i) >= SALES_HUB_INV_LIMIT) {
+        htm_Banner('<i class="fa fa-info-circle"></i> ' . sprintf(lang('@Showing the newest %d invoices - choose a customer or a status to see older ones.'), SALES_HUB_INV_LIMIT), 'info');
     }
     htm_Table(['@Inv. No', '@Date', '@Customer', '@Amount', '@Status', '@Action'], $data_i, 'hub_inv', 20, $i_filter, true,
         ['width:90px;', 'width:120px;', 'width:200px;', 'width:100px; text-align:right;', 'width:90px; text-align:center;', 'width:140px; text-align:left;']);

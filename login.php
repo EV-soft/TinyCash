@@ -1,4 +1,4 @@
-<?php # /login.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /login.php v:1.3.1 d:2026-09-15 i:evs
 # Login-siden. Understøtter valgbar database-type (SQLite/MySQL) via
 # formularen, to-faktor-login (TOTP, trin 2 efter korrekt adgangskode, kun
 # for brugere der har slået det til via my_2fa.php), session_regenerate_id()
@@ -51,11 +51,19 @@ if (isset($_POST['db_type']) && in_array($_POST['db_type'], ['mysql', 'sqlite'],
 // et tomt array, og hele denne mekanisme er et no-op - se
 // inc/account.lib.php og inc/db_connect.inc.php.
 require_once 'inc/account.lib.php';
+// RETTET (SIKKERHED): et skift af regnskab beholdt brugerens login - user_id fra regnskab A blev siddende, og i
+// regnskab B er samme user_id en ANDEN bruger (måske administrator). En bruger kunne altså skifte regnskab og være
+// logget ind som B's bruger nr. N uden kodeord. Et skift logger nu ud (og auth.inc.php afviser en uoverensstemmelse).
+function login_forget_user(): void {
+    foreach (['user_id', 'user_name', 'user_level', 'real_user_level', 'user_role', 'auth_account_id', 'totp_pending', 'csrf_token'] as $k) unset($_SESSION[$k]);
+}
 if (isset($_POST['account_id']) && $_POST['account_id'] !== '') {
+    if ((string)$_POST['account_id'] !== (string)($_SESSION['account_id'] ?? '')) login_forget_user();
     $_SESSION['account_id'] = (string)$_POST['account_id'];
 }
 // Skift regnskab: ryd valget og vis vælgeren igen fra bunden.
 if (isset($_GET['change_account'])) {
+    login_forget_user();
     unset($_SESSION['account_id']);
     header("Location: login.php");
     exit;
@@ -153,6 +161,8 @@ function login_complete_session(array $row, string $chosen_db_type, ?string $cho
     if ($chosen_account_id !== null) {
         $_SESSION['account_id'] = $chosen_account_id;
     }
+    // Det regnskab login'et gælder (se inc/auth.inc.php) - et andet regnskab kræver et nyt login
+    $_SESSION['auth_account_id'] = (string)($_SESSION['account_id'] ?? '');
 }
 
 // RETTET (§bugs-batch-18-review): inc/auth.inc.php sætter en "redirect_to"-
@@ -235,8 +245,11 @@ if (isset($_POST['login'])) {
     // angriber der allerede havde en gyldig adgangskode kunne dermed afprøve
     // 6-cifrede TOTP-koder helt uden nogen låsning, selvom hele pointen med
     // denne tæller var at forhindre netop den slags gennemprøvning.
+    // RETTET: på MySQL (utf8mb4_*_ci) matcher "WHERE username = ?" uden hensyn til store/små bogstaver - men
+    // tælleren over mislykkede forsøg talte hver skrivemåde for sig. "admin", "Admin", "ADMIN", "aDmin" ...
+    // gav dermed 5 forsøg HVER, og 5-forsøgs-låsen kunne omgås. Tælleren er nu også uafhængig af store/små.
     $lock_check_sql = "SELECT COUNT(*) AS n FROM login_log
-                        WHERE logged_username = ? AND status LIKE 'Failed%'
+                        WHERE LOWER(logged_username) = LOWER(?) AND status LIKE 'Failed%'
                           AND login_time >= " . (DB::is_sqlite() ? "datetime('now', '-15 minutes')" : "DATE_SUB(NOW(), INTERVAL 15 MINUTE)");
     $lock_res = DB::prepare_and_execute($conn, $lock_check_sql, [$initials]);
     $recent_failures = $lock_res ? (int)(DB::fetch_assoc($lock_res)['n'] ?? 0) : 0;
@@ -250,17 +263,33 @@ if (isset($_POST['login'])) {
         // også fra at kunne nå frem til selve migrationen (som kræver login).
         // Prøv derfor den fulde forespørgsel først, og fald tilbage til den
         // gamle 5-kolonne-udgave (2FA behandlet som slået fra) hvis den fejler.
+        // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): samme
+        // "prøv den fulde forespørgsel, fald tilbage hvis kolonnen ikke findes
+        // endnu"-mønster som totp_*-kolonnerne allerede bruger nedenfor - is_active
+        // findes kun efter db-setup/migrate_user_active_status.php er kørt.
+        // Manglende kolonne behandles som "aktiv" (kolonnens eget DEFAULT 1 når
+        // den findes), ikke som "afvist" - en frisk installation uden migrationen
+        // kørt endnu må aldrig kunne låse admin ude af sit eget system.
         try {
-            $sql = "SELECT user_id, username, password_hash, user_role, user_level, totp_enabled, totp_secret, totp_recovery_codes FROM users WHERE username = ?";
+            $sql = "SELECT user_id, username, password_hash, user_role, user_level, totp_enabled, totp_secret, totp_recovery_codes, is_active FROM users WHERE username = ?";
             $res = DB::prepare_and_execute($conn, $sql, [$initials]);
         } catch (\Throwable $e) {
-            $sql = "SELECT user_id, username, password_hash, user_role, user_level FROM users WHERE username = ?";
-            $res = DB::prepare_and_execute($conn, $sql, [$initials]);
+            try {
+                $sql = "SELECT user_id, username, password_hash, user_role, user_level, totp_enabled, totp_secret, totp_recovery_codes FROM users WHERE username = ?";
+                $res = DB::prepare_and_execute($conn, $sql, [$initials]);
+            } catch (\Throwable $e2) {
+                $sql = "SELECT user_id, username, password_hash, user_role, user_level FROM users WHERE username = ?";
+                $res = DB::prepare_and_execute($conn, $sql, [$initials]);
+            }
         }
 
         // Tjek om vi får et resultat tilbage
         if ($res && $row = DB::fetch_assoc($res)) {
-            if (password_verify($pass, $row['password_hash'])) {
+            if (isset($row['is_active']) && (int)$row['is_active'] === 0) {
+                $error_msg = "Denne brugerkonto er deaktiveret. Kontakt din administrator.";
+                $fail_sql = "INSERT INTO login_log (logged_username, ip_address, status, user_agent) VALUES (?, ?, 'Failed', ?)";
+                DB::prepare_and_execute($conn, $fail_sql, [$initials, $ip, $ua]);
+            } elseif (password_verify($pass, $row['password_hash'])) {
                 // Bevar db_type i sessionen på tværs af $_SESSION-nulstillingen herunder,
                 // så resten af sessionen efter login forbliver på samme database.
                 $chosen_db_type    = $_SESSION['db_type'] ?? $db_type;
@@ -327,7 +356,7 @@ if (isset($_POST['totp_login']) && !empty($_SESSION['totp_pending'])) {
     // nogensinde at ramme trin 1's 5-forsøgs-låsning. Samme
     // 5-forsøg/15-minutters-princip, nu håndhævet her også.
     $lock_check_sql = "SELECT COUNT(*) AS n FROM login_log
-                        WHERE logged_username = ? AND status LIKE 'Failed%'
+                        WHERE LOWER(logged_username) = LOWER(?) AND status LIKE 'Failed%'
                           AND login_time >= " . (DB::is_sqlite() ? "datetime('now', '-15 minutes')" : "DATE_SUB(NOW(), INTERVAL 15 MINUTE)");
     $lock_res = DB::prepare_and_execute($conn, $lock_check_sql, [$pending['logged_username']]);
     $recent_failures = $lock_res ? (int)(DB::fetch_assoc($lock_res)['n'] ?? 0) : 0;
@@ -335,7 +364,12 @@ if (isset($_POST['totp_login']) && !empty($_SESSION['totp_pending'])) {
     if ($recent_failures >= 5) {
         $error_msg = "For mange mislykkede loginforsøg. Prøv igen om 15 minutter.";
     } else {
-        $valid          = totp_verify($pending['totp_secret'], $code);
+        // RETTET: en kode kunne bruges igen inden for sit vindue (~90 sek.) - nu afvises et tidstrin der allerede
+        // er brugt til et login for denne bruger (gemt i settings som totp_last_step_<user_id>)
+        $step_key       = 'totp_last_step_' . (int)$pending['user_id'];
+        $step           = totp_match_step($pending['totp_secret'], $code);
+        $last_step_row  = DB::fetch_assoc(DB::query($conn, "SELECT setting_value FROM settings WHERE setting_key = '" . DB::escape($conn, $step_key) . "'"));
+        $valid          = $step !== null && $step > (int)($last_step_row['setting_value'] ?? 0);
         $used_recovery  = false;
         $remaining_codes = null;
 
@@ -364,6 +398,10 @@ if (isset($_POST['totp_login']) && !empty($_SESSION['totp_pending'])) {
                 'user_role'  => $pending['user_role'],
                 'user_level' => $pending['user_level'],
             ];
+            if ($step !== null && !$used_recovery) {
+                DB::query($conn, "DELETE FROM settings WHERE setting_key = '" . DB::escape($conn, $step_key) . "'");
+                DB::insert($conn, 'settings', ['setting_key' => $step_key, 'setting_value' => (string)$step]);
+            }
             login_complete_session($row, $pending['db_type'], $pending['account_id'] ?? null);
 
             if ($used_recovery && $remaining_codes !== null) {
@@ -404,6 +442,12 @@ if ($error_msg) { htm_alert($error_msg, 'error', 300); }
 if (($_GET['msg'] ?? '') === 'admin_created') {
     htm_alert(lang('@Administrator account created. Please log in.'), 'success', 300);
 }
+if (($_GET['msg'] ?? '') === 'account_disabled') {
+    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): inc/auth.inc.php
+    // sender hertil, når en allerede aktiv session opdages tilhøre en konto
+    // der siden er blevet deaktiveret (se dens egen kommentar).
+    htm_alert(lang('@Your account has been disabled. Contact your administrator.'), 'error', 300);
+}
 
 if ($show_account_picker) {
     // --- NYT TRIN 0: VÆLG REGNSKAB (kun vist ved 2+ registrerede regnskaber,
@@ -443,7 +487,7 @@ if (!empty($_SESSION['totp_pending'])) {
         attr: 'name="totp_login" data-hint="'.lang('@Verify the code and complete login').'"',
         cont: '<div style="margin-top: 20px;"></div>'
     );
-    echo '<div style="text-align:center; margin-top:15px;"><a href="login.php?cancel_2fa=1" style="color:var(--text-muted); font-size:0.85em; text-decoration:none;"><i class="fa fa-arrow-left"></i> ' . lang('@Cancel and start over') . '</a></div>';
+    echo '<div style="text-align:center; margin-top:15px;"><a href="login.php?cancel_2fa=1" data-hint="' . lang('@Cancel the two-factor step and log in again from the beginning') . '" style="color:var(--text-muted); font-size:0.85em; text-decoration:none;"><i class="fa fa-arrow-left"></i> ' . lang('@Cancel and start over') . '</a></div>';
     htm_Card_end();
     echo '</div>';
     htm_Footer();

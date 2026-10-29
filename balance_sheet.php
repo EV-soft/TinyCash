@@ -61,7 +61,7 @@ echo "<div style='display:grid; grid-template-columns: 1fr 1fr; gap:20px;'>";
     if (empty($rows)) {
         echo '<p style="color:var(--text-muted); font-style:italic;">' . lang('@No asset postings found.') . '</p>';
     } else {
-        htm_Table(['@Account', '@Balance'], $rows, 'assets_tbl', 100);
+        htm_Table(['@Account', '@Balance'], $rows, 'assets_tbl', 100, '', true, [], '500px', 'aktiver.csv');
     }
     echo '<div style="display:flex; justify-content:space-between; padding:14px 0; margin-top:8px; border-top:2px solid var(--color-primary); font-weight:bold;">';
     echo '<span>' . lang('@Total Assets') . '</span><span>' . number_format($bs['assets_total'], 2, ',', '.') . ' ' . $currency . '</span>';
@@ -77,7 +77,7 @@ echo "<div style='display:grid; grid-template-columns: 1fr 1fr; gap:20px;'>";
         $rows[] = [$r['acc_id'] . ' - ' . htmlspecialchars($r['acc_name']), '<div style="text-align:right;">' . number_format(-$r['balance'], 2, ',', '.') . '</div>'];
     }
     $rows[] = ['<em>' . lang('@Result for the year (not yet closed)') . '</em>', '<div style="text-align:right;">' . number_format($bs['unclosed_result'], 2, ',', '.') . '</div>'];
-    htm_Table(['@Account', '@Balance'], $rows, 'equity_tbl', 100);
+    htm_Table(['@Account', '@Balance'], $rows, 'equity_tbl', 100, '', true, [], '500px', 'egenkapital.csv');
 
     echo '<h4 style="margin:16px 0 8px; font-size:0.95em; color:var(--text-muted);">' . lang('@Liabilities') . '</h4>';
     $rows = [];
@@ -90,7 +90,7 @@ echo "<div style='display:grid; grid-template-columns: 1fr 1fr; gap:20px;'>";
     if (empty($rows)) {
         echo '<p style="color:var(--text-muted); font-style:italic;">' . lang('@No liability postings found.') . '</p>';
     } else {
-        htm_Table(['@Account', '@Balance'], $rows, 'liab_tbl', 100);
+        htm_Table(['@Account', '@Balance'], $rows, 'liab_tbl', 100, '', true, [], '500px', 'passiver.csv');
     }
 
     echo '<div style="display:flex; justify-content:space-between; padding:14px 0; margin-top:8px; border-top:2px solid var(--color-primary); font-weight:bold;">';
@@ -99,6 +99,43 @@ echo "<div style='display:grid; grid-template-columns: 1fr 1fr; gap:20px;'>";
     htm_Card_end();
 
 echo "</div>"; // grid
+
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 30): ingen
+// side beregnede de klassiske regnskabsnøgletal. Soliditetsgrad genbruger
+// PRÆCIS $bs['equity_total']/$bs['assets_total'] (samme tal som allerede
+// vises ovenfor - "to steder må ikke kunne regne forskelligt"-princip).
+// Likviditetsgrad kan IKKE beregnes fuldt korrekt her - kontoplanen har
+// ingen "kortfristet vs. langfristet"-opdeling af aktiver/passiver (kun
+// flade acc_type-kategorier) - i stedet en BEVIDST forenklet, tydeligt
+// mærket udgave: (bank + debitorer) / kreditorer, de tre konti systemet
+// allerede selv bruger til netop disse formål (conf_acc_bank/debitor/
+// creditor, samme som subledger_reconciliation.php/aging_report.php).
+$soliditetsgrad = $bs['assets_total'] > 0 ? ($bs['equity_total'] / $bs['assets_total'] * 100) : null;
+
+$as_of_esc = DB::escape($conn, $as_of);
+$acc_bank_bs     = (int)($s['conf_acc_bank']     ?? 5000);
+$acc_debitor_bs  = (int)($s['conf_acc_debitor']  ?? 8100);
+$acc_creditor_bs = (int)($s['conf_acc_creditor'] ?? 4000);
+function bs_acc_balance($conn, int $acc_id, string $as_of_esc): float {
+    $row = DB::fetch_assoc(DB::query($conn, "SELECT SUM(l.amount) AS bal FROM ledger l JOIN journal j ON l.jou_id = j.jou_id WHERE l.acc_id = $acc_id AND j.jou_date <= '$as_of_esc'"));
+    return (float)($row['bal'] ?? 0);
+}
+$bank_bal     = bs_acc_balance($conn, $acc_bank_bs, $as_of_esc);
+$debitor_bal  = bs_acc_balance($conn, $acc_debitor_bs, $as_of_esc);
+$creditor_bal = -bs_acc_balance($conn, $acc_creditor_bs, $as_of_esc); // kreditkonto er negativ i hovedbogen
+$likviditetsgrad = $creditor_bal > 0.01 ? (($bank_bal + $debitor_bal) / $creditor_bal * 100) : null;
+
+echo "<div style='margin-top:20px;'>";
+htm_Card_(lang('@Key Financial Ratios'), '1000');
+echo '<p style="color:var(--text-muted); font-size:0.85em; margin-top:-5px;">' . lang('@Reference figures only - not part of the official balance sheet above.') . '</p>';
+echo '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">';
+echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Solvency Ratio (Equity / Total Assets)') . '</div><div style="font-weight:bold; font-size:1.3em;">' . ($soliditetsgrad !== null ? number_format($soliditetsgrad, 1, ',', '.') . ' %' : '—') . '</div></div>';
+echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Simplified Liquidity Ratio ((Bank + Receivables) / Payables)') . '</div><div style="font-weight:bold; font-size:1.3em;">' . ($likviditetsgrad !== null ? number_format($likviditetsgrad, 1, ',', '.') . ' %' : '—') . '</div></div>';
+echo '</div>';
+echo '<p style="color:var(--text-muted); font-size:0.8em; margin-top:12px; margin-bottom:0;">' . lang('@The liquidity ratio is a simplification using only the configured bank/receivables/payables control accounts - the chart of accounts does not distinguish current from long-term assets/liabilities, so a full current ratio cannot be calculated reliably.') . '</p>';
+htm_Card_end();
+echo "</div>";
+
 echo "</div>"; // container
 
 htm_Footer();

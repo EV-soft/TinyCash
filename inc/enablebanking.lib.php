@@ -168,7 +168,12 @@ function eb_start_authorization(string $aspsp_name, string $aspsp_country, strin
         'psu_type'     => $psu_type,
         'language'     => 'da',
     ]);
-    return ['url' => $r['url'] ?? null, 'authorization_id' => $r['authorization_id'] ?? null, 'error' => $r['_status'] >= 400 ? $r : null];
+    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): $valid_until
+    // beregnes lige ovenfor og sendes allerede til banken, men blev FØR
+    // aldrig returneret herfra - bank_integration_connect.php kunne derfor
+    // aldrig gemme, hvornår samtykket reelt udløber. Se db-setup/migrate_
+    // bank_consent_expiry.php/bank_integration.php for selve advarslen.
+    return ['url' => $r['url'] ?? null, 'authorization_id' => $r['authorization_id'] ?? null, 'error' => $r['_status'] >= 400 ? $r : null, 'valid_until' => $valid_until];
 }
 
 // Udveksler den engangs-autorisationskode banken sendte tilbage (?code=...)

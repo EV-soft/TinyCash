@@ -31,7 +31,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_dispose'])) {
     $dispose_date = trim($_POST['disposed_date'] ?? date('Y-m-d'));
     $proceeds     = parse_dk_number($_POST['disposal_proceeds'] ?? 0);
 
-    if (is_date_locked($conn, $dispose_date)) {
+    // RETTET: datoen blev ikke kontrolleret - en afhændelse FØR seneste afskrivning (eller før anskaffelsen)
+    // blev bogført med en restværdi der allerede var afskrevet for måneder EFTER salget, og en tom / ugyldig
+    // dato gav en journalpost uden dato. En fremtidig dato bogførte salget i en periode der ikke er nået.
+    $fa_floor = max((string)$asset['acquisition_date'], (string)($asset['last_depreciated_date'] ?? ''));
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dispose_date) || !strtotime($dispose_date)) {
+        $err = lang('@Please enter a valid date.');
+    // RETTET: et negativt salgsprovenu (fx "-5.000" tastet for et tab) blev taget imod - banken blev KREDITERET
+    // som om virksomheden betalte køberen, og tabet blev dobbelt så stort. Et tab beregnes selv ud fra restværdien.
+    } elseif ($proceeds < 0) {
+        $err = lang('@The sales price cannot be negative - enter 0 if the asset is scrapped.');
+    } elseif ($dispose_date > date('Y-m-d')) {
+        $err = lang('@The disposal date cannot be in the future.');
+    } elseif ($dispose_date < $fa_floor) {
+        $err = sprintf(lang('@The disposal date cannot be before the acquisition or the last posted depreciation (%s).'), date(CONF_DATE_FORMAT, strtotime($fa_floor)));
+    } elseif (is_date_locked($conn, $dispose_date)) {
         $err = lang('@The disposal date is in a locked accounting period.');
     } else {
         DB::begin_transaction($conn);
@@ -45,25 +59,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_dispose'])) {
                 throw new Exception(lang('@This asset was already disposed of by another, simultaneous request.'));
             }
 
-            $gain_loss  = round($proceeds - $nbv, 2);
-            $acc_bank   = (int)(get_settings($conn)['conf_acc_bank'] ?? 5000);
+            // RETTET: hele salgsprisen blev ført som provenu uden salgsmoms. Salg af et driftsmiddel er momspligtigt
+            // for en momsregistreret virksomhed: momsen manglede på momskontoen, og gevinsten var momsen for høj.
+            // "Inkl. moms" (standard) udskiller nu 25 % moms til salgsmomskontoen; fjern fluebenet ved fx salg
+            // af et aktiv, der er købt uden momsfradrag.
+            $ds_settings = get_settings($conn);
+            $sale_vat   = !empty($_POST['proceeds_incl_vat']) ? round($proceeds * 25 / 125, 2) : 0.0;
+            $net_proceeds = round($proceeds - $sale_vat, 2);
+            $gain_loss  = round($net_proceeds - $nbv, 2);
+            $acc_bank   = (int)($ds_settings['conf_acc_bank'] ?? 5000);
             $voucher_no = next_voucher_no($conn);
             $jou_text   = DB::escape($conn, lang('@Disposal of fixed asset:') . ' ' . $asset['asset_name']);
             // RETTET (§currency-setting-is-cosmetic-label): journal.currency
             // blev aldrig sat (faldt tilbage til skemaets DEFAULT 'DKK').
             $jou_currency = DB::escape($conn, $global_settings['currency'] ?? 'DKK');
+            // NYT (BEK 811/2026-gennemgang, [[digital-standard-bookkeeping-registration-goal]]).
+            $cb = journal_created_by_sql($conn);
 
-            DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, currency)
-                VALUES ('" . DB::escape($conn, $dispose_date) . "', '$jou_text', 'fixed_asset_disposal', $voucher_no, '$jou_currency')");
+            DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, currency{$cb['col']})
+                VALUES ('" . DB::escape($conn, $dispose_date) . "', '$jou_text', 'fixed_asset_disposal', $voucher_no, '$jou_currency'{$cb['val']})");
             $jou_id = DB::insert_id($conn);
 
             if ($nbv != 0)      ledger_post($conn, $jou_id, (int)$asset['asset_account_id'], $nbv * -1);
             if ($proceeds != 0) ledger_post($conn, $jou_id, $acc_bank, $proceeds);
+            if ($sale_vat != 0) ledger_post($conn, $jou_id, (int)($ds_settings['conf_acc_vat'] ?? 6900), -$sale_vat);
             if ($gain_loss != 0) ledger_post($conn, $jou_id, (int)$asset['depreciation_account_id'], $gain_loss * -1);
 
             log_action($conn, 'DISPOSE_FIXED_ASSET', 'fixed_assets', $id,
                 ['status' => 'active', 'net_book_value' => $nbv],
-                ['status' => 'disposed', 'proceeds' => $proceeds, 'gain_loss' => $gain_loss, 'disposal_voucher_no' => $voucher_no]);
+                ['status' => 'disposed', 'proceeds' => $proceeds, 'sale_vat' => $sale_vat, 'gain_loss' => $gain_loss, 'disposal_voucher_no' => $voucher_no]);
 
             DB::commit($conn);
             header("Location: fixed_asset_list.php?msg=disposed"); exit;
@@ -103,11 +127,13 @@ csrf_field();
 htm_Field(icon: 'fa-calendar', labl: '@Disposal Date', name: 'disposed_date', valu: date('Y-m-d'), type: 'date', extr: 'required leg:left', wdth: '50%');
 htm_Field(icon: 'fa-money-bill-wave', labl: '@Sale Proceeds', name: 'disposal_proceeds', valu: '0,00', type: 'text',
     extr: 'leg:left style="text-align:right;"', wdth: '50%', hint: '@Enter 0 if the asset was scrapped with no sale value.');
+echo '<label style="display:block; margin:6px 0 0; font-size:0.9em;"><input type="checkbox" name="proceeds_incl_vat" value="1" checked> '
+   . lang('@The sale price includes 25 % VAT (posted as output VAT)') . '</label>';
 
 echo '<div style="margin-top:20px; display:flex; gap:10px; border-top:1px solid var(--border-color); padding-top:20px;">';
 echo '<button type="submit" name="confirm_dispose" value="1" style="flex:2; background:var(--color-danger); color:white; border:none; padding:12px; border-radius:4px; font-weight:bold; cursor:pointer;">'
    . '<i class="fa fa-box-open"></i> ' . lang('@Confirm Disposal') . '</button>';
-echo '<a href="fixed_asset_edit.php?id=' . $id . '" style="flex:1; background:var(--bg-panel); color:var(--text-main); border:1px solid var(--border-color); padding:12px; border-radius:4px; font-weight:bold; text-align:center; text-decoration:none; display:flex; align-items:center; justify-content:center;">' . lang('@Cancel') . '</a>';
+echo '<a href="fixed_asset_edit.php?id=' . $id . '" data-hint="' . lang('@Return to the asset without disposing of it') . '" style="flex:1; background:var(--bg-panel); color:var(--text-main); border:1px solid var(--border-color); padding:12px; border-radius:4px; font-weight:bold; text-align:center; text-decoration:none; display:flex; align-items:center; justify-content:center;">' . lang('@Cancel') . '</a>';
 echo '</div>';
 echo '</form>';
 

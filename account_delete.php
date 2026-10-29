@@ -1,4 +1,4 @@
-<?php # /account_delete.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /account_delete.php v:1.3.1 d:2026-09-15 i:evs
 # Sletter en konto fra kontoplanen efter FIRE sikkerhedstjek: (1) ingen
 # posteringer i ledger, (2) ingen produkter peger på kontoen, (3) kontoen er
 # ikke en af de konfigurerede særlige posteringskonti (conf_acc_bank/
@@ -78,6 +78,12 @@ if ($id > 0) {
         (int)($company_settings['conf_acc_fx']           ?? 7200),
     ]);
     $is_special_account = in_array($id, $special_accounts, true);
+    // RETTET: listen ovenfor er fast - en konto som en ANDEN indstilling (fx conf_acc_bad_debt, tab på
+    // debitorer) eller en webbutik (mellemregning / salg / fragt) bogfører på, kunne slettes. Bagefter
+    // bogførte butikkens betalinger på en konto der ikke findes. acc_protected_ids() kender dem alle.
+    require_once 'inc/accounts.inc.php';
+    $protected_why = acc_protected_ids($conn)[$id] ?? '';
+    if ($protected_why !== '') $is_special_account = true;
 
     // Tjek (4): er kontoen valgt som aktiv- eller afskrivningskonto på et
     // (ikke-annulleret) anlægsaktiv? Tabellen findes kun efter db-setup/
@@ -98,10 +104,20 @@ if ($id > 0) {
         $used_by_asset = $check_assets && DB::num_rows($check_assets) > 0;
     }
 
+    // RETTET: kun hovedbog, produkter, anlæg og indstillinger blev tjekket - en konto som en MOMSKODE bogfører på,
+    // en bankregel, en fast udgift, en bankforbindelse (PSD2), et budget eller en ubogført udgiftskladde peger på,
+    // kunde slettes. Bagefter fejlede bogføringen (kontoen findes ikke) eller foreslog en konto der ikke fandtes.
+    if (!$used_by_asset) {
+        foreach ([['vat_codes', 'vat_account'], ['bank_match_rules', 'acc_id'], ['recurring_expenses', 'account_id'], ['bank_connections', 'acc_id'],
+                  ['account_budgets', 'acc_id'], ['expenses', 'account_id'], ['expense_lines', 'account_id']] as [$rt, $rc]) {
+            $rr = @DB::query($conn, "SELECT 1 FROM $rt WHERE $rc = $id LIMIT 1");
+            if ($rr && DB::fetch_assoc($rr)) { $used_by_asset = true;  $used_by_other = $rt;  break; }
+        }
+    }
     if ($used_by_asset) {
         htm_Header('@Error');
         echo "<div style='max-width:600px; margin:50px auto;'>";
-        htm_Alert('@Cannot delete account: it is assigned as the asset or depreciation account on a fixed asset.', 'error');
+        htm_Alert(!empty($used_by_other) ? sprintf(lang('@Cannot delete account: it is still used (%s).'), htmlspecialchars($used_by_other)) : lang('@Cannot delete account: it is assigned as the asset or depreciation account on a fixed asset.'), 'error');
         htm_Button('fa-arrow-left', '@Back', 'secondary', 'chart_of_accounts.php', '', 'data-hint="'.lang('@Return to the chart of accounts').'"');
         echo "</div>";
         htm_Footer();
@@ -111,7 +127,7 @@ if ($id > 0) {
     if ($is_special_account) {
         htm_Header('@Error');
         echo "<div style='max-width:600px; margin:50px auto;'>";
-        htm_Alert('@Cannot delete account: it is configured as a special posting account in Company Settings.', 'error');
+        htm_Alert(lang('@Cannot delete account: it is configured as a special posting account in Company Settings.') . ($protected_why !== '' ? ' (' . htmlspecialchars($protected_why) . ')' : ''), 'error');
         htm_Button('fa-arrow-left', '@Back', 'secondary', 'chart_of_accounts.php', '', 'data-hint="'.lang('@Return to the chart of accounts').'"');
         echo "</div>";
         htm_Footer();
@@ -151,7 +167,17 @@ if ($id > 0) {
             header("Location: chart_of_accounts.php?msg=deleted");
             exit;
         } else {
-            die("SQL fejl ved sletning: " . DB::error($conn));
+            // RETTET (§find-fem-fejl runde 40): et råt die() med motor-
+            // fejlteksten, uden sidens skal - i modsætning til de fire andre
+            // fejlveje i denne fil ovenfor, som alle viser en ordentlig,
+            // chromet fejlside. Ensrettet til samme mønster.
+            htm_Header('@Error');
+            echo "<div style='max-width:600px; margin:50px auto;'>";
+            htm_Alert(lang('@Error deleting account:') . ' ' . DB::error($conn), 'error');
+            htm_Button('fa-arrow-left', '@Back', 'secondary', 'chart_of_accounts.php', '', 'data-hint="'.lang('@Return to the chart of accounts').'"');
+            echo "</div>";
+            htm_Footer();
+            exit;
         }
     }
 } else {

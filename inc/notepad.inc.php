@@ -112,7 +112,12 @@ if (file_exists($file_path)) {
    hævet over .floating-action-bar's 10000 (var 9999), så knappen tegnes
    FORAN bjælken i stedet for at blive dækket af den (bruger-rapporteret;
    første forsøg flyttede knappen op i stedet, hvilket ikke var ønsket). */ ?>
-<button type="button" class="no-print" onclick="toggleGlobalNotes()" style="position: fixed; bottom: 20px; right: 20px; z-index: 10001; background: #2c3e50; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;" title="<?php echo lang('@Open Notepad (Alt + N)'); ?>">
+<?php /* RETTET (bruger-anmodet): border tilføjet, magen til .floating-action-bar's
+   egen border-top: 2px solid var(--color-primary) (se inc/htm_page.lib.php) -
+   samme accentfarve/-tykkelse, blot som en fuld ramme rundt om selve den
+   runde knap i stedet for kun foroven på en vandret bjælke. Samme rettelse
+   givet til den nye søge-knap lige nedenfor. */ ?>
+<button type="button" class="no-print" onclick="toggleGlobalNotes()" style="position: fixed; bottom: 20px; right: 3px; z-index: 10001; background: #2c3e50; color: white; border: 2px solid var(--color-primary); border-radius: 50%; width: 50px; height: 50px; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;" title="<?php echo lang('@Open Notepad (Alt + N)'); ?>">
     📝
 </button>
 

@@ -12,8 +12,8 @@
 set_time_limit(600); // Giver scriptet op til 10 minutter
 ini_set('memory_limit', '256M'); // Øger hukommelsen, hvis du har store filer/zip
 
-require 'inc/auth.inc.php';
-require 'inc/db_connect.inc.php';
+require_once 'inc/auth.inc.php';
+require_once 'inc/db_connect.inc.php';
 
 if ($_SESSION['user_role'] !== 'admin') die("Access denied");
 

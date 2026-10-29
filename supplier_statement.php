@@ -94,7 +94,7 @@ foreach ($expenses as $e) {
         $overdue = ($e['due_date'] < $today);
         $status_html = '<span style="color:'.($overdue ? 'var(--color-danger)' : 'var(--color-warning)').';"><i class="fa-solid fa-clock"></i> ' . sprintf(lang('@Due %s'), date(CONF_DATE_FORMAT, strtotime($e['due_date']))) . '</span>';
         $confirm = addslashes(lang('@Register that this expense has now been paid from the bank account?'));
-        $action_html = '<a href="expense_actions.php?action=mark_paid&id=' . (int)$e['exp_id'] . '" onclick="return confirm(\''.$confirm.'\');" '
+        $action_html = '<a href="expense_actions.php?action=mark_paid&id=' . (int)$e['exp_id'] . '" data-hint="' . lang('@Register the expense as paid from the bank account (you are asked first)') . '" onclick="return confirm(\''.$confirm.'\');" '
             . 'class="no-print" style="background:var(--color-success); color:#fff; padding:4px 10px; border-radius:4px; text-decoration:none; font-weight:bold; font-size:0.85em;">'
             . '<i class="fa-solid fa-money-bill-wave"></i> ' . lang('@Pay Now') . '</a>';
     }

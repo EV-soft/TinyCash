@@ -1,13 +1,15 @@
-<?php # /vat_codes.php v:1.3.0 d:2026-08-30 i:evs
-# logger nu sletning til revisionssporet
+<?php # /vat_codes.php v:1.3.1 d:2026-09-15 i:evs
+# Oversigt over momskoder/-satser + formular til at tilføje en ny (selve
+# gem/opdater-logikken ligger i vat_save.php, som nu også flasher en evt.
+# fejlbesked hertil i stedet for et råt die(), se dens header).
 # KRITISK (§bugs-batch-15-review): INTET niveau-tjek - momskoder/-satser
 # styrer momsberegningen på hver eneste faktura og udgift i systemet, lige
 # så følsomt som chart_of_accounts.php/settings_fees.php (som begge fik
 # samme rettelse i [[bugs-batch-12-review]]), men blev overset her.
 $rLev = 3;
-require 'inc/auth.inc.php';
-require 'inc/db_connect.inc.php';
-require 'inc/menu.inc.php';
+require_once 'inc/auth.inc.php';
+require_once 'inc/db_connect.inc.php';
+require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
 require_once 'inc/audit.inc.php';
 
@@ -17,6 +19,13 @@ if (isset($_GET['delete'])) {
     // Hent momskodens data FØR sletning, til revisionssporet.
     $old_res = DB::query($conn, "SELECT vat_id, vat_name, vat_rate, vat_account FROM vat_codes WHERE vat_id = '$id'");
     $old_row = $old_res ? DB::fetch_assoc($old_res) : null;
+    // RETTET: en momskode der stadig bruges af konti kunne slettes - kontiene pegede så på en kode der ikke fandtes,
+    // og momsrapportens grundlag for den kode stod uden navn/sats. Den skal fjernes fra kontiene først.
+    $used = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM accounts WHERE vat_code = '$id'"));
+    if ($used && (int)$used[0] > 0) {
+        $_SESSION['flash_error'] = sprintf(lang('@The VAT code is used by %d account(s) and cannot be deleted.'), (int)$used[0]);
+        header("Location: vat_codes.php"); exit;
+    }
     if (DB::query($conn, "DELETE FROM vat_codes WHERE vat_id = '$id'") && $old_row) {
         log_action($conn, 'DELETE_VAT_CODE', 'vat_codes', 0, $old_row, null);
     }
@@ -26,8 +35,15 @@ if (isset($_GET['delete'])) {
 htm_Header('@VAT Codes');
 showMenu();
 
+// Viser en evt. flashet fejlbesked fra vat_save.php (se dens egen rettelse,
+// §find-fem-fejl runde 40) - erstatter det tidligere rå die() uden sideskal.
+if (!empty($_SESSION['flash_error'])) {
+    htm_Alert($_SESSION['flash_error'], 'error');
+    unset($_SESSION['flash_error']);
+}
+
 echo "<div style='max-width:800px; margin:0 auto;'>";
-    
+
     // Oversigt
     // RETTET (§bugs-batch-22-review, del b): erstattet den håndrullede
     // <table> med htm_Table() (se csrf-protection-added.md/
@@ -85,6 +101,7 @@ echo "<div style='max-width:800px; margin:0 auto;'>";
                 // altid som NULL uanset hvad brugeren indtastede).
                 htm_Field('📑', '@Account', 'vat_account', '', 'number', null, 'required');
             ?>
+            <label style="grid-column: span 4; font-size:0.9em;"><input type="checkbox" name="update" value="1"> <?php echo lang('@Change the existing code (same ID)'); ?></label>
             <button type="submit" style="background:#2ecc71; color:white; border:none; padding:12px; border-radius:4px; cursor:pointer; font-weight:bold; grid-column: span 4;">
                 ➕ <?php echo lang('@Add VAT Code'); ?>
             </button>

@@ -95,7 +95,24 @@ if (!$eb_ready) {
 // --- Eksisterende forbindelser ---
 htm_Card_(capt: '@Connected Banks', wdth: 1100);
 $res = DB::query($conn, "SELECT bc.*, a.acc_name FROM bank_connections bc LEFT JOIN accounts a ON bc.acc_id = a.acc_id ORDER BY bc.created_at DESC");
-$headers = ['@Bank', '@Linked Account', '@Status', '@Last Sync', '@Actions'];
+
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): samtykke-udløbs-
+// advarsel - se db-setup/migrate_bank_consent_expiry.php/bank_integration_
+// connect.php for hvor selve datoen nu gemmes. Samme "stille degradering
+// hvis ikke migreret endnu"-mønster som andre nyere kolonner.
+$has_expiry_col = false;
+if (DB::is_sqlite()) {
+    $becl = DB::query($conn, "PRAGMA table_info(bank_connections)");
+    if ($becl) { while ($beclr = DB::fetch_assoc($becl)) { if ($beclr['name'] === 'consent_expires_at') { $has_expiry_col = true; break; } } }
+} else {
+    $becl = DB::query($conn, "SHOW COLUMNS FROM bank_connections LIKE 'consent_expires_at'");
+    $has_expiry_col = ($becl && DB::num_rows($becl) > 0);
+}
+$expiring_soon_count = 0;
+
+$headers = ['@Bank', '@Linked Account', '@Status', '@Last Sync'];
+if ($has_expiry_col) $headers[] = '@Consent Expires';
+$headers[] = '@Actions';
 $data = [];
 if ($res) {
     while ($row = DB::fetch_assoc($res)) {
@@ -108,7 +125,10 @@ if ($res) {
 
         $actions = '';
         if ($row['status'] === 'LN') {
-            $actions .= '<a href="bank_integration_sync.php?conn_id=' . $row['conn_id'] . '" style="margin-right:6px; padding:4px 10px; background:var(--color-info); color:#fff; border-radius:4px; text-decoration:none; font-size:0.85em;"><i class="fa fa-sync"></i> ' . lang('@Sync Now') . '</a>';
+            // "tc-info-fill" (htm_page.lib.php): mørkere tekst i dark-temaet,
+            // hvor var(--color-info) er lysegrå og ellers gør den hvide tekst
+            // ulæselig - se rettelsens begrundelse ved CSS-reglen.
+            $actions .= '<a href="bank_integration_sync.php?conn_id=' . $row['conn_id'] . '" data-hint="' . lang('@Fetch the newest transactions from the bank now') . '" class="tc-info-fill" style="margin-right:6px; padding:4px 10px; background:var(--color-info); color:#fff; border-radius:4px; text-decoration:none; font-size:0.85em;"><i class="fa fa-sync"></i> ' . lang('@Sync Now') . '</a>';
         }
         $actions .= htm_ConfirmLink(
             icon: 'fa-unlink', labl: '@Disconnect', link: 'bank_integration.php?disconnect=' . $row['conn_id'],
@@ -120,20 +140,51 @@ if ($res) {
         $bank_label = $row['institution_name'] ?: $row['institution_id'];
         if (!empty($row['institution_country'])) $bank_label .= ' (' . $row['institution_country'] . ')';
 
-        $data[] = [
+        $data_row = [
             htmlspecialchars($bank_label),
             htmlspecialchars($row['acc_name'] ?? ('#' . $row['acc_id'])),
             '<span style="color:' . $status_color . '; font-weight:bold;">' . lang($status_label) . '</span>',
             $row['last_sync_at'] ? date(CONF_DATE_FORMAT . ' H:i', strtotime($row['last_sync_at'])) : lang('@Never'),
-            $actions,
         ];
+        if ($has_expiry_col) {
+            if (empty($row['consent_expires_at'])) {
+                $data_row[] = '<span style="color:var(--text-muted);">' . lang('@Unknown') . '</span>';
+            } else {
+                $days_left = days_between(date('Y-m-d'), $row['consent_expires_at']);
+                $expiry_fmt = date(CONF_DATE_FORMAT, strtotime($row['consent_expires_at']));
+                if ($row['status'] === 'LN' && $days_left < 0) {
+                    // SELV-FANGET UNDER LIVE-TEST: $expiring_soon_count blev FØR
+                    // kun talt op i "udløber snart"-grenen nedenfor, ikke her i
+                    // "allerede udløbet"-grenen - banneret ("X forbindelser skal
+                    // snart gentilsluttes") talte derfor en allerede udløbet
+                    // forbindelse for LIDT, selvom den tydeligvis også er
+                    // omfattet af selve bannerteksten ("... eller er allerede
+                    // udløbet"). Bekræftet direkte: 2 problematiske forbindelser
+                    // (1 udløbet + 1 snart-udløbende) gav kun "1" i banneret.
+                    $expiring_soon_count++;
+                    $data_row[] = '<span style="color:var(--color-danger); font-weight:bold;"><i class="fa-solid fa-triangle-exclamation"></i> ' . sprintf(lang('@Expired %s'), $expiry_fmt) . '</span>';
+                } elseif ($row['status'] === 'LN' && $days_left <= 14) {
+                    $expiring_soon_count++;
+                    $data_row[] = '<span style="color:var(--color-warning); font-weight:bold;"><i class="fa-solid fa-triangle-exclamation"></i> ' . sprintf(lang('@Expires in %d day(s) (%s)'), $days_left, $expiry_fmt) . '</span>';
+                } else {
+                    $data_row[] = $expiry_fmt;
+                }
+            }
+        }
+        $data_row[] = $actions;
+        $data[] = $data_row;
     }
+}
+if ($expiring_soon_count > 0) {
+    htm_Banner('<i class="fa fa-triangle-exclamation"></i> ' . sprintf(lang('@%d bank connection(s) will need to be reconnected soon - their consent is expiring within 14 days or has already expired.'), $expiring_soon_count), 'warning');
 }
 if (empty($data)) {
     echo "<p style='padding:20px; text-align:center; color:var(--text-muted);'>" . lang('@No banks connected yet - use the form below to connect one.') . "</p>";
 } else {
-    htm_Table($headers, $data, 'bankConnTbl', 50, '', true,
-        ['width:220px;', 'width:180px;', 'width:150px;', 'width:150px;', 'width:220px; text-align:left;']);
+    $col_widths = ['width:220px;', 'width:180px;', 'width:150px;', 'width:150px;'];
+    if ($has_expiry_col) $col_widths[] = 'width:200px;';
+    $col_widths[] = 'width:220px; text-align:left;';
+    htm_Table($headers, $data, 'bankConnTbl', 50, '', true, $col_widths);
 }
 htm_Card_end();
 
@@ -152,13 +203,15 @@ if ($eb_ready) {
     if (empty($institutions)) {
         echo '<p style="color:var(--text-muted);">' . lang('@No banks found for this country, or the connection to Enable Banking failed - check that your API keys in inc/data/env.ini are correct and active.') . '</p>';
     } else {
-        $account_res = DB::query($conn, "SELECT acc_id, acc_name FROM accounts WHERE acc_type = 'bank' OR acc_id = " . (int)(get_settings($conn)['conf_acc_bank'] ?? 5000) . " ORDER BY acc_id");
+        require_once __DIR__ . '/inc/accounts.inc.php';     // valglisten: slukkede konti udeladt, dæmpede nederst
+        $bi_bank = (int)(get_settings($conn)['conf_acc_bank'] ?? 5000);
+        $account_res = DB::query($conn, "SELECT acc_id, acc_name" . acc_status_col($conn) . " FROM accounts WHERE (acc_type = 'bank' AND " . acc_visible_sql($conn) . ") OR acc_id = $bi_bank ORDER BY " . acc_order_sql($conn) . "acc_id");
         $account_options = [];
-        while ($a = DB::fetch_assoc($account_res)) { $account_options[$a['acc_id']] = $a['acc_id'] . ' - ' . $a['acc_name']; }
+        while ($a = DB::fetch_assoc($account_res)) { $account_options[$a['acc_id']] = $a['acc_id'] . ' - ' . acc_label($a['acc_name'], $a['acc_status'] ?? null); }
         if (empty($account_options)) {
             // Fallback: intet fandtes med acc_type='bank' - vis alle konti i stedet
             // for en tom, ubrugelig dropdown.
-            $account_res2 = DB::query($conn, "SELECT acc_id, acc_name FROM accounts ORDER BY acc_id");
+            $account_res2 = DB::query($conn, "SELECT acc_id, acc_name FROM accounts WHERE " . acc_visible_sql($conn) . " ORDER BY " . acc_order_sql($conn) . "acc_id");
             while ($a = DB::fetch_assoc($account_res2)) { $account_options[$a['acc_id']] = $a['acc_id'] . ' - ' . $a['acc_name']; }
         }
 

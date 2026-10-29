@@ -1,4 +1,5 @@
-<?php # extract_translations.php  v:0.8.1 d:2026-04-11 i:evs m:0
+<?php # /tools/extract_translations.php v:1.3.0 d:2026-08-30 i:evs
+# m:0
 ob_start();
 
 function updateLanguageMaster() {

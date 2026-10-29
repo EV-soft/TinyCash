@@ -1,4 +1,4 @@
-<?php # /inc/db_connect.inc.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /inc/db_connect.inc.php v:1.3.1 d:2026-09-15 i:evs
 # dump_to_sql() medtager nu triggere - manglede FØR helt, så en gendannelse ville stille fjerne append-only-beskyttelsen på journal/ledger igen
 # v1.3.0: DB::fetch_assoc()/fetch_row()/num_rows()/free_result() crashede med
 # et fatal error ("Call to a member function fetch() on bool") hvis den givne
@@ -7,7 +7,7 @@
 # tilføjet alle fire steder, se kommentar ved fetch_assoc().
 # v1.4.0: tilføjet next_invoice_no() - invoice_post_action.php brugte før et
 # kapløbs-sårbart "MAX(invoice_no)+1"-mønster. Se kommentar ved funktionen.
-define('APP_VERSION', '1.2.3');
+define('APP_VERSION', '1.3.0');
 define('APP_DATE', '2026-08-30');
 /* 
 // --- 1. SIKKER SESSIONSSTART & SPROGVÆLGER-LOGIK ---
@@ -96,6 +96,15 @@ if (!isset($config['ACTIVE_DB'])) {
     die("Fejl: Nøglen ACTIVE_DB blev ikke afundet i env.ini. Indhold fundet: " . implode(', ', array_keys($config)));
 }
 //   var_dump($config['ACTIVE_DB']);  exit; // DEBUG: Fjern denne linje når det virker
+
+// --- TIDSZONE ---
+// RETTET: TinyCash satte aldrig nogen tidszone - PHP brugte serverens php.ini (UTC på mange maskiner).
+// Datoer som date('Y-m-d') (fakturadato, forfald, bogføringsdato) blev så gårsdagens mellem midnat og
+// kl. 1-2 dansk tid, og alle viste tider var 1-2 timer forkerte. Nu: TIMEZONE i env.ini, ellers dansk tid.
+// (Tider som SQLite selv skriver - DEFAULT CURRENT_TIMESTAMP - er altid UTC: se db_ts_local() / db_ts_param().)
+$tc_timezone = trim((string)($config['TIMEZONE'] ?? ''));
+if ($tc_timezone === '' || !in_array($tc_timezone, timezone_identifiers_list(), true)) $tc_timezone = 'Europe/Copenhagen';
+date_default_timezone_set($tc_timezone);
 
 // --- NYT: FLERE REGNSKABER (bruger-anmodet) ---
 // Er et regnskab valgt på login-siden (gemt i $_SESSION['account_id'], se
@@ -198,6 +207,24 @@ if ($db_type === 'sqlite') {
         die("MySQL forbindelse fejlede: " . mysqli_connect_error());
     }
     mysqli_set_charset($conn, "utf8mb4");
+    // MySQL regner i samme tidszone som PHP: NOW() / CURRENT_TIMESTAMP og visningen af TIMESTAMP-kolonner
+    @mysqli_query($conn, "SET time_zone = '" . date('P') . "'");
+}
+
+// Et tidspunkt databasen selv har skrevet (DEFAULT CURRENT_TIMESTAMP: login_log.login_time, audit_log.log_date,
+// mail_log.sent_at, journal/expenses.created_at ...) - vist i lokal tid. SQLite skriver altid UTC; MySQL
+// bruger allerede PHP's tidszone (SET time_zone ovenfor), så der er det uændret.
+function db_ts_local($ts): string {
+    $ts = (string)$ts;
+    if ($ts === '' || !DB::is_sqlite()) return $ts;
+    try { return (new DateTime($ts, new DateTimeZone('UTC')))->setTimezone(new DateTimeZone(date_default_timezone_get()))->format('Y-m-d H:i:s'); }
+    catch (\Throwable $e) { return $ts; }
+}
+// Det modsatte: et lokalt tidspunkt (fx et filter "fra 2026-10-01 00:00:00") til sammenligning med sådan en kolonne
+function db_ts_param(string $local): string {
+    if (!DB::is_sqlite()) return $local;
+    try { return (new DateTime($local))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'); }
+    catch (\Throwable $e) { return $local; }
 }
 
 
@@ -308,7 +335,55 @@ function role_to_level(string $role): int {
     return ['admin' => 3, 'accountant' => 2, 'user' => 1][$role] ?? 1;
 }
 
+// Momskontoen $acc + de konti den har AFLØST ved et skift til standardkontoplanen (slukket, std_ref_id = $acc) -
+// som SQL-liste til "l.acc_id IN (...)". RETTET: momsrapporten, momsafstemningen, resultatopgørelsen og årsrapporten
+// læste kun den NUVÆRENDE momskonto. Efter et skift midt i en periode manglede momsen der var bogført på den gamle
+// konto før skiftet, og skiftets saldooverførsel blev talt med som årets moms på den nye konto.
+function tc_vat_acc_list($conn, int $acc): string {
+    static $has_status = null;
+    if ($has_status === null) {
+        if (DB::is_sqlite()) {
+            $has_status = false;
+            $c = DB::query($conn, "PRAGMA table_info(accounts)");
+            if ($c) while ($x = DB::fetch_assoc($c)) if ($x['name'] === 'acc_status') $has_status = true;
+        } else {
+            $c = DB::query($conn, "SHOW COLUMNS FROM accounts LIKE 'acc_status'");
+            $has_status = $c && DB::num_rows($c) > 0;
+        }
+    }
+    $ids = [$acc];
+    $st  = $has_status ? " AND acc_status = 'off'" : '';
+    $res = DB::query($conn, "SELECT acc_id FROM accounts WHERE std_ref_id = $acc AND acc_id <> $acc$st");
+    if ($res) while ($r = DB::fetch_row($res)) $ids[] = (int)$r[0];
+    return implode(',', array_unique($ids));
+}
+
+// Den konto en bogføringsrolle (conf_acc_*) reelt bruger, hvis den findes i kontoplanen - ellers 0. Til de gamle
+// "opret konto NNNN"-migreringer: efter en kontoplan fra setup_chart.php eller et skift til standardkontoplanen er
+// rollen dækket af en anden konto, og den faste konto må ikke oprettes oven i (3000 er fx et standardnummer).
+function tc_role_account($conn, string $key, int $default): int {
+    $r = DB::fetch_assoc(DB::query($conn, "SELECT setting_value FROM settings WHERE setting_key = '" . DB::escape($conn, $key) . "'"));
+    $acc = (int)(($r['setting_value'] ?? '') !== '' ? $r['setting_value'] : $default);
+    return ($acc > 0 && DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = $acc"))) ? $acc : 0;
+}
+// Første egenkapitalkonto i kontoplanen (årsafslutningen) - 0 hvis ingen
+function tc_equity_account($conn): int {
+    $r = DB::fetch_row(DB::query($conn, "SELECT MIN(acc_id) FROM accounts WHERE acc_type = 'equity'"));
+    return (int)($r[0] ?? 0);
+}
+
 // Erstat din nuværende is_date_locked med denne mere robuste version
+// Antal hele kalenderdage fra $from til $to (negativt hvis $to ligger før) - kun datodelen tæller.
+// RETTET: "(int)((strtotime($to) - strtotime($from)) / 86400)" gav én dag for lidt hen over skiftet til
+// sommertid (døgnet er kun 23 timer: 28/3 -> 30/3 2026 blev 1 dag) - en faktura blev "forfalden" en dag for
+// sent i rykkerlisten og restancelisten, og dagstællerne på forsiden og i listerne var forkerte.
+function days_between($from, $to): int {
+    $f = DateTime::createFromFormat('!Y-m-d', substr((string)$from, 0, 10));
+    $t = DateTime::createFromFormat('!Y-m-d', substr((string)$to, 0, 10));
+    if (!$f || !$t) return 0;
+    return (int)$f->diff($t)->format('%r%a');
+}
+
 function is_date_locked($conn, $date) {
     $sql = "SELECT setting_value FROM settings WHERE setting_key = 'accounting_lock_date' LIMIT 1";
     
@@ -692,7 +767,56 @@ class DB {
 // og bruger-ID KUN hvis kolonnerne findes på ledger-tabellen - så bogføring
 // aldrig knækker på en database hvor migrate_ledger_audit.php endnu ikke er
 // kørt, men compliance-felterne udfyldes når de er til stede. Cross-engine.
-function ledger_post($conn, $jou_id, $acc_id, $amount) {
+// RETTET (flere regnskaber): fakturaarkivet, e-fakturaerne og SAF-T-arkivet lå i FÆLLES mapper for alle regnskaber
+// (storage/invoices/invoice_<nr>.pdf) - og alle regnskaber starter deres nummerserie samme sted. Regnskab B's faktura
+// 1001 fandt regnskab A's arkiverede PDF (arkivet skrives kun én gang) - og B's kunde fik A's faktura på mail.
+// Hvert regnskab - undtagen det første (standarden, hvis filer allerede ligger i roden) - får sin egen undermappe.
+// Returnerer '' eller '<regnskabs-id>/'.
+function tc_account_storage_subdir(): string {
+    $id = (string)($_SESSION['account_id'] ?? '');
+    if ($id === '' || !function_exists('account_list')) return '';
+    $all = account_list(true);
+    if (count($all) < 2 || (string)($all[0]['id'] ?? '') === $id) return '';
+    $safe = preg_replace('/[^A-Za-z0-9_-]/', '', $id);
+    return $safe !== '' ? $safe . '/' : '';
+}
+// Mappen <base>/<undermappe> - oprettes ved behov
+function tc_account_storage_dir(string $base): string {
+    $dir = rtrim($base, '/') . '/' . tc_account_storage_subdir();
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    return $dir;
+}
+
+// Firmaets egen standardtekst til fakturamails - '' når den ikke er sat, eller når den blot er den gamle
+// engelske forudfyldning fra Firmaindstillinger ("Please find your invoice attached."), som blev gemt ved
+// enhver gemning og overstyrede den oversatte tekst på kundens sprog
+function tc_custom_mail_body(array $settings): string {
+    $b = trim(str_replace("\r\n", "\n", (string)($settings['default_mail_body'] ?? '')));
+    return ($b === '' || $b === "Please find your invoice attached.\n\nBest regards,") ? '' : $b;
+}
+
+// RETTET: et kontonummer der IKKE findes i kontoplanen blev bogført uden videre (fx en indstilling der peger
+// på standardværdien 5000, som kontoplanen ikke har). Posteringerne forsvandt så stille fra saldobalance,
+// balance og hovedbog (som slår kontoen op), og regnskabet balancerede ikke længere i rapporterne. Nu en
+// Exception - kalderne bogfører i en transaktion og ruller tilbage med en forklaring.
+// $allow_missing: kun for at NULSTILLE en sådan konto (inc/chart_switch.inc.php).
+// Hvilke af disse kontonumre findes IKKE i kontoplanen? (til at afvise FØR en transaktion startes)
+function ledger_accounts_missing($conn, array $acc_ids): array {
+    $missing = [];
+    foreach (array_unique(array_map('intval', $acc_ids)) as $a) {
+        if ($a <= 0 || !DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = $a"))) $missing[] = $a;
+    }
+    return $missing;
+}
+function ledger_post($conn, $jou_id, $acc_id, $amount, bool $allow_missing = false) {
+    static $known = [];
+    if (!$allow_missing && !isset($known[(int)$acc_id])) {
+        if (!DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = " . (int)$acc_id))) {
+            $lm_key = '@The account %d does not exist in the chart of accounts - check Company Settings (posting accounts) or the chart of accounts. Nothing was posted.';
+            throw new Exception(sprintf(function_exists('lang') ? lang($lm_key) : substr($lm_key, 1), (int)$acc_id));
+        }
+        $known[(int)$acc_id] = true;
+    }
     static $has_audit = null;
     if ($has_audit === null) {
         $has_audit = false;
@@ -717,6 +841,36 @@ function ledger_post($conn, $jou_id, $acc_id, $amount) {
         return DB::query($conn, "INSERT INTO ledger (jou_id, acc_id, amount, created_at, user_id) VALUES ($jou_id, $acc_id, $amount, '$now', $uid)");
     }
     return DB::query($conn, "INSERT INTO ledger (jou_id, acc_id, amount) VALUES ($jou_id, $acc_id, $amount)");
+}
+
+// NYT (bruger-anmodet lukning af BEK 811/2026-gennemgangens fund 3, se
+// [[digital-standard-bookkeeping-registration-goal]]): journal har ingen
+// fælles opretningsfunktion (i modsætning til ledger_post() ovenfor) - hvert
+// af de 13 steder i koden, der selv skriver "INSERT INTO journal", bygger sin
+// egen SQL-streng fra bunden med sine egne kolonner (trans_type/proj_id
+// varierer fra sted til sted). I stedet for at kopiere et fuldt
+// findes-kolonnen-tjek ind i alle 13, giver denne lille delte funktion KUN
+// den ekstra ", created_by"-kolonne + ", <bruger-id>"-værdi, parate til at
+// sættes ind i hvert steds eksisterende kolonne-/værdiliste - samme graceful
+// "virker uanset om migrationen er kørt endnu"-filosofi som ledger_post()s
+// eget $has_audit-tjek, blot uden at tvinge alle 13 steder til én fælles
+// funktionssignatur (hvilket ville have krævet at omskrive hvert steds
+// allerede forskelligartede opbygning, med langt højere risiko for fejl i
+// midt i regnskabskritisk kode).
+function journal_created_by_sql($conn): array {
+    static $has = null;
+    if ($has === null) {
+        $has = false;
+        if (DB::is_sqlite()) {
+            $res = DB::query($conn, "PRAGMA table_info(journal)");
+            if ($res) { while ($r = DB::fetch_assoc($res)) { if (strtolower($r['name']) === 'created_by') { $has = true; break; } } }
+        } else {
+            $res = DB::query($conn, "SHOW COLUMNS FROM journal LIKE 'created_by'");
+            $has = ($res && DB::num_rows($res) > 0);
+        }
+    }
+    if (!$has) return ['col' => '', 'val' => ''];
+    return ['col' => ', created_by', 'val' => ', ' . (int)($_SESSION['user_id'] ?? 0)];
 }
 
 // Fælles, hulfrit bilagsnummer (voucher_no) på tværs af ALLE posteringstyper
@@ -806,6 +960,37 @@ function _invoice_no_fallback_max($conn) {
     return max((int)($mi['m'] ?? 0), 1000);
 }
 
+// NY (bruger-anmodet, "kan bogholderen ønske sig mere", runde 33): en
+// kreditnota (invoice_credit.php) fik aldrig sit eget kundevendte
+// fakturanummer - kun invoice_no=NULL, hvilket fik invoice_view.php til at
+// vise "@DRAFT" for en fuldt bogført kreditnota. Egen, separat nummerserie
+// (credit_note_no_counter) - samme atomiske mønster som next_invoice_no()
+// ovenfor - så kreditnotaer og almindelige fakturaer aldrig deler numre.
+function next_credit_note_no($conn) {
+    static $has_counter = null;
+    if ($has_counter === null) {
+        if (DB::is_sqlite()) {
+            $res = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='credit_note_no_counter'");
+        } else {
+            $res = DB::query($conn, "SHOW TABLES LIKE 'credit_note_no_counter'");
+        }
+        $has_counter = ($res && DB::num_rows($res) > 0);
+    }
+
+    if (!$has_counter) {
+        return null; // migration ikke kørt endnu - stille degradering, samme mønster som andre nyere kolonner
+    }
+
+    $row = DB::fetch_assoc(DB::query($conn, "SELECT next_no FROM credit_note_no_counter WHERE id = 1"));
+    if (!$row) {
+        DB::insert($conn, 'credit_note_no_counter', ['id' => 1, 'next_no' => 1]);
+    }
+
+    DB::query($conn, "UPDATE credit_note_no_counter SET next_no = next_no + 1 WHERE id = 1");
+    $row = DB::fetch_assoc(DB::query($conn, "SELECT next_no FROM credit_note_no_counter WHERE id = 1"));
+    return (int)$row['next_no'] - 1;
+}
+
 // NY (§reel-multi-valuta-bogforing): fælles, ENESTE beregning af en fakturas
 // bogførte DKK-total (netto/moms/inkl.) - genbruges nu af BÅDE invoice_post_
 // action.php (selve bogføringen) OG reconcile_action.php (afstemning). Var
@@ -821,10 +1006,144 @@ function _invoice_no_fallback_max($conn) {
 // arbejdet med reel kursgevinst/-tab-håndtering ved betaling - den samme
 // beregning skal nødvendigvis være korrekt begge steder, ellers giver en
 // kursregulering ved afstemning ingen mening.
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): valgfri rabat pr.
+// linje (invoice_lines.discount_pct, db-setup/migrate_invoice_line_
+// discount.php) - trækkes fra NETTOBELØBET før moms beregnes, samme
+// rækkefølge som standard dansk fakturapraksis. Udtrukket til to delte
+// hjælpefunktioner (samme "udtræk til fælles funktion for aldrig at kunne
+// glide fra hinanden"-mønster som denne sessions øvrige delte beregninger),
+// da MANGE steder i kodebasen selv genberegner en linje-/fakturatotal
+// direkte fra invoice_lines i stedet for at kalde invoice_dkk_totals() (som
+// kun tager ét inv_id ad gangen, upraktisk for en rapport der summerer på
+// tværs af mange fakturaer) - se aging_report.php/index.php/project_view.php/
+// reconcile_list.php/recurring_invoices.php/reminder_action.php/reminders.php/
+// subledger_reconciliation.php for de øvrige kaldesteder, alle rettet i
+// samme runde. Samme "stille degradering hvis ikke migreret endnu"-mønster
+// som andre nyere kolonner - discount_pct behandles som 0 (ingen rabat)
+// hvis kolonnen ikke findes endnu.
+function invoice_lines_has_discount_col($conn): bool {
+    static $has = null;
+    if ($has === null) {
+        $has = false;
+        if (DB::is_sqlite()) {
+            $dcc = DB::query($conn, "PRAGMA table_info(invoice_lines)");
+            if ($dcc) { while ($dccr = DB::fetch_assoc($dcc)) { if ($dccr['name'] === 'discount_pct') { $has = true; break; } } }
+        } else {
+            $dcc = DB::query($conn, "SHOW COLUMNS FROM invoice_lines LIKE 'discount_pct'");
+            $has = ($dcc && DB::num_rows($dcc) > 0);
+        }
+    }
+    return $has;
+}
+
+// Returnerer SQL-fragmentet der ganger et linjebeløb ned med rabatten - eller
+// en tom streng, hvis discount_pct-kolonnen slet ikke findes endnu. $prefix
+// er tabel-aliaset i den konkrete forespørgsel (fx "il." i et JOIN), inkl.
+// det afsluttende punktum, eller en tom streng hvis der ikke joines.
+function invoice_discount_sql($conn, string $prefix = ''): string {
+    return invoice_lines_has_discount_col($conn) ? "* (100 - COALESCE({$prefix}discount_pct, 0)) / 100.0" : "";
+}
+
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 30): en
+// udgift kan nu VALGFRIT splittes på flere konti via expense_lines - se
+// db-setup/migrate_expense_lines.php. expense_get_lines() er den ENESTE
+// autoritative kilde til "hvilke konti/beløb hører til denne udgift" -
+// bruges konsekvent af både selve bogføringen (expense_edit.php) og
+// momsafstemningen (vat_reconciliation.php), for at undgå at de to
+// nogensinde kan regne forskelligt (samme princip som invoice_dkk_totals()
+// ovenfor). Returnerer ALTID mindst én "linje" - findes ingen rigtige
+// expense_lines-rækker for denne udgift (langt de fleste, bagudkompatibelt),
+// bygges én SYNTETISK linje af selve expense-rækkens egne account_id/
+// amount/vat_rate, så en kaldende funktion aldrig behøver et separat
+// if/else for "har linjer eller ej".
+function expense_lines_has_table($conn): bool {
+    static $has = null;
+    if ($has === null) {
+        if (DB::is_sqlite()) {
+            $r = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='expense_lines'");
+            $has = ($r && DB::fetch_assoc($r)) ? true : false;
+        } else {
+            $r = DB::query($conn, "SHOW TABLES LIKE 'expense_lines'");
+            $has = ($r && DB::num_rows($r) > 0);
+        }
+    }
+    return $has;
+}
+
+function expense_get_lines($conn, int $exp_id): array {
+    $rows = [];
+    if (expense_lines_has_table($conn)) {
+        $res = DB::query($conn, "SELECT account_id, amount, line_vat_rate, description FROM expense_lines WHERE exp_id = $exp_id ORDER BY line_id ASC");
+        if ($res) { while ($r = DB::fetch_assoc($res)) { $rows[] = $r; } }
+    }
+    if (empty($rows)) {
+        $exp = DB::fetch_assoc(DB::query($conn, "SELECT account_id, amount, vat_rate FROM expenses WHERE exp_id = $exp_id"));
+        if (!$exp) return [];
+        $rows = [['account_id' => $exp['account_id'], 'amount' => $exp['amount'], 'line_vat_rate' => $exp['vat_rate'], 'description' => null]];
+    }
+
+    // Løs hver linjes momssats: linjens egen, ellers dens konto standardsats
+    // (samme "pr.-post override, ellers kontoens standard"-mønster som
+    // expenses.vat_rate/accounts.vat_rate allerede brugte for én-konto-udgifter).
+    $result = [];
+    foreach ($rows as $r) {
+        $acc_id = (int)$r['account_id'];
+        $gross  = (float)$r['amount'];
+        $rate   = (isset($r['line_vat_rate']) && $r['line_vat_rate'] !== null && $r['line_vat_rate'] !== '') ? (float)$r['line_vat_rate'] : null;
+        if ($rate === null) {
+            $acc_row = DB::fetch_assoc(DB::query($conn, "SELECT vat_rate FROM accounts WHERE acc_id = $acc_id"));
+            $rate = (float)($acc_row['vat_rate'] ?? 0);
+        }
+        $vat = ($rate > 0) ? round($gross * $rate / (100 + $rate), 2) : 0.0;
+        $net = round($gross - $vat, 2);
+        $result[] = ['account_id' => $acc_id, 'gross' => $gross, 'vat_rate' => $rate, 'vat' => $vat, 'net' => $net, 'description' => $r['description'] ?? null];
+    }
+    return $result;
+}
+
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 31): "Slet"
+// på en kunde/leverandør er nu en gendannelig blødsletning (deleted_at) -
+// se db-setup/migrate_trash_bin.php/trash_bin.php. Disse to hjælpefunktioner
+// er den ENESTE autoritative kilde til "skal denne kunde/leverandør vises i
+// almindelige lister/dropdowns" - bruges konsekvent alle steder en kunde/
+// leverandør vælges eller listes, for at undgå at en blødslettet række dukker
+// op ét sted men ikke et andet. Stille degraderet til "vis alle" (tom streng)
+// hvis migrationen ikke er kørt endnu.
+function customers_active_filter($conn, string $prefix = ''): string {
+    static $has = null;
+    if ($has === null) {
+        if (DB::is_sqlite()) {
+            $r = DB::query($conn, "PRAGMA table_info(customers)");
+            $has = false;
+            if ($r) { while ($row = DB::fetch_assoc($r)) { if ($row['name'] === 'deleted_at') { $has = true; break; } } }
+        } else {
+            $r = DB::query($conn, "SHOW COLUMNS FROM customers LIKE 'deleted_at'");
+            $has = ($r && DB::num_rows($r) > 0);
+        }
+    }
+    return $has ? "{$prefix}deleted_at IS NULL" : "1=1";
+}
+
+function suppliers_active_filter($conn, string $prefix = ''): string {
+    static $has = null;
+    if ($has === null) {
+        if (DB::is_sqlite()) {
+            $r = DB::query($conn, "PRAGMA table_info(suppliers)");
+            $has = false;
+            if ($r) { while ($row = DB::fetch_assoc($r)) { if ($row['name'] === 'deleted_at') { $has = true; break; } } }
+        } else {
+            $r = DB::query($conn, "SHOW COLUMNS FROM suppliers LIKE 'deleted_at'");
+            $has = ($r && DB::num_rows($r) > 0);
+        }
+    }
+    return $has ? "{$prefix}deleted_at IS NULL" : "1=1";
+}
+
 function invoice_dkk_totals($conn, int $inv_id): array {
+    $disc_factor = invoice_discount_sql($conn);
     $tot_row = DB::fetch_assoc(DB::query($conn,
-        "SELECT COALESCE(SUM(quantity * price_each), 0) AS net,
-                COALESCE(SUM(quantity * price_each * line_vat_rate / 100.0), 0) AS vat
+        "SELECT COALESCE(SUM(quantity * price_each $disc_factor), 0) AS net,
+                COALESCE(SUM(quantity * price_each $disc_factor * line_vat_rate / 100.0), 0) AS vat
          FROM invoice_lines WHERE inv_id = $inv_id"));
     // Beløbene er i FAKTURAENS EGEN valuta her (den linjerne er indtastet i) -
     // afrundes til øre i den valuta først, samme rækkefølge som invoice_post_
@@ -841,6 +1160,28 @@ function invoice_dkk_totals($conn, int $inv_id): array {
     $total_incl = round($total_excl + $total_vat, 2);
 
     return ['excl' => $total_excl, 'vat' => $total_vat, 'incl' => $total_incl, 'exch_rate' => $exch_rate];
+}
+
+// DELVIS KREDITNOTA: en faktura der kun er krediteret for en del, beholder sin status (sendt/betalt) - det
+// kunden stadig skylder er fakturaen + dens kreditnota(er) (negative) - betalingerne. RETTET: før blev hele
+// fakturaen markeret 'credited', og restbeløbet forsvandt fra debitorer, rykkere og bankafstemning.
+// Kreditnotaernes beløb (DKK inkl. moms, negativt) for en faktura:
+function invoice_credited_dkk($conn, int $inv_id): float {
+    $sum = 0.0;
+    $res = DB::query($conn, "SELECT inv_id FROM invoices WHERE credit_ref = $inv_id");
+    if ($res) while ($r = DB::fetch_assoc($res)) $sum += invoice_dkk_totals($conn, (int)$r['inv_id'])['incl'];
+    return round($sum, 2);
+}
+// Det åbne beløb på en faktura (DKK): total + kreditnotaer - betalinger
+function invoice_open_dkk($conn, int $inv_id): float {
+    $paid = DB::fetch_assoc(DB::query($conn, "SELECT COALESCE(SUM(amount), 0) AS paid FROM invoice_payments WHERE inv_id = $inv_id"));
+    return round(invoice_dkk_totals($conn, $inv_id)['incl'] + invoice_credited_dkk($conn, $inv_id) - (float)($paid['paid'] ?? 0), 2);
+}
+// Samme kreditnotabeløb som et SQL-udtryk til lister (fakturaen har alias $alias)
+function invoice_credited_sql($conn, string $alias = 'i'): string {
+    $disc = invoice_discount_sql($conn, 'cl.');
+    return "(SELECT COALESCE(SUM(cl.quantity * cl.price_each $disc * (100 + cl.line_vat_rate) / 100.0 * COALESCE(NULLIF(ci.exch_rate, 0), 1)), 0)"
+         . " FROM invoices ci JOIN invoice_lines cl ON cl.inv_id = ci.inv_id WHERE ci.credit_ref = $alias.inv_id)";
 }
 
 // Nummerserie til Tilbud/Ordrebekræftelse (quotes) - egen tæller
@@ -902,8 +1243,44 @@ function create_append_only_triggers($conn): array {
     $created = 0;
     $failed = [];
 
+    // NYT (bruger-anmodet lukning af BEK 811/2026-gennemgangens fund 1+3,
+    // se [[digital-standard-bookkeeping-registration-goal]]): to tilføjelser
+    // til denne allerede eksisterende funktion:
+    // (a) trg_expenses_*-triggerne nedenfor - "ingen database-trigger på
+    //     expenses"-hullet. expense_edit.php havde allerede PRÆCIS samme
+    //     felt-begrænsning i PHP-laget (beløb/konto/dato/type låst, kun
+    //     leverandør/beskrivelse/projekt frit redigerbart på en bogført
+    //     udgift) - denne trigger håndhæver nu DEN SAMME, allerede besluttede
+    //     politik på selve databaseniveauet, samme mønster som journal/ledger
+    //     allerede fik 2026-08-20.
+    // (b) journal.created_by-tjekket i selve trg_journal_restrict_update_
+    //     posted - "intet created_by på journal"-hullet er lukket ved at
+    //     tilføje kolonnen (se db-setup/migrate_journal_created_by.php) og nu
+    //     ogsaa beskytte den her. $journal_has_created_by afgør om selve
+    //     check'et inkluderes i trigger-SQL'en - uden dette tjek ville selve
+    //     CREATE TRIGGER-kaldet fejle øjeblikkeligt på en installation hvor
+    //     kolonne-migrationen (endnu) ikke er kørt, da kolonnen slet ikke
+    //     findes i tabellen trigger'en gælder for.
+    //
+    // RETTET SAMTIDIG: funktionen sprang FØR enhver trigger allerede fundet
+    // ved navn helt over (både SQLite- og MySQL-grenen) - en ÆNDRET
+    // trigger-definition (som netop journal-opdateringen her) ville derfor
+    // ALDRIG slå igennem på en installation, der allerede havde den gamle
+    // udgave oprettet, uanset hvor mange gange migrationen blev kørt igen.
+    // Ubetinget DROP+CREATE (samme to kald, blot uden "spring over hvis
+    // findes"-tjekket foran) gør funktionen reelt idempotent OGSÅ ved
+    // fremtidige definitionsændringer, ikke kun ved førstegangsoprettelse.
+    $journal_has_created_by = false;
+    if (DB::is_sqlite()) {
+        $res = DB::query($conn, "PRAGMA table_info(journal)");
+        if ($res) { while ($r = DB::fetch_assoc($res)) { if (strtolower($r['name']) === 'created_by') { $journal_has_created_by = true; break; } } }
+    } else {
+        $res = DB::query($conn, "SHOW COLUMNS FROM journal LIKE 'created_by'");
+        $journal_has_created_by = ($res && DB::num_rows($res) > 0);
+    }
+
     if ($db_type === 'sqlite') {
-        $existing = $pdo->query("SELECT name FROM sqlite_master WHERE type='trigger'")->fetchAll(PDO::FETCH_COLUMN);
+        $jou_created_by_chk = $journal_has_created_by ? " OR NEW.created_by IS NOT OLD.created_by" : "";
         $triggers = [
             'trg_journal_no_delete_posted' => "
                 CREATE TRIGGER trg_journal_no_delete_posted
@@ -917,6 +1294,7 @@ function create_append_only_triggers($conn): array {
                     NEW.voucher_no IS NOT OLD.voucher_no OR NEW.jou_date IS NOT OLD.jou_date OR
                     NEW.created_at IS NOT OLD.created_at OR NEW.trans_type IS NOT OLD.trans_type OR
                     NEW.currency IS NOT OLD.currency OR (OLD.is_cancelled = 1 AND NEW.is_cancelled = 0)
+                    $jou_created_by_chk
                 )
                 BEGIN SELECT RAISE(ABORT, 'Bogforte journalposter kan kun rettes i tekst/projekt eller annulleres (bogforingsloven)'); END;",
             'trg_ledger_no_delete_posted' => "
@@ -929,15 +1307,37 @@ function create_append_only_triggers($conn): array {
                 BEFORE UPDATE ON ledger FOR EACH ROW
                 WHEN (SELECT voucher_no FROM journal WHERE jou_id = OLD.jou_id) IS NOT NULL
                 BEGIN SELECT RAISE(ABORT, 'Bogforte hovedbogslinjer kan ikke rettes (bogforingsloven)'); END;",
+            'trg_expenses_no_delete_posted' => "
+                CREATE TRIGGER trg_expenses_no_delete_posted
+                BEFORE DELETE ON expenses FOR EACH ROW
+                WHEN OLD.voucher_no IS NOT NULL
+                BEGIN SELECT RAISE(ABORT, 'Bogforte udgifter kan ikke slettes (bogforingsloven) - brug Annuller i stedet'); END;",
+            'trg_expenses_restrict_update_posted' => "
+                CREATE TRIGGER trg_expenses_restrict_update_posted
+                BEFORE UPDATE ON expenses FOR EACH ROW
+                WHEN OLD.voucher_no IS NOT NULL AND (
+                    NEW.voucher_no IS NOT OLD.voucher_no OR NEW.exp_date IS NOT OLD.exp_date OR
+                    NEW.account_id IS NOT OLD.account_id OR NEW.amount IS NOT OLD.amount OR
+                    NEW.vat_rate IS NOT OLD.vat_rate OR NEW.currency IS NOT OLD.currency OR
+                    NEW.exp_type IS NOT OLD.exp_type OR NEW.orig_currency IS NOT OLD.orig_currency OR
+                    NEW.orig_amount IS NOT OLD.orig_amount OR NEW.exch_rate IS NOT OLD.exch_rate OR
+                    NEW.created_at IS NOT OLD.created_at OR NEW.created_by IS NOT OLD.created_by OR
+                    (OLD.is_cancelled = 1 AND NEW.is_cancelled = 0)
+                )
+                BEGIN SELECT RAISE(ABORT, 'Bogforte udgifter kan kun rettes i leverandor/beskrivelse/projekt/bilag eller annulleres (bogforingsloven)'); END;",
         ];
         foreach ($triggers as $name => $sql) {
-            if (in_array($name, $existing, true)) continue;
-            try { $pdo->exec($sql); $created++; } catch (Exception $e) {
+            try {
+                @$pdo->exec("DROP TRIGGER IF EXISTS $name");
+                $pdo->exec($sql);
+                $created++;
+            } catch (Exception $e) {
                 error_log("create_append_only_triggers: $name fejlede: " . $e->getMessage());
                 $failed[$name] = $e->getMessage();
             }
         }
     } else {
+        $jou_created_by_chk = $journal_has_created_by ? " OR NOT (NEW.created_by <=> OLD.created_by)" : "";
         $triggers = [
             'trg_journal_no_delete_posted' => "
                 CREATE TRIGGER trg_journal_no_delete_posted BEFORE DELETE ON journal FOR EACH ROW
@@ -950,6 +1350,7 @@ function create_append_only_triggers($conn): array {
                     NOT (NEW.voucher_no <=> OLD.voucher_no) OR NOT (NEW.jou_date <=> OLD.jou_date) OR
                     NOT (NEW.created_at <=> OLD.created_at) OR NOT (NEW.trans_type <=> OLD.trans_type) OR
                     NOT (NEW.currency <=> OLD.currency) OR (OLD.is_cancelled = 1 AND NEW.is_cancelled = 0)
+                    $jou_created_by_chk
                 ) THEN
                     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Bogforte journalposter kan kun rettes i tekst/projekt eller annulleres (bogforingsloven)';
                 END IF; END",
@@ -962,6 +1363,24 @@ function create_append_only_triggers($conn): array {
                 CREATE TRIGGER trg_ledger_no_update_posted BEFORE UPDATE ON ledger FOR EACH ROW
                 BEGIN IF (SELECT voucher_no FROM journal WHERE jou_id = OLD.jou_id) IS NOT NULL THEN
                     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Bogforte hovedbogslinjer kan ikke rettes (bogforingsloven)';
+                END IF; END",
+            'trg_expenses_no_delete_posted' => "
+                CREATE TRIGGER trg_expenses_no_delete_posted BEFORE DELETE ON expenses FOR EACH ROW
+                BEGIN IF OLD.voucher_no IS NOT NULL THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Bogforte udgifter kan ikke slettes (bogforingsloven) - brug Annuller i stedet';
+                END IF; END",
+            'trg_expenses_restrict_update_posted' => "
+                CREATE TRIGGER trg_expenses_restrict_update_posted BEFORE UPDATE ON expenses FOR EACH ROW
+                BEGIN IF OLD.voucher_no IS NOT NULL AND (
+                    NOT (NEW.voucher_no <=> OLD.voucher_no) OR NOT (NEW.exp_date <=> OLD.exp_date) OR
+                    NOT (NEW.account_id <=> OLD.account_id) OR NOT (NEW.amount <=> OLD.amount) OR
+                    NOT (NEW.vat_rate <=> OLD.vat_rate) OR NOT (NEW.currency <=> OLD.currency) OR
+                    NOT (NEW.exp_type <=> OLD.exp_type) OR NOT (NEW.orig_currency <=> OLD.orig_currency) OR
+                    NOT (NEW.orig_amount <=> OLD.orig_amount) OR NOT (NEW.exch_rate <=> OLD.exch_rate) OR
+                    NOT (NEW.created_at <=> OLD.created_at) OR NOT (NEW.created_by <=> OLD.created_by) OR
+                    (OLD.is_cancelled = 1 AND NEW.is_cancelled = 0)
+                ) THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Bogforte udgifter kan kun rettes i leverandor/beskrivelse/projekt/bilag eller annulleres (bogforingsloven)';
                 END IF; END",
         ];
         foreach ($triggers as $name => $sql) {
@@ -983,8 +1402,11 @@ function create_append_only_triggers($conn): array {
             // mysqli_sql_exception; funktionens eget løfte er "aldrig videre
             // uanset hvad", så fangnettet skal dække begge klasser.
             try {
-                $check = mysqli_query($conn, "SHOW TRIGGERS WHERE `Trigger` = '$name'");
-                if ($check && mysqli_num_rows($check) > 0) continue;
+                // RETTET (se funktionens egen kommentar foroven): "SHOW
+                // TRIGGERS... hvis findes, spring over"-tjekket er fjernet -
+                // DROP+CREATE køres nu ubetinget hver gang, så en ÆNDRET
+                // trigger-definition (fx journal-opdateringens nye created_by-
+                // tjek) rent faktisk slår igennem ved en fornyet kørsel.
                 @mysqli_query($conn, "DROP TRIGGER IF EXISTS `$name`");
                 if (mysqli_query($conn, $sql)) {
                     $created++;

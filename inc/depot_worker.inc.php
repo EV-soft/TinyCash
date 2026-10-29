@@ -6,7 +6,9 @@
  */
 function getDepotFiles() {
     // Definer hovedmappen til depotet i din storage-struktur (små bogstaver, engelsk)
-    $base_depot = __DIR__ . '/../storage/voucher_depot/';
+    // RETTET (flere regnskaber): depotet var fælles - regnskab B så (og kunne bogføre) regnskab A's kvitteringer
+    $depot_sub  = function_exists('tc_account_storage_subdir') ? tc_account_storage_subdir() : '';
+    $base_depot = __DIR__ . '/../storage/voucher_depot/' . $depot_sub;
     
     // De 4 ønskede kilde-mapper i lowercase
     $sources = ['mail', 'scanner', 'photo', 'download'];
@@ -40,7 +42,7 @@ function getDepotFiles() {
                         'source'   => $source,
                         'size'     => filesize($full_path),
                         'date'     => filemtime($full_path),
-                        'rel_path' => 'storage/voucher_depot/' . $source . '/' . $file
+                        'rel_path' => 'storage/voucher_depot/' . $depot_sub . $source . '/' . $file
                     ];
                 }
             }

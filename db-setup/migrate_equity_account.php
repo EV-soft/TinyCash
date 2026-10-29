@@ -9,10 +9,15 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
 require_once __DIR__ . '/../inc/db_connect.inc.php';
 header('Content-Type: text/plain; charset=utf-8');
 
+// RETTET: oprettede den faste konto, selvom rollen allerede var dækket af en anden konto (en kontoplan fra
+// setup_chart.php eller et skift til standardkontoplanen) - en ekstra, ikke-standard konto i kontoplanen
 $acc_id = 3000;
 $check = DB::query($conn, "SELECT COUNT(*) FROM accounts WHERE acc_id = $acc_id");
+$covered = tc_equity_account($conn);
 
-if ($check) {
+if ($covered > 0 && $covered !== $acc_id) {
+    echo "[SPRUNGET OVER] Kontoplanen har allerede en egenkapitalkonto ($covered) - ingen ændringer foretaget.\n";
+} elseif ($check) {
     $row = DB::fetch_row($check);
     if ((int)$row[0] > 0) {
         echo "[SPRUNGET OVER] Konto $acc_id findes allerede - ingen ændringer foretaget.\n";

@@ -52,6 +52,27 @@ if (empty($auth['url'])) {
     header("Location: bank_integration.php?msg=error"); exit;
 }
 
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): gemmer nu den
+// samtykke-udløbsdato eb_start_authorization() allerede beregnede og sendte
+// til banken (se dens egen kommentar) - stod aldrig gemt før, så en
+// bogholder fik ingen advarsel før forbindelsen stille holdt op med at
+// virke. Samme "stille degradering hvis ikke migreret endnu"-mønster som
+// andre nyere kolonner (db-setup/migrate_bank_consent_expiry.php).
+if (!empty($auth['valid_until'])) {
+    $has_expiry_col = false;
+    if (DB::is_sqlite()) {
+        $bec = DB::query($conn, "PRAGMA table_info(bank_connections)");
+        if ($bec) { while ($becr = DB::fetch_assoc($bec)) { if ($becr['name'] === 'consent_expires_at') { $has_expiry_col = true; break; } } }
+    } else {
+        $bec = DB::query($conn, "SHOW COLUMNS FROM bank_connections LIKE 'consent_expires_at'");
+        $has_expiry_col = ($bec && DB::num_rows($bec) > 0);
+    }
+    if ($has_expiry_col) {
+        $expires_at = date('Y-m-d H:i:s', strtotime($auth['valid_until']));
+        DB::query($conn, "UPDATE bank_connections SET consent_expires_at = '" . DB::escape($conn, $expires_at) . "' WHERE conn_id = $conn_id");
+    }
+}
+
 log_action($conn, 'CONNECT_BANK', 'bank_connections', $conn_id, null,
     ['institution_name' => $_POST['institution_name'], 'institution_country' => $_POST['institution_country'] ?? '', 'acc_id' => $acc_id, 'psu_type' => $psu_type]);
 

@@ -1,5 +1,7 @@
-<?php # /bank_import_step1.php v:1.3.0 d:2026-08-30 i:evs
-# profil-gem virkede ikke på SQLite - ON DUPLICATE KEY UPDATE var MySQL-kun; htm_InputGroup->htm_Field
+<?php # /bank_import_step1.php v:1.3.1 d:2026-09-15 i:evs
+# Trin 1 af bankimport: upload/forhåndsvisning af CSV samt gem/hent af
+# kolonne-mapping-profiler (settings-tabellen). Selve importen sker i
+# bank_import_process.php.
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
@@ -22,7 +24,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['profile_name'])) {
         'col_amount' => $_POST['col_amount'],
         'skip_lines' => $_POST['skip_lines']
     ];
-    $val = json_encode($setup);
+    // SIKKERHEDSRETTELSE (ansvarligt indrapporteret, SQL-injection/CWE-89):
+    // $val blev tidligere interpoleret RÅT i SQL-strengen nedenfor.
+    // json_encode() escaper kun JSON-syntaks (", \, kontroltegn) - IKKE et
+    // enkelt anførselstegn, som er det tegn der afgrænser SQL-strengen. En
+    // ondsindet kolonneværdi (fx col_date = "x'); DROP TABLE ...--") kunne
+    // dermed bryde ud af '$val'-literalen. $key blev allerede escaped
+    // korrekt via DB::real_escape_string() ovenfor - $val manglede samme
+    // beskyttelse. Siden sætter heller ikke $rLev, så enhver logget-ind
+    // bruger (ikke kun admin) kunne udnytte det. Rettet ved at escape $val
+    // på samme måde som $key, jf. det indrapporterede forslag.
+    $val = DB::escape($conn, json_encode($setup));
     // RETTET 2026-08-19: "ON DUPLICATE KEY UPDATE" er ren MySQL-syntaks og
     // fejlede stille på SQLite (bekræftet: SQLSTATE[HY000] syntax error) -
     // DB::query() fangede fejlen og returnerede false, men resultatet blev
@@ -84,6 +96,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
         rewind($handle);
 
         while (($data = fgetcsv($handle, 1000, $delimiter, '"')) !== FALSE) {
+            // (samme omkodning som bank_import_process.php - ellers var forhåndsvisningen af æøå-tekster tom)
+            if (empty($preview_data) && isset($data[0])) $data[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$data[0]);
+            foreach ($data as $di => $dv) if ($dv !== null && !mb_check_encoding((string)$dv, 'UTF-8')) $data[$di] = mb_convert_encoding((string)$dv, 'UTF-8', 'Windows-1252');
             $preview_data[] = $data;
             if (count($preview_data) >= 6) break;
         }

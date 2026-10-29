@@ -1,4 +1,4 @@
-<?php # /time_list.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /time_list.php v:1.3.1 d:2026-09-15 i:evs
 # NY FUNKTION: Timeregistrering (bruger-anmodet, sidste punkt fra "hvilke
 # funktioner mangler TinyCash"-gennemgangen). Oversigt + filtrering + "Opret
 # faktura af timer"-handlingen. Kræver Projekt-modulet aktivt - se
@@ -68,6 +68,47 @@ htm_Field(icon: 'fa-folder-open', labl: '@Project', name: 'proj_id', valu: $filt
 echo '</form>';
 
 // --- "Opret faktura af timer" ---
+// RETTET (bruger-anmodet, "kan bogholderen ønske sig mere"): den oprindelige
+// ufaktureret-tid-boks nedenfor viste KUN noget når ét bestemt projekt var
+// valgt i filteret - ved "Alle projekter" (eller ved første besøg på siden)
+// var der intet der samlede det på tværs, så glemt tid på et projekt man
+// ikke lige havde valgt kunne stå usynligt i årevis. Ny boks her, kun vist
+// ved "Alle projekter" (viser ellers samme information dobbelt), grupperer
+// ufaktureret tid PR. projekt (ikke summeret til ét tal - en faktura
+// oprettes altid pr. projekt/kunde, aldrig på tværs af flere), med sin egen
+// "Opret faktura"-knap pr. række, så en glemt post et hvilket som helst sted
+// bliver synlig med det samme uden at skulle klikke sig igennem hvert
+// projekt manuelt.
+if ($filter_proj === 0) {
+    $all_unbilled_res = DB::query($conn, "SELECT p.proj_id, p.proj_no,
+            COUNT(*) AS cnt, COALESCE(SUM(t.hours * t.hourly_rate),0) AS total
+        FROM time_entries t JOIN projects p ON t.proj_id = p.proj_id
+        WHERE t.is_billable = 1 AND t.is_invoiced = 0
+        GROUP BY p.proj_id, p.proj_no
+        ORDER BY total DESC");
+    $all_unbilled = [];
+    if ($all_unbilled_res) { while ($ur = DB::fetch_assoc($all_unbilled_res)) { $all_unbilled[] = $ur; } }
+
+    if (!empty($all_unbilled)) {
+        $grand_unbilled_cnt   = array_sum(array_column($all_unbilled, 'cnt'));
+        $grand_unbilled_total = array_sum(array_column($all_unbilled, 'total'));
+        echo '<div style="margin-bottom:15px; padding:12px 15px; background:var(--bg-panel); border-radius:8px;">';
+        echo '<div style="font-weight:bold; margin-bottom:8px;"><i class="fa-solid fa-triangle-exclamation" style="color:var(--color-warning);"></i> '
+            . sprintf(lang('@%d unbilled, billable hour entries across %d project(s), totaling %s.'), $grand_unbilled_cnt, count($all_unbilled), number_format($grand_unbilled_total, 2, ',', '.') . ' ' . $cur)
+            . '</div>';
+        foreach ($all_unbilled as $u) {
+            echo '<div style="display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-top:1px solid var(--border-subtle);">';
+            echo '<span><a href="time_list.php?proj_id='.(int)$u['proj_id'].'">'.htmlspecialchars($u['proj_no']).'</a> - '
+                . sprintf(lang('@%d entries, %s'), (int)$u['cnt'], number_format((float)$u['total'], 2, ',', '.') . ' ' . $cur) . '</span>';
+            htm_Button(icon: 'fa-file-invoice', labl: '@Create Invoice from Hours', type: 'success',
+                link: 'time_actions.php?action=invoice&proj_id='.(int)$u['proj_id'],
+                attr: 'data-hint="' . lang('@Creates a draft invoice from the unbilled hours and opens it') . '" onclick="return confirm(\''.addslashes(lang('@Create a draft invoice with one line per unbilled hour entry for this project?')).'\');" style="padding:4px 10px; font-size:0.85em;"');
+            echo '</div>';
+        }
+        echo '</div>';
+    }
+}
+
 if ($filter_proj > 0) {
     $unbilled_row = DB::fetch_assoc(DB::query($conn,
         "SELECT COUNT(*) AS cnt, COALESCE(SUM(hours * hourly_rate),0) AS total
@@ -114,7 +155,7 @@ if ($res) {
         $grand_total_hours += (float)$row['hours'];
 
         if ($row['is_invoiced']) {
-            $status_html = '<a href="invoice_edit.php?id='.(int)$row['inv_id'].'" style="color:var(--color-primary); font-weight:bold;"><i class="fa-solid fa-file-invoice"></i> ' . lang('@Invoiced') . '</a>';
+            $status_html = '<a href="invoice_edit.php?id='.(int)$row['inv_id'].'" data-hint="' . lang('@Open the invoice the hours are on') . '" style="color:var(--color-primary); font-weight:bold;"><i class="fa-solid fa-file-invoice"></i> ' . lang('@Invoiced') . '</a>';
         } elseif (!$row['is_billable']) {
             $status_html = '<span style="color:var(--text-muted);">' . lang('@Non-billable') . '</span>';
         } else {
@@ -128,7 +169,7 @@ if ($res) {
             ], false);
             $actions .= htm_ConfirmLink(icon: 'fa-trash', labl: '', link: 'time_entry_edit.php?id='.$eid.'&del=1',
                 mess: '@Are you sure you want to delete this time entry?',
-                type: 'danger', styl: 'display:inline-block; margin-left:4px; padding:4px 8px;', echo: false);
+                type: 'danger', styl: 'display:inline-block; margin-left:4px; padding:4px 8px;', attr: 'data-hint="' . lang('@Delete the time entry (you are asked first)') . '"', echo: false);
         }
 
         $data[] = [

@@ -54,7 +54,11 @@ try {
     }
 
     $inv_date = date('Y-m-d');
-    $due_date = date('Y-m-d', strtotime('+8 days'));
+    // RETTET: forfaldet var altid 8 dage - kundens egne betalingsbetingelser (cust_payment_days) blev
+    // ignoreret (samme rettelse som quote_actions.php fik)
+    $tc_days  = DB::fetch_assoc(DB::query($conn, "SELECT cust_payment_days FROM customers WHERE cust_id = " . (int)$proj['cust_id']));
+    $due_days = max(0, (int)($tc_days['cust_payment_days'] ?? 8));
+    $due_date = date('Y-m-d', strtotime("+$due_days days"));
     // RETTET: hardkodede 'DKK' ignorerede virksomhedens faktisk konfigurerede
     // basisvaluta (Firmaindstillinger -> Valuta) - tredje forekomst af samme
     // fejl fundet i quote_actions.php og inc/recurring_invoices.inc.php i

@@ -101,6 +101,23 @@ switch ($action) {
             $old_res = DB::query($conn, "SELECT proj_id, proj_no, cust_id FROM projects WHERE proj_id = $proj_id");
             $old_row = $old_res ? DB::fetch_assoc($old_res) : null;
 
+            // RETTET: et projekt med BOGFØRTE fakturaer, udgifter eller posteringer kunne slettes - projektet blev
+            // så fjernet fra selve bogføringen (journal.proj_id m.fl.), og projektregnskabet kunne ikke længere
+            // dokumenteres. Og fakturerbare timer der endnu IKKE var faktureret, blev stille gjort ikke-fakturerbare
+            // (tabt omsætning). Sådan et projekt afsluttes nu i stedet (Aktiv: nej) - kun et ubrugt projekt slettes.
+            $pa_used = (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM invoices WHERE proj_id = $proj_id AND LOWER(inv_status) <> 'draft'"))[0] ?? 0)
+                     + (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM expenses WHERE proj_id = $proj_id AND voucher_no IS NOT NULL"))[0] ?? 0)
+                     + (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM journal WHERE proj_id = $proj_id"))[0] ?? 0);
+            if (pa_table_exists($conn, 'time_entries')) {
+                $pa_used += (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM time_entries WHERE proj_id = $proj_id AND is_billable = 1 AND is_invoiced = 0"))[0] ?? 0);
+            }
+            if ($pa_used > 0) {
+                header("Location: project_edit.php?id=$proj_id&err=in_use"); exit;
+            }
+            if (pa_table_exists($conn, 'recurring_expenses')) {      // (manglede i listen herunder)
+                DB::query($conn, "UPDATE recurring_expenses SET proj_id = NULL WHERE proj_id = $proj_id");
+            }
+
             // Nulstil proj_id referencer i stedet for at slette data.
             // RETTET (se [[project-bugs-review]]): denne liste dækkede kun 4
             // af de 7 tabeller i skemaet der reelt har en proj_id-kolonne -

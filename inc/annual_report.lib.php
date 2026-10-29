@@ -63,10 +63,15 @@ function arl_balance_sheet($conn, $as_of_date) {
     $assets_total = 0;
     foreach ($asset_rows as $r) $assets_total += (float)$r['balance'];
 
+    // RETTET: kun de TO momskonti fra Firmaindstillinger talte med - andre momskonti (acc_type 'vat', fx
+    // standardkontoplanens 7700/7720 moms af køb i udlandet og 7840 skyldig moms) faldt helt ud af balancen,
+    // og den balancerede ikke. Nu alle konti af typen moms + de to fra indstillingerne, hvis de har en
+    // anden type end en balancetype (så intet tælles to gange).
     $vat_row = DB::fetch_assoc(DB::query($conn, "
         SELECT SUM(l.amount) AS net FROM ledger l
         JOIN journal j ON l.jou_id = j.jou_id
-        WHERE l.acc_id IN ($acc_vat_out, $acc_vat_in) AND $date_sql"));
+        LEFT JOIN accounts a ON a.acc_id = l.acc_id
+        WHERE (a.acc_type = 'vat' OR (l.acc_id IN ($acc_vat_out, $acc_vat_in) AND COALESCE(a.acc_type, '') NOT IN ('asset', 'bank', 'liability', 'equity'))) AND $date_sql"));
     $vat_net = (float)($vat_row['net'] ?? 0);
     $vat_is_asset = ($vat_net > 0);
 
@@ -157,9 +162,9 @@ function arl_income_statement($conn, $period_start, $period_end) {
         while ($r = DB::fetch_assoc($res)) { $cost_rows[] = $r; $total_costs += (float)$r['total']; }
     }
 
-    $sv_row = DB::fetch_assoc(DB::query($conn, "SELECT SUM(-l.amount) AS total FROM ledger l JOIN journal j ON l.jou_id=j.jou_id WHERE l.acc_id = $acc_vat_out AND $date_sql"));
+    $sv_row = DB::fetch_assoc(DB::query($conn, "SELECT SUM(-l.amount) AS total FROM ledger l JOIN journal j ON l.jou_id=j.jou_id WHERE l.acc_id IN (" . tc_vat_acc_list($conn, $acc_vat_out) . ") AND $date_sql"));
     $sales_vat = (float)($sv_row['total'] ?? 0);
-    $pv_row = DB::fetch_assoc(DB::query($conn, "SELECT SUM(l.amount) AS total FROM ledger l JOIN journal j ON l.jou_id=j.jou_id WHERE l.acc_id = $acc_vat_in AND $date_sql"));
+    $pv_row = DB::fetch_assoc(DB::query($conn, "SELECT SUM(l.amount) AS total FROM ledger l JOIN journal j ON l.jou_id=j.jou_id WHERE l.acc_id IN (" . tc_vat_acc_list($conn, $acc_vat_in) . ") AND $date_sql"));
     $purchase_vat = (float)($pv_row['total'] ?? 0);
 
     return [

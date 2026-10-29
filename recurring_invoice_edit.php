@@ -1,4 +1,4 @@
-<?php # /recurring_invoice_edit.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /recurring_invoice_edit.php v:1.3.1 d:2026-09-15 i:evs
 # Opret/redigér en fast fakturaskabelon (Gentagne/faste fakturaer). Linje-
 # editoren (fast 5-rækkers tabel) genbruger nøjagtig samme mønster som
 # invoice_edit.php's linjer, for konsistens og for at undgå at genopfinde
@@ -17,6 +17,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recur'])) {
     $cust_id       = (int)$_POST['cust_id'];
     $interval_type = in_array($_POST['interval_type'], ['monthly', 'quarterly', 'yearly'], true) ? $_POST['interval_type'] : 'monthly';
     $next_run      = DB::escape($conn, $_POST['next_run_date']);
+    // RETTET (ALVORLIGT): datoen blev ikke kontrolleret - et tomt felt gemte '' som næste kørsel. '' er "før" enhver
+    // dato, så det automatiske tjek dannede en kladde ved HVER sidevisning og regnede videre fra 1970 (strtotime('')):
+    // hundredvis af kladder. Nu skal datoen være gyldig.
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($_POST['next_run_date'] ?? '')) || !strtotime((string)$_POST['next_run_date'])) {
+        die(lang('@Please enter a valid next run date.'));
+    }
     $due_days      = (int)$_POST['inv_due_days'];
     $is_active     = isset($_POST['is_active']) ? 1 : 0;
     $cust_ref      = DB::escape($conn, $_POST['cust_reference'] ?? '');
@@ -89,7 +95,8 @@ htm_Card_($recur_id > 0 ? '@Edit Recurring Invoice' : '@New Recurring Invoice', 
 echo '<input type="hidden" name="recur_id" value="'.$recur_id.'">';
 
 // Kunde + projekt
-$cust_res = DB::query($conn, "SELECT cust_id, cust_name, cust_payment_days FROM customers ORDER BY cust_name");
+// RETTET: kunder i papirkurven kunne vælges (som i invoice_edit.php: kun aktive - den allerede valgte beholdes)
+$cust_res = DB::query($conn, "SELECT cust_id, cust_name, cust_payment_days FROM customers WHERE " . customers_active_filter($conn) . " OR cust_id = " . (int)($tmpl['cust_id'] ?? 0) . " ORDER BY cust_name");
 $cust_opt = []; $cust_days_map = [];
 while ($c = DB::fetch_assoc($cust_res)) {
     $cust_opt[$c['cust_id']] = $c['cust_name'];
@@ -102,11 +109,20 @@ htm_ProjektCodeField($conn, (int)($tmpl['proj_id'] ?: 0) ?: null, '30%');
 // Interval + næste kørsel + betalingsfrist + aktiv
 echo '<div style="display:flex; gap:10px; margin:15px 0;">';
 htm_Field(icon:'fa-sync', labl:'@Repeat Interval', name:'interval_type', valu:$tmpl['interval_type'], type:'sele',
-    opti:['monthly'=>lang('@Monthly'),'quarterly'=>lang('@Quarterly'),'yearly'=>lang('@Yearly')], echo:true);
+    opti:['monthly'=>lang('@Monthly'),'quarterly'=>lang('@Quarterly'),'yearly'=>lang('@Yearly')], extr:'id="interval_sel" onchange="updateRecurPreview()"', echo:true);
 htm_Field(icon:'fa-calendar-plus', labl:'@Next Run Date', name:'next_run_date', valu:$tmpl['next_run_date'], type:'date',
-    hint:'@The date the first (or next) draft invoice will be generated', echo:true);
+    hint:'@The date the first (or next) draft invoice will be generated', extr:'id="next_run_field" onchange="updateRecurPreview()"', echo:true);
 htm_Field(icon:'fa-calendar-check', labl:'@Payment Days', name:'inv_due_days', valu:$tmpl['inv_due_days'], type:'number', extr:'id="due_days_field" min="0"', echo:true);
 echo '</div>';
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): kun ÉN dato
+// ("Næste kørsel") blev vist - ingen måde at se de følgende par datoer FØR
+// gem, hvilket gør det svært at opdage en fejl i intervallet (fx en
+// månedlig skabelon der utilsigtet rammer den 31. og dermed springer
+// uregelmæssigt - PHP's strtotime('+1 month') og JS's setMonth() har
+// begge samme "dag overløber til næste måned"-opførsel ved en kort måned,
+// så forhåndsvisningen her rammer PRÆCIS samme datoer som
+// recurring_next_date() (inc/recurring_invoices.inc.php) reelt vil bruge).
+echo '<div id="recur_preview" style="margin:-5px 0 15px; font-size:0.85em; color:var(--text-muted);"></div>';
 
 echo '<label style="display:flex; align-items:center; gap:8px; margin:10px 0 20px; cursor:pointer;">';
 echo '<input type="checkbox" name="is_active" value="1" '.($tmpl['is_active'] ? 'checked' : '').' style="width:18px; height:18px;">';
@@ -165,6 +181,28 @@ htm_Card_end();
 const vatMap      = <?php echo json_encode($prod_vat_map); ?>;
 const priceMap    = <?php echo json_encode($prod_price_map); ?>;
 const custDaysMap = <?php echo json_encode($cust_days_map); ?>;
+
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): viser de næste 4
+// kørselsdatoer ud fra den valgte startdato/interval, FØR gem - se
+// htm_Field-kaldenes egen kommentar for baggrunden om PHP/JS-parallellen.
+function updateRecurPreview() {
+    var box = document.getElementById('recur_preview');
+    var dateField = document.getElementById('next_run_field');
+    var intervalField = document.getElementById('interval_sel');
+    if (!box || !dateField || !intervalField || !dateField.value) { if (box) box.innerHTML = ''; return; }
+    var months = intervalField.value === 'quarterly' ? 3 : (intervalField.value === 'yearly' ? 12 : 1);
+    var d = new Date(dateField.value + 'T00:00:00');
+    var dates = [];
+    for (var i = 0; i < 4; i++) {
+        dates.push(d.toLocaleDateString('da-DK'));
+        // Samme regel som recurring_next_date(): samme dag, højst månedens sidste - den sidste forbliver den sidste
+        var day = d.getDate(), wasLast = day === new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+        var last = new Date(d.getFullYear(), d.getMonth() + months + 1, 0).getDate();
+        d = new Date(d.getFullYear(), d.getMonth() + months, wasLast ? last : Math.min(day, last));
+    }
+    box.innerHTML = '<i class="fa-solid fa-calendar-days"></i> ' + <?php echo json_encode(lang('@Next occurrences:')); ?> + ' ' + dates.join(' → ');
+}
+document.addEventListener('DOMContentLoaded', updateRecurPreview);
 
 function updateDueDays() {
     const sel = document.getElementById('cust_sel');

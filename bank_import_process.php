@@ -1,4 +1,4 @@
-<?php # /bank_import_process.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /bank_import_process.php v:1.3.1 d:2026-09-15 i:evs
 # Trin 2 af CSV-bankimport (kaldes fra bank_import_step1.php's formular):
 # læser den uploadede CSV-fil linje for linje efter den valgte kolonne-
 # mapping og indsætter rækkerne i bank_statement_temp, klar til afstemning
@@ -44,6 +44,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $handle = fopen($file_path, "r");
     $importCount = 0;
     $dateWarnCount = 0;
+    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): dublet-tjekket
+    // nedenfor fandtes allerede (samme dato+tekst+beløb importeres ikke to
+    // gange), men var STUMT - genimporterer man ved en fejl den samme
+    // periode, ser man bare et lavere antal importerede rækker end forventet,
+    // uden nogen forklaring på hvorfor, hvilket let ligner en fejl i stedet
+    // for at være den beskyttelse der reelt virkede. Tælles nu og vises i
+    // succesbeskeden på reconcile_list.php.
+    $duplicateCount = 0;
+    $seen_in_file = [];       // dato|tekst|beløb => antal gange set i DENNE fil (se dublet-tjekket nedenfor)
 
     // RETTET (§bugs-batch-24-review): sprang altid PRÆCIS én linje over,
     // uanset hvad brugeren valgte i bank_import_step1.php's "Spring linjer
@@ -57,7 +66,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (fgetcsv($handle, 1000, $delimiter) === false) break;
     }
 
+    // RETTET: tegnsættet blev ikke håndteret - mange danske bankers CSV er i Windows-1252/ISO-8859-1. Tekster med
+    // æøå blev gemt som ugyldig UTF-8 (htmlspecialchars() gør dem TOMME i afstemningen), og et UTF-8-BOM foran første
+    // felt fik den første dato til at fejle. Nu: BOM fjernes, og et felt der ikke er gyldig UTF-8, omkodes.
+    $bom_done = false;
     while (($data = fgetcsv($handle, 1000, $delimiter)) !== FALSE) {
+        if (!$bom_done && isset($data[0])) { $data[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$data[0]);  $bom_done = true; }
+        foreach ($data as $di => $dv) {
+            if ($dv !== null && !mb_check_encoding((string)$dv, 'UTF-8')) $data[$di] = mb_convert_encoding((string)$dv, 'UTF-8', 'Windows-1252');
+        }
         $raw = ['date' => date('Y-m-d'), 'text' => '', 'net' => 0.0, 'fee' => 0.0, 'gross' => 0.0, 'date_ok' => true];
         $has_net = false;
         $has_gross = false;
@@ -68,19 +85,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (in_array($db_field, ['amount', 'net_amount', 'fee_amount'])) {
                 // --- Robust numeric cleaning ---
+                // RETTET: kun et FORANSTILLET almindeligt minus blev forstået - et efterstillet minus ("1.234,50-"),
+                // et typografisk minus ("−1.234,50", U+2212) eller regnskabsparenteser ("(1.234,50)") blev renset
+                // væk, og en UDBETALING blev importeret som en indbetaling.
+                $neg = (bool)preg_match('/^\s*\(.*\)\s*$|-\s*$|^\s*[−–]|^\s*-/u', $val);
+                $val = str_replace(['−', '–', '(', ')'], '', $val);
+                $val = ltrim(rtrim($val, " -\t"), " -\t");
                 $val = str_replace(' ', '', $val); // Remove spaces
                 $val = str_replace($t_sep, '', $val); // Remove thousands sep
                 $val = str_replace($d_sep, '.', $val); // Convert decimal sep to dot
                 $val = preg_replace('/[^-0-9.]/', '', $val); // Keep only minus, numbers and dot
-                $num = (float)$val;
+                $num = $neg ? -abs((float)$val) : (float)$val;
                 if ($db_field == 'amount')     { $raw['gross'] = $num; $has_gross = true; }
                 if ($db_field == 'net_amount') { $raw['net'] = $num; $has_net = true; }
                 if ($db_field == 'fee_amount') { $raw['fee'] = $num; }
             } 
             elseif ($db_field == 'trans_date') {
                 $val_orig = $val;
-                $val = str_replace(['/', '.'], '-', $val);
-                $date_ts = strtotime($val);
+                $val = str_replace(['/', '.'], '-', trim($val));
+                // RETTET: et tocifret årstal ("05.03.26" - almindeligt i danske bankudtræk) blev af strtotime()
+                // læst som år-måned-dag: 2005-03-26 - stille en helt forkert dato, uden advarsel. Dansk
+                // dag-måned-år læses nu eksplicit (også med firecifret år); ISO "2026-03-05" som før.
+                if (preg_match('/^(\d{1,2})-(\d{1,2})-(\d{2}|\d{4})$/', $val, $dm)) {
+                    $yy = strlen($dm[3]) === 2 ? 2000 + (int)$dm[3] : (int)$dm[3];
+                    $date_ts = checkdate((int)$dm[2], (int)$dm[1], $yy) ? mktime(0, 0, 0, (int)$dm[2], (int)$dm[1], $yy) : false;
+                } else {
+                    $date_ts = strtotime($val);
+                }
                 if ($date_ts) {
                     $raw['date'] = date('Y-m-d', $date_ts);
                 } else {
@@ -125,17 +156,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $f = $raw['fee'];
 
         // DUPLICATE CHECK & INSERT
-        $check = DB::query($conn, "SELECT tmp_id FROM bank_statement_temp WHERE trans_date='$d' AND text_val='$t' AND amount=$a LIMIT 1");
-        
-        if (DB::num_rows($check) == 0) {
-            $sql = "INSERT INTO bank_statement_temp (trans_date, text_val, amount, fee_amount, import_source) 
+        // RETTET: to ens transaktioner i SAMME fil (samme dag, tekst og beløb - fx to parkeringer à 50 kr)
+        // blev til én: den anden blev afvist som "dublet" af den første, der lige var indsat. Nu tælles
+        // forekomsterne: den n'te ens linje i filen er kun en dublet, hvis der allerede findes n af dem.
+        $dup_key = "$d|$t|$a";
+        $nth = ($seen_in_file[$dup_key]['seen'] ?? 0) + 1;                       // den n'te ens linje i denne fil
+        $ins = $seen_in_file[$dup_key]['inserted'] ?? 0;                          // heraf allerede indsat fra denne fil
+        $seen_in_file[$dup_key] = ['seen' => $nth, 'inserted' => $ins];
+        $check = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM bank_statement_temp WHERE trans_date='$d' AND text_val='$t' AND amount=$a"));
+        $before = (int)($check[0] ?? 0) - $ins;                                    // fra tidligere importer
+
+        if ($before < $nth) {
+            $seen_in_file[$dup_key]['inserted']++;
+            $sql = "INSERT INTO bank_statement_temp (trans_date, text_val, amount, fee_amount, import_source)
                     VALUES ('$d', '$t', $a, $f, '$source')";
             if (DB::query($conn, $sql)) $importCount++;
+        } else {
+            $duplicateCount++;
         }
     }
     fclose($handle);
     @unlink($file_path);
 
-    header("Location: reconcile_list.php?msg=imported&count=$importCount&date_warnings=$dateWarnCount");
+    header("Location: reconcile_list.php?msg=imported&count=$importCount&date_warnings=$dateWarnCount&duplicates=$duplicateCount");
     exit;
 }

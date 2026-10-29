@@ -4,9 +4,9 @@
 # v1.3.1: tip-boksen fik mere bundmargin (løste IKKE problemet alene)
 # v1.3.2: tilføjet position:relative + z-index over floating-action-bar's 10000
 # v1.3.3: margin-bottom sat til 70px (bruger-bekræftet virkende værdi)
-require 'inc/auth.inc.php';
-require 'inc/db_connect.inc.php';
-require 'inc/menu.inc.php';
+require_once 'inc/auth.inc.php';
+require_once 'inc/db_connect.inc.php';
+require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
 require_once 'inc/help.lib.php';
 // RETTET (bruger-rapporteret: "backup" var ikke et klart begreb - manuel og
@@ -172,7 +172,7 @@ echo "<div style='max-width: 1000px; margin: 0 auto; font-family: sans-serif; bo
     echo "<div style='$card margin-bottom: 10px;'>";
     $backup_notice = '<strong style="color: var(--color-warning); font-size: 14px;"><i class="fa-solid fa-cloud-arrow-down"></i> ' . lang('@Important regarding backup (Bookkeeping Act):') . '</strong>'
         . '<p style="margin: 5px 0 0 0; font-size: 13px; color: var(--text-main); line-height: 1.5;">' . lang('@Manually generated backup files (above) are saved in the backups folder on the server. To comply with legal data protection requirements, you must regularly download these .zip files and store them on an external data medium (e.g., a local hard drive, USB drive, or secure cloud storage).') . '</p>'
-        . '<div style="margin-top: 10px;"><a href="storage_browser.php?folder=backups" style="font-size: 13px; color: var(--color-primary); text-decoration: none; font-weight: bold;"><i class="fa-solid fa-folder-open"></i> ' . lang('@Go to System File Browser to Download Backups') . '</a></div>';
+        . '<div style="margin-top: 10px;"><a href="storage_browser.php?folder=backups" data-hint="' . lang('@Open the backups folder in the file browser, where they can be downloaded') . '" style="font-size: 13px; color: var(--color-primary); text-decoration: none; font-weight: bold;"><i class="fa-solid fa-folder-open"></i> ' . lang('@Go to System File Browser to Download Backups') . '</a></div>';
     htm_Banner($backup_notice, 'warning');
     echo "</div>";
 

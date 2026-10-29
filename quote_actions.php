@@ -34,6 +34,11 @@ if ($action === 'mark_sent') {
     exit;
 }
 
+// RETTET: et tilbud kunne accepteres (og derefter konverteres til faktura med tilbuddets priser), selvom dets
+// gyldighed var udløbet - virksomheden er ikke bundet af et udløbet tilbud. Genåbn det og forlæng gyldigheden.
+if ($action === 'mark_accepted' && !empty($q['valid_until']) && $q['valid_until'] < date('Y-m-d')) {
+    header("Location: quote_list.php?msg=expired"); exit;
+}
 if ($action === 'mark_accepted' || $action === 'mark_rejected') {
     $new_status = ($action === 'mark_accepted') ? 'accepted' : 'rejected';
     $stamp_col  = ($action === 'mark_accepted') ? 'accepted_at' : 'rejected_at';
@@ -78,7 +83,9 @@ if ($action === 'convert') {
         $s = get_settings($conn);
         $module_projects = !empty($s['module_projects']) && $s['module_projects'] == '1';
         $proj_sql = ($module_projects && !empty($q['proj_id'])) ? (int)$q['proj_id'] : 'NULL';
-        $due_days = 8; // samme standard som invoice_edit.php's nye-faktura-forvalg
+        // RETTET: altid 8 dage - nu kundens betalingsfrist (kundekortet), som dublet og faste fakturaer bruger
+        $qc_days  = DB::fetch_assoc(DB::query($conn, "SELECT cust_payment_days FROM customers WHERE cust_id = " . (int)$q['cust_id']));
+        $due_days = max(0, (int)($qc_days['cust_payment_days'] ?? 8));
         $inv_date = date('Y-m-d');
         $due_date = date('Y-m-d', strtotime("+$due_days days"));
         $cust_ref = DB::escape($conn, $q['cust_reference'] ?? '');

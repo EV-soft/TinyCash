@@ -57,7 +57,7 @@ showMenu();
         </p>
     </div>
     <div style="text-align: center; margin-top: 40px;">
-        <a href="index.php" class="btn-secondary" style="padding: 10px 25px; text-decoration: none; border-radius: 4px;">
+        <a href="index.php" class="btn-secondary" style="padding: 10px 25px; text-decoration: none; border-radius: 4px;" data-hint="<?php echo lang('@Go to the dashboard'); ?>">
             <?php echo lang('@Back to Dashboard'); ?>
         </a>
     </div>

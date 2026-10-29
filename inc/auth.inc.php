@@ -1,4 +1,4 @@
-<?php # /inc/auth.inc.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /inc/auth.inc.php v:1.3.1 d:2026-09-15 i:evs
 # v1.2.0: KRITISK - ?set_level= tillod enhver logget-ind bruger at give sig
 # selv admin-niveau uden noget tjek. Kræver nu real_user_level fra login.php
 # og tillader kun at sænke, aldrig hæve. Fundet ved en adgangskontrol-
@@ -117,6 +117,59 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_id'] <= 0) {
     exit;
 }
 
+// 4a. --- DEAKTIVERET-KONTO-TJEK (bruger-anmodet, "kan bogholderen ønske sig
+// mere"): denne fil har ALDRIG genslået den logget-ind bruger op i databasen
+// efter selve login-øjeblikket - alt (rolle, niveau, brugernavn) kom
+// udelukkende fra sessionsvariabler sat én gang ved login. En admin der
+// ændrede en andens rolle, kodeord, eller (denne feature) deaktiverede
+// kontoen, havde derfor INGEN effekt på en allerede aktiv session, som
+// forblev fuldt funktionsdygtig indtil brugeren selv loggede ud. Kræver
+// selve DB-forbindelsen her (auth.inc.php inkluderes normalt FØR
+// db_connect.inc.php i hver sides sædvanlige rækkefølge) - require_once
+// gør det trygt at hente den nu, den almindelige senere require_once i
+// selve siden bliver blot et no-op. Samme "stille degradering hvis ikke
+// migreret endnu"-mønster som andre nyere kolonner (kolonnen findes evt.
+// ikke endnu, se db-setup/migrate_user_active_status.php).
+require_once 'inc/db_connect.inc.php';
+$auth_has_is_active_col = false;
+if (DB::is_sqlite()) {
+    $auth_iac = DB::query($conn, "PRAGMA table_info(users)");
+    if ($auth_iac) { while ($auth_iacr = DB::fetch_assoc($auth_iac)) { if ($auth_iacr['name'] === 'is_active') { $auth_has_is_active_col = true; break; } } }
+} else {
+    $auth_iac = DB::query($conn, "SHOW COLUMNS FROM users LIKE 'is_active'");
+    $auth_has_is_active_col = ($auth_iac && DB::num_rows($auth_iac) > 0);
+}
+if ($auth_has_is_active_col) {
+    $auth_user_row = DB::fetch_assoc(DB::query($conn, "SELECT is_active FROM users WHERE user_id = " . (int)$_SESSION['user_id']));
+    if (!$auth_user_row || (int)$auth_user_row['is_active'] === 0) {
+        $_SESSION = array();
+        session_destroy();
+        header("Location: login.php?msg=account_disabled");
+        exit;
+    }
+}
+// RETTET (SIKKERHED): login'et er bundet til det regnskab det blev givet i - er et andet regnskab valgt i sessionen
+// (Skift regnskab), er brugeren ikke logget ind dér. (En session fra før denne rettelse logges ud én gang.)
+if ((string)($_SESSION['auth_account_id'] ?? '-') !== (string)($_SESSION['account_id'] ?? '')) {
+    foreach (['user_id', 'user_name', 'user_level', 'real_user_level', 'user_role', 'auth_account_id'] as $k) unset($_SESSION[$k]);
+    header("Location: login.php");
+    exit;
+}
+// RETTET: en ændret rolle (fx en administrator nedgraderet til bruger) fik først virkning ved næste login -
+// sessionen beholdt sine rettigheder i op til 4 timer. Rolle og niveau læses nu ved hver side; et midlertidigt
+// sænket visningsniveau (?set_level=) bevares, men kan aldrig ligge over det nye niveau.
+$auth_role_row = DB::fetch_assoc(DB::query($conn, "SELECT user_role, user_level FROM users WHERE user_id = " . (int)($_SESSION['user_id'] ?? 0)));
+if ($auth_role_row) {
+    $auth_db_level = (int)$auth_role_row['user_level'];
+    $auth_real     = (int)($_SESSION['real_user_level'] ?? $auth_db_level);
+    if ($auth_db_level !== $auth_real || (string)($_SESSION['user_role'] ?? '') !== (string)$auth_role_row['user_role']) {
+        $auth_cur = (int)($_SESSION['user_level'] ?? $auth_db_level);
+        $_SESSION['user_level']      = ($auth_cur >= $auth_real) ? $auth_db_level : min($auth_cur, $auth_db_level);
+        $_SESSION['real_user_level'] = $auth_db_level;
+        $_SESSION['user_role']       = (string)$auth_role_row['user_role'];
+    }
+}
+
 // 4b. --- CSRF-BESKYTTELSE (kun POST, kun for logget-ind brugere) ---
 // RETTET (§bugs-batch-22-review): fandtes slet ikke noget sted i appen -
 // bekræftet ved en fuld projekt-gennemsøgning. En ondsindet side kunne
@@ -138,6 +191,11 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_id'] <= 0) {
 // og efterlades bevidst til en senere runde, for ikke at risikere selve
 // login-flowet uden dedikeret testtid.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_verify()) {
+    http_response_code(403);
+    die(lang('@Security check failed (CSRF). Please reload the page and try again.'));
+}
+// RETTET: også de handlinger der udføres af et LINK (GET) - se csrf_get_actions() i inc/php2htm.lib.php
+if (csrf_get_is_action() && !csrf_verify_get()) {
     http_response_code(403);
     die(lang('@Security check failed (CSRF). Please reload the page and try again.'));
 }

@@ -18,8 +18,12 @@
 function recurring_invoices_check($conn) {
     $today = date('Y-m-d');
 
+    // RETTET: en kunde i papirkurven (customer_edit.php "Slet") fik stadig en ny fakturakladde hver periode - på en
+    // kunde der ikke ses nogen steder. Skabelonen springes over (og står stille), så længe kunden er slettet;
+    // gendannes kunden, fortsætter den, hvor den slap.
     $res = DB::query($conn, "SELECT recur_id FROM recurring_invoices
-                              WHERE is_active = 1 AND next_run_date IS NOT NULL AND next_run_date <= '$today'
+                              WHERE is_active = 1 AND next_run_date IS NOT NULL AND next_run_date >= '1990-01-01' AND next_run_date <= '$today'
+                                AND cust_id IN (SELECT cust_id FROM customers WHERE " . customers_active_filter($conn) . ")
                               ORDER BY next_run_date ASC");
     if (!$res) return;
 
@@ -53,7 +57,7 @@ function generate_recurring_invoice($conn, int $recur_id, bool $auto = false): ?
     // som ville vise vinderens allerede-committede resultat for begge, se
     // [[db_connect.inc.php]]s affected_rows()-kommentar for baggrunden).
     if ($auto) {
-        if (empty($tmpl['next_run_date']) || $today < $tmpl['next_run_date']) return null;
+        if (empty($tmpl['next_run_date']) || !strtotime((string)$tmpl['next_run_date']) || $tmpl['next_run_date'] < '1990-01-01' || $today < $tmpl['next_run_date']) return null;      // (en ugyldig dato kører aldrig)
         $claim_next = recurring_next_date($tmpl['next_run_date'], $tmpl['interval_type']);
         $old_next   = DB::escape($conn, $tmpl['next_run_date']);
         $claim_sql  = DB::query($conn, "UPDATE recurring_invoices
@@ -132,12 +136,17 @@ function generate_recurring_invoice($conn, int $recur_id, bool $auto = false): ?
 // Beregner næste kørselsdato UD FRA den seneste planlagte dato (ikke fra
 // "i dag") - undgår datodrift, hvis systemet fx ikke besøges i nogle dage
 // efter forfald.
+// RETTET: strtotime('+1 month') fra den 31. januar gav den 3. marts - februar blev sprunget HELT over (ingen
+// faktura / udgift for februar), og datoen blev derefter hængende på den 3. Nu: samme dag i måneden, højst
+// månedens sidste dag - og er datoen den sidste i sin måned, er den næste også den sidste (31/1 -> 28/2 -> 31/3 ...).
+// (Forhåndsvisningen i recurring_invoice_edit.php / recurring_expense_edit.php regner på samme måde.)
 function recurring_next_date(string $from_date, string $interval_type): string {
-    switch ($interval_type) {
-        case 'quarterly': $step = '+3 months'; break;
-        case 'yearly':    $step = '+1 year';   break;
-        case 'monthly':
-        default:          $step = '+1 month';  break;
-    }
-    return date('Y-m-d', strtotime($step, strtotime($from_date)));
+    $months = $interval_type === 'quarterly' ? 3 : ($interval_type === 'yearly' ? 12 : 1);
+    $t = strtotime($from_date);
+    $y = (int)date('Y', $t);  $m = (int)date('n', $t);  $d = (int)date('j', $t);
+    $was_last = $d === (int)date('t', $t);
+    $m += $months;
+    $y += intdiv($m - 1, 12);  $m = ($m - 1) % 12 + 1;
+    $last = (int)date('t', mktime(0, 0, 0, $m, 1, $y));
+    return sprintf('%04d-%02d-%02d', $y, $m, $was_last ? $last : min($d, $last));
 }

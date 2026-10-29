@@ -1,12 +1,15 @@
-<?php # /inc/currency_widget.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /inc/currency_widget.php v:1.3.1 d:2026-09-15 i:evs
 # Valutaomregner-popup — inkluderes i htm_Footer() eller på den ønskede side
 # Bruger frankfurter.app (ECB-data, ingen API-nøgle)
 ?>
 <style>
+/* RETTET (bruger-anmodet): border tilføjet, samme mønster som notesblok-/
+   søge-knappen fik (inc/notepad.inc.php/inc/htm_page.lib.php) - magen til
+   .floating-action-bar's egen border-top: 2px solid var(--color-primary). */
 #currency-btn {
-    position: fixed; bottom: 70px; right: 20px; z-index: 9998;
+    position: fixed; bottom: 120px; right: 3px; z-index: 9998;
     background: var(--color-dark); color: white;
-    border: none; border-radius: 50%; width: 50px; height: 50px;
+    border: 2px solid var(--color-primary); border-radius: 50%; width: 50px; height: 50px;
     font-size: 20px; cursor: pointer;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     display: flex; align-items: center; justify-content: center;
@@ -16,7 +19,7 @@
 
 #currency-modal {
     display: none; position: fixed;
-    bottom: 130px; right: 20px; z-index: 9997;
+    bottom: 180px; right: 3px; z-index: 9997;
     width: 300px; background: var(--bg-card);
     border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.25);
     border: 1px solid var(--border-color);

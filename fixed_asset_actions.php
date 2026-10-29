@@ -1,4 +1,4 @@
-<?php # /fixed_asset_actions.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /fixed_asset_actions.php v:1.3.1 d:2026-09-15 i:evs
 # NY FUNKTION: Anlægsaktiver/afskrivninger - "Kør afskrivninger". Beregner og
 # bogfører lineær afskrivning (lige store rater pr. hele måned) for HVERT
 # aktivt aktiv, frem til i dag, i én batch-kørsel. Fremrykker altid fra
@@ -11,6 +11,7 @@ ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/audit.inc.php';
+require_once 'inc/fixed_assets.inc.php';
 
 $action = $_GET['action'] ?? '';
 
@@ -64,8 +65,10 @@ if ($action === 'cancel') {
         // RETTET (§currency-setting-is-cosmetic-label): journal.currency
         // blev aldrig sat (faldt tilbage til skemaets DEFAULT 'DKK').
         $jou_currency = DB::escape($conn, $global_settings['currency'] ?? 'DKK');
-        DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, currency)
-            VALUES ('$today', '$jou_text', 'fixed_asset_cancellation', $voucher_no, '$jou_currency')");
+        // NYT (BEK 811/2026-gennemgang, [[digital-standard-bookkeeping-registration-goal]]).
+        $cb = journal_created_by_sql($conn);
+        DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, currency{$cb['col']})
+            VALUES ('$today', '$jou_text', 'fixed_asset_cancellation', $voucher_no, '$jou_currency'{$cb['val']})");
         $jou_id = DB::insert_id($conn);
 
         ledger_post($conn, $jou_id, (int)$asset['asset_account_id'], $cost * -1); // KREDIT aktivkonto (fortrydes)
@@ -83,16 +86,10 @@ if ($action === 'cancel') {
     }
 }
 
-// Antal HELE måneder mellem to datoer (afrundet ned) - en påbegyndt, endnu
-// ikke fuldført måned afskrives ikke endnu, den tælles med ved NÆSTE kørsel.
-function fa_whole_months_between(string $from, string $to): int {
-    $f = new DateTime($from);
-    $t = new DateTime($to);
-    if ($t <= $f) return 0;
-    $diff = $f->diff($t);
-    return $diff->y * 12 + $diff->m;
-}
-
+// RETTET (bruger-anmodet, "kan bogholderen ønske sig mere"):
+// fa_whole_months_between() flyttet til inc/fixed_assets.inc.php (kræves
+// ovenfor) - genbruges nu også af fixed_asset_list.php's nye "skyldig
+// afskrivning"-forhåndsvisning, se den fils egen kommentar for baggrunden.
 $today = date('Y-m-d');
 if (is_date_locked($conn, $today)) {
     die(lang('@Today\'s date is in a locked accounting period and depreciation cannot be posted.'));
@@ -105,27 +102,12 @@ if ($res) { while ($row = DB::fetch_assoc($res)) { $assets[] = $row; } }
 $posted_count = 0;
 
 foreach ($assets as $asset) {
-    $depreciable_base = round((float)$asset['acquisition_cost'] - (float)$asset['residual_value'], 2);
-    if ($depreciable_base <= 0) continue;
-
-    $monthly_dep = round($depreciable_base / ((int)$asset['useful_life_years'] * 12), 2);
-    if ($monthly_dep <= 0) continue;
-
-    $start_from = $asset['last_depreciated_date'] ?: $asset['acquisition_date'];
-    $months     = fa_whole_months_between($start_from, $today);
-    if ($months <= 0) continue;
-
-    $amount = round($monthly_dep * $months, 2);
-
-    // Aldrig afskriv ud over den afskrivningsbare basis (anskaffelsessum
-    // minus scrapværdi) - sidste rate afkortes til reelt at ramme præcis
-    // scrapværdien, ikke et par kroner under eller over pga. afrunding.
-    $remaining = round($depreciable_base - (float)$asset['accumulated_depreciation'], 2);
-    if ($remaining <= 0.01) continue;
-    if ($amount > $remaining) $amount = $remaining;
-    if ($amount <= 0.01) continue;
-
-    $new_last_date = (new DateTime($start_from))->modify("+$months months")->format('Y-m-d');
+    $due = fa_calculate_due_depreciation($asset, $today);
+    if ($due === null) continue;
+    $amount        = $due['amount'];
+    $months        = $due['months'];
+    $start_from    = $due['start_from'];
+    $new_last_date = $due['new_last_date'];
 
     DB::begin_transaction($conn);
     try {
@@ -141,17 +123,50 @@ foreach ($assets as $asset) {
             continue; // en anden, samtidig kørsel nåede allerede dette aktiv
         }
 
-        $voucher_no = next_voucher_no($conn);
         $jou_text   = DB::escape($conn, lang('@Depreciation:') . ' ' . $asset['asset_name']);
         // RETTET (§currency-setting-is-cosmetic-label): journal.currency
         // blev aldrig sat (faldt tilbage til skemaets DEFAULT 'DKK').
         $jou_currency = DB::escape($conn, $global_settings['currency'] ?? 'DKK');
-        DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, proj_id, currency)
-            VALUES ('$today', '$jou_text', 'depreciation', $voucher_no, " . ($asset['proj_id'] ? (int)$asset['proj_id'] : 'NULL') . ", '$jou_currency')");
-        $jou_id = DB::insert_id($conn);
+        // NYT (BEK 811/2026-gennemgang, [[digital-standard-bookkeeping-registration-goal]]).
+        $cb = journal_created_by_sql($conn);
 
-        ledger_post($conn, $jou_id, (int)$asset['depreciation_account_id'], $amount);       // DEBET afskrivning (udgift)
-        ledger_post($conn, $jou_id, (int)$asset['asset_account_id'], $amount * -1);         // KREDIT aktivkonto (bogført værdi falder)
+        // RETTET: alle skyldige måneder blev bogført som ÉT beløb med DAGS dato - kørt i januar for oktober-
+        // december, landede hele afskrivningen i det nye år (forkert regnskabsår, forkert resultat i begge år).
+        // Nu én postering pr. kalenderår, dateret på den sidste afskrevne måned i året. En del der ville falde
+        // i en låst periode, lægges over i den næste åbne del (der kan ikke bogføres bagud i en låst periode).
+        $monthly = round(round((float)$asset['acquisition_cost'] - (float)$asset['residual_value'], 2) / ((int)$asset['useful_life_years'] * 12), 2);
+        $chunks = [];      // år => ['date' => sidste afskrevne måneds dato, 'months' => n]
+        for ($mi = 1; $mi <= $months; $mi++) {
+            $md = fa_add_months($start_from, $mi);
+            $yk = substr($md, 0, 4);
+            $chunks[$yk] = ['date' => $md, 'months' => ($chunks[$yk]['months'] ?? 0) + 1];
+        }
+        $parts = [];  $carry = 0;  $left = $amount;  $keys = array_keys($chunks);
+        foreach ($keys as $ki => $yr) {
+            $last = ($ki === count($keys) - 1);
+            $n  = $chunks[$yr]['months'] + $carry;
+            $dt = min($chunks[$yr]['date'], $today);
+            if (is_date_locked($conn, $dt)) {
+                if (!$last) { $carry = $n;  continue; }
+                $dt = $today;
+            }
+            $carry = 0;
+            $amt = $last ? round($left, 2) : min(round($monthly * $n, 2), round($left, 2));
+            if ($amt <= 0.005) continue;
+            $left = round($left - $amt, 2);
+            $parts[] = [$dt, $amt];
+        }
+        $vouchers = [];
+        foreach ($parts as [$dt, $amt]) {
+            $voucher_no = next_voucher_no($conn);
+            $vouchers[] = $voucher_no;
+            DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, proj_id, currency{$cb['col']})
+                VALUES ('" . DB::escape($conn, $dt) . "', '$jou_text', 'depreciation', $voucher_no, " . ($asset['proj_id'] ? (int)$asset['proj_id'] : 'NULL') . ", '$jou_currency'{$cb['val']})");
+            $jou_id = DB::insert_id($conn);
+            ledger_post($conn, $jou_id, (int)$asset['depreciation_account_id'], $amt);       // DEBET afskrivning (udgift)
+            ledger_post($conn, $jou_id, (int)$asset['asset_account_id'], $amt * -1);         // KREDIT aktivkonto (bogført værdi falder)
+        }
+        $voucher_no = implode(',', $vouchers);
 
         log_action($conn, 'POST_DEPRECIATION', 'fixed_assets', (int)$asset['asset_id'],
             ['accumulated_depreciation' => (float)$asset['accumulated_depreciation']],

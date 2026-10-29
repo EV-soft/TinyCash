@@ -93,6 +93,19 @@ function totp_verify(string $secret_base32, string $code, int $window = 1, int $
     return false;
 }
 
+// Som totp_verify(), men returnerer det tidstrin (time step) koden passede på - null hvis den ikke passede.
+// Bruges af login.php til at afvise en kode der ALLEREDE er brugt (RFC 6238 afsnit 5.2): uden det kunne en
+// opfanget kode (skulder-kig, phishing-side) bruges igen i op til 90 sekunder.
+function totp_match_step(string $secret_base32, string $code, int $window = 1, int $period = 30): ?int {
+    $code = trim($code);
+    if ($code === '' || !ctype_digit($code)) return null;
+    $now = time();
+    for ($i = -$window; $i <= $window; $i++) {
+        if (hash_equals(totp_code($secret_base32, $now + ($i * $period), $period), $code)) return intdiv($now, $period) + $i;
+    }
+    return null;
+}
+
 // otpauth://-URI'en - de fleste authenticator-apps kan tilføje en konto via
 // denne som tekst, ikke kun ved at scanne en QR-kode.
 function totp_provisioning_uri(string $secret_base32, string $account_name, string $issuer = 'TinyCash'): string {

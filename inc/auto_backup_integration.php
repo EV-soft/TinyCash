@@ -1,4 +1,4 @@
-<?php # /inc/auto_backup_integration.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /inc/auto_backup_integration.php v:1.3.1 d:2026-09-15 i:evs
 # gendannelsesvejledningen nævner nu det indbyggede offline-dekrypteringsværktøj før openssl-kommandoen, bruger-anmodet
 // ════════════════════════════════════════════════════════════════════════════
 // INTEGRATION — to steder skal ændres i eksisterende filer:
@@ -61,6 +61,31 @@ function render_auto_backup_settings($conn) {
         htm_Alert(lang('@Master password removed from the database.'), 'success');
         $pass_in_db = false;
     }
+    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): der var ingen
+    // måde at bekræfte at backup-mailadressen/SMTP-opsætningen reelt virker,
+    // uden at vente på den automatiske ugentlige kørsel - "Tving backup ved
+    // næste sidevisning" ovenfor kører kun HVIS der rent faktisk er ændringer
+    // siden sidste backup (auto_backup_check()'s eget tjek), og bygger en
+    // fuld ZIP/kryptering først, hvilket ikke isolerer "virker selve
+    // mailafsendelsen" fra "er der noget at sikkerhedskopiere". Sender kun en
+    // simpel testmail via den allerede afprøvede sendTinyMail() - ingen
+    // backup-indhold, rører ikke ved auto_backup_last/den reelle tidsplan.
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_test_backup_mail'])) {
+        $test_mail = trim($_POST['auto_backup_mail'] ?? $backup_mail);
+        if ($test_mail === '') {
+            htm_Alert(lang('@Please enter and save a backup email address first.'), 'error');
+        } else {
+            require_once __DIR__ . '/mail_handler.lib.php';
+            $test_result = sendTinyMail($test_mail, lang('@Backup Test'),
+                lang('@TinyCash backup email test'),
+                '<p>' . lang('@This is a test email to confirm your backup email address and SMTP settings are working correctly.') . '</p><p>' . lang('@No backup data is included in this message.') . '</p>');
+            if (!empty($test_result['success'])) {
+                htm_Alert(sprintf(lang('@Test email sent successfully to %s.'), htmlspecialchars($test_mail)), 'success');
+            } else {
+                htm_Alert(lang('@Could not send the test email:') . ' ' . htmlspecialchars($test_result['error'] ?? ''), 'error');
+            }
+        }
+    }
 
     htm_Card_('🔐 ' . lang('@Automatic Encrypted Backup'), '650');
 
@@ -118,8 +143,9 @@ function render_auto_backup_settings($conn) {
         hint: '@Encrypted backup is sent to this address every 7 days when changes have been made',
         wdth: '60%'
     );
-    echo '<div style="margin-top:15px; display:flex; gap:10px; align-items:center;">';
+    echo '<div style="margin-top:15px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">';
     echo '<button type="submit" name="save_auto_backup" value="1" style="background:var(--color-primary); color:white; border:none; padding:9px 20px; border-radius:4px; cursor:pointer; font-weight:bold;"><i class="fa fa-save"></i> ' . lang('@Save') . '</button>';
+    echo '<button type="submit" name="send_test_backup_mail" value="1" style="background:var(--color-info); color:white; border:none; padding:9px 20px; border-radius:4px; cursor:pointer; font-weight:bold;" data-hint="'.htmlspecialchars(lang('@Send a simple test email (no backup data) to confirm this address and your SMTP settings work')).'"><i class="fa fa-paper-plane"></i> ' . lang('@Send Test Email') . '</button>';
     echo '<label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-muted); cursor:pointer;">';
     echo '<input type="checkbox" name="auto_backup_now" value="1"> ' . lang('@Trigger backup on next page load') . '</label>';
     echo '</div>';

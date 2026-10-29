@@ -117,10 +117,12 @@ Full column reference is in `inc/Kodestandard.txt`. Attachments live in `uploads
 ## Migrations
 
 Schema changes are applied via one-off, idempotent (`IF NOT EXISTS` / column-existence checks)
-scripts, not a migration framework: `inc/db_migrate.php` (registry of `ALTER TABLE`s recorded
-in `system_migrations`), plus individual `inc/migration_*.php` and `db-setup/migrate_*.php`
-files. When adding a column, follow the existing pattern — check for the column on both engines
-before altering, and record the migration key.
+scripts, not a migration framework: `db-setup/db_migrate.php` (registry of `ALTER TABLE`s recorded
+in `system_migrations`), plus individual `db-setup/migration_*.php` and `db-setup/migrate_*.php`
+files (all migration one-offs now live under `db-setup/`). Each starts with
+`chdir(dirname(__DIR__))` + the admin gate so it runs correctly from the subfolder. When adding a
+column, follow the existing pattern — check for the column on both engines before altering, and
+record the migration key.
 
 ## `tools/` and one-time scripts
 

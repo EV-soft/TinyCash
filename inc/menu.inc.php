@@ -1,4 +1,4 @@
-<?php # /inc/menu.inc.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /inc/menu.inc.php v:1.3.1 d:2026-09-15 i:evs
 # v1.10.0: Menu-strukturen udtrukket til get_menu_structure() (genbruges nu
 # af den nye menu_visibility.php, tilføjet under System -> Maintenance), +
 # niveau-synlighed er nu konfigurerbar pr. menu-punkt (tabellen
@@ -45,6 +45,9 @@ function get_menu_structure($conn): array {
 
     $menu = [
         'index.php'  => ['label' => '🏠 ' . lang('@Overview'),   'hint' => lang('@Dashboard and quick stats')],
+        // search.php flyttet UD af selve menuen (bruger-anmodet) - har i
+        // stedet fået sin egen flydende knap, samme mønster som notesblokken
+        // (se inc/notepad.inc.php + inc/htm_page.lib.php's htm_Footer()).
         'sales'      => ['label' => '📄 ' . lang('@Sales'),      'hint' => lang('@Manage invoices and customers'),
             'submenu' => [
                 'sales_hub.php'              => '🚀 ' . lang('@Sales Hub Dashboard'),
@@ -64,6 +67,22 @@ function get_menu_structure($conn): array {
                 // for at duplikere kundelisten i en helt ny fil.
                 'sales_hub.php#c_card'       => '👥 ' . lang('@Customers'),
                 'reminders.php'              => '⏰ ' . lang('@Payment Reminders'),
+                // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"):
+                // parallel til reminders.php, blot for udløbne/snart-
+                // udløbne SENDTE tilbud i stedet for forfaldne fakturaer -
+                // se db-setup/migrate_quote_followup.php.
+                'quote_followup.php'         => '📨 ' . lang('@Quote Follow-up'),
+                // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"):
+                // masse-udsendelse af kontoudtog til alle kunder med en åben
+                // saldo - hidtil kunne customer_statement_send.php kun sende
+                // ét kontoudtog ad gangen, manuelt pr. kunde.
+                'customer_statements.php'    => '📊 ' . lang('@Account Statements'),
+                // NYT (bruger-anmodet, "kan bogholderen ønske sig mere",
+                // runde 27): ingen side kunne samle ALT om én kunde til ét
+                // dokument til en GDPR-indsigtsanmodning - se filens egen
+                // kommentar for hvorfor sletning/anonymisering bevidst ikke
+                // er en del af det.
+                'customer_data_export.php'   => '🔒 ' . lang('@Customer Data Export (GDPR)'),
                 'recurring_invoices.php'     => '🔁 ' . lang('@Recurring Invoices'),
                 'mail_inbox.php?box=invoice' => '🗂️ ' . lang('@Invoice Copies Inbox'),
             ]],
@@ -71,7 +90,12 @@ function get_menu_structure($conn): array {
             'submenu' => [
                 'expense_list.php'           => '📋 ' . lang('@Expense List'),
                 'expense_edit.php?id=0'      => '📥 ' . lang('@Register Expense'),
+                'recurring_expenses.php'     => '🔁 ' . lang('@Recurring Expenses'),
                 'supplier_list.php'          => '🏭 ' . lang('@Suppliers'),
+                // NYT (bruger-anmodet, "kan bogholderen ønske sig mere",
+                // runde 31): CSV-eksport til bankbetaling af flere udgifter
+                // på én gang - se filens egen kommentar for scope.
+                'supplier_payment_export.php'=> '🏦 ' . lang('@Supplier Payment Export'),
                 '---'                        => '---',
                 'mail_inbox.php?box=voucher' => '📬 ' . lang('@Voucher Inbox'),
             ]],
@@ -94,11 +118,77 @@ function get_menu_structure($conn): array {
                 // øverst giver flyout'en mest mulig plads nedad.
                 'reports' => ['label' => '📊 ' . lang('@Reports') . ' <span style="float:right">▶</span>',
                     'submenu' => array_merge(
-                        ['ledger_view.php'        => '📖 ' . lang('@General Ledger')],
+                        [
+                            // RETTET (bruger-anmodet, samme begrundelse som
+                            // Rapporter/Vedligeholdelse selv fik tidligere): et
+                            // punkt der selv åbner en flyout placeres ØVERST i
+                            // sin forældre-liste - flyout'en (i top-navigations-
+                            // tilstand) åbner altid ud for SIN EGEN vandrette
+                            // position i den overliggende dropdown, så jo længere
+                            // nede i listen den står, jo højere nede på skærmen
+                            // begynder den - og med seks undermenu-punkter kunne
+                            // Revision nemt løbe ud over vinduets underkant hvis
+                            // den lå nederst (hvor den stod FØR).
+                            'audit' => ['label' => '🔍 ' . lang('@Audit') . ' <span style="float:right">▶</span>',
+                                'submenu' => [
+                                    'account_card.php'             => '🗒️ ' . lang('@Account Card'),
+                                    'trial_balance.php'             => '🧮 ' . lang('@Trial Balance'),
+                                    'sequence_check.php'            => '🔢 ' . lang('@Sequence Number Check'),
+                                    'entry_balance_check.php'       => '⚖️ ' . lang('@Journal Entry Balance Check'),
+                                    'subledger_reconciliation.php'  => '🔗 ' . lang('@Subledger Reconciliation'),
+                                    // NYT (bruger-anmodet, "kan bogholderen
+                                    // ønske sig mere", runde 26): samme
+                                    // afstemningsprincip som Subledger
+                                    // Reconciliation ovenfor, blot mod den
+                                    // FAKTISKE saldo på selve bankkontoudtoget
+                                    // - se bank_balance_check.php's egen
+                                    // kommentar.
+                                    'bank_balance_check.php'        => '🏦 ' . lang('@Bank Balance Reconciliation'),
+                                    // NYT (bruger-anmodet, "kan bogholderen
+                                    // ønske sig mere"): samme afstemnings-
+                                    // princip som Subledger Reconciliation
+                                    // ovenfor, blot for momskontiene - se
+                                    // vat_reconciliation.php's egen kommentar.
+                                    'vat_reconciliation.php'        => '🧾 ' . lang('@VAT Reconciliation'),
+                                    'segregation_audit.php'         => '👀 ' . lang('@Segregation of Duties Audit'),      // (fire-øjne-princippet - 👤 var mørkegrå på den mørke menu)
+                                    // NYT (bruger-anmodet, "kan bogholderen
+                                    // ønske sig mere"): login_log-tabellen
+                                    // blev allerede skrevet til ved hvert
+                                    // login-forsøg, men var usynlig - se
+                                    // login_history.php's egen kommentar.
+                                    'login_history.php'             => '🔐 ' . lang('@Login History'),
+                                    // NYT (bruger-anmodet, "kan bogholderen
+                                    // ønske sig mere"): mail_log-tabellen
+                                    // udfyldes nu automatisk af den fælles
+                                    // sendTinyMail() - se mail_log.php's
+                                    // egen kommentar.
+                                    'mail_log.php'                  => '📧 ' . lang('@Sent Mail Log'),
+                                    // NYT (bruger-anmodet, "kan bogholderen
+                                    // ønske sig mere", runde 31): "Slet" på en
+                                    // kunde/leverandør er nu en gendannelig
+                                    // blødsletning - se filens egen kommentar.
+                                    'trash_bin.php'                 => '🗑️ ' . lang('@Trash Bin'),
+                                    // NYT (bruger-anmodet, "kan bogholderen
+                                    // ønske sig mere", runde 26): kun fulde
+                                    // systembackups fandtes - ingen måde at
+                                    // hente et rent bilagsarkiv for ét
+                                    // regnskabsår til revisor/bogføringslovens
+                                    // 5-års opbevaringspligt - se filens egen
+                                    // kommentar.
+                                    'voucher_archive_export.php'    => '🗃️ ' . lang('@Voucher Archive Export'),
+                                ]],
+                        ],
+                        ['ledger_view.php'        => '📖 ' . lang('@General Ledger'),
+                         'journal_entry.php'      => '✍️ ' . lang('@Manual Journal Entry')],
                         $is_dkk_base ? ['vat_report.php' => '🧾 ' . lang('@VAT Report')] : [],
                         [
                             'aging_report.php'       => '📆 ' . lang('@Aging Report'),
                             'report_income.php'      => '📊 ' . lang('@Profit & Loss Report'),
+                            // NYT (bruger-anmodet, "kan bogholderen ønske
+                            // sig mere"): budget_edit.php - se dens egen
+                            // kommentar og report_income.php's nye
+                            // afvigelseskolonne.
+                            'budget_edit.php'        => '🎯 ' . lang('@Account Budgets'),
                             'balance_sheet.php'      => '⚖️ ' . lang('@Balance Sheet'),
                             'annual_report.php'      => '📜 ' . lang('@Annual Report'),
                         ]
@@ -107,6 +197,7 @@ function get_menu_structure($conn): array {
                 'bank_import_step1.php'      => '📥 ' . lang('@Import Bank File'),
                 'bank_integration.php'       => '🏦 ' . lang('@Bank Integration (PSD2)'),
                 'reconcile_list.php'         => '⚖️ ' . lang('@Bank Reconciliation'),
+                'bank_rules.php'             => '🔮 ' . lang('@Bank Matching Rules'),
                 'settings_fees.php'          => '⚙️ ' . lang('@Fee Rules'),
                 '---'                        => '---',
                 'fixed_asset_list.php'       => '🏗️ ' . lang('@Fixed Assets'),
@@ -126,6 +217,11 @@ function get_menu_structure($conn): array {
                     'submenu' => [
                         'backup.php'              => '📥 ' . lang('@Backup Management'),
                         'backup_restore.php'      => '🔄 ' . lang('@Restore System'),
+                        // NYT (bruger-anmodet, "kan bogholderen ønske sig
+                        // mere", runde 30): verificerer en backup uden at
+                        // overskrive den rigtige database - se filens egen
+                        // kommentar.
+                        'backup_test_restore.php' => '🧪 ' . lang('@Backup Test Restore'),
                         'setup_chart.php'         => ['label' => '📑 ' . lang('@Chart of Accounts Proposal'), 'hint' => lang('@Only Danish layout')],
                         'run_migrate.php'         => ['label' => '📦 ' . lang('@Database migration'),         'hint' => lang('@Update database structure')],
                         'translation_manager.php' => '🌐 ' . lang('@Language Editor'),
@@ -140,6 +236,8 @@ function get_menu_structure($conn): array {
                 'user_list.php'              => '🔑 ' . lang('@User Management'),
                 'my_2fa.php'                 => '🔐 ' . lang('@Two-Factor Login'),
                 'storage_browser.php'        => '📁 ' . lang('@Storage Browser'),
+                'webhook_keys.php'           => '🔗 ' . lang('@Webhook API Keys'),
+                'shop_connections.php'       => '🛒 ' . lang('@Web Shops'),
                 '---_3'                      => '---',
                 'ai_help.php'                => 'ℹ️ ' . lang('@AI support'),
                 // NYT (bruger-anmodet): offentlig, login-fri AI-manual (se
@@ -182,7 +280,7 @@ function get_menu_structure($conn): array {
 function get_menu_visibility_defaults(string $url): array {
     if (in_array($url, ['accounting', 'system'], true)) return [1 => false, 2 => true, 3 => true];
     if (in_array($url, ['production', 'system'], true)) return [1 => false, 2 => false, 3 => true];
-    if (in_array($url, ['settings_fees.php','chart_of_accounts.php','user_list.php','storage_browser.php','maintenance'], true)) return [1 => false, 2 => false, 3 => true];
+    if (in_array($url, ['settings_fees.php','chart_of_accounts.php','user_list.php','storage_browser.php','journal_entry.php','sequence_check.php','entry_balance_check.php','subledger_reconciliation.php','bank_balance_check.php','vat_reconciliation.php','budget_edit.php','segregation_audit.php','login_history.php','mail_log.php','voucher_archive_export.php','trash_bin.php','maintenance'], true)) return [1 => false, 2 => false, 3 => true];
     return [1 => true, 2 => true, 3 => true];
 }
 
@@ -225,6 +323,37 @@ function showMenu() {
     if ($conn) {
         $company_settings = get_settings($conn);
         $company_name     = trim($company_settings['company_name'] ?? '');
+    }
+
+    // Backup-advarsel - RETTET (bruger-rapporteret: "hvor er advarsels-banner
+    // når menuen er i sidepanel") - beregningen lå FØR kun nede ved selve
+    // #top-nav-renderingen, som CSS'en (body.sidebar-mode #top-nav {
+    // display:none}) skjuler HELT, når brugeren har skiftet til sidepanel-
+    // visning - #tc-sidebar-blokken havde aldrig fået sin egen kopi af
+    // advarslen. Flyttet herop, så BEGGE menu-visninger kan bruge samme
+    // beregnede $days_old/$alert_msg, i stedet for at risikere at de to
+    // kopier glider fra hinanden over tid.
+    $days_old = 0;
+    if ($conn) {
+        $b_res = @DB::query($conn, "SELECT setting_value FROM settings WHERE setting_key = 'last_backup_time'");
+        if ($b_res && $b_row = DB::fetch_assoc($b_res)) {
+            $days_old = (int)floor((time() - (int)$b_row['setting_value']) / 86400);
+        } else {
+            $days_old = 999;
+        }
+    }
+    $show_backup_warning = ($days_old > 10);
+    $backup_alert_msg = $show_backup_warning
+        ? sprintf(lang('@Warning: Backup is').' %d '.lang('@days old. Remember that you can lose everything you have created since then.'), $days_old)
+        : '';
+    // Kort udgave til den lodrette sidepanel-strimmel (kun første sætning,
+    // afledt af $backup_alert_msg selv i stedet for en ny oversættelsesnøgle)
+    // - den fulde tekst er for lang til at stå læsbart i en smal, roteret
+    // bane; den fulde tekst vises stadig som data-hint (tooltip) ved museover.
+    $backup_alert_short = $backup_alert_msg;
+    if ($show_backup_warning) {
+        $dot_pos = strpos($backup_alert_msg, '.');
+        if ($dot_pos !== false) $backup_alert_short = substr($backup_alert_msg, 0, $dot_pos + 1);
     }
 
     $menu = get_menu_structure($conn);
@@ -303,13 +432,47 @@ function showMenu() {
     };
     $isSubAllowed = $isAllowed; // samme opslag, samme tabel - blot kaldt fra to render-steder
 
+    // NYT (bruger-anmodet: højreklik-skjul-funktionen skal kunne vise/skifte
+    // L1 og L2 UAFHÆNGIGT af hinanden, ikke kun en samlet "skjul begge"-
+    // knap) - bygger data-hidden-l1/data-hidden-l2-attributter ud fra det
+    // allerede indlæste $overrides for hvert punkt, så context-menuen kan
+    // vise korrekt AFKRYDSET tilstand med det samme uden endnu et AJAX-kald.
+    // Kun beregnet/udskrevet for admins - ingen ekstra markup for alle andre.
+    $isAdminUser = (($_SESSION['user_role'] ?? '') === 'admin');
+    $ctxAttrs = function($url, $hasChildren = false) use ($isAdminUser, $overrides) {
+        if (!$isAdminUser) return '';
+        $vis = $overrides[$url] ?? get_menu_visibility_defaults($url);
+        $h1 = empty($vis[1]) ? '1' : '0';
+        $h2 = empty($vis[2]) ? '1' : '0';
+        return ' data-menukey="'.htmlspecialchars($url, ENT_QUOTES).'"'
+            . ($hasChildren ? ' data-haschildren="1"' : '')
+            . ' data-hidden-l1="'.$h1.'" data-hidden-l2="'.$h2.'"';
+    };
+
     // ── Fælles kontekst til utility-widgets ──────────────────────────────────
     $currentTheme = $_COOKIE['theme'] ?? 'light';
     $themeIcons   = ['light' => '☀️', 'custom' => '✨', 'dark' => '🌙'];
     $currentIcon  = $themeIcons[$currentTheme] ?? '☀️';
     $current_l    = $_SESSION['lang'] ?? 'da';
-    $fMap         = ['da'=>'dk','en'=>'gb','kl'=>'gl','se'=>'se','nb'=>'no','nn'=>'no','pt'=>'pt','es'=>'es'];
-    $fCode        = $fMap[$current_l] ?? $current_l;
+    // RETTET (bruger-anmodet, "kan bogholderen ønske sig mere" / flag-tabel-
+    // konsolidering): $fMap var en hardkodet, ufuldstændig sprog->flag-tabel
+    // (kun 8 af 13 sprog dækket) med en reel fejl - svensk hedder 'sv' i
+    // languages.json, men $fMap havde kun 'se'=>'se' (ikke en gyldig
+    // sprogkode her), så svensk faldt igennem til at bruge 'sv' direkte som
+    // ISO-landekode, som reelt er El Salvador, ikke Sverige. To andre,
+    // selvstændigt driftede kopier af samme tabel fandtes desuden i
+    // about.php og som en CSS-liste i inc/htm_page.lib.php. Alle tre
+    // erstattet af et 'flag'-felt direkte på hvert sprog i languages.json -
+    // indlæses nu ÉN gang her og genbruges af begge dropdown-render-
+    // blokke nedenfor (fjerner samtidig to redundante gen-indlæsninger af
+    // samme fil).
+    $lang_file    = 'json-data/languages.json';
+    $lang_data    = file_exists($lang_file) ? json_decode(file_get_contents($lang_file), true) : null;
+    $flagMap      = [];
+    if (!empty($lang_data['language'])) {
+        foreach ($lang_data['language'] as $l) { $flagMap[$l['code']] = $l['flag'] ?? $l['code']; }
+    }
+    $fCode        = $flagMap[$current_l] ?? $current_l;
     $uLevI        = (int)$uLev;
     $userName     = htmlspecialchars($_SESSION['user_name'] ?? 'User');
     // RETTET (bruger-anmodet terminologiskift): "Beginner/Experienced/Developer"
@@ -362,9 +525,47 @@ function showMenu() {
        fundet på notepad-knappen og tip-boksen i backup.php, se
        floating-bar-overlap i hukommelsen. */
     #tc-sidebar { display:none; position:fixed; top:0; left:0; width:215px; height:100vh;
-        background:var(--bg-nav); z-index:10001; overflow-y:auto; overflow-x:hidden;
+        box-sizing:border-box; background:var(--bg-nav); z-index:10001; overflow-y:auto; overflow-x:hidden;
         flex-direction:column; box-shadow:4px 0 12px rgba(0,0,0,0.35); font-family:sans-serif; color:white; }
     body.sidebar-mode #tc-sidebar { display:flex; }
+
+    /* RETTET (bruger-rapporteret: "menuens indikator for undermenu skjules
+       bag warning") - sb-item-elementets højrestillede pil (margin-left:auto) endte
+       lige inde under #sb-backup-warning-strimlen, som optager de yderste
+       22px af sidepanelets bredde. box-sizing:border-box ovenfor sikrer at
+       denne padding-right IKKE gør selve sidepanelet bredere (215px i alt,
+       stadig) - den presser i stedet det almindelige indhold (menu-punkter,
+       pile, firmanavn m.m.) 22px længere ind, så det aldrig overlapper
+       strimlen. Klassen sættes kun i PHP når advarslen rent faktisk vises. */
+    #tc-sidebar.has-backup-warning { padding-right:22px; }
+
+    /* Backup-advarsel i sidepanel-visning (bruger-anmodet: "90-grader
+       roteret langs menuens højre kant") - position:absolute ankrer til
+       #tc-sidebar selv (position:fixed er allerede en positioneringskontekst),
+       så strimlen ligger INDENFOR sidepanelets egen 215px bredde, ikke ud
+       over kanten ind over sideindholdet. writing-mode roterer teksten (og
+       ikonet) 90 grader i stedet for en transform:rotate()-krykke - det
+       giver naturlig topb-til-bund tekstflow uden manuel bredde-/højde-
+       ombytning. $backup_alert_short (kun første sætning) bruges her, da
+       den fulde advarselstekst ikke kan stå læsbart i en så smal bane - den
+       fulde tekst er stadig tilgængelig som data-hint (tooltip). */
+    /* RETTET (bruger-rapporteret: "hvid forgrund på gul bg er vanskelig at
+       læse på varselsbanner") - var(--color-warning) er gul/orange i alle 3
+       temaer (#f1c40f/#f39c12), hvid tekst derpå giver alt for lav kontrast.
+       Sort tekst giver solid kontrast (samme "sort på gul"-princip som
+       almindelig advarselsskiltning) uafhængigt af hvilket tema der er
+       aktivt. */
+    /* RETTET (bruger-anmodet): cursor:default -> pointer - stribens tekst
+       ("Backup er X dage gammel") var ren tekst uden noget link, selvom
+       den er altid synlig lige så længe backuppen faktisk er gammel. Et
+       klik fører nu direkte til backup.php i stedet for at kræve at
+       brugeren selv finder derhen gennem System-menuen. */
+    #sb-backup-warning { position:absolute; top:0; right:0; width:22px; height:100%;
+        box-sizing:border-box; background:var(--color-warning); color:#000; z-index:2;
+        writing-mode:sideways-lr; text-orientation:mixed;
+        display:flex; align-items:center; justify-content:center; text-align:center;
+        font-size:12px; font-weight:bold; padding:10px 0; overflow:hidden;
+        box-shadow:-2px 0 6px rgba(0,0,0,0.25); cursor:pointer; text-decoration:none; }
 
     #tc-sidebar .sb-logo { padding:14px 12px 10px; border-bottom:1px solid rgba(255,255,255,0.1);
         display:flex; flex-direction:row; align-items:center; gap:10px; }
@@ -486,7 +687,21 @@ function showMenu() {
     // RENDER-HJÆLPER: sub-menu items (bruges af BEGGE layouts)
     // ═════════════════════════════════════════════════════════════════════════
     // Renderes direkte — kaldes inline nedenfor
-    $renderSubItems = function($submenu, $mode) use ($isSubAllowed, $current_page) {
+    // RETTET (bruger-anmodet: Regnskab -> Rapporter -> Revision, en ny
+    // undermenu ÉT niveau dybere end Rapporter selv): denne funktion var FØR
+    // hårdkodet til præcis ét niveau af "flyout i flyout" - når den stødte på
+    // et punkt med sin egen 'submenu', rendrede den dets børn via en separat,
+    // ikke-rekursiv inline foreach, som antog børnene altid var almindelige
+    // links. Det virkede fint for Rapporter (kun ét sådant niveau nogen
+    // steder i træet indtil nu), men ville rendre en 4.-niveau-undermenu
+    // (Revision, som selv indeholder revisions-værktøjerne) som ét stort,
+    // ugyldigt link i stedet for endnu en flyout. Gjort reelt rekursiv - kald
+    // sig selv i stedet for at duplikere løkken - så ethvert nestings-dybde
+    // virker uden videre ændringer. Bonus: sub-sub-punkter (fx Revision-
+    // værktøjerne) får nu samme aktiv-markering og sidebar-hint-understøttelse
+    // som almindelige punkter, i stedet for slet ingen (den gamle inline-
+    // udgave manglede begge dele for netop dét niveau).
+    $renderSubItems = function($submenu, $mode) use (&$renderSubItems, $isSubAllowed, $current_page, $ctxAttrs) {
         // $mode: 'top' eller 'sidebar'
         foreach ($submenu as $subUrl => $subVal) {
             if (!$isSubAllowed($subUrl)) continue;
@@ -500,32 +715,32 @@ function showMenu() {
                 continue;
             }
 
-            // Sub-sub (Control Panel) - RETTET: de enkelte punkter herunder
-            // (fx backup.php, run_migrate.php) blev FØR aldrig niveau-
-            // tjekket individuelt, kun selve "Maintenance"-punktet ovenfor -
-            // en flad tabel med niveau pr. enkelt menu-punkt giver ikke
-            // mening, hvis punkter tre niveauer nede reelt ikke kan skjules.
+            // Endnu en flyout-undermenu (Sub-sub, Sub-sub-sub, osv.) - de
+            // enkelte punkter heri tjekkes stadig individuelt for niveau-
+            // synlighed ($isSubAllowed), samme princip uanset nestings-dybde.
             if (is_array($subVal) && isset($subVal['submenu'])) {
-                $ssLabel = strip_tags($subVal['label'] ?? '');
+                // RETTET (bruger-rapporteret dobbelt pil, "Revision ▶ ▶"):
+                // top-tilstands-labels bærer selv en indlejret "▶" (i et
+                // <span style="float:right">, til visning i selve dropdown-
+                // linjen) - strip_tags() fjerner kun SELVE span-taggen, ikke
+                // pil-TEGNET som stod inde i den (det er tekstindhold, ikke
+                // opmærkning). Koden nedenfor tilføjede derefter SIN EGEN
+                // afsluttende " ▶" oveni, uanset - deraf dobbeltpilen i
+                // sidepanel-tilstand. Fjerner nu også selve tegnet, så kun ét
+                // pil-symbol (det tilføjede) er tilbage, uanset om en
+                // fremtidig label selv indeholder et eller ej.
+                $ssLabel = trim(str_replace('▶', '', strip_tags($subVal['label'] ?? '')));
+                $ssKeyAttr = $ctxAttrs($subUrl, true);
                 if ($mode === 'top') {
                     echo '<div class="has-sub" style="position:relative;">';
-                    echo '<a href="#" class="dropdown-item" style="background:rgba(0,0,0,0.1);">'.($subVal['label'] ?? '').'</a>';
+                    echo '<a href="#" class="dropdown-item"'.$ssKeyAttr.' style="background:rgba(0,0,0,0.1);">'.($subVal['label'] ?? '').'</a>';
                     echo '<div class="sub-submenu">';
-                    foreach ($subVal['submenu'] as $ssUrl => $ssVal2) {
-                        if (!$isSubAllowed($ssUrl)) continue;
-                        $ssLabel2 = is_array($ssVal2) ? ($ssVal2['label'] ?? '') : $ssVal2;
-                        $ssHint   = (is_array($ssVal2) && !empty($ssVal2['hint'])) ? ' data-hint="'.htmlspecialchars($ssVal2['hint']).'"' : '';
-                        echo '<a href="'.htmlspecialchars($ssUrl).'" class="dropdown-item"'.$ssHint.'>'.$ssLabel2.'</a>';
-                    }
+                    $renderSubItems($subVal['submenu'], 'top');
                     echo '</div></div>';
                 } else {
-                    echo '<div class="sb-subsub-toggle" onclick="sbToggleSubSub(this)">'.$ssLabel.' ▶</div>';
+                    echo '<div class="sb-subsub-toggle"'.$ssKeyAttr.' onclick="sbToggleSubSub(this)">'.$ssLabel.' ▶</div>';
                     echo '<div class="sb-subsub">';
-                    foreach ($subVal['submenu'] as $ssUrl => $ssVal2) {
-                        if (!$isSubAllowed($ssUrl)) continue;
-                        $ssLabel2 = is_array($ssVal2) ? ($ssVal2['label'] ?? '') : $ssVal2;
-                        echo '<a href="'.htmlspecialchars($ssUrl).'">'.$ssLabel2.'</a>';
-                    }
+                    $renderSubItems($subVal['submenu'], 'sidebar');
                     echo '</div>';
                 }
                 continue;
@@ -535,11 +750,12 @@ function showMenu() {
             $subLabel = is_array($subVal) ? ($subVal['label'] ?? '') : $subVal;
             $subHint  = (is_array($subVal) && !empty($subVal['hint'])) ? ' data-hint="'.htmlspecialchars($subVal['hint']).'"' : '';
             $isActive = (strpos($subUrl, $current_page) !== false);
+            $subKeyAttr = $ctxAttrs($subUrl);
 
             if ($mode === 'top') {
-                echo '<a href="'.htmlspecialchars($subUrl).'" class="dropdown-item"'.$subHint.'>'.$subLabel.'</a>';
+                echo '<a href="'.htmlspecialchars($subUrl).'" class="dropdown-item"'.$subKeyAttr.$subHint.'>'.$subLabel.'</a>';
             } else {
-                echo '<a href="'.htmlspecialchars($subUrl).'"'.($isActive ? ' class="active"' : '').'>'.$subLabel.'</a>';
+                echo '<a href="'.htmlspecialchars($subUrl).'"'.$subKeyAttr.($isActive ? ' class="active"' : '').'>'.$subLabel.'</a>';
             }
         }
     };
@@ -547,15 +763,34 @@ function showMenu() {
     // ═════════════════════════════════════════════════════════════════════════
     // A) SIDEBAR
     // ═════════════════════════════════════════════════════════════════════════
-    echo '<div id="tc-sidebar">';
+    echo '<div id="tc-sidebar"'.($show_backup_warning ? ' class="has-backup-warning"' : '').'>';
+
+    // Backup-advarsel som en lodret, 90-grader-roteret strimmel langs
+    // sidepanelets højre kant (bruger-anmodet placering) - $show_backup_
+    // warning/$backup_alert_short/$backup_alert_msg er alle beregnet én
+    // gang tidligt i showMenu(), se dens kommentar. position:absolute her
+    // ankrer til #tc-sidebar selv (som er position:fixed, altså allerede en
+    // positioneringskontekst) - strimlen ligger dermed INDENFOR sidepanelets
+    // egen bredde, ikke ud over kanten ind over selve sideindholdet.
+    if ($show_backup_warning) {
+        echo '<a id="sb-backup-warning" href="backup.php" data-hint="'.htmlspecialchars($backup_alert_msg, ENT_QUOTES).'">'
+            . '<i class="fa-solid fa-triangle-exclamation"></i> <nbs>&nbsp;</nbs>' . htmlspecialchars($backup_alert_short)
+            . '</a>';
+    }
 
     // Logo
     echo '<div class="sb-logo">';
     echo '<button class="sb-toggle" onclick="toggleMenuLayout()" title="'.lang('@Switch to top navigation').'"><i class="ti ti-layout-navbar"></i></button>';
     echo '<div class="sb-logo-block">';
     echo '<div class="sb-logo-text"><a href="about.php" style="color:white;text-decoration:none;"><img src="favicon.svg" alt="" style="width:28px; height:28px; top: 5px; position: relative;" /><span>Tiny</span>Cash</a></div>';
+    // RETTET (samme sweep som backup-advarslen ovenfor): manglede en else-
+    // gren her - #top-nav viser en "@Develop version w. errors"-note under
+    // logoet når intet firmanavn er sat op endnu (company_settings.php),
+    // men sidepanelets logo-blok havde kun grenen for det UDFYLDTE tilfælde.
     if ($company_name !== '')
         echo '<div class="sb-company" style="text-align: center;" title="'.htmlspecialchars($company_name).'">'.htmlspecialchars($company_name).'</div>';
+    else
+        echo '<div class="sb-company" style="text-align: center; color:var(--color-warning);">'.lang('@Develop version w. errors').'</div>';
     echo '</div></div>';
 
     // Menu-items
@@ -573,14 +808,14 @@ function showMenu() {
 
         if ($isDropdown) {
             $openClass = $active ? ' open' : '';
-            echo '<div class="sb-item'.$openClass.'" onclick="sbToggleSub(this)">';
+            echo '<div class="sb-item'.$openClass.'"'.$ctxAttrs($url, true).' onclick="sbToggleSub(this)">';
             echo '<span>'.$icon.'</span><span>'.$label.'</span><span class="sb-arrow">▶</span>';
             echo '</div>';
             echo '<div class="sb-sub'.$openClass.'">';
             $renderSubItems($config['submenu'], 'sidebar');
             echo '</div>';
         } else {
-            echo '<a class="sb-item'.($active ? ' active' : '').'" href="'.htmlspecialchars($url).'">';
+            echo '<a class="sb-item'.($active ? ' active' : '').'"'.$ctxAttrs($url).' href="'.htmlspecialchars($url).'">';
             echo '<span>'.$icon.'</span><span>'.$label.'</span>';
             echo '</a>';
         }
@@ -613,11 +848,9 @@ function showMenu() {
     echo '<div id="sb-lang-options" style="display:none; position:absolute; bottom:100%; left:0;
         background:var(--bg-submenu); min-width:160px; border:1px solid var(--border-subtle);
         border-radius:4px; box-shadow:0 -8px 16px rgba(0,0,0,0.4); z-index:9500; margin-bottom:4px;">';
-    if (file_exists($lang_file)) {
-        $lang_data = json_decode(file_get_contents($lang_file), true);
-        if (!empty($lang_data['language'])) {
-            foreach ($lang_data['language'] as $l) {
-                $optCode   = $fMap[$l['code']] ?? $l['code'];
+    if (!empty($lang_data['language'])) {
+        foreach ($lang_data['language'] as $l) {
+                $optCode   = $flagMap[$l['code']] ?? $l['code'];
                 $isCurrent = ($l['code'] == $current_l);
                 $bgStyle   = $isCurrent ? 'background:rgba(52,152,219,0.2); font-weight:600;' : '';
                 echo '<a href="?l='.htmlspecialchars($l['code']).'"
@@ -626,7 +859,6 @@ function showMenu() {
                 echo '<span class="fi fi-'.$optCode.'" style="width:18px; height:13px; flex-shrink:0;"></span>';
                 echo '<span>'.htmlspecialchars($l['native']).'</span>';
                 echo '</a>';
-            }
         }
     }
     echo '</div>';
@@ -639,7 +871,21 @@ function showMenu() {
     // ═════════════════════════════════════════════════════════════════════════
     // B) TOP-NAVIGATION
     // ═════════════════════════════════════════════════════════════════════════
-    echo '<nav id="top-nav" style="background:var(--bg-nav); padding:1px 5px; margin-bottom:20px;
+    // RETTET (bruger-rapporteret: "Information: Databasen er tom..."-
+    // banneret er adskilt fra/fejljusteret i forhold til Mine opgaver
+    // nedenunder): backup-advarslen herunder er position:absolute;top:100%
+    // - taget helt ud af normal flow, så den ALDRIG skubber det næste
+    // element (denne "Databasen er tom"-info-boks) nedad for at give
+    // plads. nav's faste margin-bottom:20px var uændret uanset om
+    // advarslen reelt vises, men selve advarselsbjælken (padding 6px top/
+    // bund + tekstlinje) fylder markant mere end 20px - resultatet var et
+    // reelt visuelt OVERLAP mellem varselsbjælkens nederste kant og toppen
+    // af det næste indholdselement, hvilket så ud som en skæv/afbrudt
+    // sammenhæng mellem de to. Øger margin-bottom til 56px netop når
+    // advarslen faktisk vises, så der er plads nok - $show_backup_warning
+    // beregnes allerede tidligere i showMenu(), se dens egen kommentar.
+    $topnav_margin_bottom = $show_backup_warning ? '56px' : '20px';
+    echo '<nav id="top-nav" style="background:var(--bg-nav); padding:1px 5px; margin-bottom:'.$topnav_margin_bottom.';
         display:flex; align-items:center; min-height:65px; font-family:sans-serif; color:white;
         position:relative; z-index:9000; overflow:visible !important;">';
 
@@ -680,7 +926,7 @@ function showMenu() {
         $h_attr = $hintText ? ' data-hint="'.htmlspecialchars($hintText).'"' : '';
 
         echo '<div class="dropdown" style="position:relative; cursor:pointer;">';
-        echo '<div class="nav-main-link" style="'.$activeStyle.'" '.$onClick.$h_attr.'>';
+        echo '<div class="nav-main-link"'.$ctxAttrs($url, $isDropdown).' style="'.$activeStyle.'" '.$onClick.$h_attr.'>';
         echo '<span style="font-size:1.5em; pointer-events:none;">'.$icon.'</span>';
         echo '<span style="font-size:0.85em; white-space:nowrap; pointer-events:none;">'.$text.($isDropdown ? ' ▼' : '').'</span>';
         echo '</div>';
@@ -708,19 +954,15 @@ function showMenu() {
           data-hint="'.lang('@Here you can zoom in and out, <br>Switch to/from full screen, <br>or change color theme').'">'.lang('@VIEW').'</div>';
     echo '</div>';
 
-    $lang_file = 'json-data/languages.json';
     echo '<div class="custom-lang-dropdown" style="position:relative;">';
     echo '<div onclick="toggleLangMenu(event)" class="lang-button"><span class="fi fi-'.$fCode.'"></span> <b>'.strtoupper($current_l).'</b> ▼</div>';
     echo '<div id="lang-options" class="lang-dropdown-box">';
-    if (file_exists($lang_file)) {
-        $lang_data = json_decode(file_get_contents($lang_file), true);
-        if (!empty($lang_data['language'])) {
-            foreach ($lang_data['language'] as $l) {
-                $optCode  = $fMap[$l['code']] ?? $l['code'];
-                $bgStyle  = ($l['code'] == $current_l) ? 'background:rgba(52,152,219,0.15);' : '';
-                echo '<a href="?l='.$l['code'].'" style="display:flex;align-items:center;gap:10px;padding:10px;color:white;text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px;'.$bgStyle.'">';
-                echo '<span class="fi fi-'.$optCode.'" style="width:20px;height:15px;"></span><span>'.$l['native'].'</span></a>';
-            }
+    if (!empty($lang_data['language'])) {
+        foreach ($lang_data['language'] as $l) {
+            $optCode  = $flagMap[$l['code']] ?? $l['code'];
+            $bgStyle  = ($l['code'] == $current_l) ? 'background:rgba(52,152,219,0.15);' : '';
+            echo '<a href="?l='.$l['code'].'" style="display:flex;align-items:center;gap:10px;padding:10px;color:white;text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px;'.$bgStyle.'">';
+            echo '<span class="fi fi-'.$optCode.'" style="width:20px;height:15px;"></span><span>'.$l['native'].'</span></a>';
         }
     }
     echo '</div>';
@@ -737,22 +979,211 @@ function showMenu() {
     </a>';
     echo '</div>'; // højre side
 
-    // Backup-advarsel
-    $days_old = 0;
-    if ($conn) {
-        $b_res = @DB::query($conn, "SELECT setting_value FROM settings WHERE setting_key = 'last_backup_time'");
-        if ($b_res && $b_row = DB::fetch_assoc($b_res)) {
-            $days_old = (int)floor((time() - (int)$b_row['setting_value']) / 86400);
-        } else {
-            $days_old = 999;
-        }
-    }
-    if ($days_old > 10) {
-        $alert_msg = sprintf(lang('@Warning: Backup is').' %d '.lang('@days old. Remember that you can lose everything you have created since then.'), $days_old);
-        echo '<div style="position:absolute;top:100%;left:0;right:0;background:var(--color-warning);color:#fff;text-align:center;padding:6px 20px;font-size:13px;font-weight:bold;box-shadow:0 4px 6px rgba(0,0,0,0.1);z-index:8900;">
-            <i class="fa-solid fa-triangle-exclamation" style="margin-right:8px;"></i>'.$alert_msg.'</div>';
+    // Backup-advarsel - $show_backup_warning/$backup_alert_msg beregnet én
+    // gang, tidligt i showMenu() (se dens kommentar), så #tc-sidebar-
+    // visningen nedenfor kan bruge nøjagtig samme værdier.
+    if ($show_backup_warning) {
+        // RETTET (bruger-rapporteret: "hvid forgrund på gul bg er vanskelig
+        // at læse på varselsbanner") - se samme rettelse på #sb-backup-warning
+        // ovenfor: sort tekst på den gule/orange var(--color-warning) i
+        // stedet for hvid.
+        // RETTET (bruger-anmodet): samme klikbarheds-forbedring som
+        // #sb-backup-warning ovenfor - <a> i stedet for <div>, direkte til
+        // backup.php.
+        echo '<a href="backup.php" data-hint="' . lang('@Go to Backup Management and take a backup') . '" style="position:absolute;top:100%;left:0;right:0;background:var(--color-warning);color:#000;text-align:center;padding:6px 20px;font-size:13px;font-weight:bold;box-shadow:0 4px 6px rgba(0,0,0,0.1);z-index:8900;text-decoration:none;cursor:pointer;display:block;">
+            <i class="fa-solid fa-triangle-exclamation" style="margin-right:8px;"></i>'.$backup_alert_msg.'</a>';
     }
 
     echo '</div></nav>';
+
+    // NY FUNKTION (bruger-anmodet): højreklik på et menupunkt -> mulighed for
+    // at skjule det for L1/L2 direkte fra selve menuen, uden at skulle inde
+    // på den separate menu_visibility.php-administrationsside. Kun indlejret
+    // for admins (samme rolle-tjek som menu_hide_action.php selv håndhæver
+    // server-side - klient-siden her er bekvemmelighed, ikke selve
+    // spærren). Event-delegation på document (ét lyttepunkt, ikke ét pr.
+    // menu-link) - fanger BÅDE sidepanel- og topnav-tilstand, da begge
+    // deler samme [data-menukey]-mærkning tilføjet ovenfor i denne funktion.
+    if (($_SESSION['user_role'] ?? '') === 'admin') {
+        ?>
+        <style>
+        /* RETTET (bruger-rapporteret: "ses ikke på sort baggrund"): manglede
+           en EKSPLICIT lys tekstfarve - arvede i stedet body's --text-main,
+           som i lys-temaet er MØRK tekst (#333) på selve --bg-submenu, der
+           bevidst ER en mørk baggrundsfarve i alle temaer (samme farve som
+           .dropdown-item/.nav-main-link allerede bruger --text-light til,
+           se disse klassers egen definition). */
+        #tc-menu-ctx { position:fixed; z-index:99999; background:var(--bg-submenu); color:var(--text-light);
+            border:1px solid var(--border-subtle); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+            min-width:270px; padding:6px; display:none; font-size:13px; }
+        #tc-menu-ctx label { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:4px;
+            cursor:pointer; color:var(--text-light); }
+        #tc-menu-ctx label:hover { background:rgba(255,255,255,0.1); }
+        #tc-menu-ctx input[type="checkbox"] { width:16px; height:16px; cursor:pointer; }
+        #tc-menu-ctx button { display:block; width:100%; text-align:left; background:none; border:none; color:var(--text-light);
+            padding:8px 10px; border-radius:4px; cursor:pointer; font-size:inherit; margin-top:4px; }
+        #tc-menu-ctx button:hover { background:rgba(255,255,255,0.1); }
+        #tc-menu-ctx hr { border:0; border-top:1px solid rgba(255,255,255,0.15); margin:6px 0; }
+        #tc-menu-ctx .tc-menu-ctx-label { padding:6px 10px 4px; font-size:11px; color:var(--text-light); opacity:0.7;
+            text-transform:uppercase; font-weight:bold; }
+        /* NYT (bruger-anmodet): markerer et højreklik-skjulbart FELT (ikke et
+           menupunkt) - samme kontekstmenu genbruges, se JS'en nedenfor. Kun
+           synlig for admins (hele denne blok er allerede admin-only).
+           RETTET (bruger-rapporteret, to runder):
+           1) "jeg ser ikke stiplet blå ramme" - brugte FØR var(--color-info),
+              som er en mørk gråblå (#34495e) i lys-temaet og en lysegrå
+              (#c4c6c8) i dark-temaet til badge-/tekstbrug, hverken tydeligt
+              "blå" eller kraftig nok. Erstattet med en FAST, tema-uafhængig
+              blå (#2196f3, altid blå uanset tema).
+           2) "det var ikke meningen at tilføje en ramme men at den
+              eksisterende blot ændrede udseende" - et almindeligt htm_Field()
+              har allerede sin egen <fieldset>-kant; at pakke DEN ind i endnu
+              en boks med sin egen kant gav en dobbelt/indlejret ramme-effekt.
+              ".tc-hideable-field fieldset" omfarver nu den EKSISTERENDE
+              fieldset-kant i stedet for at tilføje en ny udenom. Kun felter
+              der slet IKKE har nogen boks i forvejen (klassen "tc-no-
+              existing-box", se inc/field_visibility.inc.php's $has_own_box)
+              får en helt ny ramme tilføjet. */
+        .tc-hideable-field { display:inline-block; vertical-align:top; position:relative; max-width:100%; }
+        /* RETTET (bruger-anmodet, runde 28-opfølgning): fjernet den blålige
+           baggrundstoning på tillægsfelter - kun den stiplede blå kant er nu
+           tilbage som markering. */
+        .tc-hideable-field fieldset { border:2px dashed #2196f3 !important; }
+        .tc-hideable-field.tc-no-existing-box { border:2px dashed #2196f3; border-radius:6px; padding:6px 8px;
+            margin:3px; }
+        </style>
+        <div id="tc-menu-ctx">
+            <div class="tc-menu-ctx-label"></div>
+            <label><input type="checkbox" id="tc-menu-ctx-l1"> <span id="tc-menu-ctx-l1-txt"></span></label>
+            <label><input type="checkbox" id="tc-menu-ctx-l2"> <span id="tc-menu-ctx-l2-txt"></span></label>
+            <button type="button" id="tc-menu-ctx-save"></button>
+            <hr>
+            <button type="button" id="tc-menu-ctx-restore"></button>
+        </div>
+        <script>
+        (function() {
+            // NYT (bruger-anmodet: "Det skal være valgbart L1 / L2 alene
+            // eller begge"): L1 og L2 kan nu skjules/vises helt uafhængigt
+            // af hinanden via to separate afkrydsningsfelter, i stedet for
+            // den tidligere ene "skjul begge på én gang"-knap. Nuværende
+            // tilstand kommer fra data-hidden-l1/data-hidden-l2 (udskrevet
+            // server-side ud fra det allerede indlæste $overrides, se
+            // $ctxAttrs() ovenfor i denne fil) - intet AJAX-kald nødvendigt
+            // bare for at ÅBNE menuen og se hvad der allerede er skjult.
+            var ctxKey = null, ctxHasChildren = false, ctxL1Initial = false, ctxL2Initial = false, ctxTarget = 'menu';
+            var menu = document.getElementById('tc-menu-ctx');
+            var labelEl = menu.querySelector('.tc-menu-ctx-label');
+            var l1Box = document.getElementById('tc-menu-ctx-l1');
+            var l2Box = document.getElementById('tc-menu-ctx-l2');
+            var l1Txt = document.getElementById('tc-menu-ctx-l1-txt');
+            var l2Txt = document.getElementById('tc-menu-ctx-l2-txt');
+            var saveBtn = document.getElementById('tc-menu-ctx-save');
+            var restoreBtn = document.getElementById('tc-menu-ctx-restore');
+            var TXT = {
+                hideL1: <?php echo json_encode(lang('@Hidden for L1 (Minimal View)')); ?>,
+                hideL2: <?php echo json_encode(lang('@Hidden for L2 (Custom View)')); ?>,
+                save: <?php echo json_encode(lang('@Save')); ?>,
+                restore: <?php echo json_encode(lang('@Restore to default visibility')); ?>,
+                warnChildren: <?php echo json_encode(lang('@This item has sub-items - hiding it will also hide ALL of them for that level. Continue?')); ?>,
+                doneMenu: <?php echo json_encode(lang('@Menu visibility updated. Only an administrator can change it back (System -> Menu Visibility).')); ?>,
+                doneField: <?php echo json_encode(lang('@Field visibility updated. Only an administrator can change it back (right-click the field again).')); ?>,
+                restored: <?php echo json_encode(lang('@Visibility restored to default.')); ?>,
+                error: <?php echo json_encode(lang('@Could not save this change.')); ?>
+            };
+            l1Txt.textContent = TXT.hideL1;
+            l2Txt.textContent = TXT.hideL2;
+            saveBtn.textContent = TXT.save;
+            restoreBtn.textContent = TXT.restore;
+            document.addEventListener('contextmenu', function(e) {
+                // NYT (bruger-anmodet): samme kontekstmenu genbruges nu til to
+                // FORSKELLIGE ting - et menupunkt ([data-menukey], mod
+                // menu_hide_action.php) eller et enkelt, markeret formularfelt
+                // ([data-fieldkey], mod field_hide_action.php, se inc/field_
+                // visibility.inc.php). closest() prøver menupunktet FØRST, da
+                // et felt aldrig kan ligge inden i et menupunkt, men et
+                // menupunkt (i sjældne tilfælde) teoretisk kunne indeholde et
+                // markeret felt - menupunktet skal derfor vinde ved en reel
+                // konflikt, ikke omvendt.
+                var el = e.target.closest('[data-menukey]');
+                var isField = false;
+                if (!el) {
+                    el = e.target.closest('[data-fieldkey]');
+                    isField = !!el;
+                }
+                if (!el) return;
+                e.preventDefault();
+                ctxTarget = isField ? 'field' : 'menu';
+                ctxKey = el.getAttribute(isField ? 'data-fieldkey' : 'data-menukey');
+                // Felter har ingen undermenupunkter - kaskade-advarslen er
+                // udelukkende relevant for menupunkter.
+                ctxHasChildren = !isField && el.getAttribute('data-haschildren') === '1';
+                labelEl.textContent = ctxKey;
+                l1Box.checked = el.getAttribute('data-hidden-l1') === '1';
+                l2Box.checked = el.getAttribute('data-hidden-l2') === '1';
+                ctxL1Initial = l1Box.checked;
+                ctxL2Initial = l2Box.checked;
+                menu.style.display = 'block';
+                var x = e.clientX, y = e.clientY;
+                var mw = 280, mh = 160;
+                if (x + mw > window.innerWidth) x = window.innerWidth - mw - 10;
+                if (y + mh > window.innerHeight) y = window.innerHeight - mh - 10;
+                menu.style.left = x + 'px';
+                menu.style.top = y + 'px';
+            });
+            document.addEventListener('click', function(e) {
+                if (!menu.contains(e.target)) menu.style.display = 'none';
+            });
+            function callAction(action, extra) {
+                var fd = new FormData();
+                fd.append('key', ctxKey);
+                fd.append('action', action);
+                if (extra) { for (var k in extra) fd.append(k, extra[k]); }
+                fd.append('csrf_token', <?php echo json_encode(csrf_token()); ?>);
+                var endpoint = (ctxTarget === 'field') ? 'field_hide_action.php' : 'menu_hide_action.php';
+                fetch(endpoint, { method: 'POST', body: fd })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        menu.style.display = 'none';
+                        if (data.success) {
+                            alert(action === 'set_levels' ? (ctxTarget === 'field' ? TXT.doneField : TXT.doneMenu) : TXT.restored);
+                            window.location.reload();
+                        } else {
+                            alert(TXT.error + (data.error ? ' (' + data.error + ')' : ''));
+                        }
+                    })
+                    .catch(function() { menu.style.display = 'none'; alert(TXT.error); });
+            }
+            saveBtn.addEventListener('click', function() {
+                // RETTET (selv-fanget, "find fem fejl"): sendte FØR altid
+                // BEGGE niveauers tilstand, uanset om brugeren reelt havde
+                // rørt ved dem - baseret på et snapshot taget da menuen blev
+                // åbnet. To administratorer der samtidig højreklikkede samme
+                // punkt og hver især kun ændrede ÉT niveau kunne dermed
+                // tabe hinandens ændring (den anden admins snapshot af det
+                // niveau VEDKOMMENDE ikke rørte var forældet og overskrev
+                // stille den første admins reelle ændring). Sender nu KUN
+                // det/de niveauer der faktisk blev ændret siden menuen blev
+                // åbnet - serveren beholder den aktuelle, friskt-læste værdi
+                // for et niveau der slet ikke indgår i requesten (se
+                // menu_hide_action.php's tilsvarende rettelse).
+                var l1Changed = l1Box.checked !== ctxL1Initial;
+                var l2Changed = l2Box.checked !== ctxL2Initial;
+                if (!l1Changed && !l2Changed) { menu.style.display = 'none'; return; }
+                // Advar kun om kaskaden når et niveau reelt SKIFTER fra synlig
+                // til skjult her og nu - ikke blot fordi det (evt. allerede
+                // fra før) står som skjult i det snapshot menuen blev åbnet med.
+                var newlyHidingChildren = ctxHasChildren &&
+                    ((l1Changed && l1Box.checked) || (l2Changed && l2Box.checked));
+                if (newlyHidingChildren && !confirm(TXT.warnChildren)) { menu.style.display = 'none'; return; }
+                var extra = {};
+                if (l1Changed) extra.hide_l1 = l1Box.checked ? '1' : '0';
+                if (l2Changed) extra.hide_l2 = l2Box.checked ? '1' : '0';
+                callAction('set_levels', extra);
+            });
+            restoreBtn.addEventListener('click', function() { callAction('restore'); });
+        })();
+        </script>
+        <?php
+    }
 }
 ?>

@@ -172,8 +172,15 @@ if ($action === 'provision') {
         // eksistens enkeltvis nedenfor.
         'quote_lines', 'quotes',
         'suppliers', 'fixed_assets', 'time_entries',
+        'invoice_layout_blocks', 'invoice_layouts',     // "Standard" laves igen af sig selv (il_default_id())
+        'shop_orders', 'shop_connections',              // butikker tilknyttes på ny i det nye regnskab (deres nøgler hører til demoen)
+        // RETTET: de nyere tabeller manglede - demoens faste udgifter, budgetter, kontaktpersoner, bankregler,
+        // saldoafstemninger, udgiftslinjer, maillog og linjeskabeloner blev hængende i det "rigtige" regnskab
+        'expense_lines', 'recurring_expenses', 'account_budgets', 'customer_contacts', 'bank_match_rules',
+        'bank_reconciliations', 'mail_log', 'invoice_line_template_items', 'invoice_line_templates',
     ];
-    $counter_tables = ['voucher_counter', 'invoice_no_counter', 'quote_no_counter'];
+    $counter_tables = ['voucher_counter', 'invoice_no_counter', 'quote_no_counter', 'credit_note_no_counter'];
+    $new_admin_pw = null;
 
     // RETTET (§find-fem-fejl, flere-regnskaber-sweep): en fejlet DELETE
     // (echo "[FEJL] ...") og en ukontrolleret fallback-INSERT herunder
@@ -187,7 +194,14 @@ if ($action === 'provision') {
     // sættes, hvis noget reelt fejlede undervejs.
     $had_errors = false;
     try {
-        _provision_with_isolated_connection($account_entry, $mysql_config, function ($t_conn, $t_type) use ($data_tables, $counter_tables, &$had_errors) {
+        _provision_with_isolated_connection($account_entry, $mysql_config, function ($t_conn, $t_type) use ($data_tables, $counter_tables, &$had_errors, &$new_admin_pw) {
+            // RETTET (KRITISK): append-only-triggerne (bogføringsloven) afviser DELETE af bogførte posteringer -
+            // konverteringen af et demo-regnskab fejlede derfor ALTID på ledger/journal/expenses. Demoens data er
+            // fiktive og skal netop væk: triggerne fjernes kun under oprydningen og genskabes straks bagefter.
+            foreach (['trg_journal_no_delete_posted', 'trg_journal_restrict_update_posted', 'trg_ledger_no_delete_posted',
+                      'trg_ledger_no_update_posted', 'trg_expenses_no_delete_posted', 'trg_expenses_restrict_update_posted'] as $trg) {
+                DB::query($t_conn, "DROP TRIGGER IF EXISTS $trg");
+            }
             foreach ($data_tables as $table) {
                 if (!_provision_table_exists($t_conn, $t_type, $table)) {
                     continue;
@@ -213,7 +227,28 @@ if ($action === 'provision') {
                 }
                 echo "[OK] $table nulstillet til 1.\n";
             }
+            $trg_res = create_append_only_triggers($t_conn);
+            if (!empty($trg_res['failed'])) { echo "[FEJL] Bogføringstriggerne kunne ikke genskabes: " . implode(', ', (array)$trg_res['failed']) . "\n";  $had_errors = true; }
+            else echo "[OK] Bogføringstriggerne (append-only) genskabt.\n";
+            // RETTET (SIKKERHED): demoens brugere fulgte med - med demoens OFFENTLIGT kendte kodeord (demoen ligger
+            // på GitHub). Kun brugeren "admin" beholdes; den får et nyt, tilfældigt kodeord (vises én gang
+            // herunder), og 2FA nulstilles.
+            if (!DB::fetch_assoc(DB::query($t_conn, "SELECT user_id FROM users WHERE username = 'admin'"))) {      // (ellers ville ingen kunne logge ind)
+                DB::insert($t_conn, 'users', ['username' => 'admin', 'password_hash' => '-', 'user_role' => 'admin', 'user_level' => 3]);
+            }
+            DB::query($t_conn, "UPDATE users SET user_role = 'admin', user_level = 3 WHERE username = 'admin'");
+            if (DB::query($t_conn, "DELETE FROM users WHERE username <> 'admin'")) echo "[OK] Demoens øvrige brugere fjernet (admin beholdt).\n";
+            else { echo "[FEJL] Kunne ikke fjerne demoens brugere: " . DB::error($t_conn) . "\n";  $had_errors = true; }
+            $new_admin_pw = rtrim(strtr(base64_encode(random_bytes(9)), '+/', '-_'), '=');
+            $pw_hash = DB::escape($t_conn, password_hash($new_admin_pw, PASSWORD_DEFAULT));
+            DB::query($t_conn, "UPDATE users SET password_hash = '$pw_hash' WHERE username = 'admin'");
+            @DB::query($t_conn, "UPDATE users SET totp_enabled = 0, totp_secret = NULL, totp_recovery_codes = NULL WHERE username = 'admin'");
+            @DB::query($t_conn, "UPDATE users SET is_active = 1 WHERE username = 'admin'");
         });
+        if ($new_admin_pw !== null && !$had_errors) {
+            echo "\n[VIGTIGT] Nyt kodeord for brugeren 'admin' i dette regnskab: " . $new_admin_pw . "\n"
+               . "          Skriv det ned nu - det vises ikke igen. Skift det efter første login.\n";
+        }
 
         if ($had_errors) {
             echo "\n[FEJL] Konverteringen stødte på fejl undervejs (se [FEJL]-linjerne ovenfor) - regnskabet er BEVIDST IKKE markeret som aktivt endnu, så det trygt kan forsøges igen.\n";

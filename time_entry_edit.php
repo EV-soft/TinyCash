@@ -141,12 +141,12 @@ if (!$is_locked) {
     htm_Button(icon: 'fa-save', labl: '@Save', type: 'success', attr: 'name="save_entry" data-hint="'.lang('@Save this time entry').'"', styl: 'flex:2;');
     if ($t['entry_id'] > 0) {
         htm_ConfirmLink(icon: 'fa-trash', labl: '@Delete', link: 'time_entry_edit.php?id='.$t['entry_id'].'&del=1',
-            mess: '@Are you sure you want to delete this time entry?', type: 'danger', styl: 'flex:1; text-align:center;');
+            mess: '@Are you sure you want to delete this time entry?', type: 'danger', styl: 'flex:1; text-align:center;', attr: 'data-hint="' . lang('@Delete the time entry (you are asked first)') . '"');
     }
-    htm_Button(icon: 'fa-arrow-left', labl: '@Back', type: 'secondary', link: 'time_list.php', styl: 'flex:1;');
+    htm_Button(icon: 'fa-arrow-left', labl: '@Back', type: 'secondary', link: 'time_list.php', styl: 'flex:1;', attr: 'data-hint="' . lang('@Return to the time list without saving') . '"');
     echo "</div>";
 } else {
-    htm_Button(icon: 'fa-arrow-left', labl: '@Back', type: 'secondary', link: 'time_list.php', styl: 'margin-top:20px;');
+    htm_Button(icon: 'fa-arrow-left', labl: '@Back', type: 'secondary', link: 'time_list.php', styl: 'margin-top:20px;', attr: 'data-hint="' . lang('@Return to the time list without saving') . '"');
 }
 
 htm_Card_end();

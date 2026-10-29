@@ -1,4 +1,4 @@
-<?php # /export_oioubl.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /export_oioubl.php v:1.3.1 d:2026-09-15 i:evs
 # (Genskabt: OIOUBL-2.02 e-faktura eksport med korrekte beløb)
 # v1.3.0: linjebeløb/-moms afrundes nu til øre PR. LINJE før summering -
 # undgår at "rund summen til sidst" kan afvige 1 øre fra summen af de viste
@@ -53,11 +53,41 @@ $co_cvr  = preg_replace('/\D/', '', $settings['company_cvr'] ?? '');   // kun ci
 $co_addr = $settings['company_address'] ?? '';
 $co_city = $settings['company_city']    ?? '';
 $co_zip  = preg_replace('/\D/', '', $settings['company_zip'] ?? '');
+
+// RETTET (bruger-anmodet, ALVORLIGT FUND): $co_cvr blev tidligere skrevet
+// ind i selve XML'en som '00000000' hvis firmaets CVR ikke var udfyldt i
+// Firmaindstillinger - en OIOUBL-fil er et formelt juridisk dokument
+// (indsendes til NemHandel/PEPPOL), og "00000000" ligner et ægte, gyldigt
+// felt uden at være det. Blokerer nu genereringen helt, samme princip som
+// kladde-tjekket ovenfor (en formelt ugyldig e-faktura må aldrig kunne
+// downloades/arkiveres som om den var gyldig). Adressen/byen tillades
+// stadig tom (renderes blot som tomme XML-felter, ikke et fabrikeret navn/
+// CVR nogen kunne forveksle med et ægte).
+if (empty($co_name) || empty($co_cvr)) {
+    ob_end_clean(); http_response_code(409);
+    die(lang('@Your company name and CVR number must be filled in under Company Settings before an OIOUBL e-invoice can be generated.'));
+}
 $bank_reg = preg_replace('/\D/', '', $settings['bank_reg'] ?? '');
 $bank_acc = preg_replace('/\D/', '', $settings['bank_acc'] ?? '');
 $pay_note = $settings['default_payment_terms'] ?? 'Betaling bedes overført til vores bankkonto.';
 
 $cust_cvr = preg_replace('/\D/', '', $inv['cust_cvr'] ?? '');
+// RETTET: en kreditnota blev eksporteret som en FAKTURA (InvoiceTypeCode 380) med negative linjer og det
+// interne id som nummer - modtagerens system bogfører den som en ny regning. OIOUBL kræver et særskilt
+// CreditNote-dokument; indtil det findes, afvises eksporten tydeligt.
+if (!empty($inv['credit_ref'])) {
+    ob_end_clean(); http_response_code(409);
+    die(lang('@A credit note cannot be exported as an OIOUBL e-invoice yet - send it as a PDF.'));
+}
+// RETTET: uden kundens CVR blev modtagerens EndpointID skrevet som "00000000" og postnummeret som "0000" -
+// opdigtede, gyldigt udseende oplysninger i et formelt dokument (samme fejlklasse som firmaets eget CVR,
+// rettet tidligere). Modtagerens CVR er nødvendigt; postnummer og by læses af kundens adresse.
+if ($cust_cvr === '') {
+    ob_end_clean(); http_response_code(409);
+    die(lang('@The customer has no CVR number - an OIOUBL e-invoice needs the CVR of the receiver.'));
+}
+$cust_street = trim((string)($inv['cust_address'] ?? ''));  $cust_zip = '';  $cust_city = '';
+if (preg_match('/^(.*?)[,\n]\s*(?:DK-)?(\d{4})\s+(.+)$/su', $cust_street, $am)) { $cust_street = trim($am[1]);  $cust_zip = $am[2];  $cust_city = trim($am[3]); }
 
 // --- 3. VALUTA & DATOER ---
 $cur      = strtoupper(preg_replace('/[^A-Za-z]/', '', $inv['currency'] ?? 'DKK')) ?: 'DKK';
@@ -75,6 +105,16 @@ $vat_groups = [];    // grupperet pr. momssats: ['25.00' => ['taxable'=>, 'tax'=
 while ($res_l && ($l = DB::fetch_assoc($res_l))) {
     $qty   = (float)$l['quantity'];
     $price = (float)$l['price_each'];
+    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): valgfri rabat
+    // pr. linje - eksporteres her som en allerede NEDSAT enhedspris (ikke
+    // som et separat UBL AllowanceCharge-element), så "qty × PriceAmount"
+    // fortsat er PRÆCIS lig LineExtensionAmount uden at skulle udvide selve
+    // XML-strukturen - samme talmæssige resultat som fakturaen reelt bliver
+    // bogført til (invoice_dkk_totals(), inc/db_connect.inc.php), blot uden
+    // en synlig "10% rabat"-linje i selve e-faktura-XML'en (den vises i
+    // stedet tydeligt på den printede/mailede faktura, invoice_view.php).
+    $disc = (float)($l['discount_pct'] ?? 0);
+    if ($disc > 0) $price = round($price * (100 - $disc) / 100, 4);
     $rate  = (float)($l['line_vat_rate'] ?? $l['vat_rate'] ?? 25);
     // Afrundes til øre PR. LINJE, før noget som helst summeres. UBL/OIOUBL's
     // egne konsistens-regler (bl.a. BR-CO-10/BR-CO-14) kræver at summen af de
@@ -118,28 +158,28 @@ $x .= '  <cbc:DocumentCurrencyCode>' . esc($cur) . '</cbc:DocumentCurrencyCode>'
 
 // Sælger
 $x .= '  <cac:AccountingSupplierParty>' . "\n" . '    <cac:Party>' . "\n";
-$x .= '      <cbc:EndpointID schemeID="DK:CVR">' . esc($co_cvr ?: '00000000') . '</cbc:EndpointID>' . "\n";
+$x .= '      <cbc:EndpointID schemeID="DK:CVR">' . esc($co_cvr) . '</cbc:EndpointID>' . "\n";
 $x .= '      <cac:PartyName><cbc:Name>' . esc($co_name) . '</cbc:Name></cac:PartyName>' . "\n";
 $x .= '      <cac:PostalAddress>' . "\n";
 $x .= '        <cbc:StreetName>' . esc($co_addr) . '</cbc:StreetName>' . "\n";
 $x .= '        <cbc:CityName>' . esc($co_city) . '</cbc:CityName>' . "\n";
-$x .= '        <cbc:PostalZone>' . esc($co_zip ?: '0000') . '</cbc:PostalZone>' . "\n";
+$x .= '        <cbc:PostalZone>' . esc($co_zip) . '</cbc:PostalZone>' . "\n";
 $x .= '        <cac:Country><cbc:IdentificationCode>DK</cbc:IdentificationCode></cac:Country>' . "\n";
 $x .= '      </cac:PostalAddress>' . "\n";
 $x .= '      <cac:PartyLegalEntity>' . "\n";
 $x .= '        <cbc:RegistrationName>' . esc($co_name) . '</cbc:RegistrationName>' . "\n";
-$x .= '        <cbc:CompanyID schemeID="DK:CVR">' . esc($co_cvr ?: '00000000') . '</cbc:CompanyID>' . "\n";
+$x .= '        <cbc:CompanyID schemeID="DK:CVR">' . esc($co_cvr) . '</cbc:CompanyID>' . "\n";
 $x .= '      </cac:PartyLegalEntity>' . "\n";
 $x .= '    </cac:Party>' . "\n" . '  </cac:AccountingSupplierParty>' . "\n";
 
 // Køber
 $x .= '  <cac:AccountingCustomerParty>' . "\n" . '    <cac:Party>' . "\n";
-$x .= '      <cbc:EndpointID schemeID="DK:CVR">' . esc($cust_cvr ?: '00000000') . '</cbc:EndpointID>' . "\n";
+$x .= '      <cbc:EndpointID schemeID="DK:CVR">' . esc($cust_cvr) . '</cbc:EndpointID>' . "\n";
 $x .= '      <cac:PartyName><cbc:Name>' . esc($inv['cust_name']) . '</cbc:Name></cac:PartyName>' . "\n";
 $x .= '      <cac:PostalAddress>' . "\n";
-$x .= '        <cbc:StreetName>' . esc($inv['cust_address']) . '</cbc:StreetName>' . "\n";
-$x .= '        <cbc:CityName/>' . "\n";
-$x .= '        <cbc:PostalZone>0000</cbc:PostalZone>' . "\n";
+$x .= '        <cbc:StreetName>' . esc($cust_street) . '</cbc:StreetName>' . "\n";
+$x .= '        <cbc:CityName>' . esc($cust_city) . '</cbc:CityName>' . "\n";
+$x .= '        <cbc:PostalZone>' . esc($cust_zip) . '</cbc:PostalZone>' . "\n";
 $x .= '        <cac:Country><cbc:IdentificationCode>DK</cbc:IdentificationCode></cac:Country>' . "\n";
 $x .= '      </cac:PostalAddress>' . "\n";
 $x .= '      <cac:PartyLegalEntity>' . "\n";
@@ -162,9 +202,11 @@ if ($deliv_addr !== '' && $deliv_addr !== $bill_addr) {
     $x .= '  <cac:Delivery>' . "\n";
     $x .= '    <cac:DeliveryLocation>' . "\n";
     $x .= '      <cac:Address>' . "\n";
-    $x .= '        <cbc:StreetName>' . esc($deliv_addr) . '</cbc:StreetName>' . "\n";
-    $x .= '        <cbc:CityName/>' . "\n";
-    $x .= '        <cbc:PostalZone>0000</cbc:PostalZone>' . "\n";
+    $dl_street = $deliv_addr;  $dl_zip = '';  $dl_city = '';      // (samme opdeling som køberens adresse - intet opdigtet "0000")
+    if (preg_match('/^(.*?)[,\n]\s*(?:DK-)?(\d{4})\s+(.+)$/su', $dl_street, $dm)) { $dl_street = trim($dm[1]);  $dl_zip = $dm[2];  $dl_city = trim($dm[3]); }
+    $x .= '        <cbc:StreetName>' . esc($dl_street) . '</cbc:StreetName>' . "\n";
+    $x .= '        <cbc:CityName>' . esc($dl_city) . '</cbc:CityName>' . "\n";
+    $x .= '        <cbc:PostalZone>' . esc($dl_zip) . '</cbc:PostalZone>' . "\n";
     $x .= '        <cac:Country><cbc:IdentificationCode>DK</cbc:IdentificationCode></cac:Country>' . "\n";
     $x .= '      </cac:Address>' . "\n";
     $x .= '    </cac:DeliveryLocation>' . "\n";
@@ -176,8 +218,14 @@ $x .= '  <cac:PaymentMeans>' . "\n";
 $x .= '    <cbc:PaymentMeansCode>31</cbc:PaymentMeansCode>' . "\n";
 $x .= '    <cbc:PaymentDueDate>' . esc($due) . '</cbc:PaymentDueDate>' . "\n";
 $x .= '    <cac:PayeeFinancialAccount>' . "\n";
-$x .= '      <cbc:ID>' . esc($bank_acc ?: '0000000000') . '</cbc:ID>' . "\n";
-$x .= '      <cac:FinancialInstitutionBranch><cbc:ID>' . esc($bank_reg ?: '0000') . '</cbc:ID></cac:FinancialInstitutionBranch>' . "\n";
+// RETTET (bruger-anmodet, ALVORLIGT FUND - samme runde som CVR-fundet
+// ovenfor): faldt tilbage til opdigtede reg./kontonumre ('0000'/
+// '0000000000') hvis bankoplysningerne ikke var udfyldt - ikke lige så
+// juridisk kritisk som selve CVR-nummeret (blokerer derfor ikke hele
+// eksporten), men stadig fabrikeret finansiel data i et formelt dokument.
+// Tomme felter er ærlige ("intet oplyst"); falske tal er det ikke.
+$x .= '      <cbc:ID>' . esc($bank_acc) . '</cbc:ID>' . "\n";
+$x .= '      <cac:FinancialInstitutionBranch><cbc:ID>' . esc($bank_reg) . '</cbc:ID></cac:FinancialInstitutionBranch>' . "\n";
 $x .= '    </cac:PayeeFinancialAccount>' . "\n";
 $x .= '  </cac:PaymentMeans>' . "\n";
 $x .= '  <cac:PaymentTerms><cbc:Note>' . esc($pay_note) . '</cbc:Note></cac:PaymentTerms>' . "\n";
@@ -230,7 +278,7 @@ $x .= '</Invoice>' . "\n";
 
 // --- 7. ARKIVÉR KOPI (best-effort) ---
 $filename = 'OIOUBL_Invoice_' . $doc_id . '.xml';
-$archive_dir = __DIR__ . '/storage/einvoices';
+$archive_dir = is_dir(__DIR__ . '/storage/einvoices') ? rtrim(tc_account_storage_dir(__DIR__ . '/storage/einvoices'), '/') : __DIR__ . '/storage/einvoices';      // (eget regnskab)
 if (is_dir($archive_dir) && is_writable($archive_dir)) {
     @file_put_contents($archive_dir . '/' . $filename, $x);
 }

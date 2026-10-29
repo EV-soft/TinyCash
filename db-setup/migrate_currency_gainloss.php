@@ -27,7 +27,12 @@ function mcg_account_exists($conn, $acc_id) {
     return ($res && DB::num_rows($res) > 0);
 }
 
-if (mcg_account_exists($conn, 7200)) {
+// RETTET: oprettede den faste konto, selvom rollen allerede var dækket af en anden konto (en kontoplan fra
+// setup_chart.php eller et skift til standardkontoplanen) - en ekstra, ikke-standard konto i kontoplanen
+$mcg_covered = tc_role_account($conn, 'conf_acc_fx', 7200);
+if ($mcg_covered > 0 && $mcg_covered !== 7200) {
+    echo "[SPRUNGET OVER] Kursgevinst/-tab bogføres allerede på konto $mcg_covered (Firmaindstillinger).\n";
+} elseif (mcg_account_exists($conn, 7200)) {
     echo "[SPRUNGET OVER] Konto 7200 findes allerede.\n";
 } else {
     if (DB::insert($conn, 'accounts', ['acc_id' => 7200, 'acc_name' => 'Kursgevinst/-tab, valuta', 'acc_type' => 'income'])) {

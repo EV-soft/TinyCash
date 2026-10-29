@@ -279,6 +279,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_existing']))
     }
 }
 
+// --- POST: omdøb et regnskab - bruger-anmodet ("hvor kan man omdøbe et
+// regnskab"). Rører kun 'name'-feltet i accounts.json (account_save() er et
+// dokumenteret delvist upsert, se dens egen kommentar - array_merge() bevarer
+// engine/db_path/is_demo/active uændret), aldrig selve databasen/filen,
+// samme "kun registret, aldrig dataene"-princip som (de)aktivering ovenfor.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['rename_account'])) {
+    $rename_id  = (string)($_POST['rename_id'] ?? '');
+    $new_name   = trim($_POST['new_name'] ?? '');
+    $old_target = account_get($rename_id);
+
+    if (!$old_target) {
+        $msg = lang('@Ledger not found.'); $msg_type = 'error';
+    } elseif ($new_name === '') {
+        $msg = lang('@Please enter a name for the ledger.'); $msg_type = 'error';
+    } elseif (account_save(['id' => $rename_id, 'name' => $new_name])) {
+        log_action($conn, 'RENAME_ACCOUNT', 'accounts', 0, $old_target, ['name' => $new_name]);
+        $msg = lang('@Ledger renamed.'); $msg_type = 'success';
+    } else {
+        $msg = lang('@Could not save the new ledger registration.'); $msg_type = 'error';
+    }
+}
+
 // --- GET: nedlæg/genaktiver et regnskab - kun en flag-ændring i
 // accounts.json, ingen database røres. Samme lette GET+confirm-mønster som
 // resten af appens listesider allerede bruger til rutinemæssige handlinger
@@ -341,7 +363,7 @@ if ($msg) htm_Alert(text: $msg, type: $msg_type, width: 1000);
 
 if ($just_created_id) {
 
-    htm_Card_(capt: '⏳ ' . lang('@Building ledger...'), wdth: 700);
+    htm_Card_(capt: '⏳ ' . lang('@Building ledger...'), wdth: 800);
     echo '<p>' . lang('@Setting up the new ledger. This only takes a moment.') . '</p>';
     echo '<form id="provisionForm" method="post" action="db-setup/provision_account.php">';
     csrf_field();
@@ -354,7 +376,7 @@ if ($just_created_id) {
 } else {
 
     // --- KORT 1: Opret nyt demo-regnskab ---
-    htm_Card_(capt: '🆕 ' . lang('@Create new demo ledger'), wdth: 700, form: 'create_demo_form', fold: true);
+    htm_Card_(capt: '🆕 ' . lang('@Create new demo ledger'), wdth: 800, form: 'create_demo_form', fold: true);
     echo '<p style="color:var(--text-muted); font-size:0.9em;">' . lang('@Creates a brand new, fully separate database seeded with demo data (H.C. Andersen fairy-tale theme) - completely isolated from your other ledgers.') . '</p>';
     echo '<div style="margin-bottom:12px;"><label>' . lang('@Name') . '</label><br>
           <input type="text" name="name" required style="width:100%; padding:8px; box-sizing:border-box;"></div>';
@@ -380,7 +402,7 @@ if ($just_created_id) {
     // man selv er logget ind på lige nu.
     $current_loc_hint = ($db_type === 'mysql') ? ($db_settings['DB_NAME'] ?? '') : ($db_settings['DB_PATH'] ?? 'data/tinycash.sqlite');
     $candidates = array_merge(account_scan_sqlite_candidates(), account_scan_mysql_candidates($config['mysql_config'] ?? []));
-    htm_Card_(capt: '🔗 ' . lang('@Register an existing database'), wdth: 700, fold: 'closed');
+    htm_Card_(capt: '🔗 ' . lang('@Register an existing database'), wdth: 800, fold: 'closed');
     echo '<p style="color:var(--text-muted); font-size:0.9em;">' . lang('@Adds an already set-up database - for example this installation\'s original ledger from before multiple ledgers existed - to the ledger list below, without touching its data. Use this if a ledger has become invisible in the login picker.') . '</p>';
 
     if (!empty($candidates)) {
@@ -422,7 +444,7 @@ if ($just_created_id) {
 
     // --- KORT 2: Konverter demo til aktiv ---
     $demo_accounts = array_values(array_filter(account_list(true), fn($a) => !empty($a['is_demo']) && !empty($a['active'])));
-    htm_Card_(capt: '🔄 ' . lang('@Convert demo to active ledger'), wdth: 1000, fold: true);
+    htm_Card_(capt: '🔄 ' . lang('@Convert demo to active ledger'), wdth: 800, fold: true);
     if (empty($demo_accounts)) {
         echo '<p style="color:var(--text-muted);">' . lang('@No demo ledgers to convert.') . '</p>';
     } else {
@@ -443,7 +465,7 @@ if ($just_created_id) {
     htm_Card_end();
 
     // --- KORT 3: Alle regnskaber (oversigt + nedlæg/genaktiver) ---
-    htm_Card_(capt: '🗂️ ' . lang('@All ledgers'), wdth: 1000, fold: true);
+    htm_Card_(capt: '🗂️ ' . lang('@All ledgers'), wdth: 800, fold: true);
     $all_accounts = account_list(true);
     if (empty($all_accounts)) {
         echo '<p style="color:var(--text-muted);">' . lang('@No ledgers registered yet - this installation runs on its single, original database (env.ini), exactly as before this feature existed.') . '</p>';
@@ -451,7 +473,13 @@ if ($just_created_id) {
         $head = ['@Name', '@Engine', '@Type', '@Status', '@Created', '@Actions'];
         $data = [];
         $active_count = count(account_list());
+        // "js_id" er en HTML-id-/JS-streng-sikker udgave af regnskabets id -
+        // account_generate_id() laver kun slugs (bogstaver/tal/bindestreg),
+        // men htmlspecialchars() alene beskytter ikke mod at ID'et bryder ud
+        // af en enkelt-anførselstegn-JS-streng i onclick=''; rawurlencode()
+        // er en billig, garanteret sikker fælles løsning for begge kontekster.
         foreach ($all_accounts as $acc) {
+            $js_id        = rawurlencode($acc['id']);
             $type_badge   = !empty($acc['is_demo']) ? htm_Badge('@Demo', 'warning', false) : htm_Badge('@Active', 'success', false);
             $status_badge = !empty($acc['active'])  ? htm_Badge('@Active', 'success', false) : htm_Badge('@Deactivated', 'secondary', false);
             if (!empty($acc['active']) && $active_count <= 1) {
@@ -464,18 +492,36 @@ if ($just_created_id) {
                     icon: 'fa-box-archive', labl: '@Deactivate',
                     link: 'account_manage.php?deactivate=' . urlencode($acc['id']),
                     mess: '@Deactivate this ledger? It disappears from the login list, but its database is kept untouched and can be reactivated any time.',
-                    type: 'secondary', styl: 'padding:4px 10px; font-size:12px;', echo: false
+                    type: 'secondary', styl: 'padding:4px 10px; font-size:12px;', attr: 'data-hint="' . lang('@Hide the ledger from the login list - its data is kept') . '"', echo: false
                 );
             } else {
                 $action = htm_ConfirmLink(
                     icon: 'fa-rotate-left', labl: '@Reactivate',
                     link: 'account_manage.php?reactivate=' . urlencode($acc['id']),
                     mess: '@Reactivate this ledger?',
-                    type: 'success', styl: 'padding:4px 10px; font-size:12px;', echo: false
+                    type: 'success', styl: 'padding:4px 10px; font-size:12px;', attr: 'data-hint="' . lang('@Show the ledger in the login list again') . '"', echo: false
                 );
             }
+            // NYT (bruger-anmodet: "hvor kan man omdøbe et regnskab") - en
+            // lille blyant-knap forrest i Handlinger, uafhængig af aktiv-/
+            // låst-status ovenfor (omdøbning er harmløs uanset regnskabets
+            // tilstand). Slår kun det navn+knap-par, der allerede vises i
+            // Navn-kolonnen nedenfor, om til en lille inline-formular via
+            // toggleRenameForm() - se dens definition efter tabellen.
+            $action = '<button type="button" onclick="toggleRenameForm(\'' . $js_id . '\')" data-hint="' . htmlspecialchars(lang('@Rename'), ENT_QUOTES) . '" style="background:none; border:none; cursor:pointer; color:var(--text-muted); padding:4px 6px; margin-right:2px;"><i class="fa-solid fa-pencil"></i></button>' . $action;
+
+            $acc_name = $acc['name'] ?? $acc['id'];
+            $name_html = '<span id="acct_name_' . $js_id . '">' . htmlspecialchars($acc_name) . '</span>'
+                . '<form id="acct_rename_form_' . $js_id . '" method="post" style="display:none; gap:4px; align-items:center;">';
+            ob_start(); csrf_field(); $name_html .= ob_get_clean();
+            $name_html .= '<input type="hidden" name="rename_id" value="' . htmlspecialchars($acc['id'], ENT_QUOTES) . '">'
+                . '<input type="text" name="new_name" value="' . htmlspecialchars($acc_name, ENT_QUOTES) . '" required style="padding:4px 6px; font-size:0.9em; width:140px;">'
+                . '<button type="submit" name="rename_account" value="1" style="background:none; border:none; cursor:pointer; color:var(--color-success);" data-hint="' . htmlspecialchars(lang('@Save'), ENT_QUOTES) . '"><i class="fa-solid fa-check"></i></button>'
+                . '<button type="button" onclick="toggleRenameForm(\'' . $js_id . '\')" style="background:none; border:none; cursor:pointer; color:var(--text-muted);" data-hint="' . htmlspecialchars(lang('@Cancel'), ENT_QUOTES) . '"><i class="fa-solid fa-xmark"></i></button>'
+                . '</form>';
+
             $data[] = [
-                htmlspecialchars($acc['name'] ?? $acc['id']),
+                $name_html,
                 htmlspecialchars(strtoupper($acc['engine'] ?? '')),
                 $type_badge,
                 $status_badge,
@@ -484,6 +530,20 @@ if ($just_created_id) {
             ];
         }
         htm_Table($head, $data, 'accountsTbl', 100, '', true, [], '400px');
+        // Viser/skjuler det navn+inline-formular-par, der bygges pr. række
+        // ovenfor - én fælles funktion for alle rækker, matcher id'et via
+        // rawurlencode()'et id (se kommentaren ved $js_id).
+        echo '<script>
+        function toggleRenameForm(id) {
+            var span = document.getElementById("acct_name_" + id);
+            var form = document.getElementById("acct_rename_form_" + id);
+            if (!span || !form) return;
+            var showing = form.style.display !== "none";
+            form.style.display = showing ? "none" : "inline-flex";
+            span.style.display = showing ? "inline" : "none";
+            if (!showing) { var inp = form.querySelector("input[name=new_name]"); if (inp) { inp.focus(); inp.select(); } }
+        }
+        </script>';
     }
     htm_Card_end();
 

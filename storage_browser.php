@@ -1,4 +1,4 @@
-<?php # /storage_browser.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /storage_browser.php v:1.3.1 d:2026-09-15 i:evs
 # Filbrowser til de faste lager-mapper (backups/, storage/invoices,
 # storage/einvoices, storage/saf-t, doc/, images/, uploads/, json-data/) -
 # browse/download/slet. Begrænset til user_level 3, da mapperne bl.a.
@@ -7,6 +7,19 @@
 # findes på disken. Bilagsfiler for allerede bogførte udgifter (voucher_no
 # sat) kan ikke slettes herfra (bogføringslov, 5-års opbevaring) - samme
 # spærring som i expense_edit.php.
+# Samme retentionsspærring gælder nu også storage/invoices/ og
+# storage/einvoices/ (§bogforingslov-compliance - stod tidligere kun noteret
+# som en ikke-lukket rest: "storage/invoices/, storage/einvoices/ m.fl. er
+# ikke gennemgået for samme problem"). Fakturaarkiv-filer har ingen egen
+# DB-kolonne med deres filnavn (i modsætning til expenses.attachment) - de
+# genkendes i stedet ved at udtrække det længste tal i filnavnet (svarer til
+# invoices.invoice_no, jf. export_oioubl.php's "OIOUBL_Invoice_{no}.xml"-
+# navngivning) og slå det op som en BOGFØRT faktura (inv_status != 'draft',
+# samme tjek export_oioubl.php/send_invoice_action.php selv bruger). Bevidst
+# den forsigtige/sikre fejlretning: et filnavn der tilfældigvis indeholder et
+# tal der matcher et rigtigt fakturanummer bliver låst selvom filen reelt
+# ikke er det arkiv, frem for omvendt (aldrig tillade sletning af en reel
+# lovpligtig arkivfil).
 ob_start();
 $rLev = 3;
 require_once 'inc/auth.inc.php';
@@ -16,9 +29,11 @@ require_once 'inc/php2htm.lib.php';
 require_once 'inc/audit.inc.php';
 
 $allowed_folders = [
-    'invoices'   => 'storage/invoices/',
-    'einvoices'  => 'storage/einvoices/',
-    'saf-t'      => 'storage/saf-t/',
+    // (arkiverne ligger pr. regnskab - se tc_account_storage_subdir(); et andet regnskabs filer vises ikke her)
+    'invoices'   => 'storage/invoices/' . tc_account_storage_subdir(),
+    'einvoices'  => 'storage/einvoices/' . tc_account_storage_subdir(),
+    'saf-t'      => 'storage/saf-t/' . tc_account_storage_subdir(),
+    'saft-import'=> 'storage/saft_import/',
     'doc'        => 'doc/',
     'images'     => 'images/',
     'uploads'    => 'uploads/',
@@ -31,6 +46,10 @@ if (!array_key_exists($current_key, $allowed_folders)) {
     $current_key = 'invoices';
 }
 $storage_dir = $allowed_folders[$current_key];
+// RETTET: også programmets egne filer kunne slettes herfra - json-data/languages.json (alle tekster),
+// standardkontoplanen, hjælpeteksterne, valutalisten og doc/. Bagefter virkede programmet ikke. De to mapper
+// kan nu kun ses og hentes.
+$readonly_folders = ['json-data', 'doc'];
 $msg_html = '';
 
 if (!is_dir($storage_dir)) {
@@ -94,21 +113,53 @@ if (isset($_POST['action']) && $_POST['action'] === 'view_file' && !empty($_POST
 }
 
 // Bogføringslov (5-års opbevaring): et bilag der er knyttet til en BOGFØRT
-// udgift (voucher_no sat) må ikke kunne slettes her heller - ellers omgår
-// denne side den samme spærring som expense_edit.php allerede håndhæver.
-// Kun relevant i uploads/-mappen, hvor udgiftsbilag ligger.
+// udgift (voucher_no sat), eller en arkivfil for en BOGFØRT faktura, må ikke
+// kunne slettes her - ellers omgår denne side de samme spærringer som
+// expense_edit.php/export_oioubl.php allerede håndhæver hver for sig.
 function storage_file_is_locked_attachment($conn, $folder_key, $filename) {
-    if ($folder_key !== 'uploads') return false;
-    $row = DB::fetch_assoc(DB::query($conn,
-        "SELECT exp_id FROM expenses WHERE attachment = '" . DB::escape($conn, $filename) . "' AND voucher_no IS NOT NULL LIMIT 1"));
-    return !empty($row);
+    if ($folder_key === 'uploads') {
+        $row = DB::fetch_assoc(DB::query($conn,
+            "SELECT exp_id FROM expenses WHERE attachment = '" . DB::escape($conn, $filename) . "' AND voucher_no IS NOT NULL LIMIT 1"));
+        return !empty($row);
+    }
+
+    if ($folder_key === 'invoices' || $folder_key === 'einvoices') {
+        // Fakturaarkiv-filer har ingen egen DB-kolonne med deres filnavn (i
+        // modsætning til expenses.attachment) - export_oioubl.php navngiver
+        // dem i stedet efter selve fakturanummeret ("OIOUBL_Invoice_{no}.xml").
+        // Udtrækker derfor det LÆNGSTE tal i filnavnet (undgår at fx et
+        // indlejret årstal fejlagtigt bruges frem for det typisk længere
+        // fakturanummer) og slår det op som invoices.invoice_no; låst hvis en
+        // BOGFØRT faktura matcher (inv_status != 'draft', samme tjek
+        // export_oioubl.php/send_invoice_action.php selv bruger). Bevidst den
+        // forsigtige retning: et filnavn der tilfældigvis rammer et rigtigt
+        // fakturanummer bliver låst selvom filen reelt ikke er arkivet -
+        // aldrig omvendt.
+        // Arkiverede kreditnotaer (inc/invoice_pdf_archive.inc.php): creditnote_<kreditnotanr>.pdf / creditnote_id<inv_id>.pdf
+        if (preg_match('/^creditnote_(id)?(\d+)\.pdf$/i', $filename, $cm)) {
+            $where = $cm[1] !== '' ? "inv_id = " . (int)$cm[2] : "credit_note_no = " . (int)$cm[2];
+            $row = @DB::fetch_assoc(DB::query($conn, "SELECT inv_id FROM invoices WHERE $where AND credit_ref IS NOT NULL LIMIT 1"));
+            return !empty($row);
+        }
+        if (!preg_match_all('/\d+/', $filename, $m) || empty($m[0])) return false;
+        $numbers = $m[0];
+        usort($numbers, fn($a, $b) => strlen($b) <=> strlen($a));
+        $invoice_no = $numbers[0];
+        $row = DB::fetch_assoc(DB::query($conn,
+            "SELECT inv_id FROM invoices WHERE invoice_no = '" . DB::escape($conn, $invoice_no) . "' AND LOWER(inv_status) != 'draft' LIMIT 1"));
+        return !empty($row);
+    }
+
+    return false;
 }
 
 if (isset($_GET['delete']) && !empty($_GET['delete'])) {
     $filename = basename($_GET['delete']);
     $target_file = $storage_dir . $filename;
-    if (storage_file_is_locked_attachment($conn, $current_key, $filename)) {
-        $msg_html = htm_Alert(text: lang('@This file is the attachment of a posted expense and cannot be deleted (bookkeeping retention).'), type: 'danger');
+    if (in_array($current_key, $readonly_folders, true)) {
+        $msg_html = htm_Alert(text: lang('@The files of this folder belong to the program and cannot be deleted here.'), type: 'danger');
+    } elseif (storage_file_is_locked_attachment($conn, $current_key, $filename)) {
+        $msg_html = htm_Alert(text: lang('@This file is linked to a posted expense or invoice and cannot be deleted (bookkeeping retention).'), type: 'danger');
     } elseif (file_exists($target_file)) {
         if (unlink($target_file)) {
             // REVISIONSSPOR: filer har ingen numerisk DB-række/PK, så filnavn
@@ -328,7 +379,7 @@ htm_Card_(capt: '@System Storage Browser', wdth: '');
             // Ingen slet-knap for et bilag der allerede er bogført - den ville
             // alligevel blive afvist server-side (samme princip som ledger_view/
             // expense_list: vis aldrig en handling der bliver nægtet).
-            if (!storage_file_is_locked_attachment($conn, $current_key, $file)) {
+            if (!in_array($current_key, $readonly_folders, true) && !storage_file_is_locked_attachment($conn, $current_key, $file)) {
                 $file_actions[] = ['icon' => 'fa-trash', 'label' => '@Delete', 'link' => 'storage_browser.php?folder=' . $current_key . '&delete=' . urlencode($file), 'confirm' => '@Are you sure you want to delete this file?', 'type' => 'danger'];
             }
 

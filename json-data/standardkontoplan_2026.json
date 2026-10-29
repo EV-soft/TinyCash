@@ -1,0 +1,4383 @@
+{
+ "name": "Standardkontoplan",
+ "valid_from": "2026-01-01",
+ "source": "Erhvervsstyrelsen - https://git.erst.dk/standard-filformater/standard-filformater (Standardkontoplanen/JSON/2026-01-01-Standardkontoplan.json)",
+ "note": "type: TinyCash kontotype (udledt af nummerintervallerne); std_type: typen i std_accounts / SAF-T",
+ "accounts": [
+  {
+   "no": 1010,
+   "name": "Salg af varer og ydelser",
+   "group": "Nettoomsætning",
+   "group_no": 1001,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income",
+   "vat_code": "S25",
+   "vat_rate": 25.0
+  },
+  {
+   "no": 1050,
+   "name": "Salg af varer udland, EU",
+   "group": "Nettoomsætning",
+   "group_no": 1001,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income",
+   "vat_code": "S0",
+   "vat_rate": 0.0
+  },
+  {
+   "no": 1100,
+   "name": "Salg af varer udland, ikke-EU",
+   "group": "Nettoomsætning",
+   "group_no": 1001,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income",
+   "vat_code": "S0",
+   "vat_rate": 0.0
+  },
+  {
+   "no": 1150,
+   "name": "Salg af ydelser udland, EU",
+   "group": "Nettoomsætning",
+   "group_no": 1001,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income",
+   "vat_code": "S0",
+   "vat_rate": 0.0
+  },
+  {
+   "no": 1200,
+   "name": "Salg af ydelser udland, ikke-EU",
+   "group": "Nettoomsætning",
+   "group_no": 1001,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income",
+   "vat_code": "S0",
+   "vat_rate": 0.0
+  },
+  {
+   "no": 1210,
+   "name": "Salgsrabatter",
+   "group": "Nettoomsætning",
+   "group_no": 1001,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 1250,
+   "name": "Salgsfragt",
+   "group": "Nettoomsætning",
+   "group_no": 1001,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 1300,
+   "name": "Regulering igangværende arbejder",
+   "group": "Nettoomsætning",
+   "group_no": 1001,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 1410,
+   "name": "Varelagerregulering på lagre af færdigvarer og varer under fremstilling",
+   "group": "Ændring i lagre af færdigvarer og varer under fremstilling",
+   "group_no": 1400,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 1430,
+   "name": "Nedskrivning på lagre af færdigvarer og varer under fremstilling",
+   "group": "Ændring i lagre af færdigvarer og varer under fremstilling",
+   "group_no": 1400,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 1450,
+   "name": "Andel af nedskrivning på lagre af færdigvarer og varer under fremstilling (ej fradragsberettiget skattemæssigt)",
+   "group": "Ændring i lagre af færdigvarer og varer under fremstilling",
+   "group_no": 1400,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 1460,
+   "name": "Øvrige ændringer på lagre af færdigvarer og varer under fremstilling",
+   "group": "Ændring i lagre af færdigvarer og varer under fremstilling",
+   "group_no": 1400,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 1496,
+   "name": "Arbejde udført for egen regning og opført under aktiver",
+   "group": "Arbejde udført for egen regning og opført under aktiver",
+   "group_no": 1495,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 1510,
+   "name": "Gevinst ved salg af immaterielle anlægsaktiver",
+   "group": "Andre driftsindtægter",
+   "group_no": 1500,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 1530,
+   "name": "Gevinst ved salg af materielle anlægsaktiver",
+   "group": "Andre driftsindtægter",
+   "group_no": 1500,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 1545,
+   "name": "Offentlige tilskud",
+   "group": "Andre driftsindtægter",
+   "group_no": 1500,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 1550,
+   "name": "Øvrige andre driftsindtægter",
+   "group": "Andre driftsindtægter",
+   "group_no": 1500,
+   "section": "RESULTATOPGØRELSE",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 1610,
+   "name": "Varekøb",
+   "group": "Omkostninger til råvarer og hjælpematerialer",
+   "group_no": 1600,
+   "section": "Eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1630,
+   "name": "Varekøb udland, EU",
+   "group": "Omkostninger til råvarer og hjælpematerialer",
+   "group_no": 1600,
+   "section": "Eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1650,
+   "name": "Varekøb udland, ikke-EU",
+   "group": "Omkostninger til råvarer og hjælpematerialer",
+   "group_no": 1600,
+   "section": "Eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1660,
+   "name": "Ydelseskøb",
+   "group": "Omkostninger til råvarer og hjælpematerialer",
+   "group_no": 1600,
+   "section": "Eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1710,
+   "name": "Ydelseskøb udland, EU",
+   "group": "Omkostninger til råvarer og hjælpematerialer",
+   "group_no": 1600,
+   "section": "Eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1740,
+   "name": "Ydelseskøb, udland, ikke-EU",
+   "group": "Omkostninger til råvarer og hjælpematerialer",
+   "group_no": 1600,
+   "section": "Eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1745,
+   "name": "Underleverandører (varer/ydelser leveret til kunder)",
+   "group": "Omkostninger til råvarer og hjælpematerialer",
+   "group_no": 1600,
+   "section": "Eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1760,
+   "name": "Fragtomkostninger",
+   "group": "Omkostninger til råvarer og hjælpematerialer",
+   "group_no": 1600,
+   "section": "Eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1770,
+   "name": "Varelagerregulering på lagre af råvarer og hjælpematerialer",
+   "group": "Omkostninger til råvarer og hjælpematerialer",
+   "group_no": 1600,
+   "section": "Eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1800,
+   "name": "Nedskrivning på varelager",
+   "group": "Omkostninger til råvarer og hjælpematerialer",
+   "group_no": 1600,
+   "section": "Eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1801,
+   "name": "Øvrige produktionsomkostninger",
+   "group": "Omkostninger til råvarer og hjælpematerialer",
+   "group_no": 1600,
+   "section": "Eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1805,
+   "name": "Andel af nedskrivning på varelager (ej fradragsberettiget skattemæssigt)",
+   "group": "Omkostninger til råvarer og hjælpematerialer",
+   "group_no": 1600,
+   "section": "Eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1807,
+   "name": "Værdi af eget vareforbrug (kun klasse A)",
+   "group": "Omkostninger til råvarer og hjælpematerialer",
+   "group_no": 1600,
+   "section": "Eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1850,
+   "name": "Annoncering og reklame",
+   "group": "Salgsomkostninger",
+   "group_no": 1821,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1870,
+   "name": "Udstillinger og dekoration",
+   "group": "Salgsomkostninger",
+   "group_no": 1821,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1910,
+   "name": "Repræsentationsomkostninger, skattemæssigt begrænset fradrag",
+   "group": "Salgsomkostninger",
+   "group_no": 1821,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1930,
+   "name": "Repræsentationsomkostninger, fuld fradragsret skattemæssigt",
+   "group": "Salgsomkostninger",
+   "group_no": 1821,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1950,
+   "name": "Andre salgsomkostninger",
+   "group": "Salgsomkostninger",
+   "group_no": 1821,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 1990,
+   "name": "Gaver og blomster",
+   "group": "Salgsomkostninger",
+   "group_no": 1821,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2000,
+   "name": "Rejseomkostninger (salgsomkostning)",
+   "group": "Salgsomkostninger",
+   "group_no": 1821,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2030,
+   "name": "Husleje",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2050,
+   "name": "El",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2060,
+   "name": "Elafgift",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2070,
+   "name": "Vand",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2080,
+   "name": "Varme",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2085,
+   "name": "Privat andel el, vand og varme (kun klasse A)",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2090,
+   "name": "Vandafgift",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2100,
+   "name": "Olie- og flaskegasafgift",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2110,
+   "name": "Kulafgift",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2120,
+   "name": "Naturgas- og bygasafgift",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2130,
+   "name": "Co2-afgift",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2140,
+   "name": "Øvrige afgifter",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2150,
+   "name": "Rengøring og renovation (affaldshåndtering)",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2160,
+   "name": "Reparation og vedligeholdelse",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2170,
+   "name": "Reparation og vedligeholdelse, ejendom skattemæssigt afskrivningsberettiget, bygning 1",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2180,
+   "name": "Forsikringer til lokaler og bygninger",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2190,
+   "name": "Ejendomsskatter",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2200,
+   "name": "Andre lokaleomkostninger",
+   "group": "Lokaleomkostninger",
+   "group_no": 2020,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2230,
+   "name": "Småanskaffelser under skattemæssig grænse for småaktiver",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2240,
+   "name": "Småanskaffelser over skattemæssig grænse for småaktiver",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2255,
+   "name": "Forskningsomkostninger",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2260,
+   "name": "Udviklingsomkostninger",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2265,
+   "name": "Andel af forskningsomkostninger (berettiget til forhøjet skattemæssigt fradrag)",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2266,
+   "name": "Andel af udviklingsomkostninger (berettiget til forhøjet skattemæssigt fradrag)",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2280,
+   "name": "Tab på tilgodehavender fra salg og tjenesteydelser",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2290,
+   "name": "Regulering af nedskrivning på tilgodehavender fra salg og tjenesteydelser",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2295,
+   "name": "Andel af regulering af nedskrivning på tilgodehavender fra salg og tjenesteydelser  (ej fradragsberettiget skattemæssigt)",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2310,
+   "name": "It-udstyr (hardware, software inkl. licenser og abonnementer)",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2350,
+   "name": "Kantineomkostninger",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2370,
+   "name": "Kontingenter",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2375,
+   "name": "Aviser og blade",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2380,
+   "name": "Faglitteratur",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2390,
+   "name": "Porto og gebyrer",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2410,
+   "name": "Telefon og internet mv. (kun virksomhed)",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2430,
+   "name": "Privat andel / fri-telefon (kun klasse A)",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2450,
+   "name": "Kontorartikler",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2460,
+   "name": "Leje og operationelle leasingydelser (ekskl. husleje)",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2470,
+   "name": "Rejseomkostninger (administrationsomkostning)",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2480,
+   "name": "Vikarassistance",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2510,
+   "name": "Konsulentydelser",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2530,
+   "name": "Leasingomkostninger, personbiler",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2540,
+   "name": "Driftsomkostninger, personbiler",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2548,
+   "name": "Leasingomkostninger, blandet benyttet personbil (kun klasse A)",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2550,
+   "name": "Privat andel af biludgifter (kun klasse A)",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2560,
+   "name": "Driftsomkostninger, varebiler",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2567,
+   "name": "Leasingomkostninger, blandet benyttet varebil (kun klasse A)",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2569,
+   "name": "Leasingomkostninger, varebiler",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2580,
+   "name": "Privat andel af blandet benyttet varebil (kun klasse A)",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2620,
+   "name": "Parkeringsomkostninger",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2650,
+   "name": "Øvrige forsikringer",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2660,
+   "name": "Offentlige gebyrer og bøder (ej fradragsberettiget skattemæssigt)",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2670,
+   "name": "Revision og regnskabsmæssig assistance",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2680,
+   "name": "Advokatmæssig assistance",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2690,
+   "name": "Øvrige rådgivningshonorarer",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2700,
+   "name": "Ej skattemæssigt fradragsberettigede rådgivningshonorarer",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2710,
+   "name": "Administrationsvederlag/management fee",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2720,
+   "name": "Øreafrunding/kassedifferencer",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2810,
+   "name": "Andre eksterne omkostninger",
+   "group": "Administrationsomkostninger",
+   "group_no": 2220,
+   "section": "Andre eksterne omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2845,
+   "name": "AM Bidragspligtig A-Indkomst",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2846,
+   "name": "AM Bidragsfri A-Indkomst",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2847,
+   "name": "B-honorar",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2860,
+   "name": "Feriepenge og SH-tillæg",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2865,
+   "name": "Ferietillæg",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2866,
+   "name": "Feriepengeforpligtelse, regulering",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2870,
+   "name": "Jubilæumsgratiale og fratrædelsesgodtgørelse",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2880,
+   "name": "Bestyrelseshonorar",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2885,
+   "name": "Lønrefusioner",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2887,
+   "name": "Personalegoder",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2888,
+   "name": "Fri bil",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2895,
+   "name": "Skattefri rejse- og befordringsgodtgørelse",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2896,
+   "name": "Kursusudgifter",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2897,
+   "name": "ATP, medarbejder",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2898,
+   "name": "ATP, arbejdsgiver",
+   "group": "Lønninger",
+   "group_no": 2842,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2910,
+   "name": "Pensioner, arbejdsgiver",
+   "group": "Pensioner",
+   "group_no": 2906,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2920,
+   "name": "Vederlag til afløsning af pensionstilsagn",
+   "group": "Pensioner",
+   "group_no": 2906,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2925,
+   "name": "Øvrige pensionsomkostninger",
+   "group": "Pensioner",
+   "group_no": 2906,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2930,
+   "name": "Øvrige omkostninger til social sikring",
+   "group": "Andre omkostninger til social sikring",
+   "group_no": 2927,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2946,
+   "name": "Lønsumsafgift",
+   "group": "Andre omkostninger til social sikring",
+   "group_no": 2927,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 2947,
+   "name": "Arbejdsskadeforsikringer",
+   "group": "Andre omkostninger til social sikring",
+   "group_no": 2927,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3000,
+   "name": "Af- og nedskrivninger af erhvervede immaterielle anlægsaktiver",
+   "group": "Af- og nedskrivninger af materielle og immaterielle anlægsaktiver",
+   "group_no": 2991,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3010,
+   "name": "Af- og nedskrivninger af goodwill",
+   "group": "Af- og nedskrivninger af materielle og immaterielle anlægsaktiver",
+   "group_no": 2991,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3020,
+   "name": "Af- og nedskrivninger af grunde og bygninger",
+   "group": "Af- og nedskrivninger af materielle og immaterielle anlægsaktiver",
+   "group_no": 2991,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3030,
+   "name": "Af- og nedskrivninger af produktionsanlæg og maskiner",
+   "group": "Af- og nedskrivninger af materielle og immaterielle anlægsaktiver",
+   "group_no": 2991,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3040,
+   "name": "Af- og nedskrivninger af indretning af lejede lokaler",
+   "group": "Af- og nedskrivninger af materielle og immaterielle anlægsaktiver",
+   "group_no": 2991,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3050,
+   "name": "Af- og nedskrivninger af andre anlæg, driftsmateriel og inventar",
+   "group": "Af- og nedskrivninger af materielle og immaterielle anlægsaktiver",
+   "group_no": 2991,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3060,
+   "name": "Af- og nedskrivninger af software",
+   "group": "Af- og nedskrivninger af materielle og immaterielle anlægsaktiver",
+   "group_no": 2991,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3070,
+   "name": "Af- og nedskrivninger af finansielt leasede grunde og bygninger",
+   "group": "Af- og nedskrivninger af materielle og immaterielle anlægsaktiver",
+   "group_no": 2991,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3080,
+   "name": "Af- og nedskrivninger af finansielt leasede produktionsanlæg og maskiner",
+   "group": "Af- og nedskrivninger af materielle og immaterielle anlægsaktiver",
+   "group_no": 2991,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3090,
+   "name": "Af- og nedskrivninger af finansielt leasede andre anlæg, driftsmateriel og inventar",
+   "group": "Af- og nedskrivninger af materielle og immaterielle anlægsaktiver",
+   "group_no": 2991,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3095,
+   "name": "Privat andel af af- og nedskrivninger (kun klasse A)",
+   "group": "Af- og nedskrivninger af materielle og immaterielle anlægsaktiver",
+   "group_no": 2991,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3097,
+   "name": "Gevinst ved salg af andre anlæg, driftsmateriel og inventar blandet benyttet (kun klasse A)",
+   "group": "Af- og nedskrivninger af materielle og immaterielle anlægsaktiver",
+   "group_no": 2991,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3099,
+   "name": "Tab ved salg af andre anlæg, driftsmateriel og inventar blandet benyttet (kun klasse A)",
+   "group": "Af- og nedskrivninger af materielle og immaterielle anlægsaktiver",
+   "group_no": 2991,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3130,
+   "name": "Nedskrivning af omsætningsaktiver, som overstiger normale nedskrivninger",
+   "group": "Nedskrivning af omsætningsaktiver, som overstiger normale nedskrivninger",
+   "group_no": 3120,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3160,
+   "name": "Tab ved salg af immaterielle anlægsaktiver",
+   "group": "Andre driftsomkostninger",
+   "group_no": 3150,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3165,
+   "name": "Tab ved salg af materielle anlægsaktiver",
+   "group": "Andre driftsomkostninger",
+   "group_no": 3150,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3170,
+   "name": "Øvrige andre driftsomkostninger",
+   "group": "Andre driftsomkostninger",
+   "group_no": 3150,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3185,
+   "name": "Værdireguleringer af investeringsejendomme",
+   "group": "Dagsværdiregulering af investeringsejendomme",
+   "group_no": 3180,
+   "section": "Personaleomkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3193,
+   "name": "Modtagne udbytter fra tilknyttede virksomheder",
+   "group": "Indtægter af kapitalandele i tilknyttede virksomheder",
+   "group_no": 3192,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3194,
+   "name": "Gevinst ved afhændelse af kapitalandele i tilknyttede virksomheder",
+   "group": "Indtægter af kapitalandele i tilknyttede virksomheder",
+   "group_no": 3192,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3196,
+   "name": "Tab ved afhændelse af kapitalandele i tilknyttede virksomheder",
+   "group": "Indtægter af kapitalandele i tilknyttede virksomheder",
+   "group_no": 3192,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3197,
+   "name": "Nedskrivning af kapitalandele i tilknyttede virksomheder",
+   "group": "Indtægter af kapitalandele i tilknyttede virksomheder",
+   "group_no": 3192,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3198,
+   "name": "Tilbageførsel af nedskrivning af kapitalandele i tilknyttede virksomheder",
+   "group": "Indtægter af kapitalandele i tilknyttede virksomheder",
+   "group_no": 3192,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3200,
+   "name": "Øvrige indtægter af kapitalandele i tilknyttede virksomheder",
+   "group": "Indtægter af kapitalandele i tilknyttede virksomheder",
+   "group_no": 3192,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3211,
+   "name": "Modtagne udbytter fra associerede virksomheder",
+   "group": "Indtægter af kapitalandele i associerede virksomheder",
+   "group_no": 3210,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3212,
+   "name": "Gevinst ved afhændelse af kapitalandele i associerede virksomheder",
+   "group": "Indtægter af kapitalandele i associerede virksomheder",
+   "group_no": 3210,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3214,
+   "name": "Tab ved afhændelse af kapitalandele i associerede virksomheder",
+   "group": "Indtægter af kapitalandele i associerede virksomheder",
+   "group_no": 3210,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3215,
+   "name": "Nedskrivning af kapitalandele i associerede virksomheder",
+   "group": "Indtægter af kapitalandele i associerede virksomheder",
+   "group_no": 3210,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3216,
+   "name": "Tilbageførsel af nedskrivning af kapitalandele i associerede virksomheder",
+   "group": "Indtægter af kapitalandele i associerede virksomheder",
+   "group_no": 3210,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3217,
+   "name": "Øvrige indtægter af kapitalandele i associerede virksomheder",
+   "group": "Indtægter af kapitalandele i associerede virksomheder",
+   "group_no": 3210,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3221,
+   "name": "Modtagne udbytter fra kapitalinteresser",
+   "group": "Indtægter af kapitalinteresser",
+   "group_no": 3220,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3222,
+   "name": "Gevinst ved afhændelse af kapitalinteresser",
+   "group": "Indtægter af kapitalinteresser",
+   "group_no": 3220,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3224,
+   "name": "Tab ved afhændelse af kapitalinteresser",
+   "group": "Indtægter af kapitalinteresser",
+   "group_no": 3220,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3225,
+   "name": "Nedskrivning af kapitalinteresser",
+   "group": "Indtægter af kapitalinteresser",
+   "group_no": 3220,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3226,
+   "name": "Tilbageførsel af nedskrivning af kapitalinteresser",
+   "group": "Indtægter af kapitalinteresser",
+   "group_no": 3220,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3230,
+   "name": "Øvrige indtægter af kapitalinteresser",
+   "group": "Indtægter af kapitalinteresser",
+   "group_no": 3220,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3252,
+   "name": "Resultatandele, der hidrører fra tilknyttede virksomheder",
+   "group": "Resultatandele, der hidrører fra tilknyttede virksomheder",
+   "group_no": 3251,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3262,
+   "name": "Resultatandele, der hidrører fra associerede virksomheder",
+   "group": "Resultatandele, der hidrører fra associerede virksomheder",
+   "group_no": 3261,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3272,
+   "name": "Resultatandele, der hidrører fra kapitalinteresser",
+   "group": "Resultatandele, der hidrører fra kapitalinteresser",
+   "group_no": 3271,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3380,
+   "name": "Udbytte fra unoterede porteføljeaktier (bruttoudbytte)",
+   "group": "Indtægter af andre kapitalandele, værdipapirer og tilgodehavender, der er anlægsaktiver",
+   "group_no": 3370,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3385,
+   "name": "Kursgevinster af andre kapitalandele, værdipapirer og tilgodehavender, der er anlægsaktiver",
+   "group": "Indtægter af andre kapitalandele, værdipapirer og tilgodehavender, der er anlægsaktiver",
+   "group_no": 3370,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3390,
+   "name": "Renteindtægter af andre kapitalandele, værdipapirer og tilgodehavender, der er anlægsaktiver",
+   "group": "Indtægter af andre kapitalandele, værdipapirer og tilgodehavender, der er anlægsaktiver",
+   "group_no": 3370,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3395,
+   "name": "Værdiregulering af andre kapitalandele og værdipaprer, der er anlægsaktiver",
+   "group": "Indtægter af andre kapitalandele, værdipapirer og tilgodehavender, der er anlægsaktiver",
+   "group_no": 3370,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3400,
+   "name": "Øvrige indtægter af andre kapitalandele, værdipapirer og tilgodehavender, der er anlægsaktiver",
+   "group": "Indtægter af andre kapitalandele, værdipapirer og tilgodehavender, der er anlægsaktiver",
+   "group_no": 3370,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3440,
+   "name": "Andre finansielle indtægter fra tilknyttede virksomheder",
+   "group": "Andre finansielle indtægter fra tilknyttede virksomheder",
+   "group_no": 3411,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3445,
+   "name": "Renteindtægter fra tilknyttede virksomheder",
+   "group": "Andre finansielle indtægter fra tilknyttede virksomheder",
+   "group_no": 3411,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3470,
+   "name": "Renter fra banker",
+   "group": "Andre finansielle indtægter",
+   "group_no": 3451,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3490,
+   "name": "Renter vedr. tilgodehavende fra salg af varer og tjenesteydelser",
+   "group": "Andre finansielle indtægter",
+   "group_no": 3451,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3510,
+   "name": "Rentetillæg mv. fra det offentlige (ej skattepligtig)",
+   "group": "Andre finansielle indtægter",
+   "group_no": 3451,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3530,
+   "name": "Øvrige finansielle indtægter",
+   "group": "Andre finansielle indtægter",
+   "group_no": 3451,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3535,
+   "name": "Valutakursregulering (gevinst)",
+   "group": "Andre finansielle indtægter",
+   "group_no": 3451,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3536,
+   "name": "Værdiregulering af børsnoterede værdipapirer, der er omsætningsaktiver",
+   "group": "Andre finansielle indtægter",
+   "group_no": 3451,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3537,
+   "name": "Værdiregulering af andre kapitalandele og værdipaprer, der er omsætningsaktiver",
+   "group": "Andre finansielle indtægter",
+   "group_no": 3451,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "income",
+   "std_type": "income"
+  },
+  {
+   "no": 3560,
+   "name": "Nedskrivning af finansielle anlægs- og omsætningsaktiver",
+   "group": "Nedskrivning af finansielle aktiver",
+   "group_no": 3541,
+   "section": "Indtægter af kapitalandele i tilknyttede og associerede virksomheder",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3590,
+   "name": "Finansielle omkostninger, der hidrører fra tilknyttede virksomheder",
+   "group": "Finansielle omkostninger, der hidrører fra tilknyttede virksomheder",
+   "group_no": 3572,
+   "section": "Øvrige finansielle omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3596,
+   "name": "Valutakursreguleringer, udenlandske dattervirksomheder",
+   "group": "Finansielle omkostninger, der hidrører fra tilknyttede virksomheder",
+   "group_no": 3572,
+   "section": "Øvrige finansielle omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3610,
+   "name": "Valutakursregulering (tab)",
+   "group": "Andre finansielle omkostninger",
+   "group_no": 3601,
+   "section": "Øvrige finansielle omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3630,
+   "name": "Kurstab på likvider, bankgæld og prioritetsgæld",
+   "group": "Andre finansielle omkostninger",
+   "group_no": 3601,
+   "section": "Øvrige finansielle omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3640,
+   "name": "Renter på finansiel leasinggæld",
+   "group": "Andre finansielle omkostninger",
+   "group_no": 3601,
+   "section": "Øvrige finansielle omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3650,
+   "name": "Renter vedr. leverandører af varer og tjenesteydelser",
+   "group": "Andre finansielle omkostninger",
+   "group_no": 3601,
+   "section": "Øvrige finansielle omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3670,
+   "name": "Renter til banker og realkreditinstitutter",
+   "group": "Andre finansielle omkostninger",
+   "group_no": 3601,
+   "section": "Øvrige finansielle omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3675,
+   "name": "Renter til det offentlige (ej fradragsberettiget skattemæssigt)",
+   "group": "Andre finansielle omkostninger",
+   "group_no": 3601,
+   "section": "Øvrige finansielle omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3690,
+   "name": "Øvrige finansielle omkostninger",
+   "group": "Andre finansielle omkostninger",
+   "group_no": 3601,
+   "section": "Øvrige finansielle omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3740,
+   "name": "Årets skat (skat af årets skattepligtige indkomst)",
+   "group": "Skat af årets resultat",
+   "group_no": 3703,
+   "section": "Øvrige finansielle omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3760,
+   "name": "Årets regulering af udskudt skat",
+   "group": "Skat af årets resultat",
+   "group_no": 3703,
+   "section": "Øvrige finansielle omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3780,
+   "name": "Regulering af skat vedrørende tidligere år",
+   "group": "Skat af årets resultat",
+   "group_no": 3703,
+   "section": "Øvrige finansielle omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 3810,
+   "name": "Andre skatter",
+   "group": "Andre skatter",
+   "group_no": 3791,
+   "section": "Øvrige finansielle omkostninger",
+   "type": "expense",
+   "std_type": "expense"
+  },
+  {
+   "no": 5010,
+   "name": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter, Kostpris primo",
+   "group": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter",
+   "group_no": 5004,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5011,
+   "name": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter, Årets tilgange",
+   "group": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter",
+   "group_no": 5004,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5012,
+   "name": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter, Årets afgange",
+   "group": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter",
+   "group_no": 5004,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5015,
+   "name": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter, Intern overførsel til/fra andre poster",
+   "group": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter",
+   "group_no": 5004,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5020,
+   "name": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter, opskrivninger primo",
+   "group": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter",
+   "group_no": 5004,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5021,
+   "name": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter, Årets opskrivninger",
+   "group": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter",
+   "group_no": 5004,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5022,
+   "name": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter, årets tilbageførsler af tidligere års opskrivninger",
+   "group": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter",
+   "group_no": 5004,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5030,
+   "name": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter, Af- og nedskrivninger primo",
+   "group": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter",
+   "group_no": 5004,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5031,
+   "name": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter, Årets af- og nedskrivninger",
+   "group": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter",
+   "group_no": 5004,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5032,
+   "name": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter, Tilbageførte af- og nedskrivninger",
+   "group": "Færdiggjort udviklingsprojekter, herunder patenter og lignende rettigheder, der stammer fra udviklingsprojekter",
+   "group_no": 5004,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5042,
+   "name": "Erhvervede immaterielle anlægsaktiver, kostpris primo",
+   "group": "Erhvervede immaterielle anlægsaktiver",
+   "group_no": 5041,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5043,
+   "name": "Erhvervede immaterielle anlægsaktiver, årets tilgange",
+   "group": "Erhvervede immaterielle anlægsaktiver",
+   "group_no": 5041,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5044,
+   "name": "Erhvervede immaterielle anlægsaktiver, årets afgange",
+   "group": "Erhvervede immaterielle anlægsaktiver",
+   "group_no": 5041,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5050,
+   "name": "Erhvervede immaterielle anlægsaktiver, Opskrivninger primo",
+   "group": "Erhvervede immaterielle anlægsaktiver",
+   "group_no": 5041,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5051,
+   "name": "Erhvervede immaterielle anlægsaktiver, Årets opskrivninger",
+   "group": "Erhvervede immaterielle anlægsaktiver",
+   "group_no": 5041,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5052,
+   "name": "Erhvervede immaterielle anlægsaktiver, Tilbageførte opskrivninger fra tidligere år",
+   "group": "Erhvervede immaterielle anlægsaktiver",
+   "group_no": 5041,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5055,
+   "name": "Erhvervede immaterielle anlægsaktiver, Af- og nedskrivninger primo",
+   "group": "Erhvervede immaterielle anlægsaktiver",
+   "group_no": 5041,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5056,
+   "name": "Erhvervede immaterielle anlægsaktiver, årets af- og nedskrivninger",
+   "group": "Erhvervede immaterielle anlægsaktiver",
+   "group_no": 5041,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5057,
+   "name": "Erhvervede immaterielle anlægsaktiver, tilbageførte af- og nedskrivninger",
+   "group": "Erhvervede immaterielle anlægsaktiver",
+   "group_no": 5041,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5062,
+   "name": "Goodwill, kostpris primo",
+   "group": "Goodwill",
+   "group_no": 5061,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5063,
+   "name": "Goodwill, årets tilgange",
+   "group": "Goodwill",
+   "group_no": 5061,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5064,
+   "name": "Goodwill, årets afgange",
+   "group": "Goodwill",
+   "group_no": 5061,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5075,
+   "name": "Goodwill, af- og nedskrivninger primo",
+   "group": "Goodwill",
+   "group_no": 5061,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5076,
+   "name": "Goodwill, årets af- og nedskrivninger",
+   "group": "Goodwill",
+   "group_no": 5061,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5077,
+   "name": "Goodwill, tilbageførte afskrivninger",
+   "group": "Goodwill",
+   "group_no": 5061,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5085,
+   "name": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver, Kostpris primo",
+   "group": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver",
+   "group_no": 5080,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5090,
+   "name": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver, Årets tilgange",
+   "group": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver",
+   "group_no": 5080,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5095,
+   "name": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver, Årets afgange",
+   "group": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver",
+   "group_no": 5080,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5100,
+   "name": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver, Intern overførsel til/fra andre poster",
+   "group": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver",
+   "group_no": 5080,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5110,
+   "name": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver, Af- og nedskrivninger primo",
+   "group": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver",
+   "group_no": 5080,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5111,
+   "name": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver, Årets af- og nedskrivninger",
+   "group": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver",
+   "group_no": 5080,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5112,
+   "name": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver, Tilbageførte af- og nedskrivninger",
+   "group": "Udviklingsprojekter under udførelse og forudbetalinger for immaterielle anlægsaktiver",
+   "group_no": 5080,
+   "section": "Immaterielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5160,
+   "name": "Investeringsejendomme, kostpris primo",
+   "group": "Investeringsejendomme",
+   "group_no": 5150,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5170,
+   "name": "Investeringsejendomme, årets tilgange",
+   "group": "Investeringsejendomme",
+   "group_no": 5150,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5180,
+   "name": "Investeringsejendomme, årets afgange",
+   "group": "Investeringsejendomme",
+   "group_no": 5150,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5185,
+   "name": "Investeringsejendomme, intern overførsel til/fra andre poster",
+   "group": "Investeringsejendomme",
+   "group_no": 5150,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5190,
+   "name": "Investeringsejendomme, årets forbedringer",
+   "group": "Investeringsejendomme",
+   "group_no": 5150,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5200,
+   "name": "Investeringsejendomme, værdireguleringer primo",
+   "group": "Investeringsejendomme",
+   "group_no": 5150,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5201,
+   "name": "Investeringsejendomme, årets værdireguleringer",
+   "group": "Investeringsejendomme",
+   "group_no": 5150,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5205,
+   "name": "Investeringsejendomme, Af- og nedskrivninger primo",
+   "group": "Investeringsejendomme",
+   "group_no": 5150,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5210,
+   "name": "Investeringsejendomme, årets af- og nedskrivninger",
+   "group": "Investeringsejendomme",
+   "group_no": 5150,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5220,
+   "name": "Investeringsejendomme, tilbageførte af- og nedskrivninger",
+   "group": "Investeringsejendomme",
+   "group_no": 5150,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5240,
+   "name": "Investeringsejendomme under opførelse, kostpris primo",
+   "group": "Investeringsejendomme under opførelse",
+   "group_no": 5231,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5250,
+   "name": "Investeringsejendomme under opførelse, årets tilgange",
+   "group": "Investeringsejendomme under opførelse",
+   "group_no": 5231,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5260,
+   "name": "Investeringsejendomme under opførelse, årets afgange",
+   "group": "Investeringsejendomme under opførelse",
+   "group_no": 5231,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5265,
+   "name": "Investeringsejendomme, intern overførsel til/fra andre poster",
+   "group": "Investeringsejendomme under opførelse",
+   "group_no": 5231,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5280,
+   "name": "Investeringsejendomme under opførelse, øvrige værdireguleringer primo",
+   "group": "Investeringsejendomme under opførelse",
+   "group_no": 5231,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5281,
+   "name": "Investeringsejendomme under opførelse, årets værdireguleringer",
+   "group": "Investeringsejendomme under opførelse",
+   "group_no": 5231,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5282,
+   "name": "Investeringsejendomme under opførelse, nedskrivninger, primo",
+   "group": "Investeringsejendomme under opførelse",
+   "group_no": 5231,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5290,
+   "name": "Investeringsejendomme under opførelse, årets nedskrivninger",
+   "group": "Investeringsejendomme under opførelse",
+   "group_no": 5231,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5300,
+   "name": "Investeringsejendomme under opførelse, tilbageførte nedskrivninger",
+   "group": "Investeringsejendomme under opførelse",
+   "group_no": 5231,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5320,
+   "name": "Grunde og bygninger, kostpris primo",
+   "group": "Grunde og bygninger",
+   "group_no": 5311,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5330,
+   "name": "Grunde og bygninger, årets tilgange",
+   "group": "Grunde og bygninger",
+   "group_no": 5311,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5340,
+   "name": "Grunde og bygninger, årets afgange",
+   "group": "Grunde og bygninger",
+   "group_no": 5311,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5350,
+   "name": "Grunde og bygninger, årets forbedringer",
+   "group": "Grunde og bygninger",
+   "group_no": 5311,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5370,
+   "name": "Grunde og bygninger, værdireguleringer primo",
+   "group": "Grunde og bygninger",
+   "group_no": 5311,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5371,
+   "name": "Grunde og bygninger, årets værdireguleringer",
+   "group": "Grunde og bygninger",
+   "group_no": 5311,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5372,
+   "name": "Grunde og bygninger, Af- og nedskrivninger primo",
+   "group": "Grunde og bygninger",
+   "group_no": 5311,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5390,
+   "name": "Grunde og bygninger, årets af- og nedskrivninger",
+   "group": "Grunde og bygninger",
+   "group_no": 5311,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5400,
+   "name": "Grunde og bygninger, tilbageførte af- og nedskrivninger",
+   "group": "Grunde og bygninger",
+   "group_no": 5311,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5420,
+   "name": "Produktionsanlæg og maskiner, kostpris primo",
+   "group": "Produktionsanlæg og maskiner",
+   "group_no": 5411,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5430,
+   "name": "Produktionsanlæg og maskiner, årets tilgange",
+   "group": "Produktionsanlæg og maskiner",
+   "group_no": 5411,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5440,
+   "name": "Produktionsanlæg og maskiner, årets afgange",
+   "group": "Produktionsanlæg og maskiner",
+   "group_no": 5411,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5450,
+   "name": "Produktionsanlæg og maskiner, Værdireguleringer primo",
+   "group": "Produktionsanlæg og maskiner",
+   "group_no": 5411,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5451,
+   "name": "Produktionsanlæg og maskiner, Årets værdireguleringer",
+   "group": "Produktionsanlæg og maskiner",
+   "group_no": 5411,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5452,
+   "name": "Produktionsanlæg og maskiner, Af- og nedskrivninger primo",
+   "group": "Produktionsanlæg og maskiner",
+   "group_no": 5411,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5470,
+   "name": "Produktionsanlæg og maskiner, årets af- og nedskrivninger",
+   "group": "Produktionsanlæg og maskiner",
+   "group_no": 5411,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5480,
+   "name": "Produktionsanlæg og maskiner, tilbageførte af- og nedskrivninger",
+   "group": "Produktionsanlæg og maskiner",
+   "group_no": 5411,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5500,
+   "name": "Indretning af lejede lokaler, kostpris primo",
+   "group": "Indretning af lejede lokaler",
+   "group_no": 5491,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5510,
+   "name": "Indretning af lejede lokaler, årets tilgange",
+   "group": "Indretning af lejede lokaler",
+   "group_no": 5491,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5520,
+   "name": "Indretning af lejede lokaler, årets afgange",
+   "group": "Indretning af lejede lokaler",
+   "group_no": 5491,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5530,
+   "name": "Indretning af lejede lokaler, Værdireguleringer primo",
+   "group": "Indretning af lejede lokaler",
+   "group_no": 5491,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5531,
+   "name": "Indretning af lejede lokaler, Årets værdireguleringer",
+   "group": "Indretning af lejede lokaler",
+   "group_no": 5491,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5532,
+   "name": "Indretning af lejede lokaler, Af- og nedskrivninger primo",
+   "group": "Indretning af lejede lokaler",
+   "group_no": 5491,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5540,
+   "name": "Indretning af lejede lokaler, årets af- og nedskrivninger",
+   "group": "Indretning af lejede lokaler",
+   "group_no": 5491,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5550,
+   "name": "Indretning af lejede lokaler, tilbageførte af- og nedskrivninger",
+   "group": "Indretning af lejede lokaler",
+   "group_no": 5491,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5570,
+   "name": "Andre anlæg, driftsmateriel og inventar, kostpris primo",
+   "group": "Andre anlæg, driftsmateriel og inventar",
+   "group_no": 5561,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5580,
+   "name": "Andre anlæg, driftsmateriel og inventar, årets tilgange",
+   "group": "Andre anlæg, driftsmateriel og inventar",
+   "group_no": 5561,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5590,
+   "name": "Andre anlæg, driftsmateriel og inventar, årets afgange",
+   "group": "Andre anlæg, driftsmateriel og inventar",
+   "group_no": 5561,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5600,
+   "name": "Andre anlæg, driftsmateriel og inventar, Værdireguleringer primo",
+   "group": "Andre anlæg, driftsmateriel og inventar",
+   "group_no": 5561,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5601,
+   "name": "Andre anlæg, driftsmateriel og inventar, Årets værdireguleringer",
+   "group": "Andre anlæg, driftsmateriel og inventar",
+   "group_no": 5561,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5602,
+   "name": "Andre anlæg, driftsmateriel og inventar, Af- og nedskrivninger primo",
+   "group": "Andre anlæg, driftsmateriel og inventar",
+   "group_no": 5561,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5610,
+   "name": "Andre anlæg, driftsmateriel og inventar, årets af- og nedskrivninger",
+   "group": "Andre anlæg, driftsmateriel og inventar",
+   "group_no": 5561,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5620,
+   "name": "Andre anlæg, driftsmateriel og inventar, tilbageførte af- og nedskrivninger",
+   "group": "Andre anlæg, driftsmateriel og inventar",
+   "group_no": 5561,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5640,
+   "name": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver, kostpris primo",
+   "group": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver",
+   "group_no": 5631,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5650,
+   "name": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver, årets tilgange",
+   "group": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver",
+   "group_no": 5631,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5660,
+   "name": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver, årets afgange",
+   "group": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver",
+   "group_no": 5631,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5670,
+   "name": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver, værdireguleringer primo",
+   "group": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver",
+   "group_no": 5631,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5671,
+   "name": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver, årets værdireguleringer",
+   "group": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver",
+   "group_no": 5631,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5675,
+   "name": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver, nedskrivninger primo",
+   "group": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver",
+   "group_no": 5631,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5676,
+   "name": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver, årets nedskrivninger",
+   "group": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver",
+   "group_no": 5631,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5677,
+   "name": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver, tilbageførte nedskrivninger",
+   "group": "Materielle anlægsaktiver under udførelse og forudbetalinger for materielle anlægsaktiver",
+   "group_no": 5631,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5682,
+   "name": "Andre anlæg, driftsmateriel og inventar blandet benyttet, kostpris primo (kun klasse A)",
+   "group": "Andre anlæg, driftsmateriel og inventar blandet benyttet (kun klasse A)",
+   "group_no": 5681,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5683,
+   "name": "Andre anlæg, driftsmateriel og inventar blandet benyttet, Årets tilgange (kun klasse A)",
+   "group": "Andre anlæg, driftsmateriel og inventar blandet benyttet (kun klasse A)",
+   "group_no": 5681,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5684,
+   "name": "Andre anlæg, driftsmateriel og inventar blandet benyttet, Årets afgange (kun klasse A)",
+   "group": "Andre anlæg, driftsmateriel og inventar blandet benyttet (kun klasse A)",
+   "group_no": 5681,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5685,
+   "name": "Andre anlæg, driftsmateriel og inventar blandet benyttet, Værdireguleringer primo (kun klasse A)",
+   "group": "Andre anlæg, driftsmateriel og inventar blandet benyttet (kun klasse A)",
+   "group_no": 5681,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5686,
+   "name": "Andre anlæg, driftsmateriel og inventar blandet benyttet, Årets værdireguleringer (kun klasse A)",
+   "group": "Andre anlæg, driftsmateriel og inventar blandet benyttet (kun klasse A)",
+   "group_no": 5681,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5687,
+   "name": "Andre anlæg, driftsmateriel og inventar blandet benyttet, Af- og nedskrivninger primo (kun klasse A)",
+   "group": "Andre anlæg, driftsmateriel og inventar blandet benyttet (kun klasse A)",
+   "group_no": 5681,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5688,
+   "name": "Andre anlæg, driftsmateriel og inventar blandet benyttet, Årets af- og nedskrivninger (kun klasse A)",
+   "group": "Andre anlæg, driftsmateriel og inventar blandet benyttet (kun klasse A)",
+   "group_no": 5681,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5689,
+   "name": "Andre anlæg, driftsmateriel og inventar blandet benyttet, tilbageførte af- og nedskrivninger (kun klasse A)",
+   "group": "Andre anlæg, driftsmateriel og inventar blandet benyttet (kun klasse A)",
+   "group_no": 5681,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5690,
+   "name": "Andre anlæg, driftsmateriel og inventar blandet benyttet, Gevinst og tab (kun klasse A)",
+   "group": "Andre anlæg, driftsmateriel og inventar blandet benyttet (kun klasse A)",
+   "group_no": 5681,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5710,
+   "name": "Finansielt leasede aktiver, Kostpris primo",
+   "group": "Finansielt leasede aktiver",
+   "group_no": 5701,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5720,
+   "name": "Finansielt leasede aktiver, årets tilgange",
+   "group": "Finansielt leasede aktiver",
+   "group_no": 5701,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5730,
+   "name": "Finansielt leasede aktiver, årets afgange",
+   "group": "Finansielt leasede aktiver",
+   "group_no": 5701,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5740,
+   "name": "Finansielt leasede aktiver, værdireguleringer primo",
+   "group": "Finansielt leasede aktiver",
+   "group_no": 5701,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5741,
+   "name": "Finansielt leasede aktiver, årets værdireguleringer",
+   "group": "Finansielt leasede aktiver",
+   "group_no": 5701,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5745,
+   "name": "Finansielt leasede aktiver, af- og nedskrivninger primo",
+   "group": "Finansielt leasede aktiver",
+   "group_no": 5701,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5750,
+   "name": "Finansielt leasede aktiver, årets af- og nedskrivninger",
+   "group": "Finansielt leasede aktiver",
+   "group_no": 5701,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5760,
+   "name": "Finansielt leasede aktiver, tilbageførte af- og nedskrivninger",
+   "group": "Finansielt leasede aktiver",
+   "group_no": 5701,
+   "section": "Materielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5800,
+   "name": "Kapitalandele i tilknyttede virksomheder, kostpris primo",
+   "group": "Kapitalandele i tilknyttede virksomheder",
+   "group_no": 5773,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5810,
+   "name": "Kapitalandele i tilknyttede virksomheder, årets tilgange",
+   "group": "Kapitalandele i tilknyttede virksomheder",
+   "group_no": 5773,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5820,
+   "name": "Kapitalandele i tilknyttede virksomheder, årets afgange",
+   "group": "Kapitalandele i tilknyttede virksomheder",
+   "group_no": 5773,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5825,
+   "name": "Kapitalandele i tilknyttede virksomheder, intern overførsel til/fra andre poster",
+   "group": "Kapitalandele i tilknyttede virksomheder",
+   "group_no": 5773,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5829,
+   "name": "Kapitalandele i tilknyttede virksomheder, opskrivninger primo",
+   "group": "Kapitalandele i tilknyttede virksomheder",
+   "group_no": 5773,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5830,
+   "name": "Kapitalandele i tilknyttede virksomheder, årets opskrivninger",
+   "group": "Kapitalandele i tilknyttede virksomheder",
+   "group_no": 5773,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5831,
+   "name": "Kapitalandele i tilknyttede virksomheder, årets tilbageførsler af tidligere års opskrivninger",
+   "group": "Kapitalandele i tilknyttede virksomheder",
+   "group_no": 5773,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5835,
+   "name": "Kapitalandele i tilknyttede virksomheder, nedskrivninger primo",
+   "group": "Kapitalandele i tilknyttede virksomheder",
+   "group_no": 5773,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5836,
+   "name": "Kapitalandele i tilknyttede virksomheder, årets nedskrivninger",
+   "group": "Kapitalandele i tilknyttede virksomheder",
+   "group_no": 5773,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5837,
+   "name": "Kapitalandele i tilknyttede virksomheder, årets tilbageførsler af tidligere års nedskrivninger",
+   "group": "Kapitalandele i tilknyttede virksomheder",
+   "group_no": 5773,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5842,
+   "name": "Tilgodehavender hos tilknyttede virksomheder (anlægsaktiv)",
+   "group": "Tilgodehavender hos tilknyttede virksomheder (anlægsaktiv)",
+   "group_no": 5841,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5843,
+   "name": "Tilgodehavender hos tilknyttede virksomheder, nedskrivninger primo (anlægsaktiv)",
+   "group": "Tilgodehavender hos tilknyttede virksomheder (anlægsaktiv)",
+   "group_no": 5841,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5844,
+   "name": "Tilgodehavender hos tilknyttede virksomheder, nedskrivninger i årets løb (anlægsaktiv)",
+   "group": "Tilgodehavender hos tilknyttede virksomheder (anlægsaktiv)",
+   "group_no": 5841,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5845,
+   "name": "Tilgodehavender hos tilknyttede virksomheder, tilbageførsel af tidligere års nedskrivninger (anlægsaktiv)",
+   "group": "Tilgodehavender hos tilknyttede virksomheder (anlægsaktiv)",
+   "group_no": 5841,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5852,
+   "name": "Kapitalandele i associerede virksomheder, kostpris primo",
+   "group": "Kapitalandele i associerede virksomheder",
+   "group_no": 5851,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5853,
+   "name": "Kapitalandele i associerede virksomheder, årets tilgange",
+   "group": "Kapitalandele i associerede virksomheder",
+   "group_no": 5851,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5854,
+   "name": "Kapitalandele i associerede virksomheder, årets afgange",
+   "group": "Kapitalandele i associerede virksomheder",
+   "group_no": 5851,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5855,
+   "name": "Kapitalandele i associerede virksomheder, intern overførsel til/fra andre poster",
+   "group": "Kapitalandele i associerede virksomheder",
+   "group_no": 5851,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5860,
+   "name": "Kapitalandele i associerede virksomheder, opskrivninger primo",
+   "group": "Kapitalandele i associerede virksomheder",
+   "group_no": 5851,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5861,
+   "name": "Kapitalandele i associerede virksomheder, årets opskrivninger",
+   "group": "Kapitalandele i associerede virksomheder",
+   "group_no": 5851,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5862,
+   "name": "Kapitalandele i associerede virksomheder, årets tilbageførsler af tidligere års opskrivninger",
+   "group": "Kapitalandele i associerede virksomheder",
+   "group_no": 5851,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5870,
+   "name": "Kapitalandele i associerede virksomheder, nedskrivninger primo",
+   "group": "Kapitalandele i associerede virksomheder",
+   "group_no": 5851,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5871,
+   "name": "Kapitalandele i associerede virksomheder, årets nedskrivninger",
+   "group": "Kapitalandele i associerede virksomheder",
+   "group_no": 5851,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5872,
+   "name": "Kapitalandele i associerede virksomheder, årets tilbageførsler af tidligere års nedskrivninger",
+   "group": "Kapitalandele i associerede virksomheder",
+   "group_no": 5851,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5882,
+   "name": "Tilgodehavender hos associerede virksomheder (anlægsaktiv)",
+   "group": "Tilgodehavender hos associerede virksomheder (anlægsaktiv)",
+   "group_no": 5881,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5883,
+   "name": "Tilgodehavender hos associerede virksomheder, nedskrivninger primo (anlægsaktiv)",
+   "group": "Tilgodehavender hos associerede virksomheder (anlægsaktiv)",
+   "group_no": 5881,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5884,
+   "name": "Tilgodehavender hos associerede virksomheder, nedskrivninger i årets løb (anlægsaktiv)",
+   "group": "Tilgodehavender hos associerede virksomheder (anlægsaktiv)",
+   "group_no": 5881,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5885,
+   "name": "Tilgodehavender hos associerede virksomheder, tilbageførsel af tidligere års nedskrivninger (anlægsaktiv)",
+   "group": "Tilgodehavender hos associerede virksomheder (anlægsaktiv)",
+   "group_no": 5881,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5900,
+   "name": "Kapitalinteresser, kostpris primo",
+   "group": "Kapitalinteresser",
+   "group_no": 5891,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5910,
+   "name": "Kapitalinteresser, årets tilgange",
+   "group": "Kapitalinteresser",
+   "group_no": 5891,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5920,
+   "name": "Kapitalinteresser, årets afgange",
+   "group": "Kapitalinteresser",
+   "group_no": 5891,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5925,
+   "name": "Kapitalinteresser, intern overførsel til/fra andre poster",
+   "group": "Kapitalinteresser",
+   "group_no": 5891,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5929,
+   "name": "Kapitalinteresser, opskrivninger primo",
+   "group": "Kapitalinteresser",
+   "group_no": 5891,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5930,
+   "name": "Kapitalinteresser, årets opskrivninger",
+   "group": "Kapitalinteresser",
+   "group_no": 5891,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5931,
+   "name": "Kapitalinteresser, årets tilbageførsler af tidligere års opskrivninger",
+   "group": "Kapitalinteresser",
+   "group_no": 5891,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5935,
+   "name": "Kapitalinteresser, nedskrivninger primo",
+   "group": "Kapitalinteresser",
+   "group_no": 5891,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5940,
+   "name": "Kapitalinteresser, årets nedskrivninger",
+   "group": "Kapitalinteresser",
+   "group_no": 5891,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5950,
+   "name": "Kapitalinteresser, årets tilbageførsler af tidligere års nedskrivninger",
+   "group": "Kapitalinteresser",
+   "group_no": 5891,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5970,
+   "name": "Tilgodehavender hos kapitalinteresser (anlægsaktiv)",
+   "group": "Tilgodehavender hos kapitalinteresser (anlægsaktiv)",
+   "group_no": 5961,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5980,
+   "name": "Tilgodehavender hos kapitalinteresser, nedskrivninger primo (anlægsaktiv)",
+   "group": "Tilgodehavender hos kapitalinteresser (anlægsaktiv)",
+   "group_no": 5961,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5984,
+   "name": "Tilgodehavender hos kapitalinteresser, nedskrivninger i årets løb (anlægsaktiv)",
+   "group": "Tilgodehavender hos kapitalinteresser (anlægsaktiv)",
+   "group_no": 5961,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 5985,
+   "name": "Tilgodehavender hos kapitalinteresser, tilbageførsel af tidligere års nedskrivninger (anlægsaktiv)",
+   "group": "Tilgodehavender hos kapitalinteresser (anlægsaktiv)",
+   "group_no": 5961,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6000,
+   "name": "Andre værdipapirer og kapitalandele",
+   "group": "Andre værdipapirer og kapitalandele",
+   "group_no": 5991,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6020,
+   "name": "Udskudte skatteaktiver (anlægsaktiv)",
+   "group": "Andre tilgodehavender (anlægsaktiv)",
+   "group_no": 6011,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6030,
+   "name": "Øvrige tilgodehavender (anlægsaktiv)",
+   "group": "Andre tilgodehavender (anlægsaktiv)",
+   "group_no": 6011,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6040,
+   "name": "Deposita (anlægsaktiv)",
+   "group": "Andre tilgodehavender (anlægsaktiv)",
+   "group_no": 6011,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6061,
+   "name": "Tilgodehavender hos direktionen (anlægsaktiv)",
+   "group": "Tilgodehavender hos virksomhedsdeltagere og ledelse (anlægsaktiv)",
+   "group_no": 6051,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6062,
+   "name": "Tilgodehavender hos bestyrelsen (anlægsaktiv)",
+   "group": "Tilgodehavender hos virksomhedsdeltagere og ledelse (anlægsaktiv)",
+   "group_no": 6051,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6063,
+   "name": "Tilgodehavender hos tilsynsråd (anlægsaktiv)",
+   "group": "Tilgodehavender hos virksomhedsdeltagere og ledelse (anlægsaktiv)",
+   "group_no": 6051,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6064,
+   "name": "Tilgodehavender hos repræsentantskab (anlægsaktiv)",
+   "group": "Tilgodehavender hos virksomhedsdeltagere og ledelse (anlægsaktiv)",
+   "group_no": 6051,
+   "section": "Finansielle anlægsaktiver",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6080,
+   "name": "Råvarer og hjælpematerialer, kostpris primo",
+   "group": "Råvarer og hjælpematerialer",
+   "group_no": 6075,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6081,
+   "name": "Råvarer og hjælpematerialer, årets tilgange",
+   "group": "Råvarer og hjælpematerialer",
+   "group_no": 6075,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6082,
+   "name": "Råvarer og hjælpematerialer, årets afgange",
+   "group": "Råvarer og hjælpematerialer",
+   "group_no": 6075,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6083,
+   "name": "Råvarer og hjælpematerialer, intern overførsel til/fra andre poster",
+   "group": "Råvarer og hjælpematerialer",
+   "group_no": 6075,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6085,
+   "name": "Råvarer og hjælpematerialer, nedskrivninger primo",
+   "group": "Råvarer og hjælpematerialer",
+   "group_no": 6075,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6090,
+   "name": "Råvarer og hjælpematerialer, årets nedskrivning",
+   "group": "Råvarer og hjælpematerialer",
+   "group_no": 6075,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6091,
+   "name": "Råvarer og hjælpematerialer, tilbageførsel af tidligere års nedskrivninger",
+   "group": "Råvarer og hjælpematerialer",
+   "group_no": 6075,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6110,
+   "name": "Varer under fremstilling, kostpris primo",
+   "group": "Varer under fremstilling",
+   "group_no": 6101,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6111,
+   "name": "Varer under fremstilling, årets tilgange",
+   "group": "Varer under fremstilling",
+   "group_no": 6101,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6112,
+   "name": "Varer under fremstilling, årets afgange",
+   "group": "Varer under fremstilling",
+   "group_no": 6101,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6113,
+   "name": "Varer under fremstilling, intern overførsel til/fra andre poster",
+   "group": "Varer under fremstilling",
+   "group_no": 6101,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6115,
+   "name": "Varer under fremstilling, nedskrivninger primo",
+   "group": "Varer under fremstilling",
+   "group_no": 6101,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6120,
+   "name": "Varer under fremstilling, årets nedskrivning",
+   "group": "Varer under fremstilling",
+   "group_no": 6101,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6121,
+   "name": "Varer under fremstilling, tilbageførsel af tidligere års nedskrivninger",
+   "group": "Varer under fremstilling",
+   "group_no": 6101,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6140,
+   "name": "Fremstillede varer og handelsvarer, kostpris primo",
+   "group": "Fremstillede varer og handelsvarer",
+   "group_no": 6131,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6141,
+   "name": "Fremstillede varer og handelsvarer, årets tilgange",
+   "group": "Fremstillede varer og handelsvarer",
+   "group_no": 6131,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6142,
+   "name": "Fremstillede varer og handelsvarer, årets afgange",
+   "group": "Fremstillede varer og handelsvarer",
+   "group_no": 6131,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6143,
+   "name": "Fremstillede varer og handelsvarer, intern overførsel til/fra andre poster",
+   "group": "Fremstillede varer og handelsvarer",
+   "group_no": 6131,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6145,
+   "name": "Fremstillede varer og handelsvarer, nedskrivninger primo",
+   "group": "Fremstillede varer og handelsvarer",
+   "group_no": 6131,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6150,
+   "name": "Fremstillede varer og handelsvarer, årets nedskrivning",
+   "group": "Fremstillede varer og handelsvarer",
+   "group_no": 6131,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6151,
+   "name": "Fremstillede varer og handelsvarer, tilbageførsel af tidligere års nedskrivninger",
+   "group": "Fremstillede varer og handelsvarer",
+   "group_no": 6131,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6170,
+   "name": "Forudbetalinger for varer",
+   "group": "Forudbetalinger for varer",
+   "group_no": 6161,
+   "section": "Varebeholdninger",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6190,
+   "name": "Tilgodehavender fra salg og tjenesteydelser",
+   "group": "Tilgodehavender fra salg og tjenesteydelser",
+   "group_no": 6183,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6200,
+   "name": "Tilgodehavender fra salg og tjenesteydelser, nedskrivninger primo",
+   "group": "Tilgodehavender fra salg og tjenesteydelser",
+   "group_no": 6183,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6201,
+   "name": "Nedskrivninger i årets løb",
+   "group": "Tilgodehavender fra salg og tjenesteydelser",
+   "group_no": 6183,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6202,
+   "name": "Tilbageførsel af tidligere års nedskrivninger",
+   "group": "Tilgodehavender fra salg og tjenesteydelser",
+   "group_no": 6183,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6240,
+   "name": "Igangværende arbejder for fremmed regning",
+   "group": "Igangværende arbejder for fremmed regning",
+   "group_no": 6231,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6252,
+   "name": "Tilgodehavender hos tilknyttede virksomheder (omsætningsaktiv)",
+   "group": "Tilgodehavender hos tilknyttede virksomheder (omsætningsaktiv)",
+   "group_no": 6251,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6255,
+   "name": "Tilgodehavender hos tilknyttede virksomheder, nedskrivninger primo (omsætningsaktiv)",
+   "group": "Tilgodehavender hos tilknyttede virksomheder (omsætningsaktiv)",
+   "group_no": 6251,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6256,
+   "name": "Tilgodehavender hos tilknyttede virksomheder, nedskrivninger i årets løb",
+   "group": "Tilgodehavender hos tilknyttede virksomheder (omsætningsaktiv)",
+   "group_no": 6251,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6257,
+   "name": "Tilgodehavender hos tilknyttede virksomheder, tilbageførsel af tidligere års nedskrivninger (omsætningsaktiv)",
+   "group": "Tilgodehavender hos tilknyttede virksomheder (omsætningsaktiv)",
+   "group_no": 6251,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6262,
+   "name": "Tilgodehavender hos associerede virksomheder (omsætningsaktiv)",
+   "group": "Tilgodehavender hos associerede virksomheder (omsætningsaktiv)",
+   "group_no": 6261,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6265,
+   "name": "Tilgodehavender hos associerede virksomheder, nedskrivninger primo (omsætningsaktiv)",
+   "group": "Tilgodehavender hos associerede virksomheder (omsætningsaktiv)",
+   "group_no": 6261,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6266,
+   "name": "Tilgodehavender hos associerede virksomheder, nedskrivninger i årets løb (omsætningsaktiv)",
+   "group": "Tilgodehavender hos associerede virksomheder (omsætningsaktiv)",
+   "group_no": 6261,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6267,
+   "name": "Tilgodehavender hos associerede virksomheder, tilbageførsel af tidligere års nedskrivninger (omsætningsaktiv)",
+   "group": "Tilgodehavender hos associerede virksomheder (omsætningsaktiv)",
+   "group_no": 6261,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6282,
+   "name": "Tilgodehavender hos kapitalinteresser (omsætningsaktiv)",
+   "group": "Tilgodehavender hos kapitalinteresser (omsætningsaktiv)",
+   "group_no": 6281,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6285,
+   "name": "Tilgodehavender hos kapitalinteresser, nedskrivninger primo (omsætningsaktiv)",
+   "group": "Tilgodehavender hos kapitalinteresser (omsætningsaktiv)",
+   "group_no": 6281,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6286,
+   "name": "Tilgodehavender hos kapitalinteresser, nedskrivninger i årets løb (omsætningsaktiv)",
+   "group": "Tilgodehavender hos kapitalinteresser (omsætningsaktiv)",
+   "group_no": 6281,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6287,
+   "name": "Tilgodehavender hos kapitalinteresser, tilbageførsel af tidligere års nedskrivninger (omsætningsaktiv)",
+   "group": "Tilgodehavender hos kapitalinteresser (omsætningsaktiv)",
+   "group_no": 6281,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6305,
+   "name": "Udskudte skatteaktiver (omsætningsaktiv)",
+   "group": "Andre tilgodehavender (omsætningsaktiv)",
+   "group_no": 6301,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6310,
+   "name": "Tilgodehavende kildeskat (omsætningsaktiv)",
+   "group": "Andre tilgodehavender (omsætningsaktiv)",
+   "group_no": 6301,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6315,
+   "name": "Tilgodehavende selskabsskat (omsætningsaktiv)",
+   "group": "Andre tilgodehavender (omsætningsaktiv)",
+   "group_no": 6301,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6320,
+   "name": "Tilgodehavende moms (omsætningsaktiv)",
+   "group": "Andre tilgodehavender (omsætningsaktiv)",
+   "group_no": 6301,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6330,
+   "name": "Øvrige tilgodehavender (omsætningsaktiv)",
+   "group": "Andre tilgodehavender (omsætningsaktiv)",
+   "group_no": 6301,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6350,
+   "name": "Krav på indbetaling af virksomhedskapital og overkurs",
+   "group": "Krav på indbetaling af virksomhedskapital og overkurs",
+   "group_no": 6341,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6365,
+   "name": "Tilgodehavender hos direktionen (omsætningsaktiv)",
+   "group": "Tilgodehavender hos virksomhedsdeltagere og ledelse (omsætningsaktiv)",
+   "group_no": 6361,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6370,
+   "name": "Tilgodehavender hos bestyrelsens (omsætningsaktiv)",
+   "group": "Tilgodehavender hos virksomhedsdeltagere og ledelse (omsætningsaktiv)",
+   "group_no": 6361,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6375,
+   "name": "Tilgodehavender hos tilsynsråd (omsætningsaktiv)",
+   "group": "Tilgodehavender hos virksomhedsdeltagere og ledelse (omsætningsaktiv)",
+   "group_no": 6361,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6376,
+   "name": "Tilgodehavender hos repræsentantskab (omsætningsaktiv)",
+   "group": "Tilgodehavender hos virksomhedsdeltagere og ledelse (omsætningsaktiv)",
+   "group_no": 6361,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6390,
+   "name": "Periodeafgrænsningsposter, der kan opretholdes skattemæssigt",
+   "group": "Periodeafgrænsningsposter",
+   "group_no": 6381,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6400,
+   "name": "Periodeafgrænsningsposter, der ikke kan opretholdes skattemæssigt",
+   "group": "Periodeafgrænsningsposter",
+   "group_no": 6381,
+   "section": "Tilgodehavender",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6420,
+   "name": "Kapitalandele i tilknyttede virksomheder som ikke er bestemt til vedvarende eje",
+   "group": "Kapitalandele i tilknyttede virksomheder",
+   "group_no": 6413,
+   "section": "Værdipapirer og kapitalandele",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6450,
+   "name": "Andre værdipapirer og kapitalandele som ikke er bestemt til vedvarende eje",
+   "group": "Andre værdipapirer og kapitalandele",
+   "group_no": 6431,
+   "section": "Værdipapirer og kapitalandele",
+   "type": "asset",
+   "std_type": "asset"
+  },
+  {
+   "no": 6470,
+   "name": "Likvide beholdninger",
+   "group": "Likvide beholdninger",
+   "group_no": 6462,
+   "section": "Værdipapirer og kapitalandele",
+   "type": "bank",
+   "std_type": "asset"
+  },
+  {
+   "no": 6480,
+   "name": "Bankkonto",
+   "group": "Likvide beholdninger",
+   "group_no": 6462,
+   "section": "Værdipapirer og kapitalandele",
+   "type": "bank",
+   "std_type": "asset"
+  },
+  {
+   "no": 6510,
+   "name": "Registreret kapital mv.",
+   "group": "Virksomhedskapital",
+   "group_no": 6502,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6520,
+   "name": "Indbetalt registreret kapital mv.",
+   "group": "Virksomhedskapital",
+   "group_no": 6502,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6525,
+   "name": "Ikke indbetalt registreret kapital mv.",
+   "group": "Virksomhedskapital",
+   "group_no": 6502,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6540,
+   "name": "Overkurs ved emission",
+   "group": "Overkurs ved emission",
+   "group_no": 6531,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6560,
+   "name": "Reserve for opskrivninger",
+   "group": "Reserve for opskrivninger",
+   "group_no": 6551,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6800,
+   "name": "Reserve for nettoopskrivning efter den indre værdis metode",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6810,
+   "name": "Reserve for udlån og sikkerhedsstillelse",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6830,
+   "name": "Reserve for ikke indbetalt virksomhedskapital og overkurs",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6840,
+   "name": "Reserve for udviklingsomkostninger",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6870,
+   "name": "Øvrige lovpligtige reserver",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6890,
+   "name": "Vedtægtsmæssige reserver",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6910,
+   "name": "Øvrige reserver",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6914,
+   "name": "Reserve for iværksætterselskaber",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6915,
+   "name": "Egenkapital primo (kun klasse A)",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6916,
+   "name": "Årets resultat (kun klasse A)",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6917,
+   "name": "Fri bil (kun klasse A)",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6918,
+   "name": "Rejse og befordringsgodtgørelse (kun klasse A)",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6919,
+   "name": "Fri telefon (Kun klasse A)",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6920,
+   "name": "Private andele (Kun klasse A)",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6921,
+   "name": "Private afskrivninger (Kun klasse A)",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6922,
+   "name": "Driftsudgifter uden fradrag (Kun klasse A)",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6923,
+   "name": "Privat hævet (kun klasse A)",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6924,
+   "name": "Privat indskud (kun klasse A)",
+   "group": "Andre reserver",
+   "group_no": 6591,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6935,
+   "name": "Overført resultat, primo",
+   "group": "Overført resultat",
+   "group_no": 6931,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6940,
+   "name": "Overført resultat, jf. resultatdisponering",
+   "group": "Overført resultat",
+   "group_no": 6931,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6955,
+   "name": "Foreslået udbytte, primo",
+   "group": "Foreslået udbytte indregnet under egenkapitalen",
+   "group_no": 6951,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6956,
+   "name": "Udloddet udbytte",
+   "group": "Foreslået udbytte indregnet under egenkapitalen",
+   "group_no": 6951,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6960,
+   "name": "Foreslået udbytte jf. resultatdisponeringen",
+   "group": "Foreslået udbytte indregnet under egenkapitalen",
+   "group_no": 6951,
+   "section": "Egenkapital",
+   "type": "equity",
+   "std_type": "equity"
+  },
+  {
+   "no": 6985,
+   "name": "Hensættelser til pensioner og lignende forpligtelser",
+   "group": "Hensættelser til pensioner og lignende forpligtelser",
+   "group_no": 6980,
+   "section": "Hensatte forpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7010,
+   "name": "Hensættelser til udskudt skat",
+   "group": "Hensættelse til udskudt skat",
+   "group_no": 7000,
+   "section": "Hensatte forpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7040,
+   "name": "Andre hensatte forpligtelser",
+   "group": "Andre hensatte forpligtelser",
+   "group_no": 7031,
+   "section": "Hensatte forpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7055,
+   "name": "Gæld, der er optaget ved udstedelse af obligationer (langfristet)",
+   "group": "Gæld, der er optaget ved udstedelse af obligationer (langfristet)",
+   "group_no": 7053,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7065,
+   "name": "Konvertible og udbyttegivende gældsbreve (langfristet)",
+   "group": "Konvertible og udbyttegivende gældsbreve (langfristet)",
+   "group_no": 7061,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7110,
+   "name": "Gæld til kredit- og realkreditinstitutter (langfristet)",
+   "group": "Gæld til kreditinstitutter (langfristet)",
+   "group_no": 7080,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7120,
+   "name": "Gæld til banker (langfristet)",
+   "group": "Gæld til kreditinstitutter (langfristet)",
+   "group_no": 7080,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7125,
+   "name": "Leasingforpligtelser (langfristet)",
+   "group": "Gæld til kreditinstitutter (langfristet)",
+   "group_no": 7080,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7126,
+   "name": "Øvrig langfristet gæld",
+   "group": "Gæld til kreditinstitutter (langfristet)",
+   "group_no": 7080,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7145,
+   "name": "Modtagne forudbetalinger fra kunder (langfristet)",
+   "group": "Modtagne forudbetalinger fra kunder (langfristet)",
+   "group_no": 7141,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7155,
+   "name": "Leverandører af varer og tjenesteydelser (langfristet)",
+   "group": "Leverandører af varer og tjenesteydelser (langfristet)",
+   "group_no": 7151,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7165,
+   "name": "Vekselgæld (langfristet)",
+   "group": "Vekselgæld (langfristet)",
+   "group_no": 7161,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7175,
+   "name": "Gæld til tilknyttede virksomheder (langfristet)",
+   "group": "Gæld til tilknyttede virksomheder (langfristet)",
+   "group_no": 7171,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7185,
+   "name": "Gæld til kapitalinteresser (langfristet)",
+   "group": "Gæld til kapitalinteresser (langfristet)",
+   "group_no": 7181,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7195,
+   "name": "Anden gæld (langfristet)",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (langfristet)",
+   "group_no": 7191,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7210,
+   "name": "Gæld til virksomhedssdeltagere og ledelse (langfristet)",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (langfristet)",
+   "group_no": 7191,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7230,
+   "name": "Deposita (langfristet)",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (langfristet)",
+   "group_no": 7191,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7240,
+   "name": "Leasingforpligtelse (langfristet)",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (langfristet)",
+   "group_no": 7191,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7250,
+   "name": "Skyldig selskabsskat (langfristet)",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (langfristet)",
+   "group_no": 7191,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7265,
+   "name": "Periodeafgrænsningsposter (langfristet)",
+   "group": "Periodeafgrænsningsposter (langfristet)",
+   "group_no": 7261,
+   "section": "Langfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7285,
+   "name": "Gæld, der er optaget ved udstedelse af obligationer (kortfristet)",
+   "group": "Gæld, der er optaget ved udstedelse af obligationer (kortfristet)",
+   "group_no": 7281,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7295,
+   "name": "Konvertible og udbyttegivende gældsbreve (kortfristet)",
+   "group": "Konvertible og udbyttegivende gældsbreve (kortfristet)",
+   "group_no": 7291,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7310,
+   "name": "Gæld til kredit- og realkreditinstitutter (kortfristet)",
+   "group": "Gæld til kreditinstitutter (kortfristet)",
+   "group_no": 7301,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7330,
+   "name": "Gæld til banker (kortfristet)",
+   "group": "Gæld til kreditinstitutter (kortfristet)",
+   "group_no": 7301,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7345,
+   "name": "Leasingforpligtelser (kortfristet)",
+   "group": "Gæld til kreditinstitutter (kortfristet)",
+   "group_no": 7301,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7350,
+   "name": "Øvrig kortfristet gæld",
+   "group": "Gæld til kreditinstitutter (kortfristet)",
+   "group_no": 7301,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7410,
+   "name": "Modtagne forudbetalinger fra kunder (kortfristet)",
+   "group": "Modtagne forudbetalinger fra kunder (kortfristet)",
+   "group_no": 7401,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7440,
+   "name": "Leverandører af varer og tjenesteydelser (kortfristet)",
+   "group": "Leverandører af varer og tjenesteydelser (kortfristet)",
+   "group_no": 7421,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7455,
+   "name": "Igangværende arbejder for fremmed regning (kortfristet gæld)",
+   "group": "Igangværende arbejder for fremmed regning (kortfristet gæld)",
+   "group_no": 7451,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7456,
+   "name": "Modtagne acontobetalinger (kortfristet gæld)",
+   "group": "Igangværende arbejder for fremmed regning (kortfristet gæld)",
+   "group_no": 7451,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7465,
+   "name": "Vekselgæld (kortfristet)",
+   "group": "Vekselgæld (kortfristet)",
+   "group_no": 7461,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7510,
+   "name": "Gæld til tilknyttede virksomheder (kortfristet)",
+   "group": "Gæld til tilknyttede virksomheder (kortfristet)",
+   "group_no": 7501,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7535,
+   "name": "Gæld til kapitalinteresser (kortfristet)",
+   "group": "Gæld til kapitalinteresser (kortfristet)",
+   "group_no": 7531,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7590,
+   "name": "Gæld til virksomhedsdeltagere og ledelse (kortfristet)",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7610,
+   "name": "Deposita (kortfristet)",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7680,
+   "name": "Salgsmoms",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "vat",
+   "std_type": "liability"
+  },
+  {
+   "no": 7700,
+   "name": "Moms af varekøb udland, EU og ikke-EU",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "vat",
+   "std_type": "liability"
+  },
+  {
+   "no": 7720,
+   "name": "Moms af ydelseskøb udland, EU og ikke-EU",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "vat",
+   "std_type": "liability"
+  },
+  {
+   "no": 7740,
+   "name": "Købsmoms",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "vat",
+   "std_type": "liability"
+  },
+  {
+   "no": 7760,
+   "name": "Olie- og flaskegasafgift",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7780,
+   "name": "Elafgift",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7800,
+   "name": "Naturgas- og bygasafgift",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7810,
+   "name": "Kulafgift",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7820,
+   "name": "Vandafgift",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7830,
+   "name": "Co2-afgift",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7840,
+   "name": "Skyldig moms",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "vat",
+   "std_type": "liability"
+  },
+  {
+   "no": 7860,
+   "name": "Skyldig løn og gager",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7880,
+   "name": "Skyldig bonus og tantieme",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7900,
+   "name": "Skyldige feriepenge",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7920,
+   "name": "Skyldig A-skat",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7940,
+   "name": "Skyldigt AM-bidrag",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7960,
+   "name": "Skyldigt ATP-bidrag",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 7980,
+   "name": "Skyldigt AMP-bidrag",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 8000,
+   "name": "Anden skyldig pension",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 8010,
+   "name": "Skyldig arbejdsgiverbidrag (samlet betaling)",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 8030,
+   "name": "Skyldig feriepengeforpligtigelse",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 8035,
+   "name": "Skyldigt ferietillæg",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 8040,
+   "name": "Øvrig anden gæld",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 8045,
+   "name": "Modtagne offentlige tilskud til senere beskatning",
+   "group": "Anden gæld, herunder skyldige skatter og skyldige bidrag til social sikring (kortfristet)",
+   "group_no": 7581,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  },
+  {
+   "no": 8070,
+   "name": "Periodeafgrænsningsposter (kortfristet)",
+   "group": "Periodeafgrænsningsposter (kortfristet)",
+   "group_no": 8051,
+   "section": "Kortfristede gældsforpligtelser",
+   "type": "liability",
+   "std_type": "liability"
+  }
+ ]
+}

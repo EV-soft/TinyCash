@@ -1,4 +1,4 @@
-<?php # /fixed_asset_edit.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /fixed_asset_edit.php v:1.3.1 d:2026-09-15 i:evs
 # NY FUNKTION: Anlægsaktiver/afskrivninger (bruger-anmodet). Opret/redigér et
 # anlægsaktiv. Anskaffelsen bogføres DIREKTE her ved oprettelse (DEBET
 # aktivkonto, KREDIT bank) - IKKE via expense_edit.php, som kun tillader
@@ -27,6 +27,12 @@ require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
 require_once 'inc/audit.inc.php';
+require_once 'inc/fixed_assets.inc.php';
+require_once 'inc/field_visibility.inc.php';
+
+$fv_overrides = get_field_visibility_overrides($conn);
+$fv_is_admin  = (($_SESSION['user_role'] ?? '') === 'admin');
+$fv_uLev      = (int)($_SESSION['user_level'] ?? 1);
 
 $id  = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $err = '';
@@ -49,12 +55,14 @@ if ($id > 0) {
 }
 
 $asset_accounts = [];
-$ares = DB::query($conn, "SELECT acc_id, acc_name FROM accounts WHERE acc_type = 'asset' ORDER BY acc_id ASC");
-if ($ares) { while ($a = DB::fetch_assoc($ares)) { $asset_accounts[$a['acc_id']] = $a['acc_id'] . ' - ' . htmlspecialchars($a['acc_name']); } }
+require_once __DIR__ . '/inc/accounts.inc.php';     // valglisten: slukkede konti udeladt, dæmpede nederst
+$fa_keep = [(int)($asset['asset_account_id'] ?? 0), (int)($asset['depreciation_account_id'] ?? 0)];
+$ares = DB::query($conn, "SELECT acc_id, acc_name" . acc_status_col($conn) . " FROM accounts WHERE acc_type = 'asset' AND " . acc_visible_sql($conn, '', $fa_keep) . " ORDER BY " . acc_order_sql($conn) . "acc_id ASC");
+if ($ares) { while ($a = DB::fetch_assoc($ares)) { $asset_accounts[$a['acc_id']] = $a['acc_id'] . ' - ' . htmlspecialchars(acc_label($a['acc_name'], $a['acc_status'] ?? null)); } }
 
 $exp_accounts = [];
-$eres = DB::query($conn, "SELECT acc_id, acc_name FROM accounts WHERE acc_type = 'expense' ORDER BY acc_id ASC");
-if ($eres) { while ($a = DB::fetch_assoc($eres)) { $exp_accounts[$a['acc_id']] = $a['acc_id'] . ' - ' . htmlspecialchars($a['acc_name']); } }
+$eres = DB::query($conn, "SELECT acc_id, acc_name" . acc_status_col($conn) . " FROM accounts WHERE acc_type = 'expense' AND " . acc_visible_sql($conn, '', $fa_keep) . " ORDER BY " . acc_order_sql($conn) . "acc_id ASC");
+if ($eres) { while ($a = DB::fetch_assoc($eres)) { $exp_accounts[$a['acc_id']] = $a['acc_id'] . ' - ' . htmlspecialchars(acc_label($a['acc_name'], $a['acc_status'] ?? null)); } }
 
 $s = get_settings($conn);
 $module_projects = !empty($s['module_projects']) && $s['module_projects'] == '1';
@@ -118,8 +126,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // RETTET (§currency-setting-is-cosmetic-label): journal.currency
                 // blev aldrig sat (faldt tilbage til skemaets DEFAULT 'DKK').
                 $jou_currency = DB::escape($conn, $s['currency'] ?? 'DKK');
-                DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, proj_id, currency)
-                    VALUES ('" . DB::escape($conn, $acq_date) . "', '$jou_text', 'fixed_asset_acquisition', $voucher_no, $proj_sql, '$jou_currency')");
+                // NYT (BEK 811/2026-gennemgang, [[digital-standard-bookkeeping-registration-goal]]).
+                $cb = journal_created_by_sql($conn);
+                DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, proj_id, currency{$cb['col']})
+                    VALUES ('" . DB::escape($conn, $acq_date) . "', '$jou_text', 'fixed_asset_acquisition', $voucher_no, $proj_sql, '$jou_currency'{$cb['val']})");
                 $jou_id = DB::insert_id($conn);
 
                 ledger_post($conn, $jou_id, $asset_acc, $acq_cost);   // DEBET aktivkonto (aktivet oprettes)
@@ -183,13 +193,21 @@ echo '</div>';
 
 echo '<div style="display:flex; width:100%; gap:10px;">';
 if ($is_posted) {
-    htm_Field(icon: 'fa-university', labl: '@Asset Account', name: 'asset_account_id_display', valu: $asset_accounts[$asset['asset_account_id']] ?? $asset['asset_account_id'], type: 'view', wdth: '50%');
-    htm_Field(icon: 'fa-chart-line', labl: '@Depreciation Account', name: 'depreciation_account_id_display', valu: $exp_accounts[$asset['depreciation_account_id']] ?? $asset['depreciation_account_id'], type: 'view', wdth: '50%');
+    render_hideable_field($fv_overrides, 'fixed_asset_edit.asset_account_id', $fv_is_admin, $fv_uLev, function() use ($asset, $asset_accounts) {
+        htm_Field(icon: 'fa-university', labl: '@Asset Account', name: 'asset_account_id_display', valu: $asset_accounts[$asset['asset_account_id']] ?? $asset['asset_account_id'], type: 'view', wdth: '50%');
+    }, true);
+    render_hideable_field($fv_overrides, 'fixed_asset_edit.depreciation_account_id', $fv_is_admin, $fv_uLev, function() use ($asset, $exp_accounts) {
+        htm_Field(icon: 'fa-chart-line', labl: '@Depreciation Account', name: 'depreciation_account_id_display', valu: $exp_accounts[$asset['depreciation_account_id']] ?? $asset['depreciation_account_id'], type: 'view', wdth: '50%');
+    }, true);
 } else {
-    htm_Field(icon: 'fa-university', labl: '@Asset Account', name: 'asset_account_id', valu: $asset['asset_account_id'], type: 'sele', opti: $asset_accounts, wdth: '50%',
-        hint: '@The balance sheet account this asset\'s book value is posted to (acc_type = asset).');
-    htm_Field(icon: 'fa-chart-line', labl: '@Depreciation Account', name: 'depreciation_account_id', valu: $asset['depreciation_account_id'], type: 'sele', opti: $exp_accounts, wdth: '50%',
-        hint: '@The P&L expense account depreciation is posted to (acc_type = expense). Also used for any gain/loss on disposal.');
+    render_hideable_field($fv_overrides, 'fixed_asset_edit.asset_account_id', $fv_is_admin, $fv_uLev, function() use ($asset, $asset_accounts) {
+        htm_Field(icon: 'fa-university', labl: '@Asset Account', name: 'asset_account_id', valu: $asset['asset_account_id'], type: 'sele', opti: $asset_accounts, wdth: '50%',
+            hint: '@The balance sheet account this asset\'s book value is posted to (acc_type = asset).');
+    }, true);
+    render_hideable_field($fv_overrides, 'fixed_asset_edit.depreciation_account_id', $fv_is_admin, $fv_uLev, function() use ($asset, $exp_accounts) {
+        htm_Field(icon: 'fa-chart-line', labl: '@Depreciation Account', name: 'depreciation_account_id', valu: $asset['depreciation_account_id'], type: 'sele', opti: $exp_accounts, wdth: '50%',
+            hint: '@The P&L expense account depreciation is posted to (acc_type = expense). Also used for any gain/loss on disposal.');
+    }, true);
 }
 echo '</div>';
 
@@ -206,6 +224,35 @@ if ($is_posted) {
         echo '<div style="display:flex; justify-content:space-between; margin-top:4px; color:var(--text-muted);"><span>' . lang('@Last depreciated through') . ':</span><span>' . date(CONF_DATE_FORMAT, strtotime($asset['last_depreciated_date'])) . '</span></div>';
     }
     echo '</div>';
+}
+
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): siden viste kun
+// den AKTUELLE bogførte værdi ovenfor - ingen fremadskuende år-for-år-
+// oversigt over hele levetiden, nyttigt til planlægning eller ved en
+// revisorgennemgang. Ren beregning/visning (fa_build_full_schedule(),
+// samme formel som selve den bogførende afskrivningskørsel bruger) - ingen
+// ny bogføring, og vist uanset om aktivet allerede er bogført, så tallene
+// kan tjekkes FØR man gemmer et helt nyt aktiv.
+$schedule = fa_build_full_schedule($asset);
+if (!empty($schedule)) {
+    echo '<details style="margin:15px 5px;"><summary style="cursor:pointer; font-weight:bold; color:var(--text-muted); user-select:none; list-style:none; display:flex; align-items:center; gap:6px;">'
+        . '<i class="fa-solid fa-table-list" style="color:var(--color-primary);"></i> ' . lang('@Full Depreciation Schedule') . '</summary>';
+    echo '<div style="margin-top:8px;">';
+    $today_year = (int)date('Y');
+    $sched_rows = [];
+    foreach ($schedule as $row) {
+        $is_current_year = ($row['year'] === $today_year);
+        $year_cell = $is_current_year ? '<strong>' . $row['year'] . ' (' . lang('@this year') . ')</strong>' : (string)$row['year'];
+        $sched_rows[] = [
+            $year_cell,
+            number_format($row['depreciation'], 2, ',', '.'),
+            number_format($row['accumulated'], 2, ',', '.'),
+            number_format($row['book_value'], 2, ',', '.'),
+        ];
+    }
+    htm_Table(['@Year', '@Depreciation', '@Accumulated', '@Book Value'], $sched_rows, 'fa_schedule_tbl', 100, '', true,
+        ['', 'text-align:right;', 'text-align:right;', 'text-align:right;']);
+    echo '</div></details>';
 }
 
 echo "<div style='display:flex; gap:10px; margin-top:20px; border-top:1px solid #eee; padding-top:20px;'>";

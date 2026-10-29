@@ -1,4 +1,9 @@
-<?php # /project_view.php v:1.4.0 d:2026-08-23 i:claude
+<?php # /project_view.php v:1.4.1 d:2026-09-15 i:evs
+# v1.4.1 (bruger-anmodet, "kan bogholderen ønske sig mere"): viser nu et
+# ufaktureret-tid-banner i Indtægter/Fakturaer-sektionen, samme kriterium og
+# "Opret faktura fra timer"-knap som time_list.php's eget cross-projekt-
+# sammendrag - denne side viste FØR intet om uafregnet, fakturerbart
+# tidsforbrug på netop dette projekt.
 # v1.4.0: 5 fund ved en projekt-gennemgang - se [[project-bugs-review]]. (1)
 # ALVORLIGT: øverste oversigtstabels invoice-sum manglede momsmultiplikationen
 # helt ("SUM(quantity*price_each)", uden "*(100+rate)/100.0") - viste derfor
@@ -51,14 +56,15 @@ if ($msg === 'deleted') htm_Alert(lang('@Project deleted'), 'success');
 // sendt/bogført. Krediterede fakturaers linjer nulstilles allerede korrekt
 // af deres kreditnotas egne (negative) linjer, som arver samme proj_id (se
 // invoice_credit.php) - kun kladder skal ekskluderes her.
+$pv_disc = invoice_discount_sql($conn, 'il.');
 $res_all = DB::query($conn, "
     SELECT p.proj_id, p.proj_no, p.is_active, p.proj_start, p.proj_stop,
            c.cust_name,
            (SELECT COALESCE(SUM(e2.amount),0) FROM expenses e2
-            WHERE e2.proj_id = p.proj_id AND e2.is_cancelled = 0 AND e2.exp_type = 'expense') AS total_exp,
+            WHERE e2.proj_id = p.proj_id AND e2.is_cancelled = 0 AND e2.voucher_no IS NOT NULL AND e2.exp_type = 'expense') AS total_exp,
            (SELECT COALESCE(SUM(e3.amount),0) FROM expenses e3
-            WHERE e3.proj_id = p.proj_id AND e3.is_cancelled = 0 AND e3.exp_type = 'income')  AS total_other_inc,
-           (SELECT COALESCE(SUM(il.quantity * il.price_each * (100 + il.line_vat_rate) / 100.0),0)
+            WHERE e3.proj_id = p.proj_id AND e3.is_cancelled = 0 AND e3.voucher_no IS NOT NULL AND e3.exp_type = 'income')  AS total_other_inc,
+           (SELECT COALESCE(SUM(il.quantity * il.price_each $pv_disc * (100 + il.line_vat_rate) / 100.0 * COALESCE(NULLIF(iv.exch_rate, 0), 1)),0)
             FROM invoice_lines il JOIN invoices iv ON il.inv_id = iv.inv_id
             WHERE il.proj_id = p.proj_id AND LOWER(iv.inv_status) != 'draft') AS total_inv
     FROM projects p
@@ -73,6 +79,10 @@ while ($p = DB::fetch_assoc($res_all)) {
     $actions = htm_ActionButtons([
         ['icon' => 'fa-eye',  'type' => 'primary',  'link' => 'project_view.php?id='.$p['proj_id'], 'hint' => '@View'],
         ['icon' => 'fa-edit', 'type' => 'secondary', 'link' => 'project_edit.php?id='.$p['proj_id'], 'hint' => '@Edit'],
+        // NYT (bruger-anmodet, forbillede: en "Sagers kontokort"-rapport fra et advokatsystem)
+        // - genvej direkte fra oversigtstabellen, samme princip som View/Edit
+        // ovenfor, til det nye projekt-kontokort (project_statement.php).
+        ['icon' => 'fa-file-invoice-dollar', 'type' => 'info', 'link' => 'project_statement.php?id='.$p['proj_id'], 'hint' => '@Account Card'],
     ], false);
 
     $total_inc = (float)$p['total_inv'] + (float)$p['total_other_inc'];
@@ -121,7 +131,7 @@ $exp_res = DB::query($conn, "
     SELECT e.exp_id, e.exp_date, e.supplier, e.description, e.amount, a.acc_name
     FROM expenses e
     LEFT JOIN accounts a ON e.account_id = a.acc_id
-    WHERE e.proj_id = $id AND e.is_cancelled = 0 AND e.exp_type = 'expense'
+    WHERE e.proj_id = $id AND e.is_cancelled = 0 AND e.voucher_no IS NOT NULL AND e.exp_type = 'expense'
     ORDER BY e.exp_date DESC
 ");
 $exp_rows = []; $exp_total = 0;
@@ -142,7 +152,7 @@ $inc_res = DB::query($conn, "
     SELECT e.exp_id, e.exp_date, e.supplier, e.description, e.amount, a.acc_name
     FROM expenses e
     LEFT JOIN accounts a ON e.account_id = a.acc_id
-    WHERE e.proj_id = $id AND e.is_cancelled = 0 AND e.exp_type = 'income'
+    WHERE e.proj_id = $id AND e.is_cancelled = 0 AND e.voucher_no IS NOT NULL AND e.exp_type = 'income'
     ORDER BY e.exp_date DESC
 ");
 $inc_rows = []; $inc_total = 0;
@@ -158,11 +168,28 @@ while ($e = DB::fetch_assoc($inc_res)) {
     ];
 }
 
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): ufaktureret,
+// fakturerbar tid på PRÆCIS dette projekt - time_list.php viser allerede
+// dette på tværs af alle projekter, men et enkelt projekts egen side (denne)
+// viste intet om det, selvom tidsregistrerings-modulet findes netop for at
+// kunne fakturere timer videre. En projektleder der kun kigger her (ikke på
+// den separate time_list.php) havde ingen måde at se uafregnet arbejde på.
+// Samme kriterium/forespørgsel som time_list.php's egen (is_billable=1,
+// is_invoiced=0) - @-hæmmet, da time_entries kun findes efter
+// db-setup/migrate_time_tracking.php er kørt (se [[fresh-install-schema]]).
+$unbilled_row = @DB::fetch_assoc(DB::query($conn,
+    "SELECT COUNT(*) AS cnt, COALESCE(SUM(hours * hourly_rate),0) AS total
+     FROM time_entries WHERE proj_id = $id AND is_billable = 1 AND is_invoiced = 0"));
+$unbilled_cnt   = (int)($unbilled_row['cnt'] ?? 0);
+$unbilled_total = (float)($unbilled_row['total'] ?? 0);
+
+// RETTET: projektets tal regnede en faktura i fremmed valuta med dens EUR-beløb som var det kroner (kursen
+// manglede), og ubogførte udgiftskladder talte med i omkostningerne. Nu omregnet og kun bogførte udgifter.
 // Fakturaer
 $inv_res = DB::query($conn, "
     SELECT i.inv_id, i.invoice_no, i.inv_date, i.inv_status, i.inv_due_date,
-           COALESCE((SELECT SUM(il.quantity * il.price_each * (100 + il.line_vat_rate) / 100.0)
-                     FROM invoice_lines il WHERE il.inv_id = i.inv_id), 0) AS total
+           COALESCE((SELECT SUM(il.quantity * il.price_each $pv_disc * (100 + il.line_vat_rate) / 100.0)
+                     FROM invoice_lines il WHERE il.inv_id = i.inv_id), 0) * COALESCE(NULLIF(i.exch_rate, 0), 1) AS total
     FROM invoices i WHERE i.proj_id = $id ORDER BY i.inv_date DESC
 ");
 $inv_rows = []; $inv_total = 0;
@@ -192,10 +219,14 @@ $bal_type     = $balance >= 0 ? 'success' : 'danger';
 
 // --- Projekthoved-kort START ---
 $edit_btn = htm_Button('fa-edit', '@Edit Project', 'secondary', 'project_edit.php?id='.$id, '', 'data-hint="'.lang('@Edit this project\'s details').'"', '', false);
+// NYT (bruger-anmodet, forbillede: en "Sagers kontokort"-rapport fra et advokatsystem) - genvej
+// til det nye projekt-kontokort direkte fra selve projektets egen side, ikke
+// kun fra oversigtstabellen (se denne fils øverste del).
+$edit_btn .= ' ' . htm_Button('fa-file-invoice-dollar', '@Account Card', 'info', 'project_statement.php?id='.$id, '', 'data-hint="'.lang('@View the chronological account card for this project').'"', '', false);
 // RETTET (§bugs-batch-13-review): htm_Card_() escaper nu selv sit $capt-
 // argument centralt (se dens egen kommentar) - den htmlspecialchars() der
 // tidligere stod her ville nu blive anvendt DOBBELT (fx "&" -> "&amp;amp;").
-htm_Card_($proj['proj_no'] . ' — ' . ($proj['cust_name'] ?? ''), 1200, tool: $edit_btn);
+htm_Card_(htmlspecialchars($proj['proj_no'] . ' — ' . ($proj['cust_name'] ?? '')), 1200, tool: $edit_btn);      // RETTET: uescapet kundenavn (kan komme fra en webbutik)
 
 echo '<div style="display:flex; gap:30px; flex-wrap:wrap; font-size:0.95em; color:var(--text-muted); margin-bottom:10px;">';
 if ($proj['proj_start']) echo '<span><i class="fa fa-calendar"></i> ' . lang('@Start') . ': <b>' . date(CONF_DATE_FORMAT, strtotime($proj['proj_start'])) . '</b></span>';
@@ -290,6 +321,16 @@ if (empty($income_rows)) {
     }
     echo '<div style="text-align:right; font-weight:bold; padding:8px 0; border-top:1px solid var(--border-subtle); margin-top:4px;">'
         . lang('@Total Income') . ': ' . number_format($income_total, 2, ',', '.') . ' ' . $cur . '</div>';
+}
+if ($unbilled_cnt > 0) {
+    echo '<div style="margin-top:10px; padding:12px 15px; background:var(--bg-panel); border-radius:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">';
+    echo '<div><i class="fa-solid fa-clock" style="color:var(--color-warning);"></i> '
+        . sprintf(lang('@%d unbilled, billable hour entries for this project, totaling %s.'), $unbilled_cnt, number_format($unbilled_total, 2, ',', '.') . ' ' . $cur)
+        . '</div>';
+    htm_Button(icon: 'fa-file-invoice', labl: '@Create Invoice from Hours', type: 'success',
+        link: 'time_actions.php?action=invoice&proj_id='.$id,
+        attr: 'onclick="return confirm(\''.addslashes(lang('@Create a draft invoice with one line per unbilled hour entry for this project?')).'\');" data-hint="'.lang('@Generate a draft invoice from all unbilled hours on this project').'"');
+    echo '</div>';
 }
 echo '<div style="margin-top:10px; display:flex; gap:8px;">';
 // RETTET (se [[project-bugs-review]]): samme fund som ved "Registrér udgift"

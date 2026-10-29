@@ -1,4 +1,4 @@
-<?php # /recurring_invoices.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /recurring_invoices.php v:1.3.1 d:2026-09-15 i:evs
 # NY FUNKTION: Gentagne/faste fakturaer
 # Fra forslagslisten, næste punkt efter kundekontoudtog. Liste over faste
 # fakturaskabeloner (recurring_invoices) - oprettelse/redigering sker i
@@ -28,10 +28,18 @@ if (isset($_GET['del']) && (int)$_GET['del'] > 0) {
 // --- Pause/genoptag ---
 if (isset($_GET['toggle']) && (int)$_GET['toggle'] > 0) {
     $tid = (int)$_GET['toggle'];
-    $cur = DB::fetch_assoc(DB::query($conn, "SELECT is_active FROM recurring_invoices WHERE recur_id = $tid"));
+    $cur = DB::fetch_assoc(DB::query($conn, "SELECT is_active, next_run_date, interval_type FROM recurring_invoices WHERE recur_id = $tid"));
     if ($cur) {
         $new_active = $cur['is_active'] ? 0 : 1;
         DB::query($conn, "UPDATE recurring_invoices SET is_active = $new_active WHERE recur_id = $tid");
+        // RETTET: genaktiveres en skabelon efter en pause, lå next_run_date stadig FØR pausen - det automatiske
+        // tjek dannede så én kladde pr. sidevisning for HVER måned i pausen (6 måneders pause = 6 kladder i dag).
+        // Den næste kørsel rykkes nu frem til den første planlagte dato fra i dag (samme dag i måneden som før).
+        if ($new_active === 1 && !empty($cur['next_run_date']) && $cur['next_run_date'] < date('Y-m-d')) {
+            $nx = $cur['next_run_date'];
+            for ($g = 0; $g < 600 && $nx < date('Y-m-d'); $g++) $nx = recurring_next_date($nx, (string)$cur['interval_type']);
+            DB::query($conn, "UPDATE recurring_invoices SET next_run_date = '" . DB::escape($conn, $nx) . "' WHERE recur_id = $tid");
+        }
         log_action($conn, 'TOGGLE_RECURRING_INVOICE', 'recurring_invoices', $tid, ['is_active' => $cur['is_active']], ['is_active' => $new_active]);
     }
     header("Location: recurring_invoices.php?msg=toggled"); exit;
@@ -48,6 +56,33 @@ if (isset($_GET['gen']) && (int)$_GET['gen'] > 0) {
     }
 }
 
+// --- Spring næste kørsel over (bruger-anmodet, "kan bogholderen ønske sig
+// mere"): før kunne en skabelon kun sættes helt til/fra - en kunde der fx
+// holder ferie én måned krævede enten at bogholderen huskede at slå
+// skabelonen fra OG til igen bagefter, eller bare lod den generere en
+// kladde man alligevel aldrig bogførte. Fremrykker next_run_date ÉT
+// interval (samme recurring_next_date() som selve den automatiske
+// generering bruger, se inc/recurring_invoices.inc.php), uden at oprette
+// nogen fakturakladde og uden at røre last_run_date (der blev jo reelt
+// ikke "kørt" noget denne gang). Atomisk claim (WHERE next_run_date =
+// den kendte gamle værdi) - samme TOCTOU-sikre mønster som resten af
+// appens statusskift, i tilfælde af to samtidige klik/faner. ---
+if (isset($_GET['skip']) && (int)$_GET['skip'] > 0) {
+    $sid = (int)$_GET['skip'];
+    $cur = DB::fetch_assoc(DB::query($conn, "SELECT next_run_date, interval_type FROM recurring_invoices WHERE recur_id = $sid"));
+    if ($cur && !empty($cur['next_run_date'])) {
+        $new_next = recurring_next_date($cur['next_run_date'], $cur['interval_type']);
+        $claim = DB::prepare_and_execute($conn,
+            "UPDATE recurring_invoices SET next_run_date = ? WHERE recur_id = ? AND next_run_date = ?",
+            [$new_next, $sid, $cur['next_run_date']]);
+        if ($claim && DB::affected_rows($conn, $claim) > 0) {
+            log_action($conn, 'SKIP_RECURRING_INVOICE', 'recurring_invoices', $sid,
+                ['next_run_date' => $cur['next_run_date']], ['next_run_date' => $new_next]);
+        }
+    }
+    header("Location: recurring_invoices.php?msg=skipped"); exit;
+}
+
 htm_Header('@Recurring Invoices', 1200);
 showMenu();
 
@@ -55,6 +90,7 @@ if (isset($_GET['msg'])) {
     if ($_GET['msg'] === 'deleted') htm_Alert(lang('@Deleted successfully'), 'success');
     elseif ($_GET['msg'] === 'toggled') htm_Alert(lang('@Status updated'), 'success');
     elseif ($_GET['msg'] === 'generr') htm_Alert(lang('@Could not generate an invoice from this template'), 'error');
+    elseif ($_GET['msg'] === 'skipped') htm_Alert(lang('@Next occurrence skipped - the schedule has moved forward by one interval.'), 'success');
 }
 
 $tools = htm_Button(icon: 'fa-plus', labl: '@New Recurring Invoice', type: 'success', link: 'recurring_invoice_edit.php?id=0', attr: 'data-hint="'.lang('@Create a new recurring invoice template').'"', echo: false);
@@ -86,10 +122,18 @@ if ($res) {
         $actions = [
             ['icon' => 'fa-pencil', 'link' => 'recurring_invoice_edit.php?id='.$row['recur_id'], 'hint' => '@Edit', 'type' => 'primary'],
             ['icon' => 'fa-bolt',   'link' => 'recurring_invoices.php?gen='.$row['recur_id'], 'hint' => '@Generate Now', 'type' => 'info'],
-            ['icon' => $row['is_active'] ? 'fa-pause' : 'fa-play',
-             'link' => 'recurring_invoices.php?toggle='.$row['recur_id'],
-             'hint' => $row['is_active'] ? '@Pause' : '@Resume', 'type' => 'warning'],
         ];
+        // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): kun
+        // meningsfuldt for en aktiv skabelon med en kendt næste-dato - en
+        // pauset skabelon har jo allerede ingen kørsel at springe over.
+        if ($row['is_active'] && !empty($row['next_run_date'])) {
+            $actions[] = ['icon' => 'fa-forward-step', 'link' => 'recurring_invoices.php?skip='.$row['recur_id'],
+                'hint' => '@Skip next occurrence (e.g. customer on holiday) without generating an invoice', 'type' => 'secondary',
+                'confirm' => '@Skip the next scheduled occurrence for this template? The schedule will move forward by one interval without creating an invoice.'];
+        }
+        $actions[] = ['icon' => $row['is_active'] ? 'fa-pause' : 'fa-play',
+             'link' => 'recurring_invoices.php?toggle='.$row['recur_id'],
+             'hint' => $row['is_active'] ? '@Pause' : '@Resume', 'type' => 'warning'];
 
         $data[] = [
             htmlspecialchars($row['cust_name'] ?? '---') . '<br><small style="color:var(--text-muted);">' . number_format($total, 2, ',', '.') . ' DKK/' . lang($interval_labels[$row['interval_type']] ?? $row['interval_type']) . '</small>',

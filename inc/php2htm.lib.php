@@ -1,4 +1,4 @@
-<?php # /inc/php2htm.lib.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /inc/php2htm.lib.php v:1.3.1 d:2026-09-15 i:evs
 # htm_InputGroup omdøbt til htm_Field i hele projektet, på brugerens ønske
 # Inkluder de centraliserede hjælpemoduler.
 # core_utils.lib.php rummer lang() og andre ikke-HTML-byggende funktioner
@@ -12,9 +12,9 @@ include_once __DIR__ . '/htm_page.lib.php'; # HEADER & FOOTER
 function htm_QuickMenu() {
     ?>
     <div class="quick-actions">
-        <a href="account_edit.php?id=0" class="qa-btn qa-account"><i class="fa fa-plus-circle"></i> <span><?php echo lang('@Account'); ?></span></a>
-        <a href="expense_edit.php?id=0" class="qa-btn qa-expense"><i class="fa fa-minus-circle"></i> <span><?php echo lang('@Expense'); ?></span></a>
-        <a href="invoice_edit.php?id=0" class="qa-btn qa-invoice"><i class="fa fa-file-invoice-dollar"></i> <span><?php echo lang('@Invoice'); ?></span></a>
+        <a href="account_edit.php?id=0" class="qa-btn qa-account" data-hint="<?php echo lang('@Create a new account in the chart of accounts'); ?>"><i class="fa fa-plus-circle"></i> <span><?php echo lang('@Account'); ?></span></a>
+        <a href="expense_edit.php?id=0" class="qa-btn qa-expense" data-hint="<?php echo lang('@Register a new expense or purchase'); ?>"><i class="fa fa-minus-circle"></i> <span><?php echo lang('@Expense'); ?></span></a>
+        <a href="invoice_edit.php?id=0" class="qa-btn qa-invoice" data-hint="<?php echo lang('@Create a new invoice'); ?>"><i class="fa fa-file-invoice-dollar"></i> <span><?php echo lang('@Invoice'); ?></span></a>
     </div>
     <?php
 }
@@ -63,7 +63,16 @@ function htm_Field($icon, $labl, $name, $valu='', $type='text', $opti=null, $ext
             $clean_hint .= "\n\n(English: " . $english_reference . ")";
         }
         $outer_hint_attr = ' data-hint="'.htmlspecialchars($clean_hint, ENT_QUOTES).'"';
-    } 
+        // RETTET (bruger-anmodet: "tilføj hint på htm_Field() når cursor er
+        // over caption-text") - $hint sad FØR kun på selve <div>/<fieldset>,
+        // aldrig direkte på <legend>. Et hover over caption-teksten BURDE i
+        // teorien allerede ramme det via closest([data-hint]) op til
+        // <fieldset>, men <legend> har en særlig, ikke-standard boksmodel
+        // (den "stikker hul" i fieldset'ets kant) som ikke alle browsere
+        // hit-tester ens - data-hint lægges derfor nu direkte på <legend>
+        // også, så det aldrig afhænger af den opførsel.
+        $legend_hint_attr = $outer_hint_attr;
+    }
     elseif ($show_english_fallback) {
         $legend_hint_attr = ' data-hint="'.htmlspecialchars("English: " . $english_reference, ENT_QUOTES).'"';
     }
@@ -76,8 +85,23 @@ function htm_Field($icon, $labl, $name, $valu='', $type='text', $opti=null, $ext
     elseif (strpos(' '.$extr, 'required') > 0) { $bord = 'border: 2px solid orange;'; } 
     else { $bord = ''; }
     
-    $h = '<div'.$outer_hint_attr.' style="display:inline-block; width:'.$wdth.'; ...">';
-    $h .= '<fieldset'.$outer_hint_attr.' style="border-radius:8px; margin:2px; border:1px solid var(--border-fieldset); background-color: var(--bg-card); '.$bord.' padding:5px 10px;">';
+    // RETTET (bruger-rapporteret: "Filterfelter overlapper hinanden" på
+    // login_history.php): der stod bogstaveligt "..." her - formentlig et
+    // glemt/ufuldendt tilføjelse. Uden en eksplicit min-width kan et
+    // fieldset-element ikke krympe under sit eget indholds intrinsiske
+    // minimumsbredde (en velkendt, ikke-standard browser-kvirk) - når
+    // flere htm_Field()-felter sidder i en display:flex-række med for lidt
+    // plads (fx et filterformular med 4+ felter), krymper den ydre boks
+    // her korrekt via flex-shrink, men fieldset'et INDENI nægter at følge
+    // med og flyder derfor ud over sin egen boks ind over naboen -
+    // "min-width: 0;" er den etablerede, veldokumenterede rettelse for
+    // netop dette (tillader hele flex-item-kæden at krympe reelt).
+    $h = '<div'.$outer_hint_attr.' style="display:inline-block; width:'.$wdth.'; min-width: 0;">';
+    // min-width:0 også her - selve fieldset-elementet er hvor browserens
+    // "min-width:min-content"-standardstil reelt sidder (se kommentaren
+    // ved den ydre div ovenfor); uden den her ville den ydre div godt
+    // kunne krympe, mens fieldset'et indeni stadig nægtede at følge med.
+    $h .= '<fieldset'.$outer_hint_attr.' style="border-radius:8px; margin:2px; border:1px solid var(--border-fieldset); background-color: var(--bg-card); min-width: 0; box-sizing: border-box; '.$bord.' padding:5px 10px;">';
 
     if ($labl) { 
         $i_h = $icon ? '<i class="fa '.$icon.'" style="margin-right:5px; color: var(--color-primary);"></i> ' : '';
@@ -100,7 +124,14 @@ function htm_Field($icon, $labl, $name, $valu='', $type='text', $opti=null, $ext
         $centering_css = ($align == 'center') ? 'margin-left:auto; margin-right:auto; float:none; display:table;' : '';
         $align_css = 'text-align: ' . $align . ';';
 
-        $h .= '<legend'.$legend_hint_attr.' style="font-size:0.85rem; padding:0 5px; color: var(--text-muted); margin:0; '. $align_css . $centering_css . $clean_legd . '">' . $i_h . $translated_label . '</legend>';
+        // RETTET (bruger-anmodet: "kan linkområdet udvides til også at
+        // omfatte blank-område til højre for caption") - <legend> krymper
+        // som udgangspunkt til nøjagtig tekstens egen bredde, så selve hover-
+        // /hint-fladen stopper brat lige efter sidste bogstav. Ekstra
+        // padding-right giver et bredere, mere tilgivende hover-mål uden at
+        // ændre selve tekstens visuelle placering (venstre-/center-/højre-
+        // justeringen ovenfor er uændret, kun selve boksen er bredere).
+        $h .= '<legend'.$legend_hint_attr.' style="font-size:0.85rem; padding:2px 5px; color: var(--text-muted); margin:0; '. $align_css . $centering_css . $clean_legd . '">' . $i_h . $translated_label . '</legend>';
     }
 
     $p_a = ($plho !== '') ? " placeholder='".htmlspecialchars(lang($plho), ENT_QUOTES)."'" : '';
@@ -125,8 +156,12 @@ function htm_Field($icon, $labl, $name, $valu='', $type='text', $opti=null, $ext
         $h .= '<div style="'.$s.' font-weight:bold; min-height:1.2em; color: var(--text-main); box-sizing: border-box;">'.($valu ? $valu : '&nbsp;').'</div>'; 
     } elseif ($type == 'sele' && is_array($opti)) {
         $h .= '<select name="'.$name.'" id="'.$unique_id.'" style="'.$s.'" '.$clean_extr.'>';
+        // RETTET (SIKKERHED, stored XSS): værdi og tekst blev skrevet UESCAPET (kun den etiketløse variant ovenfor
+        // escapede) - et brugernavn fra et mislykket loginforsøg ("<script>...") i loginhistorikkens valgliste, eller
+        // et kundenavn fra en webbutiksordre i fakturaens kundeliste, kørte som script i en indlogget brugers browser.
+        // Eksisterende entiteter (&nbsp; o.l.) bevares (double_encode = false).
         foreach ($opti as $k => $v) {
-            $h .= '<option value="'.$k.'" '.($valu == $k ? 'selected' : '').'>'.$v.'</option>';
+            $h .= '<option value="'.htmlspecialchars((string)$k, ENT_QUOTES, 'UTF-8', false).'" '.($valu == $k ? 'selected' : '').'>'.htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8', false).'</option>';
         }
         $h .= '</select>';
     } elseif ($type == 'textarea') { 
@@ -243,6 +278,67 @@ function csrf_verify(): bool {
     return hash_equals($_SESSION['csrf_token'], $_POST['csrf_token']);
 }
 
+// RETTET: CSRF-værnet gjaldt kun POST - men en lang række handlinger udføres af et almindeligt LINK (GET):
+// slet bruger / konto / leverandør / momskode / bankpost, annullér eller slet en journalpost, kør
+// afskrivninger, annullér en udgift, generér / spring over / slå faste fakturaer til og fra, konvertér et
+// tilbud, send en faktura ... SameSite=Lax sender sessionen med ved et klik på et link fra en fremmed side
+// (mail, chat), så et sådant link kunne udføre handlingen i en indlogget administrators navn.
+// Registret: script => de GET-parametre der udløser en handling (en værdi i 'read_only' er kun læsning).
+// inc/auth.inc.php afviser en sådan GET uden csrf_token; htm_Header() lægger nøglen på linkene ved klik.
+function csrf_get_actions(): array {
+    return [
+        'account_delete.php'          => ['params' => ['id']],
+        'user_actions.php'            => ['params' => ['action']],
+        'ledger_view.php'             => ['params' => ['action']],
+        'reconcile_list.php'          => ['params' => ['action']],
+        'recurring_invoices.php'      => ['params' => ['del', 'toggle', 'gen', 'skip']],
+        'recurring_expenses.php'      => ['params' => ['del', 'toggle', 'gen', 'skip']],
+        'supplier_list.php'           => ['params' => ['del']],
+        'bank_integration.php'        => ['params' => ['disconnect']],
+        'bank_integration_sync.php'   => ['params' => ['conn_id']],
+        'vat_codes.php'               => ['params' => ['delete']],
+        'expense_actions.php'         => ['params' => ['action']],
+        'fixed_asset_actions.php'     => ['params' => ['action']],
+        'inventory_actions.php'       => ['params' => ['action']],
+        'project_actions.php'         => ['params' => ['action']],
+        'quote_actions.php'           => ['params' => ['action']],
+        'time_actions.php'            => ['params' => ['action']],
+        'invoice_template_action.php' => ['params' => ['action'], 'read_only' => ['list', 'get']],
+        'invoice_duplicate.php'       => ['params' => ['id']],
+        'quote_duplicate.php'         => ['params' => ['id']],
+        'send_invoice_action.php'     => ['params' => ['id']],
+        'send_quote_action.php'       => ['params' => ['id']],
+        'customer_edit.php'           => ['params' => ['del']],
+        'invoice_edit.php'            => ['params' => ['del']],
+        'quote_edit.php'              => ['params' => ['del']],
+        'time_entry_edit.php'         => ['params' => ['del']],
+        'settings_fees.php'           => ['params' => ['delete']],
+        'storage_browser.php'         => ['params' => ['delete']],
+        'menu_visibility.php'         => ['params' => ['reset']],
+        'account_manage.php'          => ['params' => ['deactivate', 'reactivate']],
+        'reminder_action.php'         => ['params' => ['id']],        // (sender en rykker-mail)
+        'customer_statement_send.php' => ['params' => ['id']],        // (sender et kontoudtog)
+        'quote_followup_action.php'   => ['params' => ['id']],        // (sender en tilbudsopfølgning)
+        'webhook_keys.php'            => ['params' => ['revoke']],    // (fortryder en API-nøgle)
+    ];
+}
+// Er denne GET-forespørgsel en handling (registret ovenfor)?
+function csrf_get_is_action(): bool {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') return false;
+    $reg = csrf_get_actions()[basename((string)($_SERVER['SCRIPT_NAME'] ?? ''))] ?? null;
+    if (!$reg) return false;
+    foreach ($reg['params'] as $p) {
+        if (!isset($_GET[$p]) || (string)$_GET[$p] === '') continue;
+        if (in_array((string)$_GET[$p], $reg['read_only'] ?? [], true)) continue;
+        return true;
+    }
+    return false;
+}
+function csrf_verify_get(): bool {
+    if (empty($_GET['csrf_token']) || empty($_SESSION['csrf_token'])) return false;
+    return hash_equals($_SESSION['csrf_token'], (string)$_GET['csrf_token']);
+}
+
 # CARD START
 // NY PARAMETER (bruger-anmodet, inspireret af et "avanceret" htm_Card_-
 // forbillede fra et andet/rigere framework - se menu-visibility-access-audit-
@@ -310,14 +406,41 @@ function htm_Card_($capt, $wdth='600', $info='', $form=false, $echo = true, $too
         // data-hint ligger der. Hintet skal i stedet ligge på et omsluttende
         // element (her et <span>), som alle andre ikon+hint-kombinationer i
         // koden allerede gør det.
-        $tool_html .= ($tool_html !== '' ? ' ' : '') . '<span data-hint="'.htmlspecialchars(lang('@Click to expand/collapse this card'), ENT_QUOTES).'"><i id="'.$icon_id.'" class="fa-solid '.$chev.'" onclick="toggleCard(\''.$entry['fold_id'].'\', this)" style="cursor:pointer; color:var(--text-muted); margin-left:10px; font-size:1.1em;"></i></span>';
+        // "tc-fold-icon"-klassen har intet med udseende at gøre - den er
+        // udelukkende en JS-krog (htm_page.lib.php: updateToggleAllCardsButton()/
+        // toggleAllCards()), så "fold alle ud/sammen"-ikonet kan tælle og
+        // finde samtlige foldbare kort på siden uden at kende deres fold_id'er.
+        //
+        // RETTET (bruger-rapporteret: "ikke der de skulle placeres, men på
+        // card ved siden af fold-ikonen") - "fold alle ud/sammen" boede
+        // først som én knap i den flydende værktøjsbjælke; brugeren ville i
+        // stedet have et ens dobbeltpil-ikon på HVERT foldbart kort, lige
+        // ved siden af kortets eget fold-ikon. Starter skjult (display:none)
+        // - JS (updateToggleAllCardsButton()) viser det kun, når der er 3+
+        // foldbare kort på siden, og PHP kender ikke det tal her (kun kortet
+        // foran sig selv). Samme klik-funktion (toggleAllCards()) uanset
+        // hvilket af de identiske ikoner man klikker på.
+        $tool_html .= ($tool_html !== '' ? ' ' : '') . '<span class="tc-toggle-all-wrap" style="display:none;" data-expand-hint="'.htmlspecialchars(lang('@Expand all sections on this page'), ENT_QUOTES).'" data-collapse-hint="'.htmlspecialchars(lang('@Collapse all sections on this page'), ENT_QUOTES).'" data-hint="'.htmlspecialchars(lang('@Expand all sections on this page'), ENT_QUOTES).'"><i class="fa-solid fa-angles-down tc-toggle-all-icon" onclick="toggleAllCards(this)" style="cursor:pointer; color:var(--text-muted); margin-left:10px; font-size:1.1em;"></i></span>';
+        $tool_html .= '<span data-hint="'.htmlspecialchars(lang('@Click to expand/collapse this card'), ENT_QUOTES).'"><i id="'.$icon_id.'" class="fa-solid '.$chev.' tc-fold-icon" onclick="toggleCard(\''.$entry['fold_id'].'\', this)" style="cursor:pointer; color:var(--text-muted); margin-left:10px; font-size:1.1em;"></i></span>';
         // NY (bruger-anmodet): selve titlen skal også kunne folde/lukke kortet,
         // ikke kun det lille chevron-ikon. Peger på DEN SAMME ikon-reference
         // (via id) som selve ikonets eget onclick, så pilens retning altid
         // følger med uanset hvilket af de to man klikker på.
-        $capt_attr = ' onclick="toggleCard(\''.$entry['fold_id'].'\', document.getElementById(\''.$icon_id.'\'))"';
+        //
+        // RETTET (bruger-anmodet: "hint på titel-teksten + linkområdet skal
+        // udvides til blank-området til højre for teksten") - to separate
+        // ting: (1) selve <h2>-elementet fik aldrig sit eget data-hint - kun
+        // fold-ikonet havde ét - så hover over selve overskriften viste
+        // intet. (2) <h2> krymper som udgangspunkt til tekstens egen bredde
+        // i caption-rækkens flex-layout (justify-content:space-between), så
+        // det blanke rum mellem titel og ikoner til højre hverken kunne
+        // klikkes eller vise hint. Samme data-hint-tekst som ikonet, direkte
+        // på <h2>, plus "flex:1" (se $h2_style nedenfor) som lader selve
+        // <h2>-boksen fylde det blanke rum ud i stedet for at overlade det
+        // til justify-content.
+        $capt_attr = ' onclick="toggleCard(\''.$entry['fold_id'].'\', document.getElementById(\''.$icon_id.'\'))" data-hint="'.htmlspecialchars(lang('@Click to expand/collapse this card'), ENT_QUOTES).'"';
     }
-    $h2_style = 'margin:0; color: var(--text-main, #2c3e50);' . ($fold ? ' cursor:pointer;' : '');
+    $h2_style = 'margin:0; color: var(--text-main, #2c3e50);' . ($fold ? ' cursor:pointer; flex:1;' : '');
 
     $stack[] = $entry; // Push FØR resten af HTML'en, så et evt. indlejret htm_Card_-kald i callerens kode lægger sig oven på denne, ikke ved siden af den.
 
@@ -329,7 +452,28 @@ function htm_Card_($capt, $wdth='600', $info='', $form=false, $echo = true, $too
     // project_view.php), så denne escaping er et no-op for alle andre.
     $bg = ($bclr !== '') ? htmlspecialchars($bclr, ENT_QUOTES) : 'var(--bg-card)';
     echo '<div style="max-width:'.$w.'; margin: 20px auto; padding: 0 5px;"><div style="background: '.$bg.'; padding:25px; border-radius:8px; box-shadow:0 4px 15px rgba(0,0,0,0.1);">';
-    echo '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--color-primary); margin-bottom:15px; padding-bottom:10px;"><h2 style="'.$h2_style.'"'.$capt_attr.'>'.htmlspecialchars(lang($capt)).'</h2><div>'.$tool_html.'</div></div>';
+    // RETTET (bruger-rapporteret: "htm_Card() viser skillelinie under caption
+    // altid - den skal skjules i foldet tilstand") - skillelinjen adskiller
+    // visuelt caption'en fra kortets BRØDTEKST, så den giver ingen mening at
+    // vise, når brødteksten er skjult (fold: 'closed', eller efter man selv
+    // har klappet kortet sammen). Kun relevant når kortet overhovedet KAN
+    // foldes ($fold sandt) - et almindeligt, ikke-foldbart kort beholder sin
+    // linje uændret. Selve caption-rækken får et forudsigeligt id
+    // ({fold_id}_caption), så toggleCard() (htm_page.lib.php) kan slå
+    // border-bottom til/fra i takt med brødteksten, ikke kun ved selve
+    // sidens første indlæsning.
+    // RETTET (bruger-rapporteret: "asymmetri i margin over/under caption som
+    // om der er reserveret plads til divider") - da skillelinjen ovenfor
+    // blev skjult i lukket fold-tilstand, stod margin-bottom/padding-bottom
+    // stadig tilbage uændret (de 25px, der oprindeligt var beregnet til at
+    // give linjen albuerum), så der blev ved med at se ud som tomt,
+    // reserveret rum uden nogen linje i det. De skal falde bort sammen med
+    // selve linjen. toggleCard() (htm_page.lib.php) holder dem i takt ved
+    // manuel fold/udfold.
+    $divider = ($fold && $fold_closed) ? 'none' : '2px solid var(--color-primary)';
+    $caption_spacing = ($fold && $fold_closed) ? 'margin-bottom:0; padding-bottom:0;' : 'margin-bottom:15px; padding-bottom:10px;';
+    $caption_id_attr = $entry['fold_id'] ? ' id="'.$entry['fold_id'].'_caption"' : '';
+    echo '<div'.$caption_id_attr.' style="display:flex; justify-content:space-between; align-items:center; border-bottom:'.$divider.'; '.$caption_spacing.'"><h2 style="'.$h2_style.'"'.$capt_attr.'>'.htmlspecialchars(lang($capt)).'</h2><div>'.$tool_html.'</div></div>';
     if($info) echo '<div style="margin-bottom:15px; padding:10px; background: var(--bg-panel); border-radius:4px; font-size:0.9em; color: var(--text-muted);">'.$info.'</div>';
     if ($entry['fold_id']) echo '<div id="'.$entry['fold_id'].'"'.($fold_closed ? ' style="display:none;"' : '').'>';
 

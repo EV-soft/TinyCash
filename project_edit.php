@@ -39,9 +39,13 @@ showMenu();
 
 if ($err === 'missing_code') htm_Alert(lang('@Project Code is required'), 'error');
 if ($err === 'duplicate_code') htm_Alert(lang('@This project code is already in use by another project.'), 'error');
+if ($err === 'in_use') htm_Alert(lang('@This project has posted invoices, expenses or entries, or hours not yet invoiced, and cannot be deleted - set it to inactive instead.'), 'error');
 
 $cust_opts = ['' => '-- ' . lang('@Select Customer') . ' --'];
-$cust_res  = DB::query($conn, "SELECT cust_id, cust_name FROM customers ORDER BY cust_name ASC");
+// RETTET: kunder i papirkurven (customer_edit.php "Slet") stod i listen - et nyt projekt (og dets timefaktura) kunne
+// lægges på en slettet kunde, der ikke ses nogen steder. Kun aktive kunder - plus projektets egen, hvis den er slettet.
+$pe_keep   = (int)($item['cust_id'] ?? 0);
+$cust_res  = DB::query($conn, "SELECT cust_id, cust_name FROM customers WHERE " . customers_active_filter($conn) . ($pe_keep > 0 ? " OR cust_id = $pe_keep" : '') . " ORDER BY cust_name ASC");
 if ($cust_res) {
     while ($c = DB::fetch_assoc($cust_res)) {
         $cust_opts[$c['cust_id']] = $c['cust_name'];

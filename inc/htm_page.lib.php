@@ -1,4 +1,4 @@
-<?php # /inc/htm_page.lib.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /inc/htm_page.lib.php v:1.3.1 d:2026-09-15 i:evs
 
 // HEADER og FOOTER flyttet fra php2htm.lib.php
 
@@ -144,7 +144,7 @@ echo '
     body { 
         font-family: "Inter", sans-serif; 
         background: var(--bg-main); 
-        margin: 4px 20px; 
+      /*  margin: 4px 20px;  */
         color: var(--text-main); 
         padding-bottom: 100px;
         position: relative;
@@ -216,6 +216,18 @@ echo '
         border-left: 4px solid var(--color-warning) !important;
         color: var(--text-main) !important;
     }
+    /* RETTET (bruger-rapporteret gennemgang: "flere lignende problemer" efter
+       hvid-på-gul-fundet på varselsbanneret) - var(--color-info) er med vilje
+       lysegrå (#c4c6c8) i dark-temaet (fin kontrast som BADGE-/tekstfarve mod
+       kortenes mellemgrå baggrund dér), men de få steder, hvor color-info i
+       stedet bruges som en massiv knap-/pille-BAGGRUND med hvid tekst ovenpå
+       (bank_integration.php, CVR-opslagsknappen i customer_edit.php/
+       supplier_edit.php, "Send faktura"-bekræftelsen i sales_hub.php), bliver
+       næsten ulæselige af samme grund som varselsbanneret var. Selve
+       --color-info kan ikke bare gøres mørkere generelt - det ville i stedet
+       ødelægge badge-brugen. .tc-info-fill markerer kun disse fyldte-
+       baggrund-steder, så KUN de får mørk tekst i dark-temaet. */
+    [data-theme="dark"] .tc-info-fill { color: #1a1a1a !important; }
 
     .quick-actions { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column-reverse; gap: 10px; z-index: 9999; }
     .qa-btn { background-color: var(--color-dark); color: var(--text-light) !important; padding: 12px 20px; border-radius: 50px; text-decoration: none; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 10px; transition: all 0.3s ease; border: none; cursor: pointer; }
@@ -236,10 +248,17 @@ echo '
     .flag-icon { display: inline-block; background-size: contain; background-position: 50%; background-repeat: no-repeat; position: relative; width: 1.33333333em; line-height: 1em; }
     .flag-icon::before { content: "\00a0"; }
 
-    .flag-icon-da, .fi-da, .flag-icon-dk, .fi-dk { background-image: url(https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.0.0/flags/4x3/dk.svg) !important; }
-    .flag-icon-sv, .fi-sv, .flag-icon-se, .fi-se { background-image: url(https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.0.0/flags/4x3/se.svg) !important; }
-    .flag-icon-no, .fi-no, .flag-icon-nb, .fi-nb { background-image: url(https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.0.0/flags/4x3/no.svg) !important; }
-    .flag-icon-en, .fi-en, .flag-icon-gb, .fi-gb { background-image: url(https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.0.0/flags/4x3/gb.svg) !important; }
+    /* RETTET (bruger-anmodet, flag-tabel-konsolidering): de fire manuelle
+       fi-da/fi-sv/fi-no/fi-en-overrides herunder er fjernet. De var kun
+       nødvendige fordi sprogkoder (da/sv/no/en) tidligere blev brugt DIREKTE
+       som flag-klassenavne nogle steder i koden, i stedet for de rigtige
+       ISO-landekoder (dk/se/no/gb) - flag-icons-bibliotekets egne CDN-klasser
+       (.fi-dk, .fi-se, .fi-no, .fi-gb m.fl.) dækker allerede alle rigtige
+       landekoder ude af boksen. Nu hvor inc/menu.inc.php og about.php begge
+       slår det korrekte flag-felt op i languages.json i stedet for at
+       gætte, emitteres kun rigtige ISO-koder - disse overrides ville aldrig
+       blive ramt længere (og var i øvrigt selv en del af den bug, hvor
+       svensk viste et forkert flag - se inc/menu.inc.php sin egen kommentar). */
     /* body padding-bottom og font-family er defineret ovenfor — duplikat fjernet */
 
     .fab-top { position: absolute; right: 20px; background: rgba(255, 255, 255, 0.6); border-left: 1px solid rgba(255, 255, 255, 0.2); padding: 0 15px; height: 100%; display: flex; align-items: center; cursor: pointer; transition: all 0.3s; }
@@ -275,6 +294,23 @@ echo '
         d.setTime(d.getTime() + (365 * 24 * 60 * 60 * 1000));
         document.cookie = "theme=" + themeName + ";expires=" + d.toUTCString() + ";path=/;SameSite=Strict";
     }
+
+    // CSRF for handlinger via et link (GET): nøglen lægges på linket i det øjeblik det klikkes - se csrf_get_actions()
+    (function () {
+        var reg = ' . json_encode(array_map(fn($r) => ['p' => $r['params'], 'ro' => $r['read_only'] ?? []], csrf_get_actions())) . ', tok = ' . json_encode(csrf_token()) . ';
+        function sign(a) {
+            if (!tok || !a.href) return;
+            var u;  try { u = new URL(a.href, location.href); } catch (e) { return; }
+            if (u.origin !== location.origin || u.searchParams.has("csrf_token")) return;
+            var r = reg[u.pathname.split("/").pop()];
+            if (!r || !r.p.some(function (p) { var v = u.searchParams.get(p); return v !== null && v !== "" && r.ro.indexOf(v) < 0; })) return;
+            u.searchParams.set("csrf_token", tok);
+            a.href = u.toString();
+        }
+        ["click", "auxclick", "contextmenu"].forEach(function (ev) {
+            document.addEventListener(ev, function (e) { var a = e.target.closest ? e.target.closest("a[href]") : null;  if (a) sign(a); }, true);
+        });
+    })();
     </script></head><body>';
     if (!$echo) return ob_get_clean();
 }
@@ -298,6 +334,24 @@ function htm_Footer($echo = true) {
         </div>
     </div>
 
+    <!-- RETTET (bruger-rapporteret): erstatning for browserens native prompt(),
+         hvis input-felt slet ikke er styret af sidens eget CSS-tema - på
+         Windows med mørkt systemtema kunne teksten man selv skrev derfor
+         blive usort (heller ikke synlig ved markering, da selektionsfarven
+         ramte samme problem). Samme visuelle mønster som custom-alert
+         ovenfor, så feltets tekstfarve altid følger --text-main. -->
+    <div id="custom-prompt" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:99999; align-items:center; justify-content:center;">
+        <div style="background: var(--bg-card); padding:20px; border-radius:8px; max-width:400px; width:90%; box-shadow:0 4px 15px rgba(0,0,0,0.3); font-family:sans-serif;">
+            <h3 id="custom-prompt-title" style="margin-top:0; color: var(--color-dark); border-bottom:2px solid var(--color-primary); padding-bottom:8px;">TinyCash</h3>
+            <p id="custom-prompt-text" style="color: var(--text-muted); font-size:14px; line-height:1.5; margin:0;"></p>
+            <input type="text" id="custom-prompt-input" style="width:100%; box-sizing:border-box; margin-top:12px; padding:8px; font-size:14px; border:1px solid var(--border-color); border-radius:4px; background: var(--bg-panel); color: var(--text-main);">
+            <div style="text-align:right; margin-top:20px;">
+                <button onclick="_sysPromptCancel()" style="background: var(--bg-panel); color: var(--text-main); border:1px solid var(--border-color); padding:8px 16px; border-radius:4px; cursor:pointer; margin-right:8px;">' . lang('@Cancel') . '</button>
+                <button onclick="_sysPromptConfirm()" style="background: var(--color-primary); color: var(--text-light); border:none; padding:8px 16px; border-radius:4px; cursor:pointer; font-weight:bold;">OK</button>
+            </div>
+        </div>
+    </div>
+
     <script>
     function sysAlert(message, title = "TinyCash") {
         var modal = document.getElementById("custom-alert");
@@ -312,6 +366,39 @@ function htm_Footer($echo = true) {
         var modal = document.getElementById("custom-alert");
         if (modal) modal.style.display = "none";
     }
+
+    var _sysPromptCallback = null;
+    function sysPrompt(message, callback, title = "TinyCash", defaultValue = "") {     /* (message was never shown - only the title) */
+        var modal = document.getElementById("custom-prompt");
+        if (!modal) { callback(window.prompt(message, defaultValue)); return; }
+        document.getElementById("custom-prompt-title").innerText = title;
+        document.getElementById("custom-prompt-text").innerText = message || "";
+        var input = document.getElementById("custom-prompt-input");
+        input.value = defaultValue || "";
+        _sysPromptCallback = callback;
+        modal.style.display = "flex";
+        setTimeout(function() { input.focus(); input.select(); }, 50);
+    }
+
+    function _sysPromptConfirm() {
+        var input = document.getElementById("custom-prompt-input");
+        var val = input.value;
+        document.getElementById("custom-prompt").style.display = "none";
+        if (_sysPromptCallback) _sysPromptCallback(val);
+    }
+
+    function _sysPromptCancel() {
+        document.getElementById("custom-prompt").style.display = "none";
+        if (_sysPromptCallback) _sysPromptCallback(null);
+    }
+
+    document.addEventListener("keydown", function(e) {
+        var modal = document.getElementById("custom-prompt");
+        if (modal && modal.style.display === "flex") {
+            if (e.key === "Enter") { e.preventDefault(); _sysPromptConfirm(); }
+            else if (e.key === "Escape") { e.preventDefault(); _sysPromptCancel(); }
+        }
+    });
 
     (function() {
         const hb = document.getElementById("tc-hint");
@@ -350,7 +437,61 @@ function htm_Footer($echo = true) {
         const opening = el.style.display === "none";
         el.style.display = opening ? "" : "none";
         if (btn) { btn.classList.toggle("fa-chevron-down", opening); btn.classList.toggle("fa-chevron-right", !opening); }
+        // RETTET (bruger-rapporteret: skillelinjen under selve titel-rækken
+        // skal følge fold-tilstanden, ikke kun vises ved sidens første
+        // indlæsning) - se htm_Card_()s tilsvarende PHP-rettelse i php2htm.lib.php.
+        const caption = document.getElementById(id + "_caption");
+        if (caption) {
+            caption.style.borderBottom = opening ? "2px solid var(--color-primary)" : "none";
+            // RETTET (bruger-rapporteret: asymmetrisk margin over/under
+            // caption i lukket tilstand, som om der stadig var reserveret
+            // plads til linjen) - de 15px/10px hørte til linjen og skal
+            // følge den, ikke blive stående som tomt rum.
+            caption.style.marginBottom = opening ? "15px" : "0";
+            caption.style.paddingBottom = opening ? "10px" : "0";
+        }
+        updateToggleAllCardsButton();
     }
+    // RETTET (bruger-rapporteret: "ikke der de skulle placeres, men på card
+    // ved siden af fold-ikonen") - der findes ikke længere ÉN fælles knap
+    // (id="fab-toggle-cards") - htm_Card_() (php2htm.lib.php) tegner nu et
+    // ens dobbeltpil-ikon på HVERT foldbart kort, alle med samme
+    // "tc-toggle-all-icon"-klasse og pakket i en "tc-toggle-all-wrap"-span.
+    // Alle instanserne styres samlet herfra, så de altid viser præcis samme
+    // retning/tooltip, uanset hvilket af dem man klikker på.
+    function toggleAllCards(el) {
+        const icons = document.querySelectorAll(".tc-fold-icon");
+        const anyClosed = Array.from(icons).some(i => i.classList.contains("fa-chevron-right"));
+        icons.forEach(icon => {
+            const isClosed = icon.classList.contains("fa-chevron-right");
+            if (anyClosed === isClosed) { toggleCard(icon.id.replace(/_icon$/, ""), icon); }
+        });
+        // toggleCard() kalder allerede updateToggleAllCardsButton() for os pr.
+        // kort - ingen grund til at gøre det igen her.
+    }
+    function updateToggleAllCardsButton() {
+        const wraps = document.querySelectorAll(".tc-toggle-all-wrap");
+        if (!wraps.length) return;
+        const icons = document.querySelectorAll(".tc-fold-icon");
+        if (icons.length < 3) { wraps.forEach(w => w.style.display = "none"); return; }
+        const anyClosed = Array.from(icons).some(i => i.classList.contains("fa-chevron-right"));
+        wraps.forEach(wrap => {
+            wrap.style.display = "";
+            const icon = wrap.querySelector(".tc-toggle-all-icon");
+            if (anyClosed) {
+                icon.className = "fa-solid fa-angles-down tc-toggle-all-icon";
+                wrap.setAttribute("data-hint", wrap.dataset.expandHint);
+            } else {
+                icon.className = "fa-solid fa-angles-up tc-toggle-all-icon";
+                wrap.setAttribute("data-hint", wrap.dataset.collapseHint);
+            }
+        });
+    }
+    // Ikonerne renderes som en del af hvert korts caption-række, allerede
+    // skrevet FØR dette <script>-blok (kortene ligger i selve sidens
+    // brødtekst) - men vi venter alligevel til hele siden er færdigparset,
+    // så det er robust uanset hvor på siden et givet kort ligger.
+    document.addEventListener("DOMContentLoaded", updateToggleAllCardsButton);
     window.onscroll = function() {
         const btn = document.getElementById("fab-scroll-top");
         if (btn) {
@@ -368,6 +509,17 @@ function htm_Footer($echo = true) {
             include_once 'inc/currency_widget.php';
         }
         include_once 'notepad.inc.php';
+
+        // Global søgning (bruger-anmodet): flyttet ud af selve menuen og
+        // givet sin egen flydende rund knap i stedet, samme mønster og
+        // placering som notesblok-/valuta-knapperne ovenfor (§global-search-
+        // feature). Byttede plads med valuta-knappen (bruger-anmodet): søgning
+        // sidder nu fast på bottom:70px (lige over notesblokken), valuta rykket
+        // til bottom:120px i inc/currency_widget.php - ingen gap-udfyldnings-
+        // logik nødvendig mere, da søgning altid ligger under valuta uanset om
+        // valuta-modulet er aktivt. Ren navigation (ingen popup/modal som de to
+        // andre), derfor et almindeligt <a>, ikke en <button> med onclick.
+        echo '<a href="search.php" class="no-print" style="position: fixed; bottom: 70px; right: 3px; z-index: 10001; background: #2c3e50; color: white; border: 2px solid var(--color-primary); border-radius: 50%; width: 50px; height: 50px; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; text-decoration: none;" title="' . lang('@Search') . '">🔍</a>';
 
         // Automatisk krypteret off-site backup: tjekkes ved hver sidevisning,
         // men udfører kun reelt arbejde hvis 21+ dage siden sidste backup OG
@@ -389,6 +541,21 @@ function htm_Footer($echo = true) {
             require_once __DIR__ . '/recurring_invoices.inc.php';
             if (function_exists('recurring_invoices_check')) {
                 try { recurring_invoices_check($GLOBALS['conn']); } catch (\Throwable $e) { /* tabel mangler evt. endnu */ }
+            }
+        }
+
+        // Gentagne/faste udgifter: udgiftssidens modstykke til ovenstående,
+        // samme "tjek ved hver sidevisning"-mønster. Opretter altid kun
+        // UBOGFØRTE udgifter, aldrig bogført direkte - se
+        // inc/recurring_expenses.inc.php's egen kommentar for hvorfor det er
+        // endnu strengere begrundet her end for fakturaer. Fejler tavst
+        // (try/catch) hvis tabellen ikke findes endnu
+        // (§migrate_recurring_expenses) - må ikke kunne vælte en helt
+        // almindelig sidevisning.
+        if (isset($GLOBALS['conn']) && $GLOBALS['conn']) {
+            require_once __DIR__ . '/recurring_expenses.inc.php';
+            if (function_exists('recurring_expenses_check')) {
+                try { recurring_expenses_check($GLOBALS['conn']); } catch (\Throwable $e) { /* tabel mangler evt. endnu */ }
             }
         }
     }

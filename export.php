@@ -34,8 +34,8 @@ if ($type == 'customers') {
     fputcsv($output, ['ID', 'Navn', 'Kontaktperson', 'Adresse', 'Email', 'Telefon', 'CVR', 'Noter', 'Betalingsdage'], $sep);
     
     $sql = "SELECT cust_id, cust_name, cust_contact_person, cust_address, cust_email, cust_phone, cust_cvr, cust_notes, cust_payment_days 
-            FROM customers 
-            ORDER BY cust_name";
+            FROM customers WHERE " . customers_active_filter($conn) . "
+            ORDER BY cust_name";      // RETTET: kunder i papirkurven (slettede) kom med i eksporten
     
     $res = DB::query($conn, $sql);
     while ($row = DB::fetch_assoc($res)) {
@@ -56,9 +56,11 @@ elseif ($type == 'invoices') {
         'Linje tekst', 'Antal', 'Pris pr. stk', 'Moms %', 'Linje Total', 'Valuta'
     ], $sep);
     
+    // RETTET: linjetotalen så bort fra linjens rabat (discount_pct) - eksporten viste for høje beløb
+    $exp_disc = invoice_discount_sql($conn, 'l.');
     $sql = "SELECT i.inv_id, i.invoice_no, i.inv_date, i.inv_due_date, c.cust_name, i.inv_status, 
                    l.line_text, l.quantity, l.price_each, l.line_vat_rate,
-                   (l.quantity * l.price_each) as line_total, i.currency
+                   (l.quantity * l.price_each $exp_disc) as line_total, i.currency
             FROM invoices i 
             LEFT JOIN customers c ON i.cust_id = c.cust_id 
             LEFT JOIN invoice_lines l ON i.inv_id = l.inv_id 

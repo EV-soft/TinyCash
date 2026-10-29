@@ -55,9 +55,10 @@ htm_Card_end();
 // valuta (fx EUR) direkte mod "paid" (altid DKK) - samme fejlklasse fundet
 // og rettet samme runde i reconcile_action.php/invoice_view.php/sales_hub.
 // php/reminders.php.
+$aging_disc = invoice_discount_sql($conn);
 $res_i = DB::query($conn, "SELECT i.inv_id, i.invoice_no, i.inv_due_date, c.cust_id, c.cust_name,
-        (SELECT COALESCE(SUM(quantity * price_each * (100 + line_vat_rate) / 100.0), 0)
-         FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1) AS total,
+        (SELECT COALESCE(SUM(quantity * price_each $aging_disc * (100 + line_vat_rate) / 100.0), 0)
+         FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1) + " . invoice_credited_sql($conn) . " AS total,
         (SELECT COALESCE(SUM(amount), 0) FROM invoice_payments WHERE inv_id = i.inv_id) AS paid
     FROM invoices i JOIN customers c ON i.cust_id = c.cust_id
     WHERE LOWER(i.inv_status) = 'sent' AND i.inv_due_date IS NOT NULL");
@@ -70,7 +71,7 @@ if ($res_i) {
         $due = (float)$row['total'] - (float)$row['paid'];
         if ($due <= 0.01) continue; // reelt allerede betalt (afrundingsrest)
 
-        $days = (int)((strtotime($today) - strtotime($row['inv_due_date'])) / 86400);
+        $days = days_between($row['inv_due_date'], $today);
         $bucket = aging_bucket($days);
 
         $cid = (int)$row['cust_id'];
@@ -128,7 +129,8 @@ htm_Card_end();
 // (due_date/paid_date findes ikke), i stedet for at fejle hele siden.
 $res_e = @DB::query($conn, "SELECT e.exp_id, e.supplier, e.supplier_id, e.due_date, e.amount, s.supplier_name
     FROM expenses e LEFT JOIN suppliers s ON e.supplier_id = s.supplier_id
-    WHERE e.is_cancelled = 0 AND e.due_date IS NOT NULL AND e.paid_date IS NULL");
+    WHERE e.is_cancelled = 0 AND e.voucher_no IS NOT NULL AND (e.exp_type IS NULL OR e.exp_type != 'income') AND e.due_date IS NOT NULL AND e.paid_date IS NULL");
+// RETTET: kun bogførte udgifter er en skyld - en kladde med forfaldsdato talte med i restancelisten
 
 if ($res_e === false) {
     htm_Banner('<i class="fa fa-triangle-exclamation"></i> ' . lang('@The supplier module database structure has not been set up yet. Run the migration under System -> Maintenance -> Database migration to enable the creditor side of this report.'), 'warning');
@@ -137,7 +139,7 @@ if ($res_e === false) {
     $creditor_totals = ['not_due' => 0, 'd30' => 0, 'd60' => 0, 'd90' => 0, 'd90p' => 0];
 
     while ($row = DB::fetch_assoc($res_e)) {
-        $days = (int)((strtotime($today) - strtotime($row['due_date'])) / 86400);
+        $days = days_between($row['due_date'], $today);
         $bucket = aging_bucket($days);
         $amount = (float)$row['amount'];
 

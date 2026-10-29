@@ -20,13 +20,22 @@ $f_table  = trim($_GET['table_name'] ?? '');
 $f_user   = (int)($_GET['user_id'] ?? 0);
 $f_from   = trim($_GET['date_from'] ?? '');
 $f_to     = trim($_GET['date_to'] ?? '');
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 28): kunne
+// hidtil kun filtrere på tabel, ikke på ÉN bestemt post - for at se hvem
+// der har rørt fx faktura #1234 skulle man filtrere på "invoices" og lede
+// manuelt gennem ALLE fakturaers historik. Bruges af de nye "Se historik"-
+// links fra invoice_view.php/expense_edit.php/customer_edit.php/
+// supplier_edit.php (row_id=0 betyder "ikke sat", udelades bevidst - en del
+// af posteringsflowsne bruger row_id=0 som en reel værdi ved fx logo-upload).
+$f_row_id = isset($_GET['row_id']) ? (int)$_GET['row_id'] : 0;
 
 $where = [];
 if ($f_action !== '') $where[] = "a.action_type = '" . DB::escape($conn, $f_action) . "'";
 if ($f_table  !== '') $where[] = "a.table_name = '" . DB::escape($conn, $f_table) . "'";
 if ($f_user   > 0)    $where[] = "a.user_id = $f_user";
-if ($f_from !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f_from)) $where[] = "a.log_date >= '$f_from 00:00:00'";
-if ($f_to   !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f_to))   $where[] = "a.log_date <= '$f_to 23:59:59'";
+if ($f_table !== '' && $f_row_id > 0) $where[] = "a.row_id = $f_row_id";
+if ($f_from !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f_from)) $where[] = "a.log_date >= '" . db_ts_param("$f_from 00:00:00") . "'";
+if ($f_to   !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f_to))   $where[] = "a.log_date <= '" . db_ts_param("$f_to 23:59:59") . "'";
 $where_sql = empty($where) ? '' : ('WHERE ' . implode(' AND ', $where));
 
 // --- Datagrundlag til filter-dropdowns (kun værdier der faktisk findes i loggen) ---
@@ -83,7 +92,7 @@ if (!$res) {
     echo htm_Alert("SQL Error: " . DB::error($conn), "error");
 } else {
     while ($row = DB::fetch_assoc($res)) {
-        $when = date(CONF_DATE_FORMAT . ' H:i', strtotime($row['log_date']));
+        $when = date(CONF_DATE_FORMAT . ' H:i', strtotime(db_ts_local($row['log_date'])));
         $who  = htmlspecialchars($row['username'] ?? ('#' . (int)$row['user_id']));
         $badge = htm_Badge($row['action_type'], audit_action_badge_type($row['action_type']), false);
 

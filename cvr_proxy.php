@@ -1,4 +1,4 @@
-<?php # /cvr_proxy.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /cvr_proxy.php v:1.3.1 d:2026-09-15 i:evs
 # NY FUNKTION: CVR-opslag (bruger-anmodet, fra "hvilke funktioner mangler
 # TinyCash"-gennemgangen: "ingen automatisk udfyldning af kundeoplysninger
 # fra et CVR-nummer"). Slår et CVR-nummer op via cvrapi.dk - et gratis,
@@ -37,126 +37,22 @@
 # er det samme som enhver anden kapløbsrettelse denne session - løst med en
 # ægte fil-lås (flock), som holder læs+tjek+skriv sammen som ÉN atomisk
 # operation, i stedet for tre separate trin.
+#
+# RETTET (BEK 811/2026-gennemgang, se [[digital-standard-bookkeeping-
+# registration-goal]]): selve opslagslogikken (cache/kvote/cvrapi.dk-kald)
+# flyttet til den delte inc/cvr_lookup.inc.php, så den nye, server-side
+# company_cvr_sync_action.php (låste egne stamoplysninger) genbruger NØJAGTIG
+# samme cache/kvote i stedet for at risikere en parallel, dobbelt-tællende
+# implementation. Denne fil er nu en tynd wrapper - ekstern adfærd uændret.
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/php2htm.lib.php';
+require_once 'inc/cvr_lookup.inc.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
 $cvr = preg_replace('/\D/', '', $_GET['cvr'] ?? '');
-if (strlen($cvr) !== 8) {
-    echo json_encode(['success' => false, 'error' => lang('@Please enter a valid 8-digit CVR number.')]);
-    exit;
-}
-
-$cache_dir  = __DIR__ . '/storage/cvr_cache/';
-$cache_file = $cache_dir . $cvr . '.json';
-$cache_ttl  = 90 * 24 * 3600; // 90 dage - CVR-registrerede stamdata skifter sjældent, og kvoten er kun 50/dag/IP
-
-if (file_exists($cache_file) && (time() - filemtime($cache_file)) < $cache_ttl) {
-    echo file_get_contents($cache_file);
-    exit;
-}
-
-// Daglig lokal kvote-vagt, FØR vi overhovedet rammer det eksterne API - se
-// begrundelsen øverst i filen. Kun cache-MISSES tæller (et cache-hit ovenfor
-// er allerede returneret og bruger ikke af kvoten). Læs+tjek+skriv holdes
-// sammen som ÉN atomisk operation via en ægte fil-lås (flock) - se
-// §bugs-batch-29-review ovenfor for hvorfor et simpelt læs-så-skriv var en race.
-if (!is_dir($cache_dir)) @mkdir($cache_dir, 0775, true);
-$quota_file  = $cache_dir . '_quota.json';
-$today       = date('Y-m-d');
-$quota_limit = 40;
-$quota_ok    = false;
-
-$fh = @fopen($quota_file, 'c+');
-if ($fh && flock($fh, LOCK_EX)) {
-    $raw_quota = stream_get_contents($fh);
-    $quota = ['date' => $today, 'count' => 0];
-    $saved = json_decode((string)$raw_quota, true);
-    if (is_array($saved) && ($saved['date'] ?? '') === $today) $quota = $saved;
-
-    if ($quota['count'] < $quota_limit) {
-        $quota['count']++;
-        $quota_ok = true;
-        ftruncate($fh, 0);
-        rewind($fh);
-        fwrite($fh, json_encode($quota));
-        fflush($fh);
-    }
-    flock($fh, LOCK_UN);
-    fclose($fh);
-} else {
-    // Kunne ikke låse filen (fx et skrivebeskyttet filsystem) - fejler åbent
-    // (tillader kaldet) frem for at blokere funktionen helt pga. et lokalt
-    // filsystemproblem; den eksterne tjenestes egen QUOTA_EXCEEDED er stadig
-    // det yderste sikkerhedsnet.
-    $quota_ok = true;
-    if ($fh) fclose($fh);
-}
-
-if (!$quota_ok) {
-    echo json_encode(['success' => false, 'error' => lang('@Daily CVR lookup quota reached for this installation. Please fill in the details manually, or try again tomorrow.')]);
-    exit;
-}
-
-// cvrapi.dk kræver et RIGTIGT, identificerende User-Agent (firmanavn +
-// projektnavn + kontaktoplysning) - bygget dynamisk fra Firmaindstillinger,
-// så det er den faktiske installations egne oplysninger, ikke en hårdkodet
-// streng delt af alle TinyCash-installationer (som i teorien kunne udløse
-// BANNED, hvis den blev misbrugt af mange installationer under samme navn -
-// kvoten er ganske vist pr. IP, ikke pr. User-Agent, men en reel
-// identifikation er selve API'ets brugsbetingelse, ikke bare et høfligt tip).
-$s = get_settings($conn);
-$ua_company = trim($s['company_name'] ?? '') ?: 'TinyCash (selvhostet regnskabssystem)';
-$ua_contact = trim($s['company_email'] ?? '') ?: (trim($s['company_phone'] ?? '') ?: 'ingen kontaktoplysning angivet');
-$user_agent = "$ua_company - TinyCash CVR-opslag - $ua_contact";
-
-$url = 'https://cvrapi.dk/api?search=' . $cvr . '&country=dk';
-$ctx = stream_context_create(['http' => [
-    'timeout' => 6,
-    'header'  => "User-Agent: " . $user_agent . "\r\n",
-    'ignore_errors' => true,
-]]);
-$raw = @file_get_contents($url, false, $ctx);
-
-if ($raw === false) {
-    echo json_encode(['success' => false, 'error' => lang('@Could not reach the CVR lookup service. Please try again later or fill in the details manually.')]);
-    exit;
-}
-
-$data = json_decode($raw, true);
-if (!is_array($data) || isset($data['error'])) {
-    // cvrapi.dk's fejlformat: {"error": "NOT_FOUND"/"QUOTA_EXCEEDED"/..., "message": "..."}
-    $err_code = $data['error'] ?? '';
-    if ($err_code === 'QUOTA_EXCEEDED') {
-        $msg = lang('@Daily CVR lookup quota exceeded (free tier: 50/day). Please fill in the details manually, or try again tomorrow.');
-    } elseif ($err_code === 'NO_HITS' || $err_code === 'NOT_FOUND') {
-        $msg = lang('@No company found for this CVR number.');
-    } else {
-        $msg = $data['message'] ?? lang('@CVR lookup failed. Please fill in the details manually.');
-    }
-    echo json_encode(['success' => false, 'error' => $msg]);
-    exit;
-}
-
-// Normaliseret svar til klienten - kun de felter customer_edit.php/
-// supplier_edit.php reelt bruger, uafhængigt af cvrapi.dk's fulde skema
-// (som bl.a. også indeholder produktionsenheder, branchekode, ejere osv.,
-// ikke relevant her).
-$result = [
-    'success' => true,
-    'cvr'     => (string)($data['vat'] ?? $cvr),
-    'name'    => (string)($data['name'] ?? ''),
-    'address' => trim(trim((string)($data['address'] ?? '')) . "\n" . trim(trim((string)($data['zipcode'] ?? '')) . ' ' . trim((string)($data['city'] ?? '')))),
-    'phone'   => (string)($data['phone'] ?? ''),
-    'email'   => (string)($data['email'] ?? ''),
-];
-
-if (!is_dir($cache_dir)) @mkdir($cache_dir, 0775, true);
-@file_put_contents($cache_file, json_encode($result, JSON_UNESCAPED_UNICODE));
-
-echo json_encode($result, JSON_UNESCAPED_UNICODE);
+echo json_encode(cvr_lookup_by_number($conn, $cvr), JSON_UNESCAPED_UNICODE);
 ob_end_flush();
 ?>

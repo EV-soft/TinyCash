@@ -32,6 +32,10 @@ $transactions = eb_get_transactions($bc['gc_account_id'], $date_from, $date_to);
 
 $imported = 0;
 foreach ($transactions as $t) {
+    // RETTET: også VENTENDE transaktioner (status PDNG - fx en reserveret kortbetaling) blev hentet. Når banken
+    // senere bogfører dem, kommer de igen med et andet id - og stod så to gange i afstemningen (beløbet kan
+    // tilmed ændre sig). Kun bogførte transaktioner (BOOK) hentes; ventende kommer med, når de er bogført.
+    if (isset($t['status']) && strtoupper((string)$t['status']) !== 'BOOK') continue;
     $tx_id = $t['transaction_id'] ?? $t['entry_reference'] ?? null;
     if (!$tx_id) continue; // ingen stabil id at deduplikere på - spring over frem for at risikere en dublet
 
@@ -60,7 +64,7 @@ foreach ($transactions as $t) {
     $imported++;
 }
 
-DB::query($conn, "UPDATE bank_connections SET last_sync_at = " . (DB::is_sqlite() ? "datetime('now')" : "NOW()") . " WHERE conn_id = $conn_id");
+DB::query($conn, "UPDATE bank_connections SET last_sync_at = '" . date('Y-m-d H:i:s') . "' WHERE conn_id = $conn_id");
 log_action($conn, 'SYNC_BANK_TRANSACTIONS', 'bank_connections', $conn_id, null, ['imported' => $imported]);
 
 // Samme redirect-mål som CSV-importen (bank_import_process.php) - de

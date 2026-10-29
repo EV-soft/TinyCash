@@ -81,12 +81,12 @@ $acc_vat_in  = (int)($s['conf_acc_purchase_vat'] ?? 6910); // indgående moms (k
 
 $sv_row = DB::fetch_assoc(DB::query($conn,
     "SELECT SUM(-l.amount) AS total FROM ledger l JOIN journal j ON l.jou_id = j.jou_id
-     WHERE l.acc_id = $acc_vat_out AND j.jou_date BETWEEN '$ps' AND '$pe'"));
+     WHERE l.acc_id IN (" . tc_vat_acc_list($conn, $acc_vat_out) . ") AND j.jou_date BETWEEN '$ps' AND '$pe'"));
 $sales_vat = (float)($sv_row['total'] ?? 0);
 
 $pv_row = DB::fetch_assoc(DB::query($conn,
     "SELECT SUM(l.amount) AS total FROM ledger l JOIN journal j ON l.jou_id = j.jou_id
-     WHERE l.acc_id = $acc_vat_in AND j.jou_date BETWEEN '$ps' AND '$pe'"));
+     WHERE l.acc_id IN (" . tc_vat_acc_list($conn, $acc_vat_in) . ") AND j.jou_date BETWEEN '$ps' AND '$pe'"));
 $purchase_vat = (float)($pv_row['total'] ?? 0);
 
 $vat_payable = $sales_vat - $purchase_vat;
@@ -96,11 +96,13 @@ $vat_payable = $sales_vat - $purchase_vat;
 // GRUNDLAGET (hvilke konti/satser beløbene stammer fra), IKKE selve
 // momstallet - det tal kommer udelukkende fra punkt 2 ovenfor.
 // -------------------------------------------------------------------------
+// RETTET: momsgrundlaget talte årsafslutningens lukkepostering med - den nulstiller indtægts-/udgiftskontiene
+// på årets sidste dag, så grundlaget for december / 4. kvartal / hele året blev 0, når året var lukket.
 $sql = "SELECT a.vat_code AS vat_id, a.vat_rate, SUM(l.amount) AS net_amount
         FROM ledger l
         JOIN journal j ON l.jou_id = j.jou_id
         JOIN accounts a ON l.acc_id = a.acc_id
-        WHERE j.jou_date BETWEEN '$ps' AND '$pe' AND a.vat_code IS NOT NULL
+        WHERE j.jou_date BETWEEN '$ps' AND '$pe' AND a.vat_code IS NOT NULL AND (j.trans_type IS NULL OR j.trans_type != 'year_end_close')
         GROUP BY a.vat_code, a.vat_rate
         HAVING SUM(l.amount) != 0
         ORDER BY a.vat_code ASC";
@@ -131,6 +133,14 @@ echo '<label style="font-size:0.85em; font-weight:bold; display:block;">' . lang
 echo '<input type="number" name="period_num" min="1" value="' . $period_num . '" style="width:70px; padding:6px;"></div>';
 htm_Button(labl: '@Show', type: 'primary', attr: 'data-hint="'.lang('@Show the VAT report for the selected period').'"');
 echo '</form>';
+
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 25): denne
+// side bygger selv sin tabel i hånden (ikke htm_Table), som ellers ville
+// have givet en gratis $expo-CSV-knap - se vat_report_export.php, der
+// genberegner PRÆCIS samme forespørgsler ud fra samme URL-parametre.
+$export_qs = http_build_query(['year' => $year, 'period_type' => $period_type, 'period_num' => $period_num]);
+htm_Button(icon: 'fa-file-csv', labl: '@Download CSV', type: 'success', link: 'vat_report_export.php?' . $export_qs,
+    attr: 'data-hint="'.lang('@Download this VAT report as CSV').'"');
 
 // --- Hovedresultat: de tal der reelt skal bruges til TastSelv Erhverv ---
 $box_color = $vat_payable >= 0 ? '#c0392b' : '#27ae60';

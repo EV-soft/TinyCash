@@ -1,4 +1,4 @@
-<?php # /expense_actions.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /expense_actions.php v:1.3.1 d:2026-09-15 i:evs
 # POST-handler for sletning/annullering af en udgift (kaldt fra expense_list.php).
 # En ikke-bogført udgift slettes normalt. En allerede bogført udgift
 # (voucher_no sat) kan ikke slettes direkte - i stedet posteres en fuld
@@ -7,38 +7,39 @@
 # modpostering ville en annullering ikke have nogen reel effekt i regnskabet,
 # da rapporter/årsafslutning bevidst ikke filtrerer på is_cancelled. Bruger
 # DB::-abstraktionen, så virker på både SQLite og MySQL.
+# RETTET (bruger-anmodet, "kan bogholderen ønske sig mere"): "Betal nu"-
+# logikken er nu udtrukket til mark_expense_paid(), så både det oprindelige
+# enkelt-GET-flow (uændret ekstern adfærd) og et nyt bulk-POST-flow
+# (expense_list.php's "Betal valgte") deler nøjagtig samme, velafprøvede
+# kode - samme mønster som reconcile_action.php/reminder_action.php fra
+# samme session. Sletning/annullering er UÆNDRET og IKKE del af bulk-flowet
+# - langt mere risikofyldt at gøre i klump, og ikke det brugeren bad om.
 ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/php2htm.lib.php'; // Sikrer adgang til lang()
 require_once 'inc/audit.inc.php';    // SIKRER ADGANG TIL log_action()
 
-$action = isset($_GET['action']) ? $_GET['action'] : '';
-$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+/**
+ * Bogfører den faktiske betaling af én tidligere "Ikke betalt endnu"-udgift.
+ * Returnerer status som en af: 'paid', 'already_paid' (tabt kapløb eller
+ * allerede betalt), 'locked' (perioden er låst), 'not_eligible' (findes
+ * ikke, er annulleret, ikke bogført, eller ikke en udgift).
+ */
+function mark_expense_paid($conn, array $s, int $id): string {
+    if ($id <= 0) return 'not_eligible';
 
-// Tving scriptet til KUN at køre, hvis parametrene er 100% korrekte
-if (!in_array($action, ['delete', 'mark_paid'], true) || $id <= 0) {
-    header("Location: expense_list.php");
-    exit;
-}
-
-// NYT (leverandørmodul, se db-setup/migrate_suppliers.php): bogfører den
-// faktiske betaling af en tidligere "Ikke betalt endnu"-udgift - krediterer
-// banken og debiterer den samme kreditor-/gældskonto den oprindelige
-// postering krediterede, så saldoen på gældskontoen igen går i nul for
-// denne postering. Egen, selvstændig journalpostering med sit eget
-// bilagsnummer (samme princip som annulleringens modpostering ovenfor) -
-// ALDRIG en ændring af den oprindelige, allerede bogførte postering.
-if ($action === 'mark_paid') {
     $exp = DB::fetch_assoc(DB::query($conn, "SELECT * FROM expenses WHERE exp_id = $id AND is_cancelled = 0"));
     if (!$exp || empty($exp['voucher_no']) || $exp['exp_type'] !== 'expense') {
-        header("Location: expense_list.php");
-        exit;
+        return 'not_eligible';
     }
 
     $today = date('Y-m-d');
     if (is_date_locked($conn, $today)) {
-        die(lang('@This transaction date is in a locked accounting period and cannot be posted.'));
+        return 'locked';
+    }
+    if (ledger_accounts_missing($conn, [(int)($s['conf_acc_bank'] ?? 5000), (int)($s['conf_acc_creditor'] ?? 4000)])) {
+        return 'missing_account';      // (se ledger_post() - bank- eller kreditorkontoen findes ikke)
     }
 
     DB::begin_transaction($conn);
@@ -49,11 +50,9 @@ if ($action === 'mark_paid') {
     $claim = DB::prepare_and_execute($conn, "UPDATE expenses SET paid_date = ? WHERE exp_id = ? AND paid_date IS NULL", [$today, $id]);
     if (!$claim || DB::affected_rows($conn, $claim) < 1) {
         DB::rollback($conn);
-        header("Location: expense_list.php?msg=already_paid");
-        exit;
+        return 'already_paid';
     }
 
-    $s          = get_settings($conn);
     $acc_bank   = (int)($s['conf_acc_bank']     ?? 5000);
     $acc_credit = (int)($s['conf_acc_creditor'] ?? 4000);
     $gross      = (float)$exp['amount'];
@@ -63,7 +62,9 @@ if ($action === 'mark_paid') {
     // RETTET (§currency-setting-is-cosmetic-label): journal.currency blev
     // aldrig sat (faldt tilbage til skemaets DEFAULT 'DKK').
     $pay_currency = DB::escape($conn, $s['currency'] ?? 'DKK');
-    DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, currency) VALUES ('$today', '$pay_text', 'expense_payment', $pay_voucher, '$pay_currency')");
+    // NYT (BEK 811/2026-gennemgang, [[digital-standard-bookkeeping-registration-goal]]).
+    $cb = journal_created_by_sql($conn);
+    DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, currency{$cb['col']}) VALUES ('$today', '$pay_text', 'expense_payment', $pay_voucher, '$pay_currency'{$cb['val']})");
     $pay_jou_id = DB::insert_id($conn);
 
     ledger_post($conn, $pay_jou_id, $acc_credit, $gross);   // DEBET kreditorkonto - gælden udlignes
@@ -72,7 +73,46 @@ if ($action === 'mark_paid') {
     log_action($conn, 'PAY_EXPENSE', 'expenses', $id, ['paid_date' => null], ['paid_date' => $today, 'voucher_no' => $pay_voucher]);
 
     DB::commit($conn);
-    header("Location: expense_list.php?msg=paid");
+    return 'paid';
+}
+
+// --- BULK-FLOW (bruger-anmodet): POST med ids[] - "Betal valgte" ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ids']) && is_array($_POST['ids'])) {
+    $s = get_settings($conn);
+    $paid = 0; $failed = 0;
+    foreach ($_POST['ids'] as $raw_id) {
+        $status = mark_expense_paid($conn, $s, (int)$raw_id);
+        if ($status === 'paid') { $paid++; } else { $failed++; }
+    }
+    header("Location: expense_list.php?msg=bulk_paid&paid=$paid&failed=$failed");
+    ob_end_flush();
+    exit;
+}
+
+$action = isset($_GET['action']) ? $_GET['action'] : '';
+$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+
+// Tving scriptet til KUN at køre, hvis parametrene er 100% korrekte
+if (!in_array($action, ['delete', 'mark_paid'], true) || $id <= 0) {
+    header("Location: expense_list.php");
+    exit;
+}
+
+// --- ENKELT-FLOW "Betal nu" (uændret ekstern adfærd) ---
+if ($action === 'mark_paid') {
+    $s = get_settings($conn);
+    $status = mark_expense_paid($conn, $s, $id);
+    if ($status === 'paid') {
+        header("Location: expense_list.php?msg=paid");
+    } elseif ($status === 'locked') {
+        die(lang('@This transaction date is in a locked accounting period and cannot be posted.'));
+    } elseif ($status === 'missing_account') {
+        die(sprintf(lang('@The account %d does not exist in the chart of accounts - check Company Settings (posting accounts) or the chart of accounts. Nothing was posted.'), ledger_accounts_missing($conn, [(int)($s['conf_acc_bank'] ?? 5000), (int)($s['conf_acc_creditor'] ?? 4000)])[0] ?? 0));
+    } elseif ($status === 'already_paid') {
+        header("Location: expense_list.php?msg=already_paid");
+    } else {
+        header("Location: expense_list.php");
+    }
     exit;
 }
 
@@ -176,10 +216,12 @@ if ($voucher_no !== null) {
                 // altid at falde tilbage til skemaets DEFAULT 'DKK'), så en
                 // annullering aldrig fejlagtigt skifter valuta undervejs.
                 $cancel_currency = DB::escape($conn, $orig_jou['currency'] ?? ($global_settings['currency'] ?? 'DKK'));
-                DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, currency) VALUES ('" . date('Y-m-d') . "', '$cancel_text', 'cancellation', $cancel_voucher_no, '$cancel_currency')");
+                // NYT (BEK 811/2026-gennemgang, [[digital-standard-bookkeeping-registration-goal]]).
+                $cb = journal_created_by_sql($conn);
+                DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, currency{$cb['col']}) VALUES ('" . date('Y-m-d') . "', '$cancel_text', 'cancellation', $cancel_voucher_no, '$cancel_currency'{$cb['val']})");
                 $new_jou_id = DB::insert_id($conn);
                 foreach ($orig_lines as $ol) {
-                    ledger_post($conn, $new_jou_id, (int)$ol['acc_id'], -1 * (float)$ol['amount']);
+                    ledger_post($conn, $new_jou_id, (int)$ol['acc_id'], -1 * (float)$ol['amount'], true);      // (en modpostering må nulstille en konto der ikke findes)
                 }
             }
         }

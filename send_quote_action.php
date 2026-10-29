@@ -67,9 +67,9 @@ try {
     if (isset($_POST['custom_body']) && trim($_POST['custom_body']) !== '') {
         $body = nl2br(htmlspecialchars($_POST['custom_body']));
     } else {
-        $fallback_text = !empty($sys_settings['default_mail_body'])
-            ? $sys_settings['default_mail_body']
-            : "Hi " . htmlspecialchars($q['cust_name']) . ",\n\nPlease find your quote attached.\n\nBest regards,";
+        // RETTET: hårdkodet engelsk og dobbelt escapet kundenavn - se send_invoice_action.php
+        // (firmaets egen standardtekst er en FAKTURAtekst - et tilbud får sin egen oversatte tekst)
+        $fallback_text = sprintf(lang("@Hi %s,\n\nPlease find your quote attached.\n\nBest regards,"), $q['cust_name']);
         $body = nl2br(htmlspecialchars($fallback_text));
     }
 

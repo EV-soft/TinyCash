@@ -1,4 +1,4 @@
-<?php # /inc/auto_backup.inc.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /inc/auto_backup.inc.php v:1.3.1 d:2026-09-15 i:evs
 # gendannelsesvejledning i backup-mailen nævner nu det indbyggede offline-dekrypteringsværktøj før openssl-kommandoen
 # Automatisk krypteret backup sendt til backup-mail
 # Bruger DB::dump_to_sql() og DB::is_sqlite() fra db_connect.inc.php
@@ -23,7 +23,8 @@ function auto_backup_check($conn) {
     $last_dt = date('Y-m-d H:i:s', $last_ts ?: 0);
     $changed = false;
 
-    $chk = @DB::query($conn, "SELECT COUNT(*) FROM audit_log WHERE log_date > '$last_dt'");
+    $last_db = db_ts_param($last_dt);      // log_date / created_at er databasens egen tid
+    $chk = @DB::query($conn, "SELECT COUNT(*) FROM audit_log WHERE log_date > '$last_db'");
     if ($chk) { $r = DB::fetch_row($chk); if ((int)$r[0] > 0) $changed = true; }
 
     // RETTET (bruger-rapporteret følgefejl): loopet inkluderede FØR også
@@ -40,7 +41,7 @@ function auto_backup_check($conn) {
     // stå som meningsløse, altid-fejlende forespørgsler.
     if (!$changed) {
         foreach (['expenses', 'journal'] as $tbl) {
-            $chk2 = @DB::query($conn, "SELECT COUNT(*) FROM $tbl WHERE created_at > '$last_dt'");
+            $chk2 = @DB::query($conn, "SELECT COUNT(*) FROM $tbl WHERE created_at > '$last_db'");
             if ($chk2) { $r2 = DB::fetch_row($chk2); if ((int)$r2[0] > 0) { $changed = true; break; } }
         }
     }
@@ -55,8 +56,10 @@ function auto_backup_check($conn) {
     $set_res = @DB::query($conn, "SELECT setting_key, setting_value FROM settings");
     while ($row = DB::fetch_assoc($set_res)) { $s[$row['setting_key']] = $row['setting_value']; }
 
-    // Backup-destination + krypterings-kodeord konfigureres i Firmaindstillinger
-    // (settings-tabellen). Selve SMTP-afsenderen kommer fra appens centrale
+    // RETTET (samme fund som fejlmeddelelsen nedenfor): backup-destinations-
+    // mailen konfigureres på backup.php ("🤖 Automatisk Backup"-sektionen),
+    // IKKE i Firmaindstillinger - denne kommentar sagde stadig det gamle,
+    // forkerte sted. Selve SMTP-afsenderen kommer fra appens centrale
     // mail-konfiguration (inc/mail_config.inc.php -> MAIL_* fra env.ini), samme
     // kilde som al anden udgående post i systemet.
     $backup_mail  = trim($s['auto_backup_mail'] ?? '');
@@ -85,7 +88,15 @@ function auto_backup_check($conn) {
     // kolonner (se migrate_auto_backup_indexes.php) - fulde tabel-scanninger
     // på hver sidevisning, værre jo mere bogføringshistorik der er.
     if (empty($backup_mail)) {
-        _ab_log($conn, 'Auto backup: mangler auto_backup_mail i Firmaindstillinger');
+        // RETTET (bruger-rapporteret: "feltet findes ikke i
+        // Firmaindstillinger"): fejlmeddelelsen pegede på den forkerte
+        // side - auto_backup_mail-feltet blev flyttet fra
+        // company_settings.php til backup.php's egen "🤖 Automatisk
+        // Backup"-sektion for en rum tid siden (se render_auto_backup_
+        // settings() i inc/auto_backup_integration.php,
+        // [[backup-manual-vs-automatic-separation]]), men denne logtekst
+        // blev aldrig opdateret til at følge med flytningen.
+        _ab_log($conn, 'Auto backup: mangler auto_backup_mail - udfyld den under System -> Backup-administration');
         _ab_save($conn, 'auto_backup_last', time());
         return;
     }

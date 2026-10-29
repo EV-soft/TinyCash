@@ -1,4 +1,4 @@
-<?php # /quote_edit.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /quote_edit.php v:1.3.1 d:2026-09-15 i:evs
 # NY FUNKTION: Tilbud/Ordrebekræftelse (bruger-anmodet). Opret/redigér et
 # tilbud - samme linje-redigerings-mønster som invoice_edit.php (produkt-
 # vælger, moms-beregning, samme JS), men skriver til de helt separate
@@ -64,6 +64,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_quote'])) {
     $cust_id      = (int)$_POST['cust_id'];
     $quote_date   = DB::escape($conn, $_POST['quote_date']);
     $valid_until  = DB::escape($conn, $_POST['valid_until']);
+    if ($valid_until !== '' && $valid_until < (string)($_POST['quote_date'] ?? '')) {      // RETTET: et tilbud der udløb før det blev givet
+        die(lang('@The validity date cannot be before the quote date.'));
+    }
     $cust_ref     = DB::escape($conn, $_POST['cust_reference'] ?? '');
     $quote_note   = DB::escape($conn, $_POST['quote_note'] ?? '');
     $deliv_addr   = DB::escape($conn, $_POST['delivery_address'] ?? '');
@@ -166,7 +169,14 @@ showMenu();
 
 $tools = htm_Button('fa-list', '@Back', 'secondary', 'quote_list.php', '', 'data-hint="'.lang('@Return to the quote list without saving').'"', '', false);
 $card_msg = '';
-if (isset($_GET['msg'])) {
+// RETTET (bruger-anmodet, samme fund som invoice_edit.php fik samme
+// session): specifikt tjek for 'duplicated' skal stå FØR det generiske
+// isset($_GET['msg'])-tjek nedenfor, som ellers matcher enhver værdi af
+// msg (inkl. denne) og ville vise den forkerte "Ændringer gemt"-besked på
+// en helt frisk kladde der aldrig er blevet gemt endnu.
+if (isset($_GET['msg']) && $_GET['msg'] === 'duplicated') {
+    $card_msg = htm_Alert(sprintf(lang('@New draft created as a duplicate of quote #%d - review and adjust before sending.'), (int)($_GET['src'] ?? 0)), 'info', 700, false);
+} elseif (isset($_GET['msg'])) {
     $card_msg = htm_Alert(lang('@Changes saved successfully'), 'success', 700, false);
 } elseif (isset($_GET['err']) && $_GET['err'] === 'posted_no_delete') {
     $card_msg = htm_Alert(lang('@This quote has already been sent and cannot be deleted. Reopen it to draft first if you need to remove it.'), 'error', 700, false);
@@ -180,9 +190,18 @@ if ($is_locked) {
 }
 
 // Kunde + projekt
-$cust_res = DB::query($conn, "SELECT cust_id, cust_name FROM customers ORDER BY cust_name");
+// NYT (runde 31, papirkurv): en blødslettet kunde udelades af listen for NYE
+// valg, men skal stadig kunne VÆLGES/blive stående her, hvis det allerede er
+// DENNE konkrete kundes tilbud - ellers ville en genindsendelse af en helt
+// almindelig (ikke-låst) formular kunne skifte kunden til den forkerte, uden
+// nogen advarsel. Samme "(slettet)"-mærkning gør det tydeligt for brugeren.
+$cust_res = DB::query($conn, "SELECT cust_id, cust_name FROM customers WHERE " . customers_active_filter($conn) . " ORDER BY cust_name");
 $cust_opt = [];
 while ($c = DB::fetch_assoc($cust_res)) { $cust_opt[$c['cust_id']] = $c['cust_name']; }
+if ($q['cust_id'] && !isset($cust_opt[$q['cust_id']])) {
+    $del_cust = DB::fetch_assoc(DB::query($conn, "SELECT cust_name FROM customers WHERE cust_id = " . (int)$q['cust_id']));
+    if ($del_cust) $cust_opt[$q['cust_id']] = $del_cust['cust_name'] . ' (' . lang('@Deleted') . ')';
+}
 htm_Field(icon:'fa-user', labl:'@Customer', name:'cust_id', valu:$q['cust_id'], type:'sele',
     opti:$cust_opt, extr:($is_locked ? 'disabled required' : 'required'), wdth:'70%', echo:true);
 if ($module_projects) htm_ProjektCodeField($conn, $proj_id ?: null, '30%');

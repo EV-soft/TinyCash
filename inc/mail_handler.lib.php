@@ -1,4 +1,4 @@
-<?php # /inc/mail_handler.lib.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /inc/mail_handler.lib.php v:1.3.1 d:2026-09-15 i:evs
 # Cleaned - Dompdf Removed
 # v1.3.0: SMTPSecure var hardkodet til STARTTLS uanset MAIL_PORT (fejlede for
 # port 465/implicit SSL) + manglede en eksplicit $mail->Timeout (faldt
@@ -62,8 +62,33 @@ function sendTinyMail($toEmail, $toName, $subject, $body, $attachment = null, $i
         $mail->Body    = $body;
 
         $mail->send();
+        _mail_log_entry($toEmail, $subject, true, null);
         return ['success' => true];
     } catch (Exception $e) {
+        _mail_log_entry($toEmail, $subject, false, $mail->ErrorInfo);
         return ['success' => false, 'error' => $mail->ErrorInfo];
     }
+}
+
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): logger AL udgående
+// post ét sted (db-setup/migrate_mail_log.php's mail_log-tabel) - sendTinyMail()
+// er den ENESTE funktion i hele kodebasen der reelt sender mail (bekræftet
+// ved en fuld gennemsøgning), så et hook her fanger automatisk fakturaer/
+// rykkere/kontoudtog/tilbudsopfølgning/backup-testmail uden at hvert enkelt
+// afsendelsesflow selv skal huske at logge. Samme "stille degradering hvis
+// ikke migreret endnu"-mønster som resten af kodebasens nyere tabeller -
+// $GLOBALS['conn'] bruges direkte (sendTinyMail() har ingen $conn-parameter),
+// ingen fejl her må nogensinde afbryde selve mailafsendelsen ovenfor.
+function _mail_log_entry($to_email, $subject, bool $success, ?string $error): void {
+    if (empty($GLOBALS['conn'])) return;
+    $conn = $GLOBALS['conn'];
+    $exists = @DB::query($conn, "SELECT 1 FROM mail_log LIMIT 1") !== false;
+    if (!$exists) return;
+    @DB::insert($conn, 'mail_log', [
+        'to_email'      => $to_email,
+        'subject'       => $subject,
+        'success'       => $success ? 1 : 0,
+        'error_message' => $error,
+        'user_id'       => (int)($_SESSION['user_id'] ?? 0),
+    ]);
 }

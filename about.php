@@ -1,4 +1,4 @@
-<?php # /about.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /about.php v:1.3.1 d:2026-09-15 i:evs
 # v1.3.0: viser seneste linje fra inc/system_errors.log i systemstatus, hvis
 # den er under 24 timer gammel - kun for admin (level 3). Fuld besked i
 # data-hint ved hovering, kort udgave vist inline. Bruger-anmodet.
@@ -16,17 +16,23 @@ if (!defined('APP_VERSION')) {
 }
 
 // --- Effekt-kontrol af .htaccess ---
+// RETTET: (1) tjekket ramte db_connect.inc.php - en PHP-fil, der blot afvikles (tomt svar) og intet lækker - mens de
+// filer der REELT rummer hemmelighederne (inc/data/env.ini med kodeord og API-nøgler, og selve databasen) aldrig
+// blev prøvet: en Nginx-installation med åben env.ini fik "OK". (2) Adressen blev bygget af Host-headeren, så
+// serveren kunne narres til at kalde en vilkårlig vært (SSRF). Nu prøves de to filer, og kun på serveren selv.
 function check_security_lock() {
-    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https" : "http";
-    // Vi tjekker db_connect.inc.php - den SKAL svare med 403 eller 404 hvis låst
-    $url = $protocol . "://" . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']) . "/inc/db_connect.inc.php";
-    
-    $context = stream_context_create(['http' => ['ignore_errors' => true, 'timeout' => 0.5]]);
-    $headers = @get_headers($url, 1, $context);
-    
-    if ($headers === false) return false;
-    $status = $headers[0];
-    return (strpos($status, '403') !== false || strpos($status, '404') !== false);
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+    $port  = (int)($_SERVER['SERVER_PORT'] ?? ($https ? 443 : 80));
+    $base  = ($https ? 'https' : 'http') . '://127.0.0.1:' . $port . rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
+    $host  = preg_replace('/[^A-Za-z0-9.:\-\[\]]/', '', (string)($_SERVER['HTTP_HOST'] ?? 'localhost'));
+    $context = stream_context_create(['http' => ['ignore_errors' => true, 'timeout' => 1, 'header' => "Host: $host\r\n"],
+                                      'ssl' => ['verify_peer' => false, 'verify_peer_name' => false]]);
+    foreach (['/inc/data/env.ini', '/inc/data/tinycash.sqlite'] as $f) {
+        $headers = @get_headers($base . $f, 1, $context);
+        if ($headers === false) continue;                       // ikke til at nå: intet tegn på en åben fil
+        if (preg_match('/\s200\b/', (string)$headers[0])) return false;
+    }
+    return true;
 }
 
 $security_ok = check_security_lock();
@@ -127,29 +133,28 @@ htm_Card_(capt: '@TinyCash Accounting System', wdth: '500'); // fold: kun releva
                 ?>
             </li>
             <li>
-                ✅ <?php echo lang('@Language:'); 
+                ✅ <?php echo lang('@Language:');
                 $current_l = $_SESSION['lang'] ?? 'da';
-                
-                // Sprog-til-land mapping (nøjagtig kopi fra din inc/menu.inc.php)
-                $fMap = [
-                    'da' => 'dk', 
-                    'en' => 'gb', 
-                    'kl' => 'gl', 
-                    'se' => 'se', 
-                    'no' => 'no'  
-                ];
-                $fCode = $fMap[$current_l] ?? $current_l;
-                
-                // Slå navnet op i JSON-filen (nøjagtig kopi fra din inc/menu.inc.php)
-                $lang_file = 'json-data/languages.json'; 
+
+                // RETTET (bruger-anmodet, flag-tabel-konsolidering): denne
+                // side havde sin EGEN, selvstændigt driftede kopi af
+                // inc/menu.inc.php's sprog->flag-tabel (kommentaren her
+                // hævdede fejlagtigt "nøjagtig kopi" - den var det ikke,
+                // manglede bl.a. 'nb'/'pt'/'es' og havde en forkert 'no'-
+                // nøgle i stedet for 'nb'). Læser nu 'flag'-feltet direkte
+                // fra languages.json (samme fælles kilde som inc/menu.inc.php
+                // nu bruger) i samme løkke der allerede slog 'native' op.
+                $lang_file = 'json-data/languages.json';
                 $display_name = strtoupper($current_l); // Fallback
-                
+                $fCode = $current_l; // Fallback hvis sproget ikke findes i tabellen
+
                 if (file_exists($lang_file)) {
                     $lang_data = json_decode(file_get_contents($lang_file), true);
                     if (!empty($lang_data['language'])) {
                         foreach ($lang_data['language'] as $l) {
                             if ($l['code'] == $current_l) {
                                 $display_name = $l['native'];
+                                $fCode = $l['flag'] ?? $current_l;
                                 break;
                             }
                         }

@@ -222,7 +222,12 @@ function htm_FloatingActionBar() {
         <a href="invoice_edit.php?id=0" class="fab-item"><span class="fab-dot dot-invoice"></span><i class="fa fa-file-invoice"></i> <?php echo lang('@New Invoice'); ?></a>
         <a href="expense_edit.php?id=0" class="fab-item"><span class="fab-dot dot-receipt"></span><i class="fa fa-receipt"></i> <?php echo lang('@New Expense'); ?></a>
         <a href="product_edit.php?id=0" class="fab-item"><span class="fab-dot dot-account"></span><i class="fa fa-box-open"></i> <?php echo lang('@New Product'); ?></a>
-        <a href="customer_edit.php?id=0" class="fab-item"><i class="fa fa-user-plus"></i> <?php echo lang('@New Customer'); ?></a>
+        <a href="customer_edit.php?id=0" class="fab-item" data-hint="<?php echo lang('@Create a new customer'); ?>"><i class="fa fa-user-plus"></i> <?php echo lang('@New Customer'); ?></a>
+        <?php /* RETTET (bruger-rapporteret: "det var ikke der de skulle placeres, men
+           på card ved siden af fold-ikonen") - "fold alle ud/sammen"-knappen boede
+           her først, men er flyttet ind i selve htm_Card_()s caption-række
+           (php2htm.lib.php), lige ved siden af hvert korts eget fold-ikon, i
+           stedet for i den flydende værktøjsbjælke hernede. */ ?>
         <div id="fab-scroll-top" class="fab-top" style="display:none;" onclick="window.scrollTo({top: 0, behavior: 'smooth'});" data-hint="<?php echo lang('@Go to top'); ?>"><i class="fa fa-arrow-up"></i>&nbsp;<span><?php echo lang('@Top'); ?></span></div>
         <a href="#" class="fab-item" onclick="<?php echo $btn_onclick; ?>" style="<?php echo $btn_style; ?>" data-hint="<?php echo lang($btn_hint); ?>">
             <i class="fa-solid fa-circle-question"></i> <?php echo lang('@Help'); ?>

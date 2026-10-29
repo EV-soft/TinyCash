@@ -1,4 +1,4 @@
-<?php # /ledger_view.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /ledger_view.php v:1.3.1 d:2026-09-15 i:evs
 # bilagsdato brugte hårdkodet d.m.Y i stedet for CONF_DATE_FORMAT
 # v1.5.0: bogførte posteringer (har voucher_no) er nu urørlige UANSET
 # periodelås - kun Annullér vises. Slet er kun tilbage til ikke-bogførte
@@ -58,12 +58,42 @@ if (isset($_GET['action']) && $_GET['action'] == 'delete_jou' && isset($_GET['jo
 // (kun et is_cancelled-flag, samme mønster som faktura/udgifts-annullering
 // allerede bruger), og en ny modsat postering tilføjes med dags dato. Virker
 // UANSET periodelås - det er netop mekanismen til at rette låste perioder.
+// RETTET: "Annullér" kunne vende ENHVER postering - også en fakturas bogføring, en betaling, en kreditnota,
+// en udgift, en afskrivning eller årsafslutningen. Kun hovedbogen blev vendt; dokumentet blev stående
+// (fakturaen "sendt"/"betalt", betalingen registreret, aktivet afskrevet) - debitorer, kreditorer og
+// anlægskartoteket stemte så ikke længere med hovedbogen. Sådanne posteringer rettes via dokumentet
+// (kreditnota, annullér udgiften ...). Manuelle posteringer og bankposteringer på en konto kan vendes som før.
+const LEDGER_DOC_TRANS_TYPES = ['credit_note', 'expense', 'expense_payment', 'shop_day', 'year_end_close', 'bad_debt_writeoff', 'cancellation',
+                                'depreciation', 'fixed_asset_cancellation', 'fixed_asset_disposal', 'fixed_asset_acquisition', 'chart_switch'];
+// Posteringer uden trans_type der rører debitor- eller kreditorkontoen: fakturaens bogføring, betalinger af
+// fakturaer og udgifter (bankafstemningen) (jou_id => true)
+function ledger_debtor_jous($conn, ?int $only = null): array {
+    $st  = get_settings($conn);
+    $deb = (int)($st['conf_acc_debitor'] ?? 8100);  $cre = (int)($st['conf_acc_creditor'] ?? 4000);
+    $out = [];
+    $r = DB::query($conn, "SELECT DISTINCT l.jou_id FROM ledger l JOIN journal j ON j.jou_id = l.jou_id
+                           WHERE l.acc_id IN ($deb, $cre) AND (j.trans_type IS NULL OR j.trans_type = '')" . ($only ? " AND l.jou_id = $only" : ''));
+    if ($r) while ($x = DB::fetch_assoc($r)) $out[(int)$x['jou_id']] = true;
+    // ... og bankposteringer der har oprettet en (bogført) udgift med samme bilagsnummer - rettes via udgiften
+    $r = DB::query($conn, "SELECT DISTINCT j.jou_id FROM journal j JOIN expenses e ON e.voucher_no = j.voucher_no
+                           WHERE (j.trans_type IS NULL OR j.trans_type = '')" . ($only ? " AND j.jou_id = $only" : ''));
+    if ($r) while ($x = DB::fetch_assoc($r)) $out[(int)$x['jou_id']] = true;
+    return $out;
+}
+function ledger_is_doc_entry(array $jou, array $debtor_jous): bool {
+    return in_array((string)($jou['trans_type'] ?? ''), LEDGER_DOC_TRANS_TYPES, true) || isset($debtor_jous[(int)$jou['jou_id']]);
+}
+
 if (isset($_GET['action']) && $_GET['action'] == 'cancel_jou' && isset($_GET['jou_id'])) {
     $jou_id = (int)$_GET['jou_id'];
 
     $orig = DB::fetch_assoc(DB::query($conn, "SELECT * FROM journal WHERE jou_id = $jou_id"));
     if (!$orig) {
         header("Location: ledger_view.php?msg=notfound");
+        exit;
+    }
+    if (ledger_is_doc_entry($orig, ledger_debtor_jous($conn, $jou_id))) {
+        header("Location: ledger_view.php?msg=doc_entry");
         exit;
     }
     if ((int)($orig['is_cancelled'] ?? 0) === 1) {
@@ -93,11 +123,13 @@ if (isset($_GET['action']) && $_GET['action'] == 'cancel_jou' && isset($_GET['jo
         // nu den oprindelige posterings valuta i stedet for altid at falde
         // tilbage til skemaets DEFAULT 'DKK'.
         $cancel_currency = DB::escape($conn, $orig['currency'] ?? ($global_settings['currency'] ?? 'DKK'));
-        DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, currency) VALUES ('$today', '$cancel_text', 'cancellation', $cancel_voucher_no, '$cancel_currency')");
+        // NYT (BEK 811/2026-gennemgang, [[digital-standard-bookkeeping-registration-goal]]).
+        $cb = journal_created_by_sql($conn);
+        DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, currency{$cb['col']}) VALUES ('$today', '$cancel_text', 'cancellation', $cancel_voucher_no, '$cancel_currency'{$cb['val']})");
         $new_jou_id = DB::insert_id($conn);
 
         foreach ($lines as $l) {
-            ledger_post($conn, $new_jou_id, (int)$l['acc_id'], -1 * (float)$l['amount']);
+            ledger_post($conn, $new_jou_id, (int)$l['acc_id'], -1 * (float)$l['amount'], true);      // (modpostering - se ledger_post())
         }
 
         // RETTET (§bugs-batch-22-review): "allerede annulleret"-tjekket
@@ -154,15 +186,21 @@ if (isset($_GET['msg']) && $_GET['msg'] == 'cancelled') {
 if (isset($_GET['msg']) && $_GET['msg'] == 'already_cancelled') {
     htm_Alert(lang('@This entry has already been reversed.'), 'error');
 }
+if (isset($_GET['msg']) && $_GET['msg'] == 'doc_entry') {
+    htm_Alert(lang('@This entry belongs to an invoice, a payment, a credit note, an expense, a depreciation or the year-end closing - correct it there (credit note, cancel the expense ...). A reversal here would leave the document unchanged.'), 'error');
+}
 if (isset($_GET['msg']) && ($_GET['msg'] == 'notfound' || $_GET['msg'] == 'nolines')) {
     htm_Alert(lang('@Entry not found or has no ledger lines to reverse.'), 'error');
 }
 
 // 1. Hent transaktioner
-$sql = "SELECT j.jou_id, j.jou_date, j.jou_text, j.is_cancelled, j.voucher_no, l.acc_id, a.acc_name, l.amount
+$debtor_jous = ledger_debtor_jous($conn);
+// RETTET: posteringer på et kontonummer der ikke findes i kontoplanen var helt usynlige i hovedbogen (JOIN)
+$sql = "SELECT j.jou_id, j.jou_date, j.jou_text, j.is_cancelled, j.voucher_no, j.trans_type, l.acc_id,
+               COALESCE(a.acc_name, '" . DB::escape($conn, '⚠ ' . lang('@not in the chart of accounts')) . "') AS acc_name, l.amount
         FROM ledger l
         JOIN journal j ON l.jou_id = j.jou_id
-        JOIN accounts a ON l.acc_id = a.acc_id
+        LEFT JOIN accounts a ON l.acc_id = a.acc_id
         ORDER BY j.jou_date DESC, j.jou_id DESC, l.led_id ASC";
 
 $res = DB::query($conn, $sql);
@@ -194,6 +232,8 @@ if ($res) {
         if ($is_new_jou) {
             if ($is_cancelled) {
                 $actionCell = '<span style="color:#94a3b8; font-size:11px; font-style:italic;">' . lang('@Cancelled') . '</span>';
+            } elseif ($is_posted && ledger_is_doc_entry($row, $debtor_jous)) {
+                $actionCell = '<span style="color:#94a3b8; font-size:11px; font-style:italic; cursor:help;" data-hint="' . htmlspecialchars(lang('@This entry belongs to an invoice, a payment, a credit note, an expense, a depreciation or the year-end closing - correct it there (credit note, cancel the expense ...). A reversal here would leave the document unchanged.'), ENT_QUOTES) . '">' . lang('@Corrected via its document') . '</span>';
             } elseif ($is_posted) {
                 $actionCell = htm_ConfirmLink(
                     icon: 'fa-rotate-left',
@@ -262,7 +302,11 @@ if (empty($tableData)) {
     htm_Alert(lang('@No transactions found'), 'info');
 } else {
     // Nu med automatiske zebrastriber og søgefunktion fra biblioteket
-    htm_Table($headers, $tableData, 'ledger_table', 100);
+    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): CSV-eksport
+    // tilføjet - export.php understøtter kun kunder/fakturaer, ikke selve
+    // hovedbogen, og det er typisk netop disse data en ekstern revisor
+    // beder om. Samme delte exportCsv()-mekanisme som resten af appen.
+    htm_Table($headers, $tableData, 'ledger_table', 100, expo: 'hovedbog.csv');
 }
 
 htm_Card_end();

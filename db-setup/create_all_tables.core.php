@@ -60,7 +60,8 @@ $tables_sqlite = [
     acc_type TEXT,
     std_ref_id INTEGER,
     vat_code TEXT,
-    vat_rate NUMERIC
+    vat_rate NUMERIC,
+    guidance TEXT
 )",
 'vat_codes' => "CREATE TABLE IF NOT EXISTS vat_codes (
     vat_id TEXT PRIMARY KEY,
@@ -150,6 +151,7 @@ $tables_sqlite = [
     voucher_no INTEGER,
     jou_text TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER,
     is_cancelled INTEGER DEFAULT 0,
     trans_type VARCHAR(20),
     currency VARCHAR(3) DEFAULT 'DKK',
@@ -205,6 +207,22 @@ $tables_sqlite = [
     line_vat_rate NUMERIC,
     prod_id INTEGER,
     proj_id INTEGER
+)",
+'recurring_expenses' => "CREATE TABLE IF NOT EXISTS recurring_expenses (
+    recur_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    supplier TEXT,
+    supplier_id INTEGER,
+    account_id INTEGER,
+    amount NUMERIC,
+    description TEXT,
+    exp_type TEXT NOT NULL DEFAULT 'expense',
+    interval_type TEXT NOT NULL DEFAULT 'monthly',
+    next_run_date DATE,
+    last_run_date DATE,
+    is_active INTEGER DEFAULT 1,
+    proj_id INTEGER,
+    created_by INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )",
 'bank_connections' => "CREATE TABLE IF NOT EXISTS bank_connections (
     conn_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -341,7 +359,8 @@ $tables_mysql = [
     acc_type VARCHAR(50),
     std_ref_id INT,
     vat_code VARCHAR(10),
-    vat_rate DECIMAL(5,2)
+    vat_rate DECIMAL(5,2),
+    guidance TEXT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 'vat_codes' => "CREATE TABLE IF NOT EXISTS vat_codes (
     vat_id VARCHAR(10) PRIMARY KEY,
@@ -431,6 +450,7 @@ $tables_mysql = [
     voucher_no INT,
     jou_text VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by INT,
     is_cancelled TINYINT DEFAULT 0,
     trans_type VARCHAR(20),
     currency VARCHAR(3) DEFAULT 'DKK',
@@ -486,6 +506,22 @@ $tables_mysql = [
     line_vat_rate DECIMAL(5,2),
     prod_id INT,
     proj_id INT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+'recurring_expenses' => "CREATE TABLE IF NOT EXISTS recurring_expenses (
+    recur_id INT AUTO_INCREMENT PRIMARY KEY,
+    supplier VARCHAR(150),
+    supplier_id INT,
+    account_id INT,
+    amount DECIMAL(12,2),
+    description VARCHAR(255),
+    exp_type VARCHAR(20) NOT NULL DEFAULT 'expense',
+    interval_type VARCHAR(20) NOT NULL DEFAULT 'monthly',
+    next_run_date DATE,
+    last_run_date DATE,
+    is_active TINYINT(1) DEFAULT 1,
+    proj_id INT,
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 'bank_connections' => "CREATE TABLE IF NOT EXISTS bank_connections (
     conn_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -706,6 +742,26 @@ if ($exp_count_res) {
 // beskyttelse som db-setup/migrate_append_only_ledger.php giver eksisterende
 // installationer, sat op fra dag ét på en frisk installation.
 // -------------------------------------------------------------------------
+// Kontoplanens synlighed (aktiv / dæmpet / slukket) - samme som db-setup/migrate_account_status.php
+require_once __DIR__ . '/../inc/accounts.inc.php';
+foreach (acc_ensure_schema($conn, $is_sqlite) as $ac_line) {
+    if (strpos($ac_line, '[SPRUNGET OVER]') !== 0) echo $ac_line . "
+";
+}
+
+// Webbutikker - samme skema som db-setup/migrate_shop_connections.php (shop_ensure_schema(), inc/shop.inc.php)
+require_once __DIR__ . '/../inc/shop.inc.php';
+foreach (shop_ensure_schema($conn, $is_sqlite) as $sh_line) {
+    if (strpos($sh_line, '[SPRUNGET OVER]') !== 0) echo $sh_line . "\n";
+}
+
+// Flere fakturalayouts - samme skema som db-setup/migrate_invoice_layouts.php
+// giver eksisterende installationer (il_ensure_schema(), inc/invoice_layouts.inc.php).
+require_once __DIR__ . '/../inc/invoice_layouts.inc.php';
+foreach (il_ensure_schema($conn, $is_sqlite) as $il_line) {
+    if (strpos($il_line, '[SPRUNGET OVER]') !== 0) echo $il_line . "\n";
+}
+
 $trg_result = create_append_only_triggers($conn);
 if ($trg_result['created'] > 0) {
     echo "[OK] " . $trg_result['created'] . " trigger(e) for append-only-beskyttelse af journal/ledger oprettet.\n";

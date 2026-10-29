@@ -13,6 +13,8 @@
 > at gætte. Afsnittet "Kendte begrænsninger" til sidst er lige så vigtigt som
 > resten — brug det aktivt til at svare "nej, det kan den ikke (endnu)" i
 > stedet for at overdrive systemets muligheder.
+>
+> Sidst opdateret: 2026-10-27.
 
 ## Hvad er TinyCash?
 
@@ -31,6 +33,22 @@ danske lovkrav-funktioner (SAF-T-eksport, OIOUBL e-faktura og den officielle
 momsrapport) er dog kun tilgængelige, når bogføringsvalutaen er DKK — se
 afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
 
+- **Flere regnskaber på samme installation**: Én TinyCash-installation kan
+  rumme flere helt adskilte regnskaber (hvert med sin egen database, fx et
+  for hvert firma). Ved login vælger man hvilket regnskab man vil arbejde i
+  ("Vælg regnskab"). En administrator kan oprette, konvertere og nedlægge
+  regnskaber. Data deles ikke mellem regnskaberne.
+- **Sprog**: Brugerfladen findes på flere sprog (standard dansk), og den
+  enkelte bruger kan skifte sprog. Selve fakturaen kan desuden vises på
+  kundens eget sprog (sat pr. kunde), uafhængigt af brugerens sprog.
+- **Global søgning**: Én søgning på tværs af kunder, fakturaer, udgifter,
+  leverandører, produkter, tilbud, anlægsaktiver og timeregistreringer.
+- **"Mine opgaver" på forsiden**: En oversigt over det der venter — fx
+  forfaldne fakturaer, udgifter der snart skal betales, tilbud der mangler
+  opfølgning, glemte kladder, lav lagerbeholdning, overskredne budgetter og
+  faste fakturaer der ikke er kørt. Forsiden viser også en
+  likviditetsprognose ud fra åbne fakturaer og ubetalte udgifter.
+
 ## Fakturering og salg
 
 - **Fakturaer**: Opret, redigér og bogfør fakturaer til kunder, med
@@ -38,27 +56,76 @@ afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
   bogføres — kun da får den et rigtigt fakturanummer og en postering i
   hovedbogen. En bogført faktura kan ikke redigeres bagefter; rettelser sker
   via en kreditnota.
-- **Kreditnotaer**: Opret automatisk en kreditnota der modregner en allerede
-  bogført faktura.
+- **Rabat pr. linje**: Hver fakturalinje kan have en rabat i procent.
+- **Linjeskabeloner**: Gem en navngiven samling af linjer og indsæt den på
+  en ny faktura med ét klik (fx et fast "servicepakke"-bundt).
+- **Dupliker faktura**: Kopiér en eksisterende faktura til en ny kladde.
+- **Kreditnotaer**: Opret en kreditnota der modregner en allerede bogført
+  faktura — helt eller delvist (man vælger antal pr. linje). Der kan laves
+  én kreditnota pr. faktura. Kreditnotaer har deres egen nummerserie. En
+  faktura fra en låst periode kan godt krediteres; kreditnotaen dateres da
+  i den åbne periode.
+- **Fakturalayouts**: Man kan gemme flere navngivne layouts for
+  fakturaens udseende (flyt blokke rundt i "Design Mode", skjul valgfrie
+  tekstblokke som logo, leveringsadresse, noter eller enkelte
+  sidefodsfelter). Et layout kan vælges som standard, pr. kunde eller pr.
+  faktura. Lovpligtige oplysninger (afsender med CVR, modtager,
+  fakturanummer, dato, linjer, moms og total) kan ikke skjules. En bogført
+  faktura husker det layout den blev sendt med.
+- **Firmalogo** kan uploades under Firmaindstillinger og vises på fakturaen.
+- **PDF og mail**: En bogført faktura kan mailes til kunden som PDF direkte
+  fra TinyCash. En PDF-kopi af hver bogført faktura arkiveres automatisk i
+  systemet (opbevaring af bilag), også hvis fakturaen aldrig mailes. Alle
+  mails systemet sender, logges i en maillog.
+- **Advarsler ved fakturering** (blokerer ikke): kundens forfaldne saldo,
+  overskredet kreditgrænse (sat pr. kunde) og salg over lagerbeholdningen.
+- **Afskrivning af tab på debitorer**: En faktura kunden aldrig betaler,
+  kan afskrives som tab, med korrekt bogføring.
+- **Manuel registrering af betaling**: En indbetaling kan registreres
+  direkte på fakturaen uden bankimport.
 - **Delvis betaling**: En faktura kan betales i flere rater — systemet
   holder styr på hvor meget der reelt mangler, og markerer den først som
   "betalt" når det fulde beløb er indbetalt.
 - **Rykkere (betalingspåmindelser)**: Systemet viser automatisk hvilke
   bogførte fakturaer er forfaldne og ikke fuldt betalt, og kan sende en
   rykker-mail til kunden med ét klik. Der er en indbygget spærre mod at
-  sende samme rykker to gange samme dag.
+  sende samme rykker to gange samme dag. Rykkere har tre trin med stigende
+  tone, og et rykkergebyr kan nævnes (inden for rentelovens regler). En
+  kunde kan fravælges rykkere. Flere rykkere kan sendes samlet.
 - **Gentagne/faste fakturaer**: Opret en skabelon (kunde + linjer + interval:
-  månedligt, kvartalsvist osv.), og systemet opretter automatisk en ny
-  kladdefaktura når den er forfalden. Kladden skal stadig gennemgås og
+  månedligt, kvartalsvist eller årligt), og systemet opretter automatisk en
+  ny kladdefaktura når den er forfalden. Kladden skal stadig gennemgås og
   bogføres manuelt — intet bogføres nogensinde automatisk uden godkendelse.
+  Datoen holder sig på samme dag i måneden (en serie den 31. giver den
+  sidste dag i korte måneder). Redigeringssiden viser de næste fire datoer.
+  Der er ingen rigtig tidsplanlægning på serveren: faste fakturaer dannes,
+  når nogen bruger systemet. Forsiden advarer, hvis en kørsel er mere end
+  7 dage forsinket.
 - **Tilbud og ordrebekræftelser**: Opret et tilbud til en kunde (samme
   linjeopbygning som en faktura), send det, og registrér om kunden
   accepterer eller afviser. Et tilbud påvirker ALDRIG bogføringen, momsen
   eller nogen rapport — kun når det konverteres til en rigtig faktura
   (efter accept) opstår der en almindelig fakturakladde. Samme dokument
-  hedder "Tilbud" før accept og "Ordrebekræftelse" efter.
+  hedder "Tilbud" før accept og "Ordrebekræftelse" efter. Der er
+  opfølgning på sendte tilbud, advarsel om accepterede tilbud der ikke er
+  faktureret, og en konverteringsrate.
 - **Kundekontoudtog**: Et samlet udtog pr. kunde med løbende saldo —
-  fakturaer, kreditnotaer og betalinger i kronologisk rækkefølge.
+  fakturaer, kreditnotaer og betalinger i kronologisk rækkefølge. Kan
+  mailes til én kunde eller sendes samlet til mange.
+- **Kunder**: Flere kontaktpersoner pr. kunde, betalingsbetingelser pr.
+  kunde, et økonomisk sammendrag på kundekortet, en knap der viser netop
+  denne kundes fakturaer, og en liste over de største kunder. Der advares
+  om kunder uden mailadresse, om dubletter af CVR-numre og om kunder uden
+  faktura i 6 måneder. En slettet kunde eller leverandør havner i en
+  papirkurv og kan gendannes. GDPR: alle data om en kunde kan eksporteres
+  (kun eksport — ingen automatisk sletning/anonymisering).
+- **Webbutik**: En webbutik kan sende sine ordrer direkte til TinyCash
+  (webhook med egen nøgle pr. butik). Man vælger enten én faktura pr. ordre
+  (evt. bogført og markeret betalt automatisk) eller ét samlet bilag pr.
+  dags salg. Returneringer bliver til kreditnotaer. Lager trækkes ned,
+  hvis man vælger det. Betalinger går til en mellemregningskonto for
+  butikkens betalingsudbyder. Se "Kendte begrænsninger" for hvilke
+  platforme der virker i dag.
 - **CVR-opslag**: Ved oprettelse af en kunde (eller leverandør) kan man slå
   et CVR-nummer op og få navn/adresse/telefon udfyldt automatisk fra det
   offentlige CVR-register — kræver ikke egen konto eller nøgle, men er
@@ -71,8 +138,20 @@ afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
   vedhæftet kvittering/faktura (billede eller PDF). Der er valgfri
   AI-scanning (kræver egen OpenAI-nøgle sat op af installationen) der kan
   udfylde felterne automatisk ud fra det uploadede bilag.
+- **Udgift fordelt på flere konti**: Én udgift kan deles op i linjer på
+  forskellige konti.
+- **Faste udgifter**: Som faste fakturaer, men for udgifter (fx husleje,
+  abonnementer) — danner en kladde efter et interval.
+- **Advarsel om dubletter**: Systemet advarer (blokerer ikke) hvis en
+  udgift ligner en der allerede er registreret.
+- **Dupliker udgift**, CSV-eksport af udgiftslisten, samlet "markér betalt"
+  for flere udgifter og en fordeling af udgifter pr. konto.
+- **Bilagsstatus**: Udgiftslisten skelner mellem udgifter med bilag, med
+  dokumenteret undtagelse og med manglende bilag.
 - **Leverandører**: Egen stamdata-liste over leverandører, med
-  leverandørkontoudtog.
+  leverandørkontoudtog, forfaldne beløb og største leverandører efter
+  forbrug. Flere ubetalte leverandørudgifter kan eksporteres samlet som en
+  CSV-fil til bankens betalingsimport (systemet betaler ikke selv).
 - **"Ikke betalt endnu"**: En udgift kan registreres som endnu ikke betalt
   (i stedet for at antage den er betalt med det samme) — den optræder så som
   skyldigt beløb til leverandøren, indtil den markeres betalt via en rigtig
@@ -86,10 +165,28 @@ afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
 
 - Ægte dobbelt bogholderi (hovedbog/journal + posteringslinjer), med en
   konfigurerbar kontoplan.
+- **Kontoplan med synlighed**: Erhvervsstyrelsens officielle
+  standardkontoplan (2026, 485 konti) kan importeres. Hver konto kan være
+  aktiv, dæmpet (vises nederst i valglister) eller slukket (vises ikke i
+  valglister, men stadig i rapporter). Man kan altså have "alle konti" og
+  kun tænde for dem, man bruger. Konti som systemet selv bogfører på, kan
+  ikke slukkes, kun dæmpes. Kontiene kan knyttes til standardkontoplanens
+  numre til SAF-T-eksporten.
+- **Manuelle posteringer** (kassekladde/journalpost) direkte på konti.
 - **Bilagsnummer**: Hver postering får et fortløbende, hulfrit
   bilagsnummer, adskilt fra det kundevendte fakturanummer.
+- **Uforanderlige posteringer**: En bogført postering kan ikke ændres eller
+  slettes — heller ikke direkte i databasen (det blokeres af selve
+  databasen). Fejl rettes med en ny modpostering, som bogføringsloven
+  kræver.
 - **Periodelåsning**: Man kan sætte en regnskabsmæssig låsedato, hvorefter
   intet kan bogføres bagom den dato.
+- **Revisorværktøjer**: Saldobalance, kontokort pr. konto, afstemning af
+  debitorer/kreditorer mod hovedbogen og afstemning af moms (genberegnet
+  moms mod bogført moms).
+- **Budget**: Et årsbudget pr. konto, vist som budget mod faktisk i
+  resultatopgørelsen. Forsiden advarer, når en udgiftskonto har overskredet
+  sit budget.
 - **Revisionsspor**: En separat log over hvem der har gjort hvad og hvornår
   (oprettelser, rettelser, sletninger) — kan gennemses af en administrator.
 - **Årsafslutning**: Luk et regnskabsår med én samlet afslutningspostering.
@@ -106,6 +203,9 @@ afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
   Rapporten er formet efter den danske TastSelv-indberetning (afrunding til
   hele kroner) og er derfor kun tilgængelig, når firmaets bogføringsvaluta er
   DKK — se "Kendte begrænsninger".
+- **Momsfrist-påmindelse**: Man kan selv indtaste næste momsfrist og få en
+  påmindelse. Systemet beregner ikke selv SKATs frister og indberetter
+  ikke moms — tallene tastes ind i TastSelv af brugeren.
 
 ## Bank
 
@@ -119,6 +219,12 @@ afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
   beløbet passer entydigt.
 - **Gebyrregler**: Konfigurerbare regler til automatisk at udregne og
   bogføre et transaktionsgebyr (fast beløb, procent, eller en kombination).
+- **Genkendelsesregler**: Regler der genkender en tilbagevendende banktekst
+  (fx et abonnement) og foreslår den rigtige konto ved afstemningen.
+- **Saldoafstemning**: Sammenlign hovedbogens banksaldo med den faktiske
+  saldo på kontoudtoget.
+- Bankimporten advarer om transaktioner der allerede er importeret. Ved
+  PSD2-bankforbindelse advares der, før bankens samtykke udløber.
 
 ## Flervaluta
 
@@ -161,6 +267,8 @@ afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
   osv.), med rigtig bogført lineær (retlinet) månedlig afskrivning.
 - Understøtter afhændelse (salg/kassation) af et aktiv, med automatisk
   bogført gevinst/tab i forhold til den bogførte, resterende værdi.
+- Fuld afskrivningsplan pr. aktiv, forhåndsvisning af kommende
+  afskrivninger og CSV-eksport af kartoteket.
 
 ## Lager
 
@@ -168,11 +276,21 @@ afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
   når en faktura bogføres (og lægges tilbage ved en kreditnota).
 - Advarsel ved lav lagerbeholdning (konfigurerbar minimumsgrænse pr.
   produkt).
+- Kostpris og bruttoavance pr. produkt, produktkategorier med salg pr.
+  kategori, EAN/stregkode-felt, salgshistorik pr. produkt og en top 10 over
+  de bedst sælgende produkter.
+- Lageret er et simpelt antal pr. produkt — ingen lagerværdi efter FIFO,
+  ingen flere lagre/lokationer og ingen indkøbsordrer.
 
 ## Rapporter og eksport
 
 - Resultatopgørelse, balance, årsrapport, momsrapport, aldersfordelt
-  restanceliste, generel hovedbog.
+  restanceliste, generel hovedbog, saldobalance og kontokort.
+- Nøgletal på balancen (soliditetsgrad og forenklet likviditetsgrad).
+- CSV-eksport af hovedbog, resultatopgørelse, balance, momsrapport,
+  kunder, fakturaer, udgifter, leverandører, lager og anlægskartotek.
+- **Bilagsarkiv**: Hent alle udgiftsbilag for et år som én ZIP-fil med en
+  CSV-oversigt (fx til revisor).
 - **SAF-T-eksport**: Det danske standardformat for regnskabsdata, til brug
   ved fx en skattekontrol. Kun tilgængelig når firmaets bogføringsvaluta er
   DKK (se "Kendte begrænsninger").
@@ -187,14 +305,24 @@ afsnittene om Moms og Rapporter/eksport samt "Kendte begrænsninger".
   adgang til følsomme funktioner (kontoplan, brugerstyring, systemvedligehold).
 - **To-faktor login (2FA)**: Valgfri, standard TOTP (samme slags kode som
   Google Authenticator/Authy bruger).
+- **Deaktivering af bruger**: En brugerkonto kan deaktiveres; en bruger der
+  er logget ind, bliver smidt ud med det samme.
+- **Loginhistorik**: En administrator kan se alle login-forsøg (også
+  mislykkede og forkerte 2FA-koder) og hver brugers seneste login.
+- Brugeren logges automatisk ud efter en periode uden aktivitet.
 - **Revisionsspor**: Se ovenfor under Bogføring.
 - **Sikkerhedskopiering**: Krypterede, fulde databackups, med mulighed for
-  automatisk ugentlig afsendelse pr. mail.
+  automatisk ugentlig afsendelse pr. mail. En backup kan prøvegendannes i
+  en isoleret kopi for at bevise at den virker, uden at røre det rigtige
+  regnskab. Der er en "send testmail"-knap til at prøve mailopsætningen.
+  Forsiden advarer, når den seneste backup er for gammel.
 - **Menu-synlighed**: En administrator kan skjule menupunkter for
   bestemte brugerniveauer, for at gøre systemet enklere for nye/mindre
   tekniske brugere — dette er kun en menu-forenkling, ikke en reel
   adgangsbegrænsning (siderne kan stadig tilgås direkte via deres adresse,
-  hvis brugerens niveau i øvrigt tillader det).
+  hvis brugerens niveau i øvrigt tillader det). Administratoren kan
+  højreklikke direkte på et menupunkt — eller på et markeret
+  formularfelt — for at skjule det for begynder/erfarne brugere.
 
 ## Flere brugere samtidig
 
@@ -235,6 +363,22 @@ ikke et komplet ERP-system:
   almindelig faktura og et tilbud har derimod en "Tilføj linje"-knap og
   understøtter et vilkårligt antal linjer, uanset hvor de stammer fra (også
   automatisk genererede, fx fra mange timeregistreringer).
+- **Webbutik: kun TinyCash' eget ordreformat virker i dag.** WooCommerce,
+  Shopify, PrestaShop og Magento står som valgmuligheder, men har endnu
+  ingen færdig tilpasning — butikken skal (via et lille plugin/script) sende
+  ordren i TinyCash' JSON-format. Der er heller ingen automatisk afstemning
+  af betalingsudbyderens udbetalinger mod mellemregningskontoen endnu; den
+  sker ved almindelig bankafstemning. Kun ordrer i bogføringsvalutaen
+  modtages.
+- **Ingen momsindberetning, ingen årsrapport-indsendelse.** TinyCash
+  laver tallene, men indberetter ikke selv til SKAT eller indsender
+  årsrapporten til Erhvervsstyrelsen.
+- **Ikke (endnu) registreret som digitalt standard bogføringssystem** hos
+  Erhvervsstyrelsen. Det er et mål, men blandt andet login med MitID og
+  afsendelse via NemHandel mangler. Spørg den der driver installationen om
+  den aktuelle status.
+- **Ingen kunde-/leverandørsammenlægning** af dubletter (systemet advarer
+  kun om dem).
 - **Bankintegration (PSD2) og AI-scanning af bilag kræver egne, betalte
   tredjeparts-konti** (henholdsvis Enable Banking og OpenAI), som den
   enkelte installation selv skal oprette og indtaste nøgler til. Uden det

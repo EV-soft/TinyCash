@@ -1,4 +1,4 @@
-<?php # /run_migrate.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /run_migrate.php v:1.3.1 d:2026-09-15 i:evs
 # v2.0.0: ALVORLIGT FUND - denne side (menuens "Database migration"-link)
 # kørte reelt kun ÉN eneste, gammel migration (migrate_cust_reference.php,
 # fra 2026-07-13) og var derfor stærkt forældet. De 17 øvrige migrationer
@@ -109,9 +109,9 @@ $migrations = [
     ['file' => 'migration_projects.php',        'label' => 'Projekt-modul (v1.3.0-tilføjelser)',   'desc' => 'expenses.exp_type + projects.note_expenses/note_income/note_general. Kræver at projects-tabellen allerede findes.',
      'check' => fn($c) => rm_column_exists($c, 'expenses', 'exp_type') && rm_column_exists($c, 'projects', 'note_expenses')],
     ['file' => 'migrate_equity_account.php',     'label' => 'Egenkapital-konto',                    'desc' => 'Opretter standard-egenkapitalkontoen (3000) hvis den mangler.',
-     'check' => fn($c) => rm_account_exists($c, 3000)],
+     'check' => fn($c) => rm_account_exists($c, 3000) || tc_equity_account($c) > 0],      // (eller en anden egenkapitalkonto, fx standardkontoplanens)
     ['file' => 'migrate_liability_account.php',  'label' => 'Gældskonto',                           'desc' => 'Opretter standard-gældskontoen (4000) hvis den mangler.',
-     'check' => fn($c) => rm_account_exists($c, 4000)],
+     'check' => fn($c) => rm_account_exists($c, 4000) || tc_role_account($c, 'conf_acc_creditor', 4000) > 0],
     ['file' => 'migrate_fiscal_years.php',       'label' => 'Regnskabsår',                          'desc' => 'Tabellen fiscal_years (understøtter forskudt regnskabsår).',
      'check' => fn($c) => rm_table_exists($c, 'fiscal_years')],
     ['file' => 'migrate_cust_reference.php',     'label' => 'Kundereference på faktura',            'desc' => 'invoices.cust_reference (fx ordrenummer/EAN).',
@@ -160,7 +160,7 @@ $migrations = [
     // er allerede valuta-agnostisk, kun denne beskrivelsestekst var ikke
     // opdateret. Samme fejlklasse som about.php-rettelsen i tidligere runde.
     ['file' => 'migrate_currency_gainloss.php',  'label' => 'Kursgevinst/-tab ved betaling',         'desc' => 'Konto 7200 "Kursgevinst/-tab, valuta" - bruges ved bankafstemning når en udenlandsk faktura afsluttes med en kursforskel mellem bogført og modtaget beløb i firmaets bogføringsvaluta.',
-     'check' => fn($c) => rm_account_exists($c, 7200)],
+     'check' => fn($c) => rm_account_exists($c, 7200) || tc_role_account($c, 'conf_acc_fx', 7200) > 0],
     // TILFØJET (bruger-rapporteret: langsom sidevisning ved sideskift): tre
     // manglende indekser fundet under samme fejlsøgning som rettede
     // inc/auto_backup.inc.php's tidsstempel-bug (se filens egen header-
@@ -168,6 +168,71 @@ $migrations = [
     // hver sidevisning, hver 7. dag) fulde tabel-scanninger.
     ['file' => 'migrate_auto_backup_indexes.php', 'label' => 'Indekser til automatisk backup-tjek',   'desc' => 'Indeks på audit_log.log_date, expenses.created_at og journal.created_at - bruges af auto_backup_check() (kørt på hver sidevisning) til at afgøre om noget er ændret siden sidste backup.',
      'check' => fn($c) => rm_index_exists($c, 'audit_log', 'idx_audit_log_date') && rm_index_exists($c, 'expenses', 'idx_expenses_created') && rm_index_exists($c, 'journal', 'idx_journal_created')],
+    // TILFØJET (bruger-rapporteret: "run_migrate.php viser ikke de nyeste"):
+    // denne liste er en hårdkodet registrering, ikke en mappe-scanning af
+    // db-setup/ - en ny migration bliver ALDRIG synlig her af sig selv, uanset
+    // hvor idempotent/korrekt selve scriptet er. Samme fejlklasse som
+    // db_migrate.php's oprindelige mangel (§bugs-batch-16-review) - denne
+    // gang selv-begået, ikke arvet. Se [[bookkeeper-wishlist-round19]].
+    ['file' => 'migrate_customer_no_reminders.php', 'label' => 'Fravalg af rykkere pr. kunde',          'desc' => 'customers.cust_no_reminders - udelukker en kunde fra automatiske betalingsrykkere (reminders.php), håndhævet både i UI og server-side (reminder_action.php).',
+     'check' => fn($c) => rm_column_exists($c, 'customers', 'cust_no_reminders')],
+    ['file' => 'migrate_customer_credit_limit.php', 'label' => 'Kreditgrænse pr. kunde',                'desc' => 'customers.credit_limit - valgfri kreditgrænse, udvider den eksisterende saldo-advarsel ved fakturaoprettelse (customer_balance_check.php) til også at tjekke samlet udestående mod grænsen.',
+     'check' => fn($c) => rm_column_exists($c, 'customers', 'credit_limit')],
+    ['file' => 'migrate_bad_debt_account.php',       'label' => 'Tab på debitorer-konto',                'desc' => 'Opretter standardkontoen 7100 "Tab på debitorer" - bruges når en uerholdelig faktura afskrives som tab (invoice_view.php -> "Afskriv som tab").',
+     'check' => fn($c) => rm_account_exists($c, 7100) || tc_role_account($c, 'conf_acc_bad_debt', 7100) > 0],
+    ['file' => 'migrate_account_budgets.php',        'label' => 'Budget pr. konto',                      'desc' => 'Tabellen account_budgets - ét årligt budgetbeløb pr. konto, sat på budget_edit.php og sammenlignet mod det faktiske på report_income.php.',
+     'check' => fn($c) => rm_table_exists($c, 'account_budgets')],
+    ['file' => 'migrate_user_active_status.php',     'label' => 'Deaktiver brugerkonto',                 'desc' => 'users.is_active - lader en admin deaktivere en brugerkonto (blokerer nye logins OG dræber en allerede aktiv session med det samme, tjekket ved hver sideindlæsning).',
+     'check' => fn($c) => rm_column_exists($c, 'users', 'is_active')],
+    ['file' => 'migrate_field_visibility.php',       'label' => 'Højreklik-skjul for felter',             'desc' => 'Tabellen field_visibility - samme princip som menu_visibility, men for enkelte formularfelter (kreditgrænse, rykker-fravalg, konto-aktiv, tab-på-debitorer-konto m.fl.).',
+     'check' => fn($c) => rm_table_exists($c, 'field_visibility')],
+    ['file' => 'migrate_bank_consent_expiry.php',    'label' => 'PSD2-samtykke-udløbsdato',              'desc' => 'bank_connections.consent_expires_at - advarer før en automatisk bankforbindelses samtykke udløber, i stedet for at den stille holder op med at virke. Kræver at leverandørkonto-modulet allerede er sat op (migrate_bank_integration.php).',
+     'check' => fn($c) => rm_column_exists($c, 'bank_connections', 'consent_expires_at')],
+    ['file' => 'migrate_invoice_line_discount.php',  'label' => 'Rabat pr. fakturalinje',                 'desc' => 'invoice_lines.discount_pct - valgfri procent-rabat pr. linje, trukket fra nettobeløbet før moms. Se invoice_dkk_totals() (inc/db_connect.inc.php) for den autoritative formel.',
+     'check' => fn($c) => rm_column_exists($c, 'invoice_lines', 'discount_pct')],
+    ['file' => 'migrate_product_category.php',       'label' => 'Produktkategorier',                     'desc' => 'products.prod_category - valgfrit gruppe-/kategorifelt, bruges til "salg pr. kategori"-panelet på inventory_status.php.',
+     'check' => fn($c) => rm_column_exists($c, 'products', 'prod_category')],
+    ['file' => 'migrate_customer_language.php',      'label' => 'Kunde-specifik fakturasprog',           'desc' => 'customers.cust_language - fakturaen kan nu vises/sendes på kundens eget sprog i stedet for bogholderens, hvis udfyldt.',
+     'check' => fn($c) => rm_column_exists($c, 'customers', 'cust_language')],
+    ['file' => 'migrate_expense_lines.php',          'label' => 'Udgifts-linjeopdeling på flere konti',  'desc' => 'expense_lines - en udgift/bilag kan nu splittes på flere konti, i stedet for kun ét account_id. Se expense_get_lines() (inc/db_connect.inc.php) for den autoritative kilde.',
+     'check' => fn($c) => rm_table_exists($c, 'expense_lines')],
+    ['file' => 'migrate_trash_bin.php',              'label' => 'Papirkurv for kunder/leverandører',      'desc' => 'customers/suppliers.deleted_at - "Slet" bliver en gendannelig blødsletning i stedet for permanent, se trash_bin.php.',
+     'check' => fn($c) => rm_column_exists($c, 'customers', 'deleted_at')],
+    ['file' => 'migrate_product_ean.php',            'label' => 'EAN/stregkode på produkter',            'desc' => 'products.prod_ean - valgfrit stregkodefelt.',
+     'check' => fn($c) => rm_column_exists($c, 'products', 'prod_ean')],
+    ['file' => 'migrate_supplier_bank_details.php',  'label' => 'Leverandør-bankoplysninger',             'desc' => 'suppliers.supplier_reg_no/supplier_account_no - nødvendigt for CSV-eksporten til bankbetaling (supplier_payment_export.php).',
+     'check' => fn($c) => rm_column_exists($c, 'suppliers', 'supplier_reg_no')],
+    ['file' => 'migrate_invoice_templates.php',      'label' => 'Fakturaskabeloner (linjebundter)',       'desc' => 'invoice_line_templates/invoice_line_template_items - gem og genbrug et navngivet sæt fakturalinjer, se invoice_template_action.php.',
+     'check' => fn($c) => rm_table_exists($c, 'invoice_line_templates')],
+    ['file' => 'migrate_credit_note_no.php',         'label' => 'Kreditnota-nummerserie',                 'desc' => 'invoices.credit_note_no + credit_note_no_counter - kreditnotaer fik aldrig sit eget kundevendte nummer (kun voucher_no), se next_credit_note_no() (inc/db_connect.inc.php).',
+     'check' => fn($c) => rm_column_exists($c, 'invoices', 'credit_note_no')],
+    ['file' => 'migrate_bank_match_rules.php',       'label' => 'Bank-genkendelsesregler',                'desc' => 'bank_match_rules - "hvis beskrivelse indeholder X -> konto Y", foreslås automatisk i reconcile_list.php, administreres på bank_rules.php.',
+     'check' => fn($c) => rm_table_exists($c, 'bank_match_rules')],
+    ['file' => 'migrate_customer_contacts.php',      'label' => 'Flere kontaktpersoner pr. kunde',        'desc' => 'customer_contacts - en kunde kan have flere navngivne kontaktpersoner (fx separat fakturamodtager), se customer_edit.php.',
+     'check' => fn($c) => rm_table_exists($c, 'customer_contacts')],
+    ['file' => 'migrate_invoice_external_ref.php',   'label' => 'Webhook-fakturaer (eksternt ordre-id)',  'desc' => 'invoices.external_ref + indeks - lader webhook_invoice.php genkende og afvise et gentaget/duplikeret webhook-kald i stedet for at oprette samme faktura to gange. Se webhook_keys.php.',
+     'check' => fn($c) => rm_column_exists($c, 'invoices', 'external_ref') && rm_index_exists($c, 'invoices', 'idx_invoices_external_ref')],
+    ['file' => 'migrate_journal_created_by.php',     'label' => 'Bruger-id på journalposten (BEK 811)',   'desc' => 'journal.created_by + opgraderer append-only-triggerne (udvider trg_journal_restrict_update_posted og tilføjer trg_expenses_no_delete_posted/trg_expenses_restrict_update_posted) - se [[digital-standard-bookkeeping-registration-goal]]. KØR DENNE selv hvis journal.created_by allerede findes, for at opgradere triggerne.',
+     'check' => fn($c) => rm_column_exists($c, 'journal', 'created_by')],
+    ['file' => 'migrate_bank_reconciliations.php',   'label' => 'Gemte bankafstemninger (BEK 811)',       'desc' => 'bank_reconciliations - gør en udført bankafstemning (bank_balance_check.php) til en permanent, dateret, append-only post i stedet for en ren on-demand-visning. Se [[digital-standard-bookkeeping-registration-goal]].',
+     'check' => fn($c) => rm_table_exists($c, 'bank_reconciliations')],
+    ['file' => 'migrate_account_guidance.php',       'label' => 'Konteringsvejledning pr. konto (BEK 811)', 'desc' => 'accounts.guidance - fri konteringsvejledning pr. konto, vist på account_edit.php/chart_of_accounts.php/journal_entry.php. Se [[digital-standard-bookkeeping-registration-goal]].',
+     'check' => fn($c) => rm_column_exists($c, 'accounts', 'guidance')],
+    ['file' => 'migrate_account_status.php',         'label' => 'Kontoplanens synlighed',                'desc' => 'accounts.acc_status (aktiv / dæmpet / slukket) - kun de konti du bruger vises i valglisterne; Erhvervsstyrelsens standardkontoplan kan derefter importeres (slukket) på kontoplan-siden.',
+     'check' => fn($c) => rm_column_exists($c, 'accounts', 'acc_status')],
+    // RETTET: fire migreringer fandtes i db-setup/, men stod ikke her - en eksisterende installation fik aldrig besked
+    ['file' => 'migrate_recurring_expenses.php',     'label' => 'Faste udgifter',                        'desc' => 'recurring_expenses - skabeloner der laver en ubogført udgift hver periode.',
+     'check' => fn($c) => rm_table_exists($c, 'recurring_expenses')],
+    ['file' => 'migrate_mail_log.php',               'label' => 'Mail-log',                              'desc' => 'mail_log - alle udgående mails logges centralt (mail_log.php).',
+     'check' => fn($c) => rm_table_exists($c, 'mail_log')],
+    ['file' => 'migrate_product_cost_price.php',     'label' => 'Kostpris på varer',                     'desc' => 'products.prod_cost_price - avance / dækningsbidrag pr. vare.',
+     'check' => fn($c) => rm_column_exists($c, 'products', 'prod_cost_price')],
+    ['file' => 'migrate_quote_followup.php',         'label' => 'Opfølgning på tilbud',                  'desc' => 'quotes.followup_sent_at / followup_count - påmindelse om tilbud der venter på svar.',
+     'check' => fn($c) => rm_column_exists($c, 'quotes', 'followup_count')],
+    ['file' => 'migrate_shop_connections.php',       'label' => 'Webbutikker',                           'desc' => 'shop_connections/shop_orders - tilknyt en webbutik med dens egne valg (faktura pr. ordre eller samlet salg pr. dag, automatisk bogføring, mellemregningskonto ...), se shop_connections.php.',
+     'check' => fn($c) => rm_table_exists($c, 'shop_connections') && rm_table_exists($c, 'shop_orders')],
+    ['file' => 'migrate_invoice_layouts.php',        'label' => 'Flere fakturalayouts',                  'desc' => 'invoice_layouts/invoice_layout_blocks + customers.cust_layout_id + invoices.inv_layout_id - gem flere navngivne layouts i Design Mode, vælg layout pr. kunde og pr. faktura (PDF\'en følger med). Det nuværende layout bliver "Standard".',
+     'check' => fn($c) => rm_table_exists($c, 'invoice_layouts') && rm_column_exists($c, 'invoices', 'inv_layout_id')],
 ];
 
 htm_Header('@Database Migration', 1100);

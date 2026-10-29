@@ -1,4 +1,4 @@
-<?php # /account_edit.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /account_edit.php v:1.3.1 d:2026-09-15 i:evs
 # Opret/redigér en konto i kontoplanen. Kontotype-dropdown dækker de typer
 # resten af systemet reelt bruger (income/expense/asset/liability/bank/vat/
 # equity). Ændring af kontotype/momskode logges til revisionssporet.
@@ -20,7 +20,19 @@ if (isset($_POST['save_account'])) {
     $name       = DB::escape($conn, $_POST['acc_name']);
     $type       = DB::escape($conn, $_POST['acc_type']);
     $vat_code   = trim(DB::escape($conn, $_POST['vat_code']));
-    $vat_rate   = (float)$_POST['vat_rate'];
+    // RETTET (§find-fem-fejl runde 40): brugte (float) direkte i stedet for
+    // parse_dk_number(), i modsætning til vat_save.php's egen håndtering af
+    // nøjagtig samme felt (samme fejlklasse som [[invoice-line-comma-amount-fix]]).
+    // (float)"7,5" afkortes stille til 7.0 i PHP - lav praktisk risiko via et
+    // <input type=number> (accepterer typisk ikke komma), men samme lave-
+    // risiko-men-ret-for-konsistens begrundelse som vat_save.php allerede gav.
+    $vat_rate   = parse_dk_number($_POST['vat_rate']);
+    // NYT (BEK 811/2026-gennemgang, Bilag 3 "bogføringsguide/konterings-
+    // vejledning", se [[digital-standard-bookkeeping-registration-goal]]):
+    // fri konteringsvejledning pr. konto - vises på chart_of_accounts.php
+    // (tooltip) og journal_entry.php (direkte ved selve konteringen).
+    $guidance   = trim($_POST['guidance'] ?? '');
+    $guidance_sql = DB::escape($conn, $guidance);
 
     // Hent og valider standard-reference (std_ref_id er en INT i databasen)
     $std_ref_id = trim($_POST['std_ref_id']);
@@ -45,10 +57,24 @@ if (isset($_POST['save_account'])) {
         $before_row = $before_res ? DB::fetch_assoc($before_res) : null;
     }
 
+    // RETTET: typen på en konto MED posteringer kunne ændres - fx indtægt -> aktiv. Det flyttede stille hele
+    // kontoens historik mellem resultatopgørelse og balance i alle rapporter, også i lukkede år og
+    // årsrapporter der allerede var afleveret. En konto med posteringer beholder sin type; brug en ny konto
+    // (og en postering der flytter saldoen), hvis typen var forkert.
+    $acc_type_locked = false;
+    if ($before_row && (string)$before_row['acc_type'] !== (string)$_POST['acc_type']) {
+        $has_post = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM ledger WHERE acc_id = $id"));
+        if ($has_post && (int)$has_post[0] > 0) {
+            $acc_type_locked = true;
+            $type = DB::escape($conn, (string)$before_row['acc_type']);
+            $_POST['acc_type'] = $before_row['acc_type'];
+        }
+    }
+
     if ($id == 0) {
         // OPRET NY KONTO
-        $sql = "INSERT INTO accounts (acc_id, acc_name, acc_type, vat_rate, vat_code, std_ref_id)
-                VALUES ($new_id, '$name', '$type', $vat_rate, '$vat_code', $std_ref_sql)";
+        $sql = "INSERT INTO accounts (acc_id, acc_name, acc_type, vat_rate, vat_code, std_ref_id, guidance)
+                VALUES ($new_id, '$name', '$type', $vat_rate, '$vat_code', $std_ref_sql, '$guidance_sql')";
     } else {
         // OPDATER EKSISTERENDE
         $sql = "UPDATE accounts SET
@@ -56,7 +82,8 @@ if (isset($_POST['save_account'])) {
                     acc_type = '$type',
                     vat_rate = $vat_rate,
                     vat_code = '$vat_code',
-                    std_ref_id = $std_ref_sql
+                    std_ref_id = $std_ref_sql,
+                    guidance = '$guidance_sql'
                 WHERE acc_id = $id";
     }
 
@@ -68,7 +95,7 @@ if (isset($_POST['save_account'])) {
                 ['acc_type' => $before_row['acc_type'], 'vat_code' => $before_row['vat_code']],
                 ['acc_type' => $_POST['acc_type'], 'vat_code' => $vat_code]);
         }
-        header("Location: chart_of_accounts.php?msg=updated");
+        header("Location: " . ($acc_type_locked ? "account_edit.php?id=$id&err=type_locked" : "chart_of_accounts.php?msg=updated"));
         exit;
     } else {
         $message = htm_Alert(lang('@Error saving account') . ": " . DB::error($conn), 'error', 0, true);
@@ -89,7 +116,8 @@ if ($id > 0) {
         'acc_type'   => 'income',
         'vat_code'   => '', 
         'vat_rate'   => 0,
-        'std_ref_id' => ''
+        'std_ref_id' => '',
+        'guidance'   => ''
     ];
 }
 
@@ -115,6 +143,7 @@ htm_Header($id == 0 ? "@New Account" : "@Edit Account");
 showMenu();
 
 htm_Card_($id == 0 ? "@Create New Account" : "@Edit Account: " . $id, "500");
+if (($_GET['err'] ?? '') === 'type_locked') $message .= htm_Alert(lang('@The account has postings, so its type cannot be changed - the other changes are saved.'), 'warning', 0, true);
 echo $message;
 ?>
 
@@ -200,6 +229,11 @@ echo $message;
 
     <div style="margin-bottom: 20px;">
         <small style="color: var(--text-muted);"><?php echo lang('@Note: VAT codes and rates are managed under System -> VAT Codes.'); ?></small>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+        <label style="display:block; font-weight:bold; margin-bottom:5px;"><?php echo lang('@Posting Guidance'); ?>:</label>
+        <textarea name="guidance" rows="3" placeholder="<?php echo htmlspecialchars(lang('@Optional note shown to bookkeepers when posting to this account, e.g. what belongs here and what does not.')); ?>" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-card); color:var(--text-main); resize:vertical;"><?php echo htmlspecialchars($row['guidance'] ?? ''); ?></textarea>
     </div>
 
     <div style="display: flex; justify-content: space-between; margin-top: 20px;">

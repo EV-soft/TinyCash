@@ -1,4 +1,4 @@
-<?php # /quote_view.php v:1.3.0 d:2026-08-30 i:evs
+<?php # /quote_view.php v:1.3.1 d:2026-09-15 i:evs
 # NY FUNKTION: Tilbud/Ordrebekræftelse (bruger-anmodet) - udskriftsvenlig
 # visning til kunden. Bevidst en LET udgave sammenlignet med invoice_view.
 # php's fulde design-mode/træk-og-slip-system (interactjs/layout_settings) -
@@ -22,10 +22,19 @@ if (!$q) die(lang('@Invoice not found'));
 $s   = get_settings($conn);
 $cur = $s['currency'] ?? 'DKK';
 
-$coName = $s['company_name']    ?? 'Company Name ApS';
-$coAddr = $s['company_address'] ?? 'Street Address 1';
-$coCity = $s['company_city']    ?? '8000 Aarhus';
-$coCVR  = $s['company_cvr']     ?? '12345678';
+// RETTET (bruger-anmodet, samme ALVORLIGE FUND som invoice_view.php fik
+// samme runde - se [[fabricated-cvr-bank-details-bug]]): denne fil havde
+// nøjagtig samme fabrikerede firmaprofil-fallback, byte-for-byte samme
+// opdigtede værdier ("Company Name ApS", "Street Address 1", "8000
+// Aarhus", CVR "12345678") - tydeligvis kopieret fra samme oprindelige
+// kilde som fakturavisningen, men aldrig opdateret sammen med den. Et
+// tilbud sendt til en rigtig kunde ville vise samme falske firmaidentitet.
+$profile_incomplete = empty($s['company_name']) || empty($s['company_cvr'])
+    || empty($s['company_address']) || empty($s['company_city']);
+$coName = $s['company_name']    ?: lang('@[Company name missing - fill in under Company Settings]');
+$coAddr = $s['company_address'] ?: lang('@[Address missing]');
+$coCity = $s['company_city']    ?: lang('@[City missing]');
+$coCVR  = $s['company_cvr']     ?: lang('@[CVR missing]');
 
 // Titel afhænger af status - se filens header-kommentar.
 $doc_title = in_array($q['status'], ['accepted', 'converted'], true) ? lang('@Order Confirmation') : lang('@Quote');
@@ -46,6 +55,13 @@ showMenu();
         .paper { box-shadow:none; margin:0; }
     }
 </style>
+<?php if ($profile_incomplete): ?>
+<div class="no-print" style="width:210mm; margin:10px auto; background:var(--bg-panel, #fff3cd); color:var(--text-alert-warning, #856404); border-left:4px solid var(--color-warning, #ffc107); border-radius:4px; padding:12px 15px; font-size:0.9em;">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <?php echo lang('@Your company profile is incomplete (name, CVR, address or city is missing). This invoice will show placeholder text where data is missing until you fill it in under Company Settings.'); ?>
+    <a href="company_settings.php" style="font-weight:bold;"><?php echo lang('@Go to Company Settings'); ?></a>
+</div>
+<?php endif; ?>
 <div class="no-print" style="width:210mm; margin:10px auto; display:flex; justify-content:flex-end; gap:10px;">
 <?php
 $status = $q['status'];
@@ -65,6 +81,12 @@ if ($status === 'accepted') {
 if (in_array($status, ['sent','rejected'], true)) {
     htm_Button(icon:'fa-rotate-left', labl:'@Reopen to Draft', type:'secondary', link:'quote_actions.php?action=reopen&id='.$quote_id, attr:'data-hint="'.lang('@Undo and make this quote editable again').'"');
 }
+// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): "Dupliker
+// tilbud" - altid tilgængelig uanset status, samme princip som
+// "Dupliker faktura" (invoice_view.php, samme session): en accepteret,
+// afvist eller udløbet tilbud er en lige så gyldig kilde til genbrug som
+// en kladde.
+htm_Button(icon:'fa-copy', labl:'@Duplicate Quote', type:'secondary', attr:'onclick="if(confirm(\''.lang('@Create a new draft quote with the same customer and lines?').'\')) window.location.href=\'quote_duplicate.php?id='.$quote_id.'\'" data-hint="'.lang('@Create a new draft with the same customer, lines and settings - useful for repeat quoting').'"');
 htm_Button(icon:'fa-print', labl:'@Print', type:'primary', attr:'onclick="window.print()" data-hint="'.lang('@Print this quote').'"');
 htm_Button(icon:'fa-arrow-left', labl:'@Back', type:'secondary', link:'quote_list.php', attr:'data-hint="'.lang('@Return to the quote list').'"');
 ?>
@@ -73,6 +95,21 @@ htm_Button(icon:'fa-arrow-left', labl:'@Back', type:'secondary', link:'quote_lis
 <div class="paper" id="quote-page">
     <div style="display:flex; justify-content:space-between;">
         <div>
+            <?php
+            // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): tilbud
+            // viste INTET logo overhovedet, end ikke en "Logo missing"-
+            // pladsholder - firmalogo-uploadet (company_settings.php, forrige
+            // runde) var kun koblet på invoice_view.php. En kunde der modtager
+            // både et tilbud og senere en faktura fra samme firma ville se en
+            // synlig, unødvendig inkonsistens (logo på den ene, intet på den
+            // anden). Samme flere-endelser-tjek som invoice_view.php's egen.
+            $q_logo_path = null;
+            foreach (['png', 'jpg', 'jpeg', 'webp', 'gif'] as $q_logo_ext) {
+                if (file_exists("images/logo.$q_logo_ext")) { $q_logo_path = "images/logo.$q_logo_ext"; break; }
+            }
+            if ($q_logo_path): ?>
+                <img src="<?php echo htmlspecialchars($q_logo_path); ?>" style="max-height:50px; display:block; margin-bottom:8px;">
+            <?php endif; ?>
             <strong style="font-size:16px;"><?php echo htmlspecialchars($coName); ?></strong><br>
             <?php echo htmlspecialchars($coAddr); ?><br>
             <?php echo htmlspecialchars($coCity); ?><br>

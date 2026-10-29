@@ -493,7 +493,7 @@ showMenu();
                     </div>
 
                     <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> <?php echo lang("@Save changes"); ?></button>
-                    <a href="translation_manager.php" class="btn btn-secondary"><?php echo lang("@Cancel"); ?></a>
+                    <a href="translation_manager.php" class="btn btn-secondary" data-hint="<?php echo lang('@Discard the changes and return to the overview'); ?>"><?php echo lang("@Cancel"); ?></a>
                 </form>
             <?php endif; ?>
         </div>

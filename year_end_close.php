@@ -73,10 +73,11 @@ if ($fy_check) {
 // egenkapitalkonto, selv når migrate_equity_account.php var kørt korrekt.
 // -------------------------------------------------------------------------
 $acc_options = ['' => '-- ' . lang('@Select Account') . ' --'];
-$acc_res = DB::query($conn, "SELECT acc_id, acc_name, acc_type FROM accounts WHERE acc_type = 'equity' ORDER BY acc_id ASC");
+require_once __DIR__ . '/inc/accounts.inc.php';     // valglisten: slukkede konti udeladt, dæmpede nederst
+$acc_res = DB::query($conn, "SELECT acc_id, acc_name, acc_type" . acc_status_col($conn) . " FROM accounts WHERE acc_type = 'equity' AND " . acc_visible_sql($conn) . " ORDER BY " . acc_order_sql($conn) . "acc_id ASC");
 if ($acc_res) {
     while ($a = DB::fetch_assoc($acc_res)) {
-        $acc_options[$a['acc_id']] = $a['acc_id'] . ' - ' . $a['acc_name'];
+        $acc_options[$a['acc_id']] = $a['acc_id'] . ' - ' . acc_label($a['acc_name'], $a['acc_status'] ?? null);
     }
 }
 $has_equity_accounts = (count($acc_options) > 1);
@@ -274,13 +275,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_close'])) {
             // RETTET (§currency-setting-is-cosmetic-label): journal.currency
             // blev altid sat til hardkodet 'DKK', uanset firmaets faktisk
             // konfigurerede bogføringsvaluta.
-            DB::insert($conn, 'journal', [
+            $jou_insert_data = [
                 'jou_date'   => $period_end,
                 'jou_text'   => lang('@Year-end closing') . ' ' . $period_start . ' - ' . $period_end,
                 'trans_type' => 'year_end_close',
                 'currency'   => $global_settings['currency'] ?? 'DKK',
                 'voucher_no' => $voucher_no
-            ]);
+            ];
+            // NYT (BEK 811/2026-gennemgang, [[digital-standard-bookkeeping-registration-goal]]):
+            // bruger-id for hvem der lukkede regnskabsåret - dette array-baserede
+            // DB::insert()-kald (i modsætning til de øvrige 13 raw-SQL-steder)
+            // bruger journal_created_by_sql()'s kolonne-fund blot til at afgøre
+            // OM nøglen skal tilføjes, ikke selve SQL-fragmentet.
+            if (journal_created_by_sql($conn)['col'] !== '') {
+                $jou_insert_data['created_by'] = (int)($_SESSION['user_id'] ?? 0);
+            }
+            DB::insert($conn, 'journal', $jou_insert_data);
             $jou_id = DB::insert_id($conn);
 
             // Bogfør nulstillings-linjerne for hver income/expense-konto. Via
@@ -318,6 +328,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_close'])) {
             log_action($conn, 'YEAR_END_CLOSE', 'journal', $jou_id, null,
                 ['period' => "$period_start - $period_end", 'net_result' => $net_result, 'equity_acc' => $equity_acc]);
 
+            // RETTET: det NÆSTE regnskabsår blev aldrig oprettet - regnskabsår oprettes ellers kun af installations-
+            // migreringen (db-setup/migrate_fiscal_years.php). Efter den første lukning fandtes intet åbent år, og
+            // næste års afslutning kunne ikke laves ("Ingen åbne regnskabsår"). Året efter oprettes nu her (12 måneder).
+            $ny_start = date('Y-m-d', strtotime($period_end . ' +1 day'));
+            $ny_end   = date('Y-m-d', strtotime($ny_start . ' +12 months -1 day'));      // (et forlænget første år efterfølges af et almindeligt år)
+            if (!DB::fetch_assoc(DB::query($conn, "SELECT year_id FROM fiscal_years WHERE start_date <= '$ny_start' AND end_date >= '$ny_start'"))) {
+                DB::insert($conn, 'fiscal_years', ['start_date' => $ny_start, 'end_date' => $ny_end, 'is_closed' => 0]);
+            }
+
             DB::commit($conn);
           } catch (Exception $e) {
             DB::rollback($conn);
@@ -352,6 +371,40 @@ if (empty($open_years)) {
     // VIS FORHÅNDSVISNING + BEKRÆFT-FORMULAR (intet er bogført endnu)
     // -------------------------------------------------------------------
     echo '<p style="font-size:0.9em; color:var(--text-muted);">' . lang('@Review the calculation below. Nothing has been posted yet.') . '</p>';
+
+    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 25): ingen
+    // advarsel fandtes om løse ender inden for den periode der lukkes - en
+    // fakturakladde/ubogført udgift dateret ind i året BLIVER IKKE med i
+    // selve nulstillingen ovenfor (calc_closing_lines() læser kun fra
+    // ledger/journal, altså kun det der reelt er bogført), men efterlades
+    // stille i et regnskabsår der ellers fremstår "lukket". Rent INFORMATIV -
+    // blokerer bevidst IKKE selve lukningen (det er bogholderens egen
+    // vurdering), samme "gør opmærksom, ikke stop"-princip som index.php's
+    // "Mine opgaver"-tællere.
+    $ps_chk = DB::escape($conn, $posted_period_start);
+    $pe_chk = DB::escape($conn, $posted_period_end);
+    $checklist = [];
+
+    $r = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM invoices WHERE LOWER(inv_status) = 'draft' AND inv_date BETWEEN '$ps_chk' AND '$pe_chk'"));
+    if ($r && (int)$r[0] > 0) $checklist[] = sprintf(lang('@%d draft invoice(s) dated within this period - they will not be included in the closing entry.'), (int)$r[0]);
+
+    $r = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM expenses WHERE voucher_no IS NULL AND is_cancelled = 0 AND exp_date BETWEEN '$ps_chk' AND '$pe_chk'"));
+    if ($r && (int)$r[0] > 0) $checklist[] = sprintf(lang('@%d unposted expense(s) dated within this period - they will not be included in the closing entry.'), (int)$r[0]);
+
+    $r = @DB::query($conn, "SELECT COUNT(*) FROM bank_statement_temp WHERE is_processed = 0 AND trans_date BETWEEN '$ps_chk' AND '$pe_chk'");
+    $r = $r ? DB::fetch_row($r) : null;
+    if ($r && (int)$r[0] > 0) $checklist[] = sprintf(lang('@%d unreconciled bank line(s) dated within this period.'), (int)$r[0]);
+    // RETTET: webbutikkens dagssalg der endnu ikke er bogført (model B, "venter på dagen") blev ikke nævnt - efter
+    // lukningen ligger dagene i en låst periode og kan ALDRIG bogføres (shop_book_days() springer dem over)
+    $r = @DB::query($conn, "SELECT COUNT(DISTINCT order_date) FROM shop_orders WHERE status = 'pending_day' AND order_date BETWEEN '$ps_chk' AND '$pe_chk'");
+    $r = $r ? DB::fetch_row($r) : null;
+    if ($r && (int)$r[0] > 0) $checklist[] = sprintf(lang('@%d day(s) of web shop sales within this period are not booked yet - book them under Web shops first.'), (int)$r[0]);
+
+    if (!empty($checklist)) {
+        htm_Banner('<i class="fa-solid fa-triangle-exclamation"></i> ' . lang('@Open items found within this period:') . '<ul style="margin:8px 0 0 20px; padding:0;">'
+            . implode('', array_map(fn($t) => '<li>' . htmlspecialchars($t) . '</li>', $checklist))
+            . '</ul>', 'warning');
+    }
 
     $headers = ['@Account', '@Type', '@Balance'];
     $rows = [];

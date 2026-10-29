@@ -124,7 +124,7 @@ htm_Card_('@New User Account', '400');
         <button type="submit" name="create_user" style="flex:2; padding:12px; font-weight:bold; cursor:pointer; border:none; border-radius:4px; background:#2ecc71; color:white;">
             👤 <?php echo lang('@Create User'); ?>
         </button>
-        <a href="user_list.php" style="flex:1; background:#95a5a6; color:white; text-decoration:none; padding:12px; border-radius:4px; text-align:center; font-weight:bold; line-height:1.2;">
+        <a href="user_list.php" data-hint="<?php echo lang('@Return to the user list without creating the user'); ?>" style="flex:1; background:#95a5a6; color:white; text-decoration:none; padding:12px; border-radius:4px; text-align:center; font-weight:bold; line-height:1.2;">
             <?php echo lang('@Cancel'); ?>
         </a>
     </div>

@@ -1,0 +1,846 @@
+<!doctype html>
+<!-- /backup_decrypt_offline.html v:1.1.0 d:2026-08-14 i:evs
+     Selvstændig, offline-egnet dekrypteringsside til .zip.enc backup-filer
+     fra inc/auto_backup.inc.php. Bevidst UDEN PHP/DB/auth-afhængighed: skal
+     virke selv hvis serveren, databasen eller login er utilgængelig — det er
+     netop katastrofescenariet den er lavet til. Kør intet build-trin på denne
+     fil; den skal forblive én selvstændig fil man også kan gemme lokalt uden
+     for serveren (Ctrl/Cmd+S), jf. backup-system-model.
+     v1.1.0: klient-side sprogvalg (da/en) via I18N-objekt + localStorage,
+     da appens egen lang()/$_SESSION['lang'] ikke er tilgængelig uden PHP. -->
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Åbn en krypteret backup — TinyCash</title>
+<style>
+  :root {
+    --ground: #F3F6F5;
+    --surface: #FFFFFF;
+    --surface-2: #EAF0EE;
+    --ink: #172223;
+    --ink-muted: #57696A;
+    --accent: #2E6E6B;
+    --accent-strong: #1F5250;
+    --accent-ink: #FFFFFF;
+    --success: #1E7A4C;
+    --success-bg: #E4F5EC;
+    --danger: #AE3323;
+    --danger-bg: #FBEAE6;
+    --line: rgba(23,34,35,0.13);
+    --line-strong: rgba(23,34,35,0.26);
+    --shadow: 0 1px 2px rgba(23,34,35,0.04), 0 8px 24px -12px rgba(23,34,35,0.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0F1618;
+      --surface: #182224;
+      --surface-2: #1E2A2C;
+      --ink: #E7EFED;
+      --ink-muted: #93A6A5;
+      --accent: #5CB6AD;
+      --accent-strong: #85CCC3;
+      --accent-ink: #07211F;
+      --success: #52DE9A;
+      --success-bg: #103322;
+      --danger: #F0897C;
+      --danger-bg: #391714;
+      --line: rgba(231,239,237,0.14);
+      --line-strong: rgba(231,239,237,0.26);
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0F1618;
+    --surface: #182224;
+    --surface-2: #1E2A2C;
+    --ink: #E7EFED;
+    --ink-muted: #93A6A5;
+    --accent: #5CB6AD;
+    --accent-strong: #85CCC3;
+    --accent-ink: #07211F;
+    --success: #52DE9A;
+    --success-bg: #103322;
+    --danger: #F0897C;
+    --danger-bg: #391714;
+    --line: rgba(231,239,237,0.14);
+    --line-strong: rgba(231,239,237,0.26);
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    margin: 0;
+    padding: 56px 20px 72px;
+  }
+
+  h1, h2, .eyebrow, .step-title {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Noto Serif", Georgia, serif;
+  }
+
+  code, pre, .mono, .file-chip .fname, .pw-row input {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "Roboto Mono", monospace;
+  }
+
+  .page {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  /* ---------- Topbar ---------- */
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .back-link {
+    font-size: 13.5px;
+    color: var(--ink-muted);
+    text-decoration: none;
+  }
+  .back-link:hover { color: var(--accent); }
+
+  .lang-switch {
+    display: flex;
+    gap: 2px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 3px;
+  }
+  .lang-btn {
+    border: none;
+    background: transparent;
+    color: var(--ink-muted);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 6px 13px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .lang-btn[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .lang-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- Masthead ---------- */
+
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 40px;
+  }
+
+  .mark {
+    width: 46px;
+    height: 46px;
+    color: var(--accent);
+  }
+  .mark .shackle {
+    transform-origin: 24px 20px;
+    transition: transform 0.5s cubic-bezier(.2,.9,.3,1.3);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mark .shackle { transition: none; }
+  }
+  .mark.unlocked .shackle {
+    transform: translateY(-5px) rotate(-18deg);
+  }
+
+  .eyebrow {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+
+  h1 {
+    font-size: clamp(28px, 4vw, 34px);
+    line-height: 1.15;
+    font-weight: 600;
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+
+  .lede {
+    color: var(--ink-muted);
+    max-width: 58ch;
+    margin: 0;
+    font-size: 15.5px;
+  }
+
+  .lede code { color: var(--ink); background: var(--surface-2); padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.92em; }
+
+  /* ---------- Tool card ---------- */
+
+  .tool-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 8px 28px 28px;
+  }
+
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .step {
+    padding: 22px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .step:last-child { border-bottom: none; padding-bottom: 6px; }
+
+  .step-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .step-num {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .step-title {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+
+  .step-body { padding-left: 38px; }
+
+  .hint-text {
+    margin: 10px 0 0;
+    font-size: 13.5px;
+    color: var(--ink-muted);
+  }
+  .hint-text code { background: var(--surface-2); padding: 0.05em 0.35em; border-radius: 4px; }
+
+  /* Dropzone */
+  .dropzone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border: 1.5px dashed var(--line-strong);
+    border-radius: 10px;
+    padding: 22px 16px;
+    cursor: pointer;
+    background: var(--surface-2);
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .dropzone:hover { border-color: var(--accent); }
+  .dropzone.dragover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface-2)); }
+  .dropzone input[type="file"] {
+    position: absolute;
+    width: 1px; height: 1px;
+    opacity: 0; overflow: hidden;
+  }
+  .dropzone:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .dz-text { color: var(--ink); font-size: 14.5px; }
+  .dz-hint { color: var(--ink-muted); font-size: 12.5px; }
+
+  .file-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 0;
+    font-size: 13.5px;
+    color: var(--ink);
+  }
+  .file-chip .fname { font-weight: 600; word-break: break-all; }
+  .file-chip .fsize { color: var(--ink-muted); flex: none; font-variant-numeric: tabular-nums; }
+
+  /* Password row */
+  .pw-row {
+    display: flex;
+    gap: 8px;
+  }
+  .pw-row input {
+    flex: 1;
+    min-width: 0;
+    font-size: 15px;
+    padding: 11px 13px;
+    border-radius: 9px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .pw-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .pw-toggle {
+    flex: none;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-2);
+    color: var(--ink);
+    border-radius: 9px;
+    padding: 0 16px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .pw-toggle:hover { border-color: var(--accent); }
+  .pw-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* Primary button */
+  .primary-btn {
+    width: 100%;
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: 15.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.05s ease;
+  }
+  .primary-btn:hover:not(:disabled) { background: var(--accent-strong); }
+  .primary-btn:active:not(:disabled) { transform: translateY(1px); }
+  .primary-btn:disabled { background: var(--surface-2); color: var(--ink-muted); cursor: not-allowed; }
+  .primary-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Status */
+  .status {
+    margin-top: 18px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .status.ok { background: var(--success-bg); color: var(--success); }
+  .status.err { background: var(--danger-bg); color: var(--danger); }
+  .status.busy { background: var(--surface-2); color: var(--ink-muted); }
+  .status strong { display: block; color: var(--ink); font-size: 14.5px; margin-bottom: 2px; }
+  .status .icon { flex: none; width: 18px; height: 18px; margin-top: 1px; }
+
+  /* Tech details */
+  .tech-details {
+    margin-top: 22px;
+    font-size: 14px;
+  }
+  .tech-details summary {
+    cursor: pointer;
+    color: var(--ink-muted);
+    font-weight: 600;
+    padding: 6px 2px;
+  }
+  .tech-details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tech-body {
+    padding: 14px 2px 4px;
+  }
+  .tech-body dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 18px;
+    margin: 0 0 14px;
+    font-size: 13.5px;
+  }
+  .tech-body dt { color: var(--ink-muted); }
+  .tech-body dd { margin: 0; color: var(--ink); }
+  .tech-body p { margin: 0 0 6px; font-size: 13.5px; color: var(--ink-muted); }
+  .tech-body pre {
+    margin: 0;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 12.5px;
+    overflow-x: auto;
+    color: var(--ink);
+  }
+
+  /* Footer */
+  .privacy-note {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-top: 34px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-muted);
+    font-size: 13px;
+  }
+  .privacy-note svg { flex: none; width: 18px; height: 18px; margin-top: 2px; color: var(--accent); }
+  .privacy-note p { margin: 0; max-width: 56ch; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="topbar">
+    <a class="back-link" id="backLink" href="backup.php">&larr; Tilbage til Backup</a>
+    <div class="lang-switch" role="group" aria-label="Sprog / Language">
+      <button type="button" class="lang-btn" id="langDaBtn" data-lang="da" aria-pressed="true">Dansk</button>
+      <button type="button" class="lang-btn" id="langEnBtn" data-lang="en" aria-pressed="false">English</button>
+    </div>
+  </div>
+
+  <header class="masthead">
+    <svg class="mark" id="lockMark" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="10" y="21" width="28" height="21" rx="4" fill="currentColor"/>
+      <path class="shackle" d="M16 21v-5a8 8 0 0 1 16 0v5" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <circle cx="24" cy="30" r="2.6" fill="var(--surface)"/>
+      <rect x="22.6" y="30" width="2.8" height="7" rx="1.2" fill="var(--surface)"/>
+    </svg>
+    <p class="eyebrow" id="eyebrow">TinyCash &middot; Katastrofegendannelse</p>
+    <h1 id="h1">Åbn en krypteret backup</h1>
+    <p class="lede" id="lede">Dekrypterer en <code>.zip.enc</code>-fil fra en TinyCash backup-mail til en almindelig ZIP-fil. Kører udelukkende i din browsers hukommelse — ingenting sendes over internettet.</p>
+  </header>
+
+  <main class="tool-card">
+    <ol class="steps">
+
+      <li class="step">
+        <div class="step-head"><span class="step-num">1</span><span class="step-title" id="step1Title">Vælg den krypterede fil</span></div>
+        <div class="step-body">
+          <label class="dropzone" id="dropzone" for="fileInput">
+            <input type="file" id="fileInput" accept=".enc" />
+            <span class="dz-text" id="dzText">Klik for at vælge, eller træk filen hertil<br><span class="dz-hint">tinycash_backup_&hellip;.zip.enc</span></span>
+          </label>
+          <p class="file-chip" id="fileChip" hidden>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+            <span class="fname" id="fname"></span>
+            <span class="fsize" id="fsize"></span>
+          </p>
+        </div>
+      </li>
+
+      <li class="step">
+        <div class="step-head"><span class="step-num">2</span><span class="step-title" id="step2Title">Indtast master-kodeordet</span></div>
+        <div class="step-body">
+          <div class="pw-row">
+            <input type="password" id="pwInput" placeholder="Master-kodeord" autocomplete="off" spellcheck="false" />
+            <button type="button" class="pw-toggle" id="pwToggle" aria-label="Vis kodeord">Vis</button>
+          </div>
+          <p class="hint-text" id="pwHint">Det kodeord du selv gemte, da du satte <code>BACKUP_PASSWORD</code> op i <code>env.ini</code> — det står <strong>ikke</strong> i selve mailen.</p>
+        </div>
+      </li>
+
+      <li class="step">
+        <div class="step-head"><span class="step-num">3</span><span class="step-title" id="step3Title">Dekryptér</span></div>
+        <div class="step-body">
+          <button type="button" class="primary-btn" id="decryptBtn" disabled>Vælg fil og kodeord først</button>
+        </div>
+      </li>
+
+    </ol>
+
+    <div class="status" id="status" role="status" aria-live="polite" hidden></div>
+  </main>
+
+  <details class="tech-details">
+    <summary id="techSummary">Tekniske detaljer</summary>
+    <div class="tech-body">
+      <dl>
+        <dt id="techKeyDerivationTerm">Nøgleudledning</dt><dd id="techKeyDerivationDesc">PBKDF2-HMAC-SHA256, 10.000 iterationer, 48 byte (32 nøgle + 16 IV)</dd>
+        <dt id="techEncryptionTerm">Kryptering</dt><dd id="techEncryptionDesc">AES-256-CBC med PKCS7-udfyldning</dd>
+        <dt id="techFormatTerm">Filformat</dt><dd id="techFormatDesc"><code>"Salted__"</code> (8 byte) + salt (8 byte) + ciffertekst</dd>
+      </dl>
+      <p id="techCliIntro">Svarer til denne kommando, hvis du hellere vil bruge en terminal:</p>
+      <pre id="techCliPre">openssl enc -d -aes-256-cbc -pbkdf2 -md sha256 \
+  -in fil.zip.enc -out backup.zip -pass pass:KODEORD</pre>
+    </div>
+  </details>
+
+  <footer class="privacy-note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    <p id="privacyNote">Både filen og kodeordet forbliver i din browsers hukommelse — intet uploades eller sendes nogen steder. Gem denne side som en HTML-fil på din computer (Ctrl/Cmd + S), så den også virker uden internetforbindelse eller en kørende server, den dag du får brug for den.</p>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- i18n ----------
+
+  var I18N = {
+    da: {
+      pageTitle: 'Åbn en krypteret backup — TinyCash',
+      backLink: '← Tilbage til Backup',
+      eyebrow: 'TinyCash · Katastrofegendannelse',
+      h1: 'Åbn en krypteret backup',
+      lede: 'Dekrypterer en <code>.zip.enc</code>-fil fra en TinyCash backup-mail til en almindelig ZIP-fil. Kører udelukkende i din browsers hukommelse — ingenting sendes over internettet.',
+      step1Title: 'Vælg den krypterede fil',
+      dzInitial: 'Klik for at vælge, eller træk filen hertil<br><span class="dz-hint">tinycash_backup_&hellip;.zip.enc</span>',
+      dzChosen: 'Anden fil? Klik for at vælge, eller træk hertil<br><span class="dz-hint">tinycash_backup_&hellip;.zip.enc</span>',
+      step2Title: 'Indtast master-kodeordet',
+      pwPlaceholder: 'Master-kodeord',
+      pwShow: 'Vis',
+      pwHide: 'Skjul',
+      pwHint: 'Det kodeord du selv gemte, da du satte <code>BACKUP_PASSWORD</code> op i <code>env.ini</code> — det står <strong>ikke</strong> i selve mailen.',
+      step3Title: 'Dekryptér',
+      btnReady: 'Dekryptér og hent ZIP',
+      btnNoFile: 'Vælg en fil først',
+      btnNoPw: 'Indtast kodeordet',
+      techSummary: 'Tekniske detaljer',
+      techKeyDerivationTerm: 'Nøgleudledning',
+      techKeyDerivationDesc: 'PBKDF2-HMAC-SHA256, 10.000 iterationer, 48 byte (32 nøgle + 16 IV)',
+      techEncryptionTerm: 'Kryptering',
+      techEncryptionDesc: 'AES-256-CBC med PKCS7-udfyldning',
+      techFormatTerm: 'Filformat',
+      techFormatDesc: '<code>"Salted__"</code> (8 byte) + salt (8 byte) + ciffertekst',
+      techCliIntro: 'Svarer til denne kommando, hvis du hellere vil bruge en terminal:',
+      techCliPre: 'openssl enc -d -aes-256-cbc -pbkdf2 -md sha256 \\\n  -in fil.zip.enc -out backup.zip -pass pass:KODEORD',
+      privacy: 'Både filen og kodeordet forbliver i din browsers hukommelse — intet uploades eller sendes nogen steder. Gem denne side som en HTML-fil på din computer (Ctrl/Cmd + S), så den også virker uden internetforbindelse eller en kørende server, den dag du får brug for den.',
+      statusBusyTitle: 'Dekrypterer …',
+      statusBusyDetail: '<br>Beregner nøgle og låser filen op.',
+      statusOkTitle: 'Låst op — download startet',
+      statusOkDetail: function (name, size) {
+        return '<br><span class="mono">' + name + '</span> (' + size + ') blev gemt via din browsers download-mappe. Pak den ud som en almindelig ZIP.';
+      },
+      statusZipWrongTitle: 'Dekrypteret, men ser forkert ud',
+      statusZipWrongDetail: function (name) {
+        return '<br>Filen blev låst op og gemt som <span class="mono">' + name + '</span>, men starter ikke med en gyldig ZIP-signatur. Tjek at kodeordet er korrekt — prøv igen med det rigtige master-kodeord.';
+      },
+      statusBadFormatTitle: 'Ikke en genkendt backup-fil',
+      statusBadFormatDetail: '<br>Filen starter ikke med "Salted__". Er det den rigtige <span class="mono">.zip.enc</span>-fil fra backup-mailen?',
+      statusTooShortTitle: 'Filen er for lille',
+      statusTooShortDetail: '<br>Den valgte fil er for kort til at være en gyldig krypteret backup.',
+      statusWrongPwTitle: 'Forkert kodeord eller beskadiget fil',
+      statusWrongPwDetail: '<br>Dekrypteringen fejlede. Tjek master-kodeordet og prøv igen.'
+    },
+    en: {
+      pageTitle: 'Open an Encrypted Backup — TinyCash',
+      backLink: '← Back to Backup',
+      eyebrow: 'TinyCash · Disaster Recovery',
+      h1: 'Open an Encrypted Backup',
+      lede: 'Decrypts a <code>.zip.enc</code> file from a TinyCash backup email into a normal ZIP file. Runs entirely in your browser’s memory — nothing is ever sent over the internet.',
+      step1Title: 'Select the encrypted file',
+      dzInitial: 'Click to choose, or drag the file here<br><span class="dz-hint">tinycash_backup_&hellip;.zip.enc</span>',
+      dzChosen: 'Different file? Click to choose, or drag it here<br><span class="dz-hint">tinycash_backup_&hellip;.zip.enc</span>',
+      step2Title: 'Enter the master password',
+      pwPlaceholder: 'Master password',
+      pwShow: 'Show',
+      pwHide: 'Hide',
+      pwHint: 'The password you saved yourself when you set up <code>BACKUP_PASSWORD</code> in <code>env.ini</code> — it is <strong>not</strong> in the email itself.',
+      step3Title: 'Decrypt',
+      btnReady: 'Decrypt and download ZIP',
+      btnNoFile: 'Choose a file first',
+      btnNoPw: 'Enter the password',
+      techSummary: 'Technical details',
+      techKeyDerivationTerm: 'Key derivation',
+      techKeyDerivationDesc: 'PBKDF2-HMAC-SHA256, 10,000 iterations, 48 bytes (32-byte key + 16-byte IV)',
+      techEncryptionTerm: 'Encryption',
+      techEncryptionDesc: 'AES-256-CBC with PKCS7 padding',
+      techFormatTerm: 'File format',
+      techFormatDesc: '<code>"Salted__"</code> (8 bytes) + salt (8 bytes) + ciphertext',
+      techCliIntro: 'Equivalent to this command, if you’d rather use a terminal:',
+      techCliPre: 'openssl enc -d -aes-256-cbc -pbkdf2 -md sha256 \\\n  -in file.zip.enc -out backup.zip -pass pass:PASSWORD',
+      privacy: 'Both the file and the password stay in your browser’s memory — nothing is uploaded or sent anywhere. Save this page as an HTML file on your computer (Ctrl/Cmd + S), so it also works without an internet connection or a running server, the day you actually need it.',
+      statusBusyTitle: 'Decrypting …',
+      statusBusyDetail: '<br>Computing the key and unlocking the file.',
+      statusOkTitle: 'Unlocked — download started',
+      statusOkDetail: function (name, size) {
+        return '<br><span class="mono">' + name + '</span> (' + size + ') was saved via your browser’s downloads folder. Unzip it as a normal ZIP archive.';
+      },
+      statusZipWrongTitle: 'Decrypted, but it looks wrong',
+      statusZipWrongDetail: function (name) {
+        return '<br>The file was unlocked and saved as <span class="mono">' + name + '</span>, but it doesn’t start with a valid ZIP signature. Check that the password is correct — try again with the right master password.';
+      },
+      statusBadFormatTitle: 'Not a recognized backup file',
+      statusBadFormatDetail: '<br>The file doesn’t start with "Salted__". Is this the right <span class="mono">.zip.enc</span> file from the backup email?',
+      statusTooShortTitle: 'The file is too small',
+      statusTooShortDetail: '<br>The selected file is too short to be a valid encrypted backup.',
+      statusWrongPwTitle: 'Wrong password or corrupted file',
+      statusWrongPwDetail: '<br>Decryption failed. Check the master password and try again.'
+    }
+  };
+
+  var STORAGE_KEY = 'tinycash_decryptor_lang';
+  var currentLang = 'da';
+  var lastStatus = null; // { kind, key, args } - til at gen-oversætte et allerede vist resultat
+
+  // ---------- DOM refs ----------
+
+  var fileInput   = document.getElementById('fileInput');
+  var dropzone    = document.getElementById('dropzone');
+  var dzText      = document.getElementById('dzText');
+  var fileChip    = document.getElementById('fileChip');
+  var fnameEl     = document.getElementById('fname');
+  var fsizeEl     = document.getElementById('fsize');
+  var pwInput     = document.getElementById('pwInput');
+  var pwToggle    = document.getElementById('pwToggle');
+  var decryptBtn  = document.getElementById('decryptBtn');
+  var statusEl    = document.getElementById('status');
+  var lockMark    = document.getElementById('lockMark');
+  var langDaBtn   = document.getElementById('langDaBtn');
+  var langEnBtn   = document.getElementById('langEnBtn');
+
+  var selectedFile = null;
+
+  function fmtBytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function updateButtonState() {
+    var t = I18N[currentLang];
+    var ready = !!selectedFile && pwInput.value.length > 0;
+    decryptBtn.disabled = !ready;
+    decryptBtn.textContent = ready ? t.btnReady : (!selectedFile ? t.btnNoFile : t.btnNoPw);
+  }
+
+  function setFile(file) {
+    if (!file) return;
+    selectedFile = file;
+    fnameEl.textContent = file.name;
+    fsizeEl.textContent = fmtBytes(file.size);
+    fileChip.hidden = false;
+    dzText.innerHTML = I18N[currentLang].dzChosen;
+    updateButtonState();
+  }
+
+  fileInput.addEventListener('change', function (e) {
+    if (e.target.files && e.target.files[0]) setFile(e.target.files[0]);
+  });
+
+  ['dragenter', 'dragover'].forEach(function (evt) {
+    dropzone.addEventListener(evt, function (e) {
+      e.preventDefault(); e.stopPropagation();
+      dropzone.classList.add('dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function (evt) {
+    dropzone.addEventListener(evt, function (e) {
+      e.preventDefault(); e.stopPropagation();
+      dropzone.classList.remove('dragover');
+    });
+  });
+  dropzone.addEventListener('drop', function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) setFile(f);
+  });
+
+  pwToggle.addEventListener('click', function () {
+    var t = I18N[currentLang];
+    var showing = pwInput.type === 'text';
+    pwInput.type = showing ? 'password' : 'text';
+    pwToggle.textContent = showing ? t.pwShow : t.pwHide;
+    pwToggle.setAttribute('aria-label', showing ? t.pwShow : t.pwHide);
+  });
+
+  pwInput.addEventListener('input', updateButtonState);
+
+  function renderStatus(kind, key, args) {
+    lastStatus = { kind: kind, key: key, args: args };
+    var t = I18N[currentLang];
+    var title, detail;
+    switch (key) {
+      case 'busy':      title = t.statusBusyTitle;      detail = t.statusBusyDetail; break;
+      case 'ok':        title = t.statusOkTitle;        detail = t.statusOkDetail(args.name, args.size); break;
+      case 'zipWrong':  title = t.statusZipWrongTitle;  detail = t.statusZipWrongDetail(args.name); break;
+      case 'badFormat': title = t.statusBadFormatTitle; detail = t.statusBadFormatDetail; break;
+      case 'tooShort':  title = t.statusTooShortTitle;  detail = t.statusTooShortDetail; break;
+      default:          title = t.statusWrongPwTitle;   detail = t.statusWrongPwDetail; break;
+    }
+    statusEl.hidden = false;
+    statusEl.className = 'status ' + kind;
+    var iconMap = {
+      ok:   '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>',
+      err:  '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>',
+      busy: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9" stroke-dasharray="40" stroke-dashoffset="12"/></svg>'
+    };
+    statusEl.innerHTML = (iconMap[kind] || '') +
+      '<span><strong>' + title + '</strong>' + (detail ? detail : '') + '</span>';
+  }
+
+  function bytesToBase64ascii(bytes, len) {
+    var s = '';
+    for (var i = 0; i < len; i++) s += String.fromCharCode(bytes[i]);
+    return s;
+  }
+
+  async function decrypt(fileBytes, password) {
+    if (fileBytes.length < 17) throw { code: 'TOO_SHORT' };
+
+    var magic = bytesToBase64ascii(fileBytes, 8);
+    if (magic !== 'Salted__') throw { code: 'BAD_FORMAT' };
+
+    var salt = fileBytes.slice(8, 16);
+    var ciphertext = fileBytes.slice(16);
+
+    var enc = new TextEncoder();
+    var passwordKey = await crypto.subtle.importKey(
+      'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']
+    );
+    var derivedBits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt: salt, iterations: 10000, hash: 'SHA-256' },
+      passwordKey,
+      48 * 8
+    );
+    var derived = new Uint8Array(derivedBits);
+    var keyBytes = derived.slice(0, 32);
+    var ivBytes  = derived.slice(32, 48);
+
+    var aesKey = await crypto.subtle.importKey(
+      'raw', keyBytes, { name: 'AES-CBC' }, false, ['decrypt']
+    );
+
+    var plainBuf;
+    try {
+      plainBuf = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: ivBytes }, aesKey, ciphertext);
+    } catch (e) {
+      throw { code: 'WRONG_PASSWORD' };
+    }
+
+    var plain = new Uint8Array(plainBuf);
+    // Blød ekstra-kontrol: en gyldig ZIP begynder altid med "PK".
+    var looksLikeZip = plain.length > 2 && plain[0] === 0x50 && plain[1] === 0x4B;
+    return { bytes: plain, looksLikeZip: looksLikeZip };
+  }
+
+  function triggerDownload(bytes, filename) {
+    var blob = new Blob([bytes], { type: 'application/zip' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
+  function outputFilename(inputName) {
+    if (/\.enc$/i.test(inputName)) return inputName.replace(/\.enc$/i, '');
+    return inputName + '.zip';
+  }
+
+  decryptBtn.addEventListener('click', async function () {
+    if (!selectedFile || !pwInput.value) return;
+    decryptBtn.disabled = true;
+    renderStatus('busy', 'busy');
+
+    try {
+      var buf = await selectedFile.arrayBuffer();
+      var bytes = new Uint8Array(buf);
+      var result = await decrypt(bytes, pwInput.value);
+      var outName = outputFilename(selectedFile.name);
+
+      triggerDownload(result.bytes, outName);
+      lockMark.classList.add('unlocked');
+
+      if (result.looksLikeZip) {
+        renderStatus('ok', 'ok', { name: outName, size: fmtBytes(result.bytes.length) });
+      } else {
+        renderStatus('err', 'zipWrong', { name: outName });
+      }
+    } catch (err) {
+      var code = err && err.code;
+      if (code === 'BAD_FORMAT') {
+        renderStatus('err', 'badFormat');
+      } else if (code === 'TOO_SHORT') {
+        renderStatus('err', 'tooShort');
+      } else {
+        renderStatus('err', 'wrongPw');
+      }
+    } finally {
+      updateButtonState();
+    }
+  });
+
+  // ---------- Sprogvalg ----------
+
+  function applyLang(lang) {
+    if (!I18N[lang]) lang = 'da';
+    currentLang = lang;
+    var t = I18N[lang];
+
+    document.documentElement.lang = lang;
+    document.title = t.pageTitle;
+
+    document.getElementById('backLink').textContent = t.backLink;
+    document.getElementById('eyebrow').textContent = t.eyebrow;
+    document.getElementById('h1').textContent = t.h1;
+    document.getElementById('lede').innerHTML = t.lede;
+
+    document.getElementById('step1Title').textContent = t.step1Title;
+    dzText.innerHTML = selectedFile ? t.dzChosen : t.dzInitial;
+
+    document.getElementById('step2Title').textContent = t.step2Title;
+    pwInput.placeholder = t.pwPlaceholder;
+    var showingPw = pwInput.type === 'text';
+    pwToggle.textContent = showingPw ? t.pwHide : t.pwShow;
+    pwToggle.setAttribute('aria-label', showingPw ? t.pwHide : t.pwShow);
+    document.getElementById('pwHint').innerHTML = t.pwHint;
+
+    document.getElementById('step3Title').textContent = t.step3Title;
+
+    document.getElementById('techSummary').textContent = t.techSummary;
+    document.getElementById('techKeyDerivationTerm').textContent = t.techKeyDerivationTerm;
+    document.getElementById('techKeyDerivationDesc').textContent = t.techKeyDerivationDesc;
+    document.getElementById('techEncryptionTerm').textContent = t.techEncryptionTerm;
+    document.getElementById('techEncryptionDesc').textContent = t.techEncryptionDesc;
+    document.getElementById('techFormatTerm').textContent = t.techFormatTerm;
+    document.getElementById('techFormatDesc').innerHTML = t.techFormatDesc;
+    document.getElementById('techCliIntro').textContent = t.techCliIntro;
+    document.getElementById('techCliPre').textContent = t.techCliPre;
+
+    document.getElementById('privacyNote').innerHTML = t.privacy;
+
+    langDaBtn.setAttribute('aria-pressed', lang === 'da' ? 'true' : 'false');
+    langEnBtn.setAttribute('aria-pressed', lang === 'en' ? 'true' : 'false');
+
+    updateButtonState();
+    if (lastStatus) renderStatus(lastStatus.kind, lastStatus.key, lastStatus.args);
+
+    try { localStorage.setItem(STORAGE_KEY, lang); } catch (e) { /* privat browsing e.l. - ignorér */ }
+  }
+
+  langDaBtn.addEventListener('click', function () { applyLang('da'); });
+  langEnBtn.addEventListener('click', function () { applyLang('en'); });
+
+  var savedLang = 'da';
+  try {
+    var stored = localStorage.getItem(STORAGE_KEY);
+    if (stored === 'da' || stored === 'en') savedLang = stored;
+  } catch (e) { /* privat browsing e.l. - ignorér, brug dansk som app-standard */ }
+
+  applyLang(savedLang);
+})();
+</script>
+
+</body>
+</html>

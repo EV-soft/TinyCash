@@ -110,13 +110,26 @@ $x .= '  </Header>' . "\n";
 // --- MASTERFILES: KONTOPLAN ---
 $x .= '  <MasterFiles>' . "\n";
 $x .= '    <GeneralLedgerAccounts>' . "\n";
+// RETTET: kontoplanen manglede primo- og ultimosaldo pr. konto (OpeningDebit/CreditBalance, ClosingDebit/
+// CreditBalance) - de er obligatoriske i SAF-T Financial, og uden dem kan modtageren ikke afstemme filens
+// posteringer mod saldiene. Primo = alt før perioden, ultimo = alt til og med periodens slutning.
+$saft_ps = DB::escape($conn, $period_start);  $saft_pe = DB::escape($conn, $period_end);
+$saft_bal = [];
+$bres = DB::query($conn, "SELECT l.acc_id,
+        COALESCE(SUM(CASE WHEN j.jou_date < '$saft_ps' THEN l.amount ELSE 0 END), 0) AS primo,
+        COALESCE(SUM(CASE WHEN j.jou_date <= '$saft_pe' THEN l.amount ELSE 0 END), 0) AS ultimo
+    FROM ledger l JOIN journal j ON j.jou_id = l.jou_id GROUP BY l.acc_id");
+while ($bres && ($b = DB::fetch_assoc($bres))) $saft_bal[(int)$b['acc_id']] = [round((float)$b['primo'], 2), round((float)$b['ultimo'], 2)];
 $res = DB::query($conn, "SELECT acc_id, acc_name, acc_type, std_ref_id FROM accounts ORDER BY acc_id ASC");
 while ($res && ($a = DB::fetch_assoc($res))) {
+    [$o_bal, $c_bal] = $saft_bal[(int)$a['acc_id']] ?? [0.0, 0.0];
     $x .= '      <Account>' . "\n";
     $x .= '        <AccountID>' . saft_esc($a['acc_id']) . '</AccountID>' . "\n";
     $x .= '        <AccountDescription>' . saft_esc($a['acc_name']) . '</AccountDescription>' . "\n";
     if (!empty($a['std_ref_id'])) $x .= '        <StandardAccountID>' . saft_esc($a['std_ref_id']) . '</StandardAccountID>' . "\n";
     $x .= '        <AccountType>' . saft_esc($a['acc_type']) . '</AccountType>' . "\n";
+    $x .= '        <' . ($o_bal < 0 ? 'OpeningCreditBalance' : 'OpeningDebitBalance') . '>' . saft_amt(abs($o_bal)) . '</' . ($o_bal < 0 ? 'OpeningCreditBalance' : 'OpeningDebitBalance') . '>' . "\n";
+    $x .= '        <' . ($c_bal < 0 ? 'ClosingCreditBalance' : 'ClosingDebitBalance') . '>' . saft_amt(abs($c_bal)) . '</' . ($c_bal < 0 ? 'ClosingCreditBalance' : 'ClosingDebitBalance') . '>' . "\n";
     $x .= '      </Account>' . "\n";
 }
 $x .= '    </GeneralLedgerAccounts>' . "\n";
@@ -251,7 +264,7 @@ foreach ($transactions as $jou_id => $t) {
         $x .= '        <SupplierID>' . (int)$voucher_to_supplier[$t['voucher_no']] . '</SupplierID>' . "\n";
     }
     $x .= '        <Description>' . saft_esc($t['text']) . '</Description>' . "\n";
-    $x .= '        <SystemEntryDate>' . saft_esc(date('Y-m-d\TH:i:s', strtotime($t['created_at'] ?: $t['date']))) . '</SystemEntryDate>' . "\n";
+    $x .= '        <SystemEntryDate>' . saft_esc(date('Y-m-d\TH:i:s', strtotime($t['created_at'] ? db_ts_local($t['created_at']) : $t['date'])))     /* (journal.created_at er databasens egen tid - UTC på SQLite) */ . '</SystemEntryDate>' . "\n";
     foreach ($t['lines'] as $l) {
         $x .= '        <Line>' . "\n";
         $x .= '          <RecordID>' . (int)$l['led_id'] . '</RecordID>' . "\n";
@@ -271,7 +284,7 @@ $x .= '</AuditFile>' . "\n";
 
 // --- ARKIVÉR KOPI (best-effort, samme mønster som export_oioubl.php) ---
 $filename     = 'SAFT_' . $year . '_' . date('Ymd_His') . '.xml';
-$archive_dir  = __DIR__ . '/storage/saf-t';
+$archive_dir  = rtrim(tc_account_storage_dir(__DIR__ . '/storage/saf-t'), '/');      // (eget regnskab)
 if (is_dir($archive_dir) && is_writable($archive_dir)) {
     @file_put_contents($archive_dir . '/' . $filename, $x);
 }
