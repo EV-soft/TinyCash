@@ -456,14 +456,34 @@ if ($show_account_picker) {
     // 'login.php') ovenfor) - fanges af opsamlings-koden øverst i filen,
     // hvorefter siden genindlæses og viser den almindelige login-formular.
     echo '<p style="text-align:center; color:var(--text-muted); font-size:0.9rem;">' . lang('@Choose which ledger to sign in to.') . '</p>';
+    // NYT (bruger-anmodet): regnskaberne grupperes efter databasemotor (SQLite / MySQL), så det er tydeligt hvilken
+    // motor hvert regnskab kører på - et regnskab kan ligge på hver sin motor (se account_resolve_settings()).
+    $by_engine = ['sqlite' => [], 'mysql' => []];
     foreach ($accounts as $acc) {
-        $label = htmlspecialchars($acc['name'] ?? $acc['id']);
-        $badge = !empty($acc['is_demo'])
-            ? ' <span style="font-size:0.75em; color:var(--color-warning);">(' . lang('@Demo') . ')</span>'
-            : '';
-        echo '<button type="submit" name="account_id" value="' . htmlspecialchars($acc['id'], ENT_QUOTES) . '" style="display:block; width:100%; margin-bottom:8px; padding:10px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-panel); color:var(--text-main); cursor:pointer; text-align:left; font-size:0.95rem;">'
-            . '<i class="fa fa-building" style="margin-right:8px; color:var(--color-primary);"></i>' . $label . $badge
-            . '</button>';
+        $eng = (($acc['engine'] ?? 'sqlite') === 'mysql') ? 'mysql' : 'sqlite';
+        $by_engine[$eng][] = $acc;
+    }
+    $eng_meta = ['sqlite' => ['SQLite', 'fa-database'], 'mysql' => ['MySQL', 'fa-server']];
+    $multi_engine = !empty($by_engine['sqlite']) && !empty($by_engine['mysql']);
+    foreach ($by_engine as $eng => $list) {
+        if (!$list) continue;
+        if ($multi_engine) {
+            echo '<div style="display:flex; align-items:center; gap:8px; margin:14px 2px 6px; color:var(--text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.5px;">'
+                . '<i class="fa ' . $eng_meta[$eng][1] . '"></i> ' . htmlspecialchars($eng_meta[$eng][0])
+                . '<span style="flex:1; height:1px; background:var(--border-color);"></span></div>';
+        }
+        foreach ($list as $acc) {
+            $label = htmlspecialchars($acc['name'] ?? $acc['id']);
+            $badge = !empty($acc['is_demo'])
+                ? ' <span style="font-size:0.75em; color:var(--color-warning);">(' . lang('@Demo') . ')</span>'
+                : '';
+            // Motoren vises også som et lille mærke til højre, så den er synlig selv når der kun er én motor
+            $eng_badge = '<span style="float:right; font-size:0.72em; color:var(--text-muted); border:1px solid var(--border-color); border-radius:8px; padding:1px 7px;">'
+                . '<i class="fa ' . $eng_meta[$eng][1] . '" style="margin-right:4px;"></i>' . htmlspecialchars($eng_meta[$eng][0]) . '</span>';
+            echo '<button type="submit" name="account_id" value="' . htmlspecialchars($acc['id'], ENT_QUOTES) . '" style="display:block; width:100%; margin-bottom:8px; padding:10px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-panel); color:var(--text-main); cursor:pointer; text-align:left; font-size:0.95rem;">'
+                . '<i class="fa fa-building" style="margin-right:8px; color:var(--color-primary);"></i>' . $label . $badge . $eng_badge
+                . '</button>';
+        }
     }
     htm_Card_end();
     echo '</div>';

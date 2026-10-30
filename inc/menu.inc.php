@@ -224,6 +224,7 @@ function get_menu_structure($conn): array {
                         'backup_test_restore.php' => '🧪 ' . lang('@Backup Test Restore'),
                         'setup_chart.php'         => ['label' => '📑 ' . lang('@Chart of Accounts Proposal'), 'hint' => lang('@Only Danish layout')],
                         'run_migrate.php'         => ['label' => '📦 ' . lang('@Database migration'),         'hint' => lang('@Update database structure')],
+                        'db-setup/migrate_engine.php' => ['label' => '🔀 ' . lang('@Convert Database Engine'),  'hint' => lang('@Convert the ledger between SQLite and MySQL')],
                         'translation_manager.php' => '🌐 ' . lang('@Language Editor'),
                         'error_log.php'           => '⚠️ ' . lang('@Error Log'),
                         'audit_log.php'           => '📜 ' . lang('@Audit Log'),
@@ -625,7 +626,18 @@ function showMenu() {
     }
     function toggleTestLevel(currentLevel) {
         var next = currentLevel + 1; if (next > 3) next = 1;
-        window.location.href = window.location.href.split("?")[0] + "?set_level=" + next;
+        // RETTET: byggede FØR URL\x27en som href.split("?")[0] + "?set_level=" - men et "#" i adressen (fx efter et
+        // klik paa et href="#"-undermenu-/hjaelpe-link) blev haengende, saa "?set_level=" endte INDE i fragmentet
+        // ("side#?set_level=2") og aldrig naaede serveren: niveauet skiftede ikke. URL-API\x27et fjerner fragmentet
+        // og saetter parameteren korrekt, uanset hvad der ellers staar i adressen.
+        try {
+            var u = new URL(window.location.href);
+            u.hash = "";
+            u.searchParams.set("set_level", next);
+            window.location.href = u.toString();
+        } catch (e) {
+            window.location.href = window.location.pathname + "?set_level=" + next;
+        }
     }
     function toggleLangMenu(e) {
         e.stopPropagation();

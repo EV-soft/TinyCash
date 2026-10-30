@@ -223,12 +223,23 @@ echo '<!DOCTYPE html><html><head>
 
     /* UI-elementer */
     .no-print { width:210mm; margin:10px auto; text-align:right; }
+    /* Knap-rækken: ÉN linje der flyder ud til højre (bruger-anmodet), med vandret scroll hvis der bliver for mange
+       knapper. E-mailbeskeden ligger nedenunder, ikke i knap-rækken. */
+    .inv-toolbar { width:210mm; margin:5px auto; }
+    .inv-btn-row { display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; }
+    .inv-mail-below { margin-top:10px; text-align:left; }
+    .inv-mail-below fieldset { width:100% !important; }
     .alert-sent-success { width:210mm; margin:0 auto 15px; background:var(--status-paid); color:var(--text-light); padding:15px; border-radius:4px; font-weight:bold; text-align:center; box-sizing:border-box; box-shadow:0 2px 4px rgba(0,0,0,0.05); }
 
     /* Floating knapper */
     #floating-menu-id, .floating-action-bar:not(.custom-bottom-right) { display:none !important; }
-    .floating-action-bar.custom-bottom-right { position:fixed !important; bottom:20px !important; right:80px !important; left:auto !important; width:auto !important; display:block !important; z-index:999991 !important; }
-    .floating-action-bar.custom-bottom-right .fab-item { margin:0 !important; padding:10px 15px !important; border-radius:4px !important; box-shadow:0 4px 6px rgba(0,0,0,0.15) !important; text-decoration:none !important; color:var(--text-light) !important; font-family:sans-serif !important; font-size:13px !important; display:flex !important; align-items:center !important; justify-content:center !important; min-width:90px !important; box-sizing:border-box !important; }
+    /* De tre runde knapper nede th skal være ens, mindre (40px) og flugte lodret i højre kant */
+    .floating-action-bar.custom-bottom-right { position:fixed !important; bottom:116px !important; right:10px !important; left:auto !important; width:auto !important; display:block !important; z-index:999991 !important; }
+    .floating-action-bar.custom-bottom-right .fab-item { margin:0 !important; padding:0 !important; border-radius:50% !important; box-shadow:0 4px 10px rgba(0,0,0,0.3) !important; text-decoration:none !important; color:var(--text-light) !important; font-family:sans-serif !important; font-size:0 !important; display:flex !important; align-items:center !important; justify-content:center !important; min-width:0 !important; width:40px !important; height:40px !important; box-sizing:border-box !important; }
+    .floating-action-bar.custom-bottom-right .fab-item i { font-size:18px !important; margin:0 !important; }
+    /* Søg og notesblok (globale knapper) tilpasses samme størrelse/kant */
+    a.no-print[href="search.php"] { width:40px !important; height:40px !important; bottom:68px !important; right:10px !important; font-size:18px !important; }
+    button.no-print[onclick="toggleGlobalNotes()"] { width:40px !important; height:40px !important; bottom:20px !important; right:10px !important; font-size:18px !important; }
     #fab-scroll-top { margin:0 0 10px !important; padding:10px 15px !important; border-radius:4px !important; box-shadow:0 4px 6px rgba(0,0,0,0.15) !important; text-decoration:none !important; color:var(--text-light) !important; font-family:sans-serif !important; font-size:13px !important; display:none; align-items:center !important; justify-content:center !important; min-width:90px !important; box-sizing:border-box !important; background:var(--btn-scroll) !important; cursor:pointer !important; position:fixed !important; bottom:65px !important; right:20px !important; z-index:999990 !important; }
     #fab-scroll-top:hover { background:var(--btn-scroll-hover) !important; }
 
@@ -303,10 +314,9 @@ if (isset($_GET['msg']) && !$is_sent_view) {
     }
 }
 
-// ── Topbar med knapper ────────────────────────────────────────────────────────
-echo '<div class="no-print" style="width:210mm; margin:5px auto; display:flex; justify-content:space-between; align-items:flex-end;">';
-echo '<div style="display:flex; align-items:flex-end;"></div>';
-echo '<div style="display:flex; align-items:flex-end; gap:15px;">';
+// ── Topbar: knapperne på ÉN linje der flyder til højre, e-mailbeskeden nedenunder (bruger-anmodet) ──────────────
+echo '<div class="inv-toolbar no-print">';
+// E-mailbeskedens standardtekst beregnes her; selve feltet vises under knapperne længere nede.
 if (!$is_sent_view) {
     // RETTET: hårdkodet engelsk forslag - nu oversat, på kundens fakturasprog (som selve fakturaen), og for en
     // kreditnota en kreditnotatekst (se send_invoice_action.php)
@@ -315,9 +325,8 @@ if (!$is_sent_view) {
     $mb_default = sprintf(lang(!empty($inv['credit_ref']) ? "@Hi %s,\n\nPlease find your credit note attached.\n\nBest regards," : "@Hi %s,\n\nPlease find your invoice attached.\n\nBest regards,"), $inv['cust_name']);
     $_SESSION['lang'] = $mb_lang_orig;
     $standard_hilsen = (empty($inv['credit_ref']) && tc_custom_mail_body($settings) !== '') ? tc_custom_mail_body($settings) : $mb_default;
-    htm_Field(icon:'fa-envelope-open-text', labl:'@Email Message', name:'mail_body', valu:$standard_hilsen, type:'textarea', wdth:'320px', hint:'@Write a personal message to the customer here...', extr:'rows="3" style="font-size:12px; line-height:1.3;"');
 }
-echo '<div style="display:flex; gap:10px; align-items:flex-end;">';
+echo '<div class="inv-btn-row">';
 if (!$is_sent_view) {
     htm_Button(icon:'fa-pencil-ruler', labl:'@Design Mode',  type:'secondary', attr:'onclick="toggleFineDesign()" id="designBtn" data-hint="'.lang('@Reposition invoice elements freely').'"');
     if (!$il_preview)      // (en forhåndsvisning af et andet layout må ikke blive den PDF kunden får)
@@ -381,7 +390,14 @@ if (($_SESSION['user_role'] ?? '') === 'admin') {
     htm_Button(icon:'fa-clock-rotate-left', labl:'@View History', type:'secondary', attr:'onclick="window.location.href=\'audit_log.php?table_name=invoices&row_id='.$inv_id.'\'" data-hint="'.lang('@See who created, edited or posted this invoice').'"');
 }
 htm_Button(icon:'fa-door-open', labl:'@Leave the page', type:'danger',  attr:'onclick="window.location.href=\'sales_hub.php\'" data-hint="'.lang('@Return to the sales hub').'"');
-echo '</div></div></div>';
+echo '</div>'; // .inv-btn-row
+// E-mailbeskeden nedenunder knapperne (bruger-anmodet). Teksten læses af "Send via mail" via feltets navn.
+if (!$is_sent_view && isset($standard_hilsen)) {
+    echo '<div class="inv-mail-below no-print">';
+    htm_Field(icon:'fa-envelope-open-text', labl:'@Email Message', name:'mail_body', valu:$standard_hilsen, type:'textarea', wdth:'100%', hint:'@Write a personal message to the customer here...', extr:'rows="3" style="font-size:12px; line-height:1.3;"');
+    echo '</div>';
+}
+echo '</div>'; // .inv-toolbar
 
 // ── Layout-linje: vælg, opret, omdøb, standard, slet - og brug til denne kladde ─
 if ($il_on && !$is_sent_view) {
