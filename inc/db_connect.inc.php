@@ -7,8 +7,8 @@
 # tilføjet alle fire steder, se kommentar ved fetch_assoc().
 # v1.4.0: tilføjet next_invoice_no() - invoice_post_action.php brugte før et
 # kapløbs-sårbart "MAX(invoice_no)+1"-mønster. Se kommentar ved funktionen.
-define('APP_VERSION', '1.3.0');
-define('APP_DATE', '2026-08-30');
+define('APP_VERSION', '1.3.1');
+define('APP_DATE', '2026-10-30');
 /* 
 // --- 1. SIKKER SESSIONSSTART & SPROGVÆLGER-LOGIK ---
 if (session_status() === PHP_SESSION_NONE) {
@@ -37,11 +37,9 @@ if (isset($_GET['Debug']) && $_GET['Debug'] === 'true') {
 }
 
 // --- 3. DYNAMISK KONFIGURATIONSLÆSER ---
-// RETTET (bruger-anmodet konsolidering af installationsspecifikke data i
-// inc/data/, hvor tinycash.sqlite allerede lå): env.ini flyttet til
-// inc/data/env.ini. De to gamle stier ('inc/env.ini' og rod-'env.ini')
-// beholdes SIDST i listen som bagudkompatibel fallback, så en installation
-// der endnu ikke har flyttet sin fil manuelt (fx via FTP) ikke braser.
+// RETTET: env.ini flyttet til inc/data/env.ini. De to gamle stier ('inc/env.ini' og rod-'env.ini') beholdes SIDST
+// i listen som bagudkompatibel fallback, så en installation der endnu ikke har flyttet sin fil manuelt (fx via
+// FTP) ikke braser.
 $env_file = null;
 $SøgeStier = [
     __DIR__ . '/data/env.ini',
@@ -98,23 +96,16 @@ if (!isset($config['ACTIVE_DB'])) {
 //   var_dump($config['ACTIVE_DB']);  exit; // DEBUG: Fjern denne linje når det virker
 
 // --- TIDSZONE ---
-// RETTET: TinyCash satte aldrig nogen tidszone - PHP brugte serverens php.ini (UTC på mange maskiner).
-// Datoer som date('Y-m-d') (fakturadato, forfald, bogføringsdato) blev så gårsdagens mellem midnat og
-// kl. 1-2 dansk tid, og alle viste tider var 1-2 timer forkerte. Nu: TIMEZONE i env.ini, ellers dansk tid.
-// (Tider som SQLite selv skriver - DEFAULT CURRENT_TIMESTAMP - er altid UTC: se db_ts_local() / db_ts_param().)
+// RETTET: TinyCash satte aldrig nogen tidszone - PHP brugte serverens php.ini (UTC på mange maskiner). Nu:
+// TIMEZONE i env.ini, ellers dansk tid.
 $tc_timezone = trim((string)($config['TIMEZONE'] ?? ''));
 if ($tc_timezone === '' || !in_array($tc_timezone, timezone_identifiers_list(), true)) $tc_timezone = 'Europe/Copenhagen';
 date_default_timezone_set($tc_timezone);
 
-// --- NYT: FLERE REGNSKABER (bruger-anmodet) ---
-// Er et regnskab valgt på login-siden (gemt i $_SESSION['account_id'], se
-// inc/account.lib.php), slår vi dets forbindelsesoplysninger op i
-// inc/data/accounts.json og bruger DEM i stedet for den eneste, statiske
-// ACTIVE_DB-sektion. Er intet regnskab valgt (accounts.json findes slet
-// ikke, eller sessionen aldrig har valgt ét), springer denne gren helt over,
-// og resten af filen (herunder $_SESSION['db_type']-mekanismen nedenfor)
-// opfører sig 100% som før - det er det, der gør bagudkompatibiliteten for
-// eksisterende ét-regnskabs-installationer strukturel, ikke tilfældig.
+// --- NYT: FLERE REGNSKABER --- Er et regnskab valgt på login-siden, slår vi dets forbindelsesoplysninger op i
+// inc/data/accounts.json og bruger DEM i stedet for den eneste, statiske ACTIVE_DB-sektion. Er intet regnskab
+// valgt, springer denne gren helt over, og resten af filen opfører sig 100% som før - det er det, der gør
+// bagudkompatibiliteten for eksisterende ét-regnskabs-installationer strukturel, ikke tilfældig.
 require_once __DIR__ . '/account.lib.php';
 $account_entry = (session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['account_id']))
     ? account_get($_SESSION['account_id'])
@@ -125,15 +116,11 @@ if ($account_entry) {
     $db_settings = account_resolve_settings($account_entry, $config['mysql_config'] ?? []);
 } else {
 
-// --- NYT: VALGBAR DATABASE-TYPE VIA SESSION (login.php) ---
-// Hvis brugeren har valgt DB-type på login-siden (gemt i $_SESSION['db_type']
-// som enten 'mysql' eller 'sqlite'), bruger vi DEN i stedet for den statiske
-// ACTIVE_DB fra env.ini. Er intet valgt (frisk session, eller sider der ikke
-// går via login.php's vælger), falder vi tilbage til env.ini som hidtil.
-// NOTE: Selve forbindelsesoplysningerne (host/bruger/kodeord/sti) kommer
-// STADIG udelukkende fra env.ini's [mysql_config]/[sqlite_config] - brugeren
-// vælger kun HVILKEN af de to allerede konfigurerede sektioner der bruges,
-// aldrig hvilke credentials der forbindes med.
+// --- NYT: VALGBAR DATABASE-TYPE VIA SESSION (login.php) --- Hvis brugeren har valgt DB-type på login-siden,
+// bruger vi DEN i stedet for den statiske ACTIVE_DB fra env.ini. NOTE: Selve forbindelsesoplysningerne
+// (host/bruger/kodeord/sti) kommer STADIG udelukkende fra env.ini's [mysql_config]/[sqlite_config] - brugeren
+// vælger kun HVILKEN af de to allerede konfigurerede sektioner der bruges, aldrig hvilke credentials der forbindes
+// med.
 $session_override = null;
 if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['db_type']) && in_array($_SESSION['db_type'], ['mysql', 'sqlite'], true)) {
     $session_override = $_SESSION['db_type'] . '_config';
@@ -159,12 +146,8 @@ if ($db_type === 'sqlite') {
     // SQLite Engine
     $db_path_rel = $db_settings['DB_PATH'] ?? 'data/tinycash.sqlite';
 
-    // RETTET: realpath() kan kun slå stien op, hvis MÅLET allerede findes.
-    // Ved en frisk installation findes tinycash.sqlite endnu ikke, så
-    // realpath() på hele filstien returnerede false - hvilket gav
-    // "mkdir(): Invalid path", fordi dirname(false) ikke er en gyldig sti.
-    // Løsning: byg mappe-stien uden om realpath, opret den om nødvendigt,
-    // og brug FØRST realpath på selve mappen (som nu altid findes).
+    // RETTET: realpath kan kun slå stien op, hvis MÅLET allerede findes. Løsning: byg mappe-stien uden om
+    // realpath, opret den om nødvendigt, og brug FØRST realpath på selve mappen (som nu altid findes).
     $db_dir_rel = dirname($db_path_rel);
     $db_dir_abs = __DIR__ . '/' . $db_dir_rel;
 
@@ -176,6 +159,8 @@ if ($db_type === 'sqlite') {
 
     $pdo = new PDO('sqlite:' . $db_path_abs);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    // SQLite's LOWER()/LIKE kender kun A-Z - "ælling" fandt ikke "Ælling". tc_lower() er Unicode (bruges af search.php)
+    $pdo->sqliteCreateFunction('tc_lower', fn($v) => $v === null ? null : mb_strtolower((string)$v, 'UTF-8'), 1);
 
     // Global $conn skal være vores PDO objekt for at Shim virker
     $conn = $pdo;
@@ -187,15 +172,11 @@ if ($db_type === 'sqlite') {
     $db_pass = $db_settings['DB_PASS'] ?? '';
     $db_name = $db_settings['DB_NAME'] ?? '';
 
-    // RETTET (fundet under et sweep af account_manage.php's ny database-
-    // opdagelsesfunktion): "@" undertrykker kun PHP-advarsler, ikke
-    // undtagelser - og siden PHP 8.1 er mysqli's STANDARD fejltilstand
-    // netop at KASTE en mysqli_sql_exception ved en mislykket forbindelse
-    // (bekræftet direkte: PHP 8.3 her på maskinen). En hvilken som helst
-    // reel MySQL-forbindelsesfejl (forkert kodeord, nede server, forkert
-    // vært) endte derfor som et grimt, ufanget fatal error i stedet for den
-    // pæne "MySQL forbindelse fejlede: ..."-besked nedenfor - denne
-    // try/catch fanger begge fejltilstande (den ældre false-retur OG den
+    // RETTET: "@" undertrykker kun PHP-advarsler, ikke undtagelser - og siden PHP 8.1 er mysqli's STANDARD
+    // fejltilstand netop at KASTE en mysqli_sql_exception ved en mislykket forbindelse (bekræftet direkte: PHP 8.3
+    // her på maskinen). En hvilken som helst reel MySQL-forbindelsesfejl (forkert kodeord, nede server, forkert
+    // vært) endte derfor som et grimt, ufanget fatal error i stedet for den pæne "MySQL forbindelse
+    // fejlede:..."-besked nedenfor - denne try/catch fanger begge fejltilstande (den ældre false-retur OG den
     // nyere kastede undtagelse) ens.
     try {
         $conn = @mysqli_connect($db_host, $db_user, $db_pass, $db_name);
@@ -234,7 +215,10 @@ function db_ts_param(string $local): string {
 ini_set('log_errors', 1);
 ini_set('error_log', __DIR__ . '/data/system_errors.log');
 
+// Indstillingerne hentes én gang pr. forespørgsel; enhver skrivning til settings gennem DB-klassen glemmer dem igen
+// (tc_settings_touched()). setting('nøgle', standard) giver standardværdien hvis nøglen mangler eller er tom.
 function get_settings($conn) {
+    if (isset($GLOBALS['tc_settings_cache'])) return $GLOBALS['tc_settings_cache'];
     $settings = [];
     $sql = "SELECT setting_key, setting_value FROM settings";
     $res = DB::query($conn, $sql);
@@ -244,8 +228,20 @@ function get_settings($conn) {
         }
         // Brug DB-klassens metode i stedet for mysqli_free_result
         DB::free_result($res); 
+        $GLOBALS['tc_settings_cache'] = $settings;      // (kun ved en vellykket læsning)
     }
     return $settings;
+}
+function setting(string $key, $default = '') {
+    global $conn;
+    $v = get_settings($conn)[$key] ?? null;
+    return ($v === null || $v === '') ? $default : $v;
+}
+function tc_settings_forget(): void {
+    unset($GLOBALS['tc_settings_cache']);
+}
+function tc_settings_touched($sql): void {
+    if (isset($GLOBALS['tc_settings_cache']) && preg_match('/^\s*(INSERT|UPDATE|DELETE|REPLACE)\b[\s\S]*\bsettings\b/i', (string)$sql)) tc_settings_forget();
 }
 
 // --- 6. INDSTILLINGER  ---
@@ -255,42 +251,21 @@ define('CONF_DATE_FORMAT', $current_date_format);
 
 // SPROG-LOGIK ER FJERNET HERFRA. STYRES UDELUKKENDE AF AUTH.INC.PHP.
 
-// FJERNET (§bugs-batch-15-review): "?CheckMail=true"-udløseren, som kørte
-// inc/depot_sync.php direkte herfra. db_connect.inc.php inkluderes af
-// SO GODT SOM HVER ENESTE side i hele appen - denne blok betød derfor, at
-// enhver, der tilføjede "?CheckMail=true" til URL'en på en HVILKEN SOM
-// HELST side, fik depot_sync.php (en ufærdig, forladt IMAP-prototype med
-// tomme/ikke-eksisterende miljøvariabler og en forkert output-mappe -
-// inc/storage/bilagsdepot/email/, som intet andet i appen bruger) til at
-// køre - uden nogen form for adgangskontrol, logging eller dokumentation af
-// at denne parameter overhovedet fandtes. depot_sync.php's egen header-
-// kommentar hævdede fejlagtigt "ikke linket fra nogen menu/knap", uden at
-// være klar over denne skjulte udløser. Reelt harmløst lige nu (imap_open()
-// fejler stille med tomme login-oplysninger), men en skjult, udokumenteret
-// kode-udløsning i det mest universelt inkluderede include i hele projektet
-// er i sig selv et sikkerheds-/vedligeholdelsesproblem. depot_sync.php
-// efterlades urørt (nu reelt uopnåeligt) som historisk artefakt.
-
-// Fortolker et beløb/antal skrevet af en bruger, uanset om det er skrevet med
-// dansk (komma-decimal, evt. punktum-tusindtalsseparator, fx "1.500,00") eller
-// engelsk/HTML5-number-notation (punktum-decimal, fx "1500.00" eller "1500").
-//
-// BAGGRUND (fund 2026-08-22, §invoice-line-comma-amount-fix): en tidligere
-// rettelse erstattede blot komma med punktum (str_replace(',', '.', $s)) på
-// en række beløbsfelter i hele projektet. Det retter "199,95" -> "199.95"
-// korrekt, MEN gør det værre for et beløb der ER hævet til noget større og
-// skrevet med fuld dansk tusindtals-formatering: "1.500,00" bliver til
-// "1.500.00" (TO punktummer), og PHPs (float)-cast stopper simpelthen ved det
-// FØRSTE ekstra punktum og returnerer 1.5 - altså et beløb der lige er hævet
-// til 1500 kr endte som 1,50 kr efter gem. Bekræftet direkte i PHP:
-//   (float)str_replace(',', '.', "1.500,00") === 1.5   // FORKERT
-// Denne funktion undgår det ved først at afgøre hvilket tegn der reelt er
-// decimal-separatoren (det tegn der optræder SIDST i strengen), og kun fjerne
-// det andet tegn som tusindtalsseparator - i stedet for blindt at antage at
-// ethvert komma er decimal-tegnet.
+// Fortolker et beløb/antal skrevet af en bruger, uanset om det er skrevet med dansk (komma-decimal, evt.
+// punktum-tusindtalsseparator, fx "1.500,00") eller engelsk/HTML5-number-notation (punktum-decimal, fx "1500.00"
+// eller "1500").
+// BAGGRUND: en tidligere rettelse erstattede blot komma med punktum (str_replace(',', '.', $s)) på en række
+// beløbsfelter i hele projektet. Det retter "199,95" -> "199.95" korrekt, MEN gør det værre for et beløb der ER
+// hævet til noget større og skrevet med fuld dansk tusindtals-formatering: "1.500,00" bliver til "1.500.00" (TO
+// punktummer), og PHPs (float)-cast stopper simpelthen ved det FØRSTE ekstra punktum og returnerer 1.5 - altså et
+// beløb der lige er hævet til 1500 kr endte som 1,50 kr efter gem.
 function parse_dk_number($s): float {
-    $s = trim((string)$s);
+    // RETTET: mellemrum (også hårdt mellemrum) som tusindtalsseparator - "1 234,50" fra et bankudtræk blev 1 kr
+    $s = str_replace([' ', "\u{00A0}", "\u{202F}", "'"], '', trim((string)$s));
     if ($s === '') return 0.0;
+    // RETTET: samme tegn flere gange kan kun være tusindtalsseparatoren - "1.234.567" blev 1,234 og "1,234,567" 1,234
+    if (substr_count($s, '.') > 1) $s = str_replace('.', '', $s);
+    if (substr_count($s, ',') > 1) $s = str_replace(',', '', $s);
     $has_comma = strpos($s, ',') !== false;
     $has_dot   = strpos($s, '.') !== false;
     if ($has_comma && $has_dot) {
@@ -312,33 +287,124 @@ function parse_dk_number($s): float {
     return (float)$s;
 }
 
-// Oversætter en bruger-rolle (users.user_role - "admin"/"accountant"/"user",
-// valgt i user_create.php/user_edit.php's "Rolle"-dropdown) til det numeriske
-// adgangsniveau (users.user_level, 1-3), som ALT sidespecifikt $rLev-tjek i
-// inc/auth.inc.php reelt gatekeeper på - IKKE user_role direkte.
-//
-// BAGGRUND (fund 2026-08-22, bruger-rapporteret: en bruger forfremmet til
-// "Administrator" i rolle-dropdown'en kunne stadig ikke komme forbi noget
-// niveau-3-spærret side): user_role og user_level er to helt uafhængige
-// kolonner i users-tabellen, og INTET sted i koden har nogensinde holdt dem
-// synkroniseret - hverken user_create.php (INSERT satte kun user_role,
-// user_level faldt til kolonnens standard på 1) eller user_edit.php (UPDATE
-// satte også kun user_role, rørte aldrig user_level på en eksisterende
-// bruger). Den ENESTE konto der nogensinde har fået begge sat korrekt er
-// bootstrap-adminkontoen fra init_demo_data.php, som sætter dem direkte i et
-// enkelt DB::insert()-kald - derfor er dette hul aldrig blevet opdaget af
-// nogen af denne sessions mange adgangskontrol-tests, som alle brugte netop
-// den konto. Enhver bruger der er forfremmet/oprettet som admin eller
-// revisor UDELUKKENDE via UI'et har derfor siddet fast på user_level=1 hele
-// tiden, uanset hvad rolle-dropdown'en viste.
+// RETTET: flere bogføringssider kontrollerede kun datoens FORMAT (åååå-mm-dd) - "2026-02-31" slap igennem og blev
+// bogført med en dato der ikke findes (SQLite's datofunktioner giver NULL for den, og strtotime() gør den stille
+// til 3. marts). En gyldig kalenderdato i formatet åååå-mm-dd.
+function tc_is_date($d): bool {
+    $d = (string)$d;
+    return (bool)preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) && checkdate((int)substr($d, 5, 2), (int)substr($d, 8, 2), (int)substr($d, 0, 4));
+}
+
+// KONTROL AF INDTASTNINGER - fælles for alle formularer (i stedet for hver sin håndskrevne grænse).
+// tc_num(): et gyldigt tal (dansk "1.234,56" eller "1234.56") inden for grænserne, ellers null. Tomt felt = null.
+// parse_dk_number() alene gør "abc" til 0 og "250" til 250 - den afgør ikke om værdien er gyldig.
+function tc_num($raw, ?float $min = null, ?float $max = null): ?float {
+    $s = trim((string)$raw);
+    if ($s === '' || !preg_match('/^[-+]?[0-9.,][0-9.,\s\x{00A0}\x{202F}\']*$/u', $s) || !preg_match('/[0-9]/', $s)) return null;
+    $n = parse_dk_number($s);
+    if (!is_finite($n) || ($min !== null && $n < $min) || ($max !== null && $n > $max)) return null;
+    return $n;
+}
+// En procent (momssats, rabat): 0-100
+function tc_pct($raw): ?float {
+    return tc_num($raw, 0, 100);
+}
+// Findes kontoen i kontoplanen? (en konto der er slået fra, findes stadig - den må bare ikke vælges i nye bilag)
+function tc_account_ok($conn, $acc_id): bool {
+    $acc_id = (int)$acc_id;
+    return $acc_id > 0 && (bool)DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = $acc_id"));
+}
+// Et aktivt projekt (eller $keep_id: det projekt posten allerede har, selv om det er afsluttet). 0 = intet projekt = ok.
+function tc_project_ok($conn, $proj_id, int $keep_id = 0): bool {
+    $proj_id = (int)$proj_id;
+    return $proj_id <= 0 || (bool)DB::fetch_assoc(DB::query($conn, "SELECT proj_id FROM projects WHERE proj_id = $proj_id AND (is_active = 1 OR proj_id = $keep_id)"));
+}
+// En kunde der findes og ikke ligger i papirkurven (eller $keep_id: den kunde posten allerede har)
+function tc_customer_ok($conn, $cust_id, int $keep_id = 0): bool {
+    $cust_id = (int)$cust_id;
+    if ($cust_id <= 0) return false;
+    $trash = db_has_column($conn, 'customers', 'deleted_at') ? " AND (deleted_at IS NULL OR cust_id = $keep_id)" : '';
+    return (bool)DB::fetch_assoc(DB::query($conn, "SELECT cust_id FROM customers WHERE cust_id = $cust_id$trash"));
+}
+
+// Fakturastatus som tekst på brugerens sprog. Status gemmes som et lille engelsk ord (draft/sent/paid/credit/
+// credited); lang('@' . strtoupper($s)) fandt kun @DRAFT, så listen viste "KLADDE" ved siden af SENT/PAID, og
+// lang('@' . ucfirst('credit')) gav bogføringsordet "Kredit" i stedet for "Kreditnota".
+function tc_invoice_status_label(?string $status): string {
+    $keys = ['draft' => '@Draft', 'sent' => '@Sent', 'paid' => '@Paid', 'credit' => '@Credit Note',
+             'credited' => '@Credited', 'cancelled' => '@Cancelled'];
+    $s = strtolower(trim((string)$status));
+    return isset($keys[$s]) ? lang($keys[$s]) : htmlspecialchars(ucfirst($s));
+}
+
+// Regnskabsåret (fiscal_years) der indeholder $date - ellers kalenderåret. [start, slut]. Rapporternes standardperiode:
+// date('Y-01-01') var forkert for et forskudt regnskabsår (fx 1/7-30/6)
+function tc_fiscal_year_bounds($conn, ?string $date = null): array {
+    $date = $date ?? date('Y-m-d');
+    if (db_has_table($conn, 'fiscal_years')) {
+        $d = DB::escape($conn, $date);
+        $r = DB::fetch_assoc(DB::query($conn, "SELECT start_date, end_date FROM fiscal_years WHERE start_date <= '$d' AND end_date >= '$d' ORDER BY start_date DESC LIMIT 1"));
+        if ($r && tc_is_date((string)$r['start_date'])) return [(string)$r['start_date'], (string)$r['end_date']];
+    }
+    return [substr($date, 0, 4) . '-01-01', substr($date, 0, 4) . '-12-31'];
+}
+
+// Tal i dansk format. fmt_dk(): til visning, 1.234,56. fmt_dk_input(): til et inputfelt eller en CSV-celle,
+// 1234,56 (ingen tusindtalsseparator - læses igen af parse_dk_number() og af dansk Excel).
+// Maskinformat (OIOUBL/XML, 1234.56) er stadig number_format($n, 2, '.', '').
+function fmt_dk($n, int $dec = 2): string {
+    return number_format((float)$n, $dec, ',', '.');
+}
+// En sats/procent uden overflødige nuller: 25 -> "25", 12.5 -> "12,5". (fmt_dk($rate, 0) viste 12,5 % som "13 %")
+function fmt_pct($n): string {
+    return rtrim(rtrim(fmt_dk($n, 2), '0'), ',');
+}
+function fmt_dk_input($n, int $dec = 2): string {
+    return number_format((float)$n, $dec, ',', '');
+}
+
+// Findes tabellen/kolonnen (er migrationen kørt)? Begge motorer, uden fejl hvis tabellen mangler. Kolonnelisten
+// huskes pr. forespørgsel - en side der selv ændrer en tabel undervejs, kalder db_schema_forget($table) bagefter.
+function db_table_columns($conn, string $table): array {
+    $cache = &$GLOBALS['tc_schema_cache'];
+    $key = strtolower($table);
+    if (isset($cache[$key])) return $cache[$key];
+    $cols = [];
+    if (preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+        $res = DB::is_sqlite()
+            ? @DB::query($conn, "PRAGMA table_info($table)")
+            : @DB::query($conn, "SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '$table'");
+        if ($res) while ($row = DB::fetch_assoc($res)) $cols[] = strtolower((string)($row['name'] ?? $row['NAME'] ?? ''));
+    }
+    return $cache[$key] = $cols;
+}
+function db_has_table($conn, string $table): bool {
+    return db_table_columns($conn, $table) !== [];
+}
+function db_has_column($conn, string $table, string $column): bool {
+    return in_array(strtolower($column), db_table_columns($conn, $table), true);
+}
+function db_schema_forget(?string $table = null): void {
+    if ($table === null) $GLOBALS['tc_schema_cache'] = [];
+    else unset($GLOBALS['tc_schema_cache'][strtolower($table)]);
+}
+
+// Oversætter en bruger-rolle (users.user_role - "admin"/"accountant"/"user", valgt i
+// user_create.php/user_edit.php's "Rolle"-dropdown) til det numeriske adgangsniveau (users.user_level, 1-3), som
+// ALT sidespecifikt $rLev-tjek i inc/auth.inc.php reelt gatekeeper på - IKKE user_role direkte.
+// BAGGRUND: user_role og user_level er to helt uafhængige kolonner i users-tabellen, og INTET sted i koden har
+// nogensinde holdt dem synkroniseret - hverken user_create.php (INSERT satte kun user_role, user_level faldt til
+// kolonnens standard på 1) eller user_edit.php (UPDATE satte også kun user_role, rørte aldrig user_level på en
+// eksisterende bruger). Den ENESTE konto der nogensinde har fået begge sat korrekt er bootstrap-adminkontoen fra
+// init_demo_data.php, som sætter dem direkte i et enkelt DB::insert-kald - derfor er dette hul aldrig blevet
+// opdaget af nogen af denne sessions mange adgangskontrol-tests, som alle brugte netop den konto.
 function role_to_level(string $role): int {
     return ['admin' => 3, 'accountant' => 2, 'user' => 1][$role] ?? 1;
 }
 
 // Momskontoen $acc + de konti den har AFLØST ved et skift til standardkontoplanen (slukket, std_ref_id = $acc) -
-// som SQL-liste til "l.acc_id IN (...)". RETTET: momsrapporten, momsafstemningen, resultatopgørelsen og årsrapporten
-// læste kun den NUVÆRENDE momskonto. Efter et skift midt i en periode manglede momsen der var bogført på den gamle
-// konto før skiftet, og skiftets saldooverførsel blev talt med som årets moms på den nye konto.
+// som SQL-liste til "l.acc_id IN (...)". Efter et skift midt i en periode manglede momsen der var bogført på den
+// gamle konto før skiftet, og skiftets saldooverførsel blev talt med som årets moms på den nye konto.
 function tc_vat_acc_list($conn, int $acc): string {
     static $has_status = null;
     if ($has_status === null) {
@@ -362,8 +428,8 @@ function tc_vat_acc_list($conn, int $acc): string {
 // "opret konto NNNN"-migreringer: efter en kontoplan fra setup_chart.php eller et skift til standardkontoplanen er
 // rollen dækket af en anden konto, og den faste konto må ikke oprettes oven i (3000 er fx et standardnummer).
 function tc_role_account($conn, string $key, int $default): int {
-    $r = DB::fetch_assoc(DB::query($conn, "SELECT setting_value FROM settings WHERE setting_key = '" . DB::escape($conn, $key) . "'"));
-    $acc = (int)(($r['setting_value'] ?? '') !== '' ? $r['setting_value'] : $default);
+    $v = get_settings($conn)[$key] ?? '';
+    $acc = (int)($v !== '' ? $v : $default);
     return ($acc > 0 && DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = $acc"))) ? $acc : 0;
 }
 // Første egenkapitalkonto i kontoplanen (årsafslutningen) - 0 hvis ingen
@@ -463,6 +529,9 @@ class DB {
     }
     public static function query($conn, $sql) {
         global $pdo, $db_type;
+        // En strukturændring gør den huskede kolonneliste (db_table_columns()) forældet
+        if (preg_match('/^\s*(ALTER|CREATE|DROP|RENAME)\s+TABLE/i', (string)$sql)) $GLOBALS['tc_schema_cache'] = [];
+        tc_settings_touched($sql);
         try {
             if ($db_type === 'sqlite') {
                 $stmt = $pdo->query($sql);
@@ -525,6 +594,7 @@ class DB {
     }
     public static function insert($conn, $table, $data) {
             global $db_type;
+            if ($table === 'settings') tc_settings_forget();
             $keys = array_keys($data);
             $fields = implode(", ", $keys);
             // Lav pladsholdere: SQLite/PDO bruger '?', MySQLi bruger '?' (hvis vi bruger prepared statements)
@@ -546,6 +616,7 @@ class DB {
     // Denne metode gør, at du kan bruge samme kode til både MySQL og SQLite
     public static function prepare_and_execute($conn, $sql, $params = []) {
         global $pdo, $db_type;
+        tc_settings_touched($sql);
         if ($db_type === 'sqlite') {
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
@@ -572,10 +643,9 @@ class DB {
             return mysqli_num_rows($result);
         }
     }
-    // NYT: Transaktionsstøtte - kræves af expense_actions.php (og ethvert
-    // andet sted, der skal garantere flere sammenhørende opdateringer enten
-    // lykkes helt eller fortrydes helt, fx annullering af en bogført udgift
-    // + synkronisering af journalen i samme operation).
+    // NYT: Transaktionsstøtte - kræves af expense_actions.php (og ethvert andet sted, der skal garantere flere
+    // sammenhørende opdateringer enten lykkes helt eller fortrydes helt, fx annullering af en bogført udgift +
+    // synkronisering af journalen i samme operation).
     public static function begin_transaction($conn) {
         global $pdo, $db_type;
         return ($db_type === 'sqlite') ? $pdo->beginTransaction() : mysqli_begin_transaction($conn);
@@ -590,6 +660,7 @@ class DB {
     }
     public static function prepare($conn, $sql) {
         global $pdo, $db_type;
+        tc_settings_touched($sql);
         return ($db_type === 'sqlite') ? $pdo->prepare($sql) : mysqli_prepare($conn, $sql);
     }
     public static function fetch_array($result) {
@@ -599,6 +670,7 @@ class DB {
     }
     public static function update($conn, $table, $data, $where_field, $where_value) {
         global $db_type;
+        if ($table === 'settings') tc_settings_forget();
         $fields = "";
         foreach (array_keys($data) as $key) {
             $fields .= "$key = ?, ";
@@ -722,20 +794,11 @@ class DB {
             return mysqli_insert_id($conn);
         }
     }
-    // RETTET (§bugs-batch-19-review): manglede helt. Flere steder i koden
-    // afgør et kapløbsforsøg ("blev DENNE forespørgsel den der skrev, eller
-    // nåede en anden forespørgsel det først?") ved bagefter at SELECT'e og se
-    // om den ønskede sluttilstand er opnået - men det tjekker kun OM
-    // tilstanden er korrekt, ikke HVEM der satte den. To næsten-samtidige
-    // forsøg kan begge se "korrekt sluttilstand" efter en atomisk
-    // "UPDATE ... WHERE <forventet gammel tilstand>", selvom kun ét af dem
-    // reelt ændrede rækken - taberen så bare vinderens allerede-committede
+    // RETTET: manglede helt. Flere steder i koden afgør et kapløbsforsøg ("blev DENNE forespørgsel den der skrev,
+    // eller nåede en anden forespørgsel det først?") ved bagefter at SELECT'e og se om den ønskede sluttilstand er
+    // opnået - men det tjekker kun OM tilstanden er korrekt, ikke HVEM der satte den. WHERE <forventet gammel
+    // tilstand>", selvom kun ét af dem reelt ændrede rækken - taberen så bare vinderens allerede-committede
     // resultat, og ville derfor fejlagtigt tro sit eget forsøg lykkedes.
-    // Den eneste pålidelige måde at vide om ens EGEN UPDATE ramte 0 eller 1+
-    // rækker, er at spørge databasen om antal berørte rækker fra selve det
-    // kald - ikke gætte det ud fra en efterfølgende SELECT. $result skal være
-    // værdien returneret af DB::query()/DB::prepare_and_execute() for netop
-    // den UPDATE/DELETE, man vil måle.
     public static function affected_rows($conn, $result = null) {
         global $db_type;
         if ($db_type === 'sqlite') {
@@ -763,15 +826,12 @@ class DB {
     }
 }
 
-// Central bogføring af én ledger-linje. Medtager registreringsdato (created_at)
-// og bruger-ID KUN hvis kolonnerne findes på ledger-tabellen - så bogføring
-// aldrig knækker på en database hvor migrate_ledger_audit.php endnu ikke er
-// kørt, men compliance-felterne udfyldes når de er til stede. Cross-engine.
+// Central bogføring af én ledger-linje. Medtager registreringsdato (created_at) og bruger-ID KUN hvis kolonnerne
+// findes på ledger-tabellen - så bogføring aldrig knækker på en database hvor migrate_ledger_audit.php endnu ikke
+// er kørt, men compliance-felterne udfyldes når de er til stede. Cross-engine.
 // RETTET (flere regnskaber): fakturaarkivet, e-fakturaerne og SAF-T-arkivet lå i FÆLLES mapper for alle regnskaber
-// (storage/invoices/invoice_<nr>.pdf) - og alle regnskaber starter deres nummerserie samme sted. Regnskab B's faktura
-// 1001 fandt regnskab A's arkiverede PDF (arkivet skrives kun én gang) - og B's kunde fik A's faktura på mail.
-// Hvert regnskab - undtagen det første (standarden, hvis filer allerede ligger i roden) - får sin egen undermappe.
-// Returnerer '' eller '<regnskabs-id>/'.
+// (storage/invoices/invoice_<nr>.pdf) - og alle regnskaber starter deres nummerserie samme sted. Returnerer ''
+// eller '<regnskabs-id>/'.
 function tc_account_storage_subdir(): string {
     $id = (string)($_SESSION['account_id'] ?? '');
     if ($id === '' || !function_exists('account_list')) return '';
@@ -787,6 +847,19 @@ function tc_account_storage_dir(string $base): string {
     return $dir;
 }
 
+// Firmalogoets mappe og fil. RETTET: logoet lå altid som images/logo.* - fælles for ALLE regnskaber på installationen,
+// så et logo uploadet i regnskab B stod på regnskab A's fakturaer og tilbud. Følger nu samme opdeling som
+// tc_account_storage_dir(): det første regnskab beholder images/logo.*, de øvrige images/<regnskab>/logo.*.
+const TC_LOGO_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+function tc_logo_dir(): string {
+    return tc_account_storage_dir('images');
+}
+function tc_logo_path(): ?string {
+    $dir = tc_logo_dir();
+    foreach (TC_LOGO_EXTS as $e) if (file_exists($dir . 'logo.' . $e)) return $dir . 'logo.' . $e;
+    return null;
+}
+
 // Firmaets egen standardtekst til fakturamails - '' når den ikke er sat, eller når den blot er den gamle
 // engelske forudfyldning fra Firmaindstillinger ("Please find your invoice attached."), som blev gemt ved
 // enhver gemning og overstyrede den oversatte tekst på kundens sprog
@@ -795,12 +868,9 @@ function tc_custom_mail_body(array $settings): string {
     return ($b === '' || $b === "Please find your invoice attached.\n\nBest regards,") ? '' : $b;
 }
 
-// RETTET: et kontonummer der IKKE findes i kontoplanen blev bogført uden videre (fx en indstilling der peger
-// på standardværdien 5000, som kontoplanen ikke har). Posteringerne forsvandt så stille fra saldobalance,
-// balance og hovedbog (som slår kontoen op), og regnskabet balancerede ikke længere i rapporterne. Nu en
-// Exception - kalderne bogfører i en transaktion og ruller tilbage med en forklaring.
-// $allow_missing: kun for at NULSTILLE en sådan konto (inc/chart_switch.inc.php).
-// Hvilke af disse kontonumre findes IKKE i kontoplanen? (til at afvise FØR en transaktion startes)
+// RETTET: et kontonummer der IKKE findes i kontoplanen blev bogført uden videre (fx en indstilling der peger på
+// standardværdien 5000, som kontoplanen ikke har). Nu en Exception - kalderne bogfører i en transaktion og ruller
+// tilbage med en forklaring.
 function ledger_accounts_missing($conn, array $acc_ids): array {
     $missing = [];
     foreach (array_unique(array_map('intval', $acc_ids)) as $a) {
@@ -843,20 +913,14 @@ function ledger_post($conn, $jou_id, $acc_id, $amount, bool $allow_missing = fal
     return DB::query($conn, "INSERT INTO ledger (jou_id, acc_id, amount) VALUES ($jou_id, $acc_id, $amount)");
 }
 
-// NYT (bruger-anmodet lukning af BEK 811/2026-gennemgangens fund 3, se
-// [[digital-standard-bookkeeping-registration-goal]]): journal har ingen
-// fælles opretningsfunktion (i modsætning til ledger_post() ovenfor) - hvert
-// af de 13 steder i koden, der selv skriver "INSERT INTO journal", bygger sin
-// egen SQL-streng fra bunden med sine egne kolonner (trans_type/proj_id
-// varierer fra sted til sted). I stedet for at kopiere et fuldt
-// findes-kolonnen-tjek ind i alle 13, giver denne lille delte funktion KUN
-// den ekstra ", created_by"-kolonne + ", <bruger-id>"-værdi, parate til at
-// sættes ind i hvert steds eksisterende kolonne-/værdiliste - samme graceful
-// "virker uanset om migrationen er kørt endnu"-filosofi som ledger_post()s
-// eget $has_audit-tjek, blot uden at tvinge alle 13 steder til én fælles
-// funktionssignatur (hvilket ville have krævet at omskrive hvert steds
-// allerede forskelligartede opbygning, med langt højere risiko for fejl i
-// midt i regnskabskritisk kode).
+// NYT: journal har ingen fælles opretningsfunktion (i modsætning til ledger_post ovenfor) - hvert af de 13 steder
+// i koden, der selv skriver "INSERT INTO journal", bygger sin egen SQL-streng fra bunden med sine egne kolonner
+// (trans_type/proj_id varierer fra sted til sted). I stedet for at kopiere et fuldt findes-kolonnen-tjek ind i
+// alle 13, giver denne lille delte funktion KUN den ekstra ", created_by"-kolonne + ", <bruger-id>"-værdi, parate
+// til at sættes ind i hvert steds eksisterende kolonne-/værdiliste - samme graceful "virker uanset om migrationen
+// er kørt endnu"-filosofi som ledger_posts eget $has_audit-tjek, blot uden at tvinge alle 13 steder til én fælles
+// funktionssignatur (hvilket ville have krævet at omskrive hvert steds allerede forskelligartede opbygning, med
+// langt højere risiko for fejl i midt i regnskabskritisk kode).
 function journal_created_by_sql($conn): array {
     static $has = null;
     if ($has === null) {
@@ -904,9 +968,18 @@ function next_voucher_no($conn) {
     // UPDATE'en tager en rækkelås (MySQL InnoDB) / eksklusiv skrivelås (SQLite)
     // inden for den kaldende transaktion, så to samtidige posteringer aldrig
     // kan få samme nummer.
-    DB::query($conn, "UPDATE voucher_counter SET next_no = next_no + 1 WHERE id = 1");
-    $row = DB::fetch_assoc(DB::query($conn, "SELECT next_no FROM voucher_counter WHERE id = 1"));
-    return (int)$row['next_no'] - 1;
+    // RETTET: et allerede brugt bilagsnummer (fx efter import eller en nulstillet tæller) blev udstedt igen - to
+    // bilag med samme nummer. Et brugt nummer springes over (samme værn som next_invoice_no()).
+    for ($guard = 0; $guard < 3; $guard++) {
+        DB::query($conn, "UPDATE voucher_counter SET next_no = next_no + 1 WHERE id = 1");
+        $row = DB::fetch_assoc(DB::query($conn, "SELECT next_no FROM voucher_counter WHERE id = 1"));
+        $no  = (int)$row['next_no'] - 1;
+        if (!DB::fetch_assoc(DB::query($conn, "SELECT jou_id FROM journal WHERE voucher_no = $no LIMIT 1"))
+            && !DB::fetch_assoc(DB::query($conn, "SELECT exp_id FROM expenses WHERE voucher_no = $no LIMIT 1"))) return $no;
+        $max = _voucher_fallback_max($conn);
+        DB::query($conn, "UPDATE voucher_counter SET next_no = " . ($max + 1) . " WHERE id = 1 AND next_no <= $max");
+    }
+    return _voucher_fallback_max($conn) + 1;
 }
 
 function _voucher_fallback_max($conn) {
@@ -949,10 +1022,19 @@ function next_invoice_no($conn) {
         DB::insert($conn, 'invoice_no_counter', ['id' => 1, 'next_no' => $start]);
     }
 
-    // Samme atomiske UPDATE-mønster som next_voucher_no().
-    DB::query($conn, "UPDATE invoice_no_counter SET next_no = next_no + 1 WHERE id = 1");
-    $row = DB::fetch_assoc(DB::query($conn, "SELECT next_no FROM invoice_no_counter WHERE id = 1"));
-    return (int)$row['next_no'] - 1;
+    // RETTET: tælleren tjekkede ikke om nummeret allerede var brugt - fakturaer med numre der er kommet ind uden om
+    // den (import, demo-data, en ændret startværdi) ville give DUBLEREDE fakturanumre, når tælleren nåede dertil.
+    // Et brugt nummer springes nu over: tælleren rykkes forbi det højeste eksisterende nummer.
+    for ($guard = 0; $guard < 3; $guard++) {
+        // Samme atomiske UPDATE-mønster som next_voucher_no().
+        DB::query($conn, "UPDATE invoice_no_counter SET next_no = next_no + 1 WHERE id = 1");
+        $row = DB::fetch_assoc(DB::query($conn, "SELECT next_no FROM invoice_no_counter WHERE id = 1"));
+        $no  = (int)$row['next_no'] - 1;
+        if (!DB::fetch_assoc(DB::query($conn, "SELECT inv_id FROM invoices WHERE invoice_no = $no LIMIT 1"))) return $no;
+        $max = _invoice_no_fallback_max($conn);
+        DB::query($conn, "UPDATE invoice_no_counter SET next_no = " . ($max + 1) . " WHERE id = 1 AND next_no <= $max");
+    }
+    return _invoice_no_fallback_max($conn) + 1;
 }
 
 function _invoice_no_fallback_max($conn) {
@@ -960,12 +1042,10 @@ function _invoice_no_fallback_max($conn) {
     return max((int)($mi['m'] ?? 0), 1000);
 }
 
-// NY (bruger-anmodet, "kan bogholderen ønske sig mere", runde 33): en
-// kreditnota (invoice_credit.php) fik aldrig sit eget kundevendte
-// fakturanummer - kun invoice_no=NULL, hvilket fik invoice_view.php til at
-// vise "@DRAFT" for en fuldt bogført kreditnota. Egen, separat nummerserie
-// (credit_note_no_counter) - samme atomiske mønster som next_invoice_no()
-// ovenfor - så kreditnotaer og almindelige fakturaer aldrig deler numre.
+// NY: en kreditnota (invoice_credit.php) fik aldrig sit eget kundevendte fakturanummer - kun invoice_no=NULL,
+// hvilket fik invoice_view.php til at vise "@DRAFT" for en fuldt bogført kreditnota. Egen, separat nummerserie
+// (credit_note_no_counter) - samme atomiske mønster som next_invoice_no ovenfor - så kreditnotaer og almindelige
+// fakturaer aldrig deler numre.
 function next_credit_note_no($conn) {
     static $has_counter = null;
     if ($has_counter === null) {
@@ -982,45 +1062,34 @@ function next_credit_note_no($conn) {
     }
 
     $row = DB::fetch_assoc(DB::query($conn, "SELECT next_no FROM credit_note_no_counter WHERE id = 1"));
+    $cn_max = fn() => (int)(DB::fetch_row(DB::query($conn, "SELECT MAX(credit_note_no) FROM invoices"))[0] ?? 0);
     if (!$row) {
-        DB::insert($conn, 'credit_note_no_counter', ['id' => 1, 'next_no' => 1]);
+        // RETTET: startede altid ved 1 - også når der allerede fandtes kreditnotaer (dublerede kreditnotanumre)
+        DB::insert($conn, 'credit_note_no_counter', ['id' => 1, 'next_no' => $cn_max() + 1]);
     }
 
-    DB::query($conn, "UPDATE credit_note_no_counter SET next_no = next_no + 1 WHERE id = 1");
-    $row = DB::fetch_assoc(DB::query($conn, "SELECT next_no FROM credit_note_no_counter WHERE id = 1"));
-    return (int)$row['next_no'] - 1;
+    for ($guard = 0; $guard < 3; $guard++) {      // (et brugt nummer springes over - samme værn som next_invoice_no())
+        DB::query($conn, "UPDATE credit_note_no_counter SET next_no = next_no + 1 WHERE id = 1");
+        $row = DB::fetch_assoc(DB::query($conn, "SELECT next_no FROM credit_note_no_counter WHERE id = 1"));
+        $no  = (int)$row['next_no'] - 1;
+        if (!DB::fetch_assoc(DB::query($conn, "SELECT inv_id FROM invoices WHERE credit_note_no = $no LIMIT 1"))) return $no;
+        $max = $cn_max();
+        DB::query($conn, "UPDATE credit_note_no_counter SET next_no = " . ($max + 1) . " WHERE id = 1 AND next_no <= $max");
+    }
+    return $cn_max() + 1;
 }
 
-// NY (§reel-multi-valuta-bogforing): fælles, ENESTE beregning af en fakturas
-// bogførte DKK-total (netto/moms/inkl.) - genbruges nu af BÅDE invoice_post_
-// action.php (selve bogføringen) OG reconcile_action.php (afstemning). Var
-// FØR duplikeret i begge filer, men reconcile_action.php's kopi manglede
-// selve gange-med-exch_rate-trinnet: for en almindelig DKK-faktura er det
-// harmløst (intet exch_rate sat), men for en udenlandsk faktura sammenlignede
-// reconcile_action.php et rent EUR/USD-beløb (fra invoice_lines) direkte mod
-// de faktisk indbetalte DKK-beløb (fra bankafstemningen) - to forskellige
-// valutaenheder sammenlignet som var de samme tal. Konsekvens: en 1.000 EUR-
-// faktura (7.450 DKK bogført) blev markeret 'paid' efter blot én DKK-
-// bankindbetaling på 1.000 DKK (langt fra hele beløbet), eller omvendt aldrig
-// nåede 'paid' selvom kunden reelt havde betalt fuldt ud i EUR. Fundet under
-// arbejdet med reel kursgevinst/-tab-håndtering ved betaling - den samme
-// beregning skal nødvendigvis være korrekt begge steder, ellers giver en
-// kursregulering ved afstemning ingen mening.
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): valgfri rabat pr.
-// linje (invoice_lines.discount_pct, db-setup/migrate_invoice_line_
-// discount.php) - trækkes fra NETTOBELØBET før moms beregnes, samme
-// rækkefølge som standard dansk fakturapraksis. Udtrukket til to delte
-// hjælpefunktioner (samme "udtræk til fælles funktion for aldrig at kunne
-// glide fra hinanden"-mønster som denne sessions øvrige delte beregninger),
-// da MANGE steder i kodebasen selv genberegner en linje-/fakturatotal
-// direkte fra invoice_lines i stedet for at kalde invoice_dkk_totals() (som
-// kun tager ét inv_id ad gangen, upraktisk for en rapport der summerer på
-// tværs af mange fakturaer) - se aging_report.php/index.php/project_view.php/
-// reconcile_list.php/recurring_invoices.php/reminder_action.php/reminders.php/
-// subledger_reconciliation.php for de øvrige kaldesteder, alle rettet i
-// samme runde. Samme "stille degradering hvis ikke migreret endnu"-mønster
-// som andre nyere kolonner - discount_pct behandles som 0 (ingen rabat)
-// hvis kolonnen ikke findes endnu.
+// NY: fælles, ENESTE beregning af en fakturas bogførte DKK-total (netto/moms/inkl.) - genbruges nu af BÅDE
+// invoice_post_action.php (selve bogføringen) OG reconcile_action.php (afstemning). Konsekvens: en 1.000
+// EUR-faktura (7.450 DKK bogført) blev markeret 'paid' efter blot én DKK-bankindbetaling på 1.000 DKK (langt fra
+// hele beløbet), eller omvendt aldrig nåede 'paid' selvom kunden reelt havde betalt fuldt ud i EUR.
+// NYT: valgfri rabat pr. linje (invoice_lines.discount_pct, db-setup/migrate_invoice_line_discount.php) - trækkes
+// fra NETTOBELØBET før moms beregnes, samme rækkefølge som standard dansk fakturapraksis. Udtrukket til to delte
+// hjælpefunktioner, da MANGE steder i kodebasen selv genberegner en linje-/fakturatotal direkte fra invoice_lines
+// i stedet for at kalde invoice_dkk_totals (som kun tager ét inv_id ad gangen, upraktisk for en rapport der
+// summerer på tværs af mange fakturaer) - se
+// aging_report.php/index.php/project_view.php/reconcile_list.php/recurring_invoices.php/reminder_action.php/reminders.php/subledger_reconciliation.php
+// for de øvrige kaldesteder, alle rettet i samme runde.
 function invoice_lines_has_discount_col($conn): bool {
     static $has = null;
     if ($has === null) {
@@ -1044,18 +1113,11 @@ function invoice_discount_sql($conn, string $prefix = ''): string {
     return invoice_lines_has_discount_col($conn) ? "* (100 - COALESCE({$prefix}discount_pct, 0)) / 100.0" : "";
 }
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 30): en
-// udgift kan nu VALGFRIT splittes på flere konti via expense_lines - se
-// db-setup/migrate_expense_lines.php. expense_get_lines() er den ENESTE
-// autoritative kilde til "hvilke konti/beløb hører til denne udgift" -
-// bruges konsekvent af både selve bogføringen (expense_edit.php) og
-// momsafstemningen (vat_reconciliation.php), for at undgå at de to
-// nogensinde kan regne forskelligt (samme princip som invoice_dkk_totals()
-// ovenfor). Returnerer ALTID mindst én "linje" - findes ingen rigtige
-// expense_lines-rækker for denne udgift (langt de fleste, bagudkompatibelt),
-// bygges én SYNTETISK linje af selve expense-rækkens egne account_id/
-// amount/vat_rate, så en kaldende funktion aldrig behøver et separat
-// if/else for "har linjer eller ej".
+// NYT: en udgift kan nu VALGFRIT splittes på flere konti via expense_lines - se
+// db-setup/migrate_expense_lines.php. Returnerer ALTID mindst én "linje" - findes ingen rigtige
+// expense_lines-rækker for denne udgift (langt de fleste, bagudkompatibelt), bygges én SYNTETISK linje af selve
+// expense-rækkens egne account_id/amount/vat_rate, så en kaldende funktion aldrig behøver et separat if/else for
+// "har linjer eller ej".
 function expense_lines_has_table($conn): bool {
     static $has = null;
     if ($has === null) {
@@ -1101,14 +1163,9 @@ function expense_get_lines($conn, int $exp_id): array {
     return $result;
 }
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 31): "Slet"
-// på en kunde/leverandør er nu en gendannelig blødsletning (deleted_at) -
-// se db-setup/migrate_trash_bin.php/trash_bin.php. Disse to hjælpefunktioner
-// er den ENESTE autoritative kilde til "skal denne kunde/leverandør vises i
-// almindelige lister/dropdowns" - bruges konsekvent alle steder en kunde/
-// leverandør vælges eller listes, for at undgå at en blødslettet række dukker
-// op ét sted men ikke et andet. Stille degraderet til "vis alle" (tom streng)
-// hvis migrationen ikke er kørt endnu.
+// NYT: "Slet" på en kunde/leverandør er nu en gendannelig blødsletning (deleted_at) - se
+// db-setup/migrate_trash_bin.php/trash_bin.php. Stille degraderet til "vis alle" (tom streng) hvis migrationen
+// ikke er kørt endnu.
 function customers_active_filter($conn, string $prefix = ''): string {
     static $has = null;
     if ($has === null) {
@@ -1162,10 +1219,9 @@ function invoice_dkk_totals($conn, int $inv_id): array {
     return ['excl' => $total_excl, 'vat' => $total_vat, 'incl' => $total_incl, 'exch_rate' => $exch_rate];
 }
 
-// DELVIS KREDITNOTA: en faktura der kun er krediteret for en del, beholder sin status (sendt/betalt) - det
-// kunden stadig skylder er fakturaen + dens kreditnota(er) (negative) - betalingerne. RETTET: før blev hele
-// fakturaen markeret 'credited', og restbeløbet forsvandt fra debitorer, rykkere og bankafstemning.
-// Kreditnotaernes beløb (DKK inkl. moms, negativt) for en faktura:
+// DELVIS KREDITNOTA: en faktura der kun er krediteret for en del, beholder sin status (sendt/betalt) - det kunden
+// stadig skylder er fakturaen + dens kreditnota(er) (negative) - betalingerne. Kreditnotaernes beløb (DKK inkl.
+// moms, negativt) for en faktura:
 function invoice_credited_dkk($conn, int $inv_id): float {
     $sum = 0.0;
     $res = DB::query($conn, "SELECT inv_id FROM invoices WHERE credit_ref = $inv_id");
@@ -1243,33 +1299,17 @@ function create_append_only_triggers($conn): array {
     $created = 0;
     $failed = [];
 
-    // NYT (bruger-anmodet lukning af BEK 811/2026-gennemgangens fund 1+3,
-    // se [[digital-standard-bookkeeping-registration-goal]]): to tilføjelser
-    // til denne allerede eksisterende funktion:
-    // (a) trg_expenses_*-triggerne nedenfor - "ingen database-trigger på
-    //     expenses"-hullet. expense_edit.php havde allerede PRÆCIS samme
-    //     felt-begrænsning i PHP-laget (beløb/konto/dato/type låst, kun
-    //     leverandør/beskrivelse/projekt frit redigerbart på en bogført
-    //     udgift) - denne trigger håndhæver nu DEN SAMME, allerede besluttede
-    //     politik på selve databaseniveauet, samme mønster som journal/ledger
-    //     allerede fik 2026-08-20.
-    // (b) journal.created_by-tjekket i selve trg_journal_restrict_update_
-    //     posted - "intet created_by på journal"-hullet er lukket ved at
-    //     tilføje kolonnen (se db-setup/migrate_journal_created_by.php) og nu
-    //     ogsaa beskytte den her. $journal_has_created_by afgør om selve
-    //     check'et inkluderes i trigger-SQL'en - uden dette tjek ville selve
-    //     CREATE TRIGGER-kaldet fejle øjeblikkeligt på en installation hvor
-    //     kolonne-migrationen (endnu) ikke er kørt, da kolonnen slet ikke
-    //     findes i tabellen trigger'en gælder for.
-    //
-    // RETTET SAMTIDIG: funktionen sprang FØR enhver trigger allerede fundet
-    // ved navn helt over (både SQLite- og MySQL-grenen) - en ÆNDRET
-    // trigger-definition (som netop journal-opdateringen her) ville derfor
-    // ALDRIG slå igennem på en installation, der allerede havde den gamle
-    // udgave oprettet, uanset hvor mange gange migrationen blev kørt igen.
-    // Ubetinget DROP+CREATE (samme to kald, blot uden "spring over hvis
-    // findes"-tjekket foran) gør funktionen reelt idempotent OGSÅ ved
-    // fremtidige definitionsændringer, ikke kun ved førstegangsoprettelse.
+    // NYT: to tilføjelser til denne allerede eksisterende funktion: (a) trg_expenses_*-triggerne nedenfor - "ingen
+    // database-trigger på expenses"-hullet. expense_edit.php havde allerede PRÆCIS samme felt-begrænsning i
+    // PHP-laget (beløb/konto/dato/type låst, kun leverandør/beskrivelse/projekt frit redigerbart på en bogført
+    // udgift) - denne trigger håndhæver nu DEN SAMME, allerede besluttede politik på selve databaseniveauet, samme
+    // mønster som journal/ledger allerede fik 2026-08-20.
+    // RETTET SAMTIDIG: funktionen sprang FØR enhver trigger allerede fundet ved navn helt over (både SQLite- og
+    // MySQL-grenen) - en ÆNDRET trigger-definition (som netop journal-opdateringen her) ville derfor ALDRIG slå
+    // igennem på en installation, der allerede havde den gamle udgave oprettet, uanset hvor mange gange
+    // migrationen blev kørt igen. Ubetinget DROP+CREATE (samme to kald, blot uden "spring over hvis
+    // findes"-tjekket foran) gør funktionen reelt idempotent OGSÅ ved fremtidige definitionsændringer, ikke kun
+    // ved førstegangsoprettelse.
     $journal_has_created_by = false;
     if (DB::is_sqlite()) {
         $res = DB::query($conn, "PRAGMA table_info(journal)");
@@ -1384,29 +1424,18 @@ function create_append_only_triggers($conn): array {
                 END IF; END",
         ];
         foreach ($triggers as $name => $sql) {
-            // RETTET (fundet ved samme sweep som account_manage.php's
-            // database-opdagelse/inc/db_connect.inc.php's MySQL-forbindelse):
-            // denne løkke havde INGEN try/catch, i modsætning til SQLite-
-            // grenen ovenfor - stod derfor i direkte modstrid med funktionens
-            // egen "kaster ALDRIG en fejl videre"-kontrakt lige herover.
-            // Siden PHP 8.1 KASTER mysqli_query() m.fl. en mysqli_sql_
-            // exception ved fejl i stedet for at returnere false (bekræftet
-            // direkte, samme rodårsag som de to andre rettelser) - og den
-            // helt konkrete fejl kommentaren selv nævner ("manglende TRIGGER-
-            // rettighed, ikke ualmindeligt på delt hosting") ville derfor
-            // have væltet HELE create_all_tables_for()/en frisk MySQL-
-            // installation, i stedet for blot at springe triggerne over som
-            // tilsigtet. Fanger \Throwable (ikke kun \Exception) - et hurtigt
-            // sidetjek under selve rettelsen viste at et FORKERT brugt
-            // mysqli-objekt kan kaste et rent \Error i stedet for en
-            // mysqli_sql_exception; funktionens eget løfte er "aldrig videre
-            // uanset hvad", så fangnettet skal dække begge klasser.
+            // RETTET: denne løkke havde INGEN try/catch, i modsætning til SQLite-grenen ovenfor - stod derfor i
+            // direkte modstrid med funktionens egen "kaster ALDRIG en fejl videre"-kontrakt lige herover. Siden
+            // PHP 8.1 KASTER mysqli_query m.fl. en mysqli_sql_exception ved fejl i stedet for at returnere false
+            // (bekræftet direkte, samme rodårsag som de to andre rettelser) - og den helt konkrete fejl
+            // kommentaren selv nævner ("manglende TRIGGER-rettighed, ikke ualmindeligt på delt hosting") ville
+            // derfor have væltet HELE create_all_tables_for/en frisk MySQL-installation, i stedet for blot at
+            // springe triggerne over som tilsigtet.
             try {
-                // RETTET (se funktionens egen kommentar foroven): "SHOW
-                // TRIGGERS... hvis findes, spring over"-tjekket er fjernet -
-                // DROP+CREATE køres nu ubetinget hver gang, så en ÆNDRET
-                // trigger-definition (fx journal-opdateringens nye created_by-
-                // tjek) rent faktisk slår igennem ved en fornyet kørsel.
+                // RETTET (se funktionens egen kommentar foroven): "SHOW TRIGGERS... hvis findes, spring
+                // over"-tjekket er fjernet - DROP+CREATE køres nu ubetinget hver gang, så en ÆNDRET
+                // trigger-definition (fx journal-opdateringens nye created_by-tjek) rent faktisk slår igennem ved
+                // en fornyet kørsel.
                 @mysqli_query($conn, "DROP TRIGGER IF EXISTS `$name`");
                 if (mysqli_query($conn, $sql)) {
                     $created++;
@@ -1424,27 +1453,21 @@ function create_append_only_triggers($conn): array {
     return ['created' => $created, 'failed' => $failed];
 }
 
-// RETTET (bruger-rapport "oversættelsesforslag er stadig blankt"): sporet til
-// at INGEN af de tre steder i projektet, der laver udgående HTTPS-curl-kald
-// (translation_manager.php's OpenAI-kald, inc/help.lib.php's to OpenAI-kald,
-// inc/enablebanking.lib.php's bank-API-kald), satte CURLOPT_CAINFO - på en
-// server/udviklingsmaskine uden en systemkonfigureret CA-rodcertifikat-liste
-// (bekræftet konkret her: både curl.cainfo og openssl.cafile er ukommenteret/
-// tomme i php.ini) fejler ETHVERT sådant kald med curl-fejl 60 ("unable to
-// get local issuer certificate"). translation_manager.php's egen
-// getAiSuggestion() fangede fejlen og faldt tavst tilbage til den urørte
-// engelske nøgle i stedet for et rigtigt AI-forslag - så det SÅ ud som om
-// funktionen "virkede" (success:true), men gav aldrig en reel oversættelse,
-// hvilket brugeren oplevede som at forslaget "stadig er blankt".
-//
-// Fælles løsning: bundler selv en ajourført CA-rodcertifikat-liste
-// (Mozillas, hentet fra curl.se/ca/cacert.pem, samme kilde curl selv
-// anbefaler) i inc/cacert.pem, og peger eksplicit på den her - så alle tre
-// kaldssteder virker uafhængigt af den underliggende servers php.ini, uanset
-// om den kører på Windows (hvor dette langt fra er ualmindeligt at mangle)
-// eller Linux. tc_curl_init() ligger i denne fil, fordi db_connect.inc.php
-// er det ene include, alle sider (og alle tre kaldssteder) reelt har til
-// fælles - php2htm.lib.php er det ikke (se fx bank_integration_connect.php).
+// RETTET (bruger-rapport "oversættelsesforslag er stadig blankt"): sporet til at INGEN af de tre steder i
+// projektet, der laver udgående HTTPS-curl-kald (translation_manager.php's OpenAI-kald, inc/help.lib.php's to
+// OpenAI-kald, inc/enablebanking.lib.php's bank-API-kald), satte CURLOPT_CAINFO - på en server/udviklingsmaskine
+// uden en systemkonfigureret CA-rodcertifikat-liste (bekræftet konkret her: både curl.cainfo og openssl.cafile er
+// ukommenteret/tomme i php.ini) fejler ETHVERT sådant kald med curl-fejl 60 ("unable to get local issuer
+// certificate"). translation_manager.php's egen getAiSuggestion fangede fejlen og faldt tavst tilbage til den
+// urørte engelske nøgle i stedet for et rigtigt AI-forslag - så det SÅ ud som om funktionen "virkede"
+// (success:true), men gav aldrig en reel oversættelse, hvilket brugeren oplevede som at forslaget "stadig er
+// blankt".
+// Fælles løsning: bundler selv en ajourført CA-rodcertifikat-liste (Mozillas, hentet fra curl.se/ca/cacert.pem,
+// samme kilde curl selv anbefaler) i inc/cacert.pem, og peger eksplicit på den her - så alle tre kaldssteder
+// virker uafhængigt af den underliggende servers php.ini, uanset om den kører på Windows (hvor dette langt fra er
+// ualmindeligt at mangle) eller Linux. tc_curl_init ligger i denne fil, fordi db_connect.inc.php er det ene
+// include, alle sider (og alle tre kaldssteder) reelt har til fælles - php2htm.lib.php er det ikke (se fx
+// bank_integration_connect.php).
 function tc_curl_init(string $url) {
     $ch = curl_init($url);
     $cacert = __DIR__ . '/cacert.pem';

@@ -22,10 +22,6 @@ $cur = $s['currency'] ?? 'DKK';
 htm_Header("@Inventory Status", 800);
 showMenu();
 
-if (isset($_GET['msg'])) {
-    if ($_GET['msg'] === 'deleted')       htm_Alert(text: lang('@Product deleted'), type: 'success');
-    if ($_GET['msg'] === 'error_in_use')  htm_Alert(text: lang('@Cannot delete product: it is used on one or more invoice lines.'), type: 'error');
-}
 
 // Knapper til top-højre
 $tools = htm_Button('fa-plus', ' '.lang('@New Product'), 'success', 'product_edit.php', 'padding:4px 8px; margin-right:5px;', 'data-hint="'.lang('@Create a new product').'"', '', false);
@@ -33,26 +29,12 @@ $tools .= htm_Button('fa-file-csv', ' CSV', 'info', 'inventory_export.php', 'pad
 
 htm_Card_("@Inventory Status", "100%", "", "inv_card", true, $tools);
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): ingen side i
-// systemet viste hvilke produkter der reelt sælger mest - relevant for
-// genbestilling og prisbeslutninger. Baseret på fakturalinjer på bogførte
-// (ikke kladde-)fakturaer, samme "ekskludér kladder"-princip som
-// project_view.php/report_income.php allerede bruger - en kladde er endnu
-// ikke en reel forpligtelse/handel. Krediterede linjer (negativ mængde,
-// se invoice_credit.php) trækker automatisk fra igen, så en krediteret
-// ordre ikke tæller som et reelt salg.
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", samme runde som
-// kostpris-feltet blev tilføjet): viser bruttoavance pr. produkt her også,
-// når kostpris er udfyldt - samme "stille degradering hvis ikke migreret
-// endnu"-mønster.
-$has_cost_col = false;
-if (DB::is_sqlite()) {
-    $cc = DB::query($conn, "PRAGMA table_info(products)");
-    if ($cc) { while ($ccr = DB::fetch_assoc($cc)) { if ($ccr['name'] === 'prod_cost_price') { $has_cost_col = true; break; } } }
-} else {
-    $cc = DB::query($conn, "SHOW COLUMNS FROM products LIKE 'prod_cost_price'");
-    $has_cost_col = ($cc && DB::num_rows($cc) > 0);
-}
+// NYT: ingen side i systemet viste hvilke produkter der reelt sælger mest - relevant for genbestilling og
+// prisbeslutninger. Krediterede linjer (negativ mængde, se invoice_credit.php) trækker automatisk fra igen, så en
+// krediteret ordre ikke tæller som et reelt salg.
+// NYT: viser bruttoavance pr. produkt her også, når kostpris er udfyldt - samme "stille degradering hvis ikke
+// migreret endnu"-mønster.
+$has_cost_col = db_has_column($conn, 'products', 'prod_cost_price');
 $cost_select = $has_cost_col ? ", SUM(il.quantity * COALESCE(p.prod_cost_price, 0)) AS cost_total, MAX(CASE WHEN p.prod_cost_price IS NULL THEN 1 ELSE 0 END) AS cost_unknown" : "";
 // RETTET: omsætningen så bort fra linjerabatten og fakturaens valutakurs (en EUR-linje talte som kroner) -
 // så omsætning og bruttoavance (mod kostprisen i kroner) blev for høje / forkerte
@@ -74,13 +56,13 @@ $top_rows = [];
 while ($tr = DB::fetch_assoc($top_res)) {
     $row = [
         htmlspecialchars($tr['prod_name']),
-        number_format((float)$tr['qty_sold'], 0, ',', '.'),
-        number_format((float)$tr['revenue_excl_vat'], 2, ',', '.') . ' ' . $cur,
+        fmt_dk((float)$tr['qty_sold'], 0),
+        fmt_dk((float)$tr['revenue_excl_vat']) . ' ' . $cur,
     ];
     if ($has_cost_col) {
         $row[] = !empty($tr['cost_unknown'])
             ? '<span style="color:var(--text-muted);">' . lang('@Unknown') . '</span>'
-            : number_format((float)$tr['revenue_excl_vat'] - (float)$tr['cost_total'], 2, ',', '.') . ' ' . $cur;
+            : fmt_dk((float)$tr['revenue_excl_vat'] - (float)$tr['cost_total']) . ' ' . $cur;
     }
     $top_rows[] = $row;
 }
@@ -95,18 +77,9 @@ if (!empty($top_rows)) {
     echo '</div></details>';
 }
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 27): samme
-// "gruppér salg"-idé som udgiftsfordeling-pr.-konto (runde 24), blot på
-// salgssiden - kun muligt nu hvor products.prod_category findes. Samme
-// "ekskludér kladder"-princip som bedst-sælgende-produkter-panelet ovenfor.
-$has_category_col = false;
-if (DB::is_sqlite()) {
-    $catc = DB::query($conn, "PRAGMA table_info(products)");
-    if ($catc) { while ($catr = DB::fetch_assoc($catc)) { if ($catr['name'] === 'prod_category') { $has_category_col = true; break; } } }
-} else {
-    $catc = DB::query($conn, "SHOW COLUMNS FROM products LIKE 'prod_category'");
-    $has_category_col = ($catc && DB::num_rows($catc) > 0);
-}
+// NYT: samme "gruppér salg"-idé som udgiftsfordeling-pr.-konto, blot på salgssiden - kun muligt nu hvor
+// products.prod_category findes. Samme "ekskludér kladder"-princip som bedst-sælgende-produkter-panelet ovenfor.
+$has_category_col = db_has_column($conn, 'products', 'prod_category');
 if ($has_category_col) {
     $cat_res = DB::query($conn, "
         SELECT p.prod_category AS cat_name,
@@ -128,8 +101,8 @@ if ($has_category_col) {
         $pct = $cat_grand > 0 ? ((float)$cr['revenue_excl_vat'] / $cat_grand * 100) : 0;
         $cat_rows[] = [
             htmlspecialchars($cr['cat_name'] !== null && $cr['cat_name'] !== '' ? $cr['cat_name'] : lang('@Uncategorized')),
-            number_format((float)$cr['revenue_excl_vat'], 2, ',', '.') . ' ' . $cur,
-            number_format($pct, 1, ',', '.') . ' %',
+            fmt_dk((float)$cr['revenue_excl_vat']) . ' ' . $cur,
+            fmt_dk($pct, 1) . ' %',
         ];
     }
     if (!empty($cat_rows)) {
@@ -146,33 +119,27 @@ $res = DB::query($conn, "SELECT prod_id, prod_sku, prod_name, prod_stock, prod_m
 
 if ($res && DB::num_rows($res) > 0) {
     while($r = DB::fetch_assoc($res)) {
-        $stk = (int)($r['prod_stock'] ?? 0);
-        $min = (int)($r['prod_min_stock'] ?? 5);
+        $stk = (float)($r['prod_stock'] ?? 0);      // RETTET: (int) skar decimaler af (fx 7,5 kg -> 7)
+        $stk_txt = rtrim(rtrim(fmt_dk($stk, 3), '0'), ',');
+        $min = (float)($r['prod_min_stock'] ?? 5);
         
         $sku = !empty($r['prod_sku']) ? $r['prod_sku'] : $r['prod_id'];
-        // RETTET (fund 1, lagret XSS): produktnavnet blev før skrevet direkte
-        // ind i markup'en - htm_Table() escaper IKKE cellernes indhold selv
-        // (den understøtter bevidst rå HTML i celler, fx knapper), så det er
-        // hvert kaldested der selv skal escape ren tekst. product_list.php
-        // gjorde det allerede korrekt for samme felt.
+        // RETTET: produktnavnet blev før skrevet direkte ind i markup'en - htm_Table escaper IKKE cellernes
+        // indhold selv (den understøtter bevidst rå HTML i celler, fx knapper), så det er hvert kaldested der selv
+        // skal escape ren tekst. product_list.php gjorde det allerede korrekt for samme felt.
         $name = htmlspecialchars($r['prod_name']);
 
         // Pris formateres med valuta
-        $prc = number_format($r['prod_price'], 2, ',', '.') . " $cur";
+        $prc = fmt_dk($r['prod_price']) . " $cur";
 
         // Lagerstatus
-        // RETTET (bruger-anmodet, "kan bogholderen ønske sig mere"): $min
-        // (prod_min_stock) blev beregnet men ALDRIG reelt brugt til noget -
-        // hverken her eller nogen andre steder i appen. Feltet findes på
-        // product_edit.php's formular og bliver gemt korrekt, men var reelt
-        // "død" data siden ingen kode nogensinde læste den til noget synligt
-        // formål. Lagertallet vises nu i rødt/fed med et advarselsikon, når
-        // beholdningen er nået ned på eller under grænsen - samme idé som
-        // index.php's nye "Lavt lager"-tæller nedenfor, som bruger nøjagtig
+        // RETTET: $min (prod_min_stock) blev beregnet men ALDRIG reelt brugt til noget - hverken her eller nogen
+        // andre steder i appen. Lagertallet vises nu i rødt/fed med et advarselsikon, når beholdningen er nået ned
+        // på eller under grænsen - samme idé som index.php's nye "Lavt lager"-tæller nedenfor, som bruger nøjagtig
         // samme sammenligning.
-        $display_stock = ($stk <= $min)
-            ? '<strong style="color:var(--color-danger);"><i class="fa-solid fa-triangle-exclamation"></i> ' . $stk . '</strong>'
-            : $stk;
+        $display_stock = ($min > 0 && $stk <= $min)      // (minimum 0 = ingen grænse - se index.php)
+            ? '<strong style="color:var(--color-danger);"><i class="fa-solid fa-triangle-exclamation"></i> ' . $stk_txt . '</strong>'
+            : $stk_txt;
 
         // Action knapper inkl. ny variant-knap
         $btns = htm_ActionButtons([
@@ -180,11 +147,9 @@ if ($res && DB::num_rows($res) > 0) {
             // RETTET (fund 4): hint manglede @-præfikset og var derfor
             // hårdkodet dansk uanset valgt sprog - se lang()'s konvention.
             ['icon' => 'fa-copy', 'link' => 'product_edit.php?copy_id='.$r['prod_id'], 'hint' => '@Create variant', 'type' => 'success'],
-            // NYT (fund 2): der var ingen måde at slette et produkt på
-            // nogen steder i UI'et - den eneste eksisterende sletningslogik
-            // (invoice_actions.php?action=delete_product) er helt ukoblet.
-            // Genbruger samme tjek (blokerer sletning hvis produktet er
-            // brugt på en fakturalinje) i den aktivt vedligeholdte
+            // NYT: der var ingen måde at slette et produkt på nogen steder i UI'et - den eneste eksisterende
+            // sletningslogik (invoice_actions.php?action=delete_product) er helt ukoblet. Genbruger samme tjek
+            // (blokerer sletning hvis produktet er brugt på en fakturalinje) i den aktivt vedligeholdte
             // inventory_actions.php i stedet.
             ['icon' => 'fa-trash', 'link' => 'inventory_actions.php?action=delete_product&id='.$r['prod_id'], 'hint' => '@Delete', 'type' => 'danger', 'confirm' => '@Are you sure you want to delete this product? This cannot be undone.'],
         ], false);

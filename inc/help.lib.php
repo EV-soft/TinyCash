@@ -12,20 +12,11 @@
 # INTERN DATA-LOGIK
 # -------------------------------------------------------------------------
 
-// RETTET (§bugs-batch-25-review): ALVORLIGT FUND - begge OpenAI-kaldssteder i
-// denne fil (help-tekst-oversættelse nedenfor OG scanBilagMedOpenAI(), selve
-// bilags-AI-scanningen) læste udelukkende $_ENV/$_SERVER/getenv() for
-// OPENAI_API_KEY - men CLAUDE.md/db_connect.inc.php's egen konvention er at
-// hemmeligheder ALTID ligger i inc/env.ini, indlæst via parse_ini_file(),
-// IKKE som rigtige OS-miljøvariabler. Intet sted i hele kodebasen kopierer
-// nogensinde env.ini's værdier over i $_ENV (bekræftet: ingen putenv()-kald
-// findes noget sted) - så uanset hvor korrekt en bruger udfylder
-// OPENAI_API_KEY i inc/env.ini, ville begge disse funktioner ALTID falde
-// tilbage til den tomme streng og vise "API-nøgle er ikke sat op", som om
-// nøglen aldrig var konfigureret. AI-scan-funktionen (hele drag-drop-UI'en i
-// expense_edit.php) kunne derfor reelt ALDRIG fungere via den dokumenterede
-// opsætning. translation_manager.php havde uafhængigt allerede fundet den
-// rigtige løsning i sin egen getOpenAiApiKey() - samme mønster genbruges her.
+// RETTET: ALVORLIGT FUND - begge OpenAI-kaldssteder i denne fil (help-tekst-oversættelse nedenfor OG
+// scanBilagMedOpenAI, selve bilags-AI-scanningen) læste udelukkende $_ENV/$_SERVER/getenv for OPENAI_API_KEY - men
+// CLAUDE.md/db_connect.inc.php's egen konvention er at hemmeligheder ALTID ligger i inc/env.ini, indlæst via
+// parse_ini_file, IKKE som rigtige OS-miljøvariabler. AI-scan-funktionen (hele drag-drop-UI'en i expense_edit.php)
+// kunne derfor reelt ALDRIG fungere via den dokumenterede opsætning.
 if (!function_exists('_help_get_openai_key')) {
     function _help_get_openai_key(): string {
         if (defined('OPENAI_API_KEY') && !empty(OPENAI_API_KEY)) {
@@ -53,17 +44,10 @@ if (!function_exists('_help_get_openai_key')) {
 }
 
 function _help_get_content($current_page, $target_lang) {
-    // RETTET (§bugs-batch-17-review): kaldes to gange PR. SIDEVISNING -
-    // htm_FloatingActionBar() (via _help_has_text()) for at afgøre om
-    // hjælpe-knappen skal være aktiv, og htm_HelpSystem() lige efter for det
-    // faktiske indhold - begge fra htm_Footer() på hver eneste sidevisning.
-    // Uden caching betyder det: to fulde filindlæsninger+JSON-afkodninger af
-    // master-filen for hver sidevisning, og - værre - hvis oversættelsen for
-    // denne side+sprog endnu ikke er cachet på disk, et fuldt OpenAI-
-    // API-kald (op til 15 sek. timeout) AFFYRET TO GANGE i træk for præcis
-    // samme resultat, før den første besvarelse når at skrive sin egen
-    // disk-cache. Simpel per-request static cache løser det - samme
-    // $current_page+$target_lang genbruger blot det første svar.
+    // RETTET: kaldes to gange PR. SIDEVISNING - htm_FloatingActionBar (via _help_has_text) for at afgøre om
+    // hjælpe-knappen skal være aktiv, og htm_HelpSystem lige efter for det faktiske indhold - begge fra htm_Footer
+    // på hver eneste sidevisning. Simpel per-request static cache løser det - samme $current_page+$target_lang
+    // genbruger blot det første svar.
     static $cache = [];
     $cache_key = $current_page . '|' . $target_lang;
     if (array_key_exists($cache_key, $cache)) {
@@ -346,11 +330,8 @@ function scanBilagMedOpenAI($file_path) {
         'Content-Type: application/json',
         'Authorization: Bearer ' . $api_key
     ]);
-    // NYT: eksplicit timeout - der var slet ingen før, så et langsomt/
-    // uopnåeligt api.openai.com kunne hænge selve sidevisningen på ubestemt
-    // tid (samme fejlklasse som auto_backup.inc.php's manglende SMTP-timeout
-    // tidligere i denne session). 60 sek. da PDF-analyse typisk tager længere
-    // end et enkelt billede.
+    // NYT: eksplicit timeout - der var slet ingen før, så et langsomt/uopnåeligt api.openai.com kunne hænge selve
+    // sidevisningen på ubestemt tid. 60 sek. da PDF-analyse typisk tager længere end et enkelt billede.
     curl_setopt($ch, CURLOPT_TIMEOUT, 60);
 
     // SSL-certifikatverifikation er cURLs egen standard, bevidst IKKE slået

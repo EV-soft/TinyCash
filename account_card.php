@@ -25,7 +25,7 @@ require_once 'inc/php2htm.lib.php';
 $s = get_settings($conn);
 $currency = $s['currency'] ?? 'DKK';
 
-$default_from = date('Y-01-01');
+$default_from = tc_fiscal_year_bounds($conn)[0];      // (regnskabsårets start - ikke altid 1. januar)
 $default_to   = date('Y-m-d');
 $from = $_GET['from'] ?? $default_from;
 $to   = $_GET['to']   ?? $default_to;
@@ -97,7 +97,7 @@ if (!empty($acc_options) && $acc_id > 0) {
         // Primo-linje øverst, visuelt adskilt
         $data[] = [
             '', '', '<em>' . lang('@Opening balance carried forward') . '</em>', '', '',
-            '<div style="text-align:right; font-weight:bold;">' . number_format($primo, 2, ',', '.') . '</div>'
+            '<div style="text-align:right; font-weight:bold;">' . fmt_dk($primo) . '</div>'
         ];
 
         $running = $primo;
@@ -106,8 +106,8 @@ if (!empty($acc_options) && $acc_id > 0) {
             $is_cancelled = ((int)($l['is_cancelled'] ?? 0) === 1);
             $rowStyle = $is_cancelled ? 'text-decoration:line-through; opacity:0.55;' : '';
 
-            $debit  = ($l['amount'] > 0) ? number_format($l['amount'], 2, ',', '.') : '';
-            $credit = ($l['amount'] < 0) ? number_format(abs($l['amount']), 2, ',', '.') : '';
+            $debit  = ($l['amount'] > 0) ? fmt_dk($l['amount']) : '';
+            $credit = ($l['amount'] < 0) ? fmt_dk(abs($l['amount'])) : '';
 
             $data[] = [
                 "<span style='$rowStyle'>" . date(CONF_DATE_FORMAT, strtotime($l['jou_date'])) . '</span>',
@@ -115,7 +115,7 @@ if (!empty($acc_options) && $acc_id > 0) {
                 "<span style='$rowStyle'>" . htmlspecialchars($l['jou_text']) . '</span>',
                 "<div style='text-align:right; color:green; $rowStyle'>$debit</div>",
                 "<div style='text-align:right; color:red; $rowStyle'>$credit</div>",
-                "<div style='text-align:right; font-weight:bold; $rowStyle'>" . number_format($running, 2, ',', '.') . '</div>',
+                "<div style='text-align:right; font-weight:bold; $rowStyle'>" . fmt_dk($running) . '</div>',
             ];
         }
 
@@ -126,7 +126,7 @@ if (!empty($acc_options) && $acc_id > 0) {
         htm_Table($headers, $data, 'account_card_tbl', 200, '', true, [], '600px', 'kontokort_' . $acc_row['acc_id'] . '.csv');
 
         echo '<div style="display:flex; justify-content:space-between; padding:14px 0; margin-top:8px; border-top:2px solid var(--color-primary); font-weight:bold;">';
-        echo '<span>' . lang('@Closing Balance') . '</span><span>' . number_format($running, 2, ',', '.') . ' ' . $currency . '</span>';
+        echo '<span>' . lang('@Closing Balance') . '</span><span>' . fmt_dk($running) . ' ' . $currency . '</span>';
         echo '</div>';
 
         htm_Card_end();

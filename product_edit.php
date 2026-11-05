@@ -24,22 +24,19 @@ if ($id > 0) {
     // Rediger eksisterende produkt
     $res = DB::query($conn, "SELECT * FROM products WHERE prod_id = $id");
     $item = DB::fetch_assoc($res);
-    if (!$item) die(lang('@Product not found'));
+    if (!$item) redirect('inventory_status.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: hvid side uden menu
     $pageTitle = lang('@Edit Product');
 } elseif ($copy_id > 0) {
     // Opret variant: Hent data fra det eksisterende produkt, men nulstil ID'et
     $res = DB::query($conn, "SELECT * FROM products WHERE prod_id = $copy_id");
     $item = DB::fetch_assoc($res);
-    if (!$item) die(lang('@Product not found'));
+    if (!$item) redirect('inventory_status.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: hvid side uden menu
     
     $item['prod_id'] = 0;
     $item['prod_name'] = $item['prod_name'] . ' (Variant)';
-    // RETTET (fund 3, produkt-/lagergennemgang [[inventory-bugs-review]]):
-    // foreslog altid det samme faste "-2"-suffiks, uanset hvor mange
-    // varianter der allerede findes af det samme grundprodukt - to
-    // varianter oprettet efter hinanden fik derfor samme foreslåede SKU
-    // ("ABC-2" begge gange), og intet i skemaet håndhæver unikke SKU'er.
-    // Finder nu det laveste ledige "-N"-suffiks i stedet.
+    // RETTET: foreslog altid det samme faste "-2"-suffiks, uanset hvor mange varianter der allerede findes af det
+    // samme grundprodukt - to varianter oprettet efter hinanden fik derfor samme foreslåede SKU ("ABC-2" begge
+    // gange), og intet i skemaet håndhæver unikke SKU'er. Finder nu det laveste ledige "-N"-suffiks i stedet.
     $base_sku = $item['prod_sku'] ?? '';
     $suffix = 2;
     do {
@@ -115,14 +112,7 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
             // her giver blot forslag ud fra allerede brugte kategorier, uden
             // at LÅSE brugeren til kun dem), samme "stille degradering hvis
             // ikke migreret endnu"-mønster som kostprisen nedenfor.
-            $has_category_col = false;
-            if (DB::is_sqlite()) {
-                $catc = DB::query($conn, "PRAGMA table_info(products)");
-                if ($catc) { while ($catr = DB::fetch_assoc($catc)) { if ($catr['name'] === 'prod_category') { $has_category_col = true; break; } } }
-            } else {
-                $catc = DB::query($conn, "SHOW COLUMNS FROM products LIKE 'prod_category'");
-                $has_category_col = ($catc && DB::num_rows($catc) > 0);
-            }
+            $has_category_col = db_has_column($conn, 'products', 'prod_category');
             if ($has_category_col):
                 $cat_res = DB::query($conn, "SELECT DISTINCT prod_category FROM products WHERE prod_category IS NOT NULL AND prod_category != '' ORDER BY prod_category ASC");
                 $existing_cats = [];
@@ -142,19 +132,9 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
                 );
             endif;
 
-            // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde
-            // 31): products havde intet stregkode-/EAN-felt - mange
-            // leverandører/fakturaer kræver et EAN-nummer. Samme "stille
-            // degradering hvis ikke migreret endnu"-mønster som kategorien
-            // ovenfor.
-            $has_ean_col = false;
-            if (DB::is_sqlite()) {
-                $eanc = DB::query($conn, "PRAGMA table_info(products)");
-                if ($eanc) { while ($eanr = DB::fetch_assoc($eanc)) { if ($eanr['name'] === 'prod_ean') { $has_ean_col = true; break; } } }
-            } else {
-                $eanc = DB::query($conn, "SHOW COLUMNS FROM products LIKE 'prod_ean'");
-                $has_ean_col = ($eanc && DB::num_rows($eanc) > 0);
-            }
+            // NYT: products havde intet stregkode-/EAN-felt - mange leverandører/fakturaer kræver et EAN-nummer.
+            // Samme "stille degradering hvis ikke migreret endnu"-mønster som kategorien ovenfor.
+            $has_ean_col = db_has_column($conn, 'products', 'prod_ean');
             if ($has_ean_col):
                 htm_Field(
                     icon: 'fa-barcode',
@@ -204,7 +184,7 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
                             icon: 'fa-money-bill-wave',
                             labl: lang('@Sales Price') . ' (' . lang('@excl. VAT') . ')',
                             name: 'prod_price',
-                            valu: number_format($item['prod_price'], 2, ',', ''),
+                            valu: fmt_dk_input($item['prod_price']),
                             type: 'text',
                             extr: 'required id="prod_price_field" oninput="updateMargin()" style="font-weight:bold; text-align: right;"'
                         );
@@ -231,14 +211,7 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
             // fakturering/moms), samme "stille degradering hvis ikke migreret
             // endnu"-mønster som andre nyere kolonner - viser kun feltet hvis
             // db-setup/migrate_product_cost_price.php er kørt.
-            $has_cost_col = false;
-            if (DB::is_sqlite()) {
-                $cc = DB::query($conn, "PRAGMA table_info(products)");
-                if ($cc) { while ($ccr = DB::fetch_assoc($cc)) { if ($ccr['name'] === 'prod_cost_price') { $has_cost_col = true; break; } } }
-            } else {
-                $cc = DB::query($conn, "SHOW COLUMNS FROM products LIKE 'prod_cost_price'");
-                $has_cost_col = ($cc && DB::num_rows($cc) > 0);
-            }
+            $has_cost_col = db_has_column($conn, 'products', 'prod_cost_price');
             if ($has_cost_col):
             ?>
             <div style="display: flex; gap: 15px; align-items: center;">
@@ -249,7 +222,7 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
                                 icon: 'fa-tags',
                                 labl: '@Cost Price',
                                 name: 'prod_cost_price',
-                                valu: isset($item['prod_cost_price']) && $item['prod_cost_price'] !== null ? number_format((float)$item['prod_cost_price'], 2, ',', '') : '',
+                                valu: isset($item['prod_cost_price']) && $item['prod_cost_price'] !== null ? fmt_dk_input((float)$item['prod_cost_price']) : '',
                                 type: 'text',
                                 extr: 'id="prod_cost_field" oninput="updateMargin()" style="text-align: right;" placeholder="' . lang('@Optional') . '"'
                             );
@@ -280,18 +253,21 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
     htm_Card_end();
 echo "</div>";
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): der findes et
-// "bedst sælgende produkter"-overblik (sales_hub.php, runde 13), men ingen
-// måde at se salgshistorikken for ÉT bestemt produkt direkte fra selve
-// produktkortet - nyttigt ved prisjusteringer eller lagerplanlægning.
-// Ekskluderer kladder, samme "en kladde er endnu ikke et reelt salg"-
-// princip som resten af appens omsætnings-relaterede rapporter.
+// NYT: der findes et "bedst sælgende produkter"-overblik, men ingen måde at se salgshistorikken for ÉT bestemt
+// produkt direkte fra selve produktkortet - nyttigt ved prisjusteringer eller lagerplanlægning. Ekskluderer
+// kladder, samme "en kladde er endnu ikke et reelt salg"- princip som resten af appens omsætnings-relaterede
+// rapporter.
 if ($id > 0) {
     // RETTET: linjetotalen så bort fra linjens rabat og fra fakturaens valutakurs - en EUR-faktura talte med
     // sit EUR-beløb som var det kroner, og en rabatlinje med fuld pris (samme regel som invoice_dkk_totals())
     $ph_disc = invoice_discount_sql($conn, 'il.');
+    $ph_line = "(il.quantity * il.price_each $ph_disc * (100 + il.line_vat_rate) / 100.0 * COALESCE(NULLIF(i.exch_rate, 0), 1))";
+    $ph_cn   = db_has_column($conn, 'invoices', 'credit_note_no') ? ', i.credit_note_no' : '';
+    // Totalerne over ALLE linjer - før summeredes kun de 200 viste
+    $ph_tot = DB::fetch_assoc(DB::query($conn, "SELECT COALESCE(SUM(il.quantity), 0) AS qty, COALESCE(SUM($ph_line), 0) AS rev, COUNT(*) AS n
+        FROM invoice_lines il JOIN invoices i ON il.inv_id = i.inv_id WHERE il.prod_id = $id AND LOWER(i.inv_status) != 'draft'"));
     $sales_res = DB::query($conn, "
-        SELECT i.inv_id, i.invoice_no, i.inv_date, i.inv_status, c.cust_name,
+        SELECT i.inv_id, i.invoice_no, i.credit_ref$ph_cn, i.inv_date, i.inv_status, c.cust_name,
                il.quantity, il.price_each,
                (il.quantity * il.price_each $ph_disc * (100 + il.line_vat_rate) / 100.0 * COALESCE(NULLIF(i.exch_rate, 0), 1)) AS line_total
         FROM invoice_lines il
@@ -302,26 +278,24 @@ if ($id > 0) {
         LIMIT 200");
 
     $sales_rows = [];
-    $total_qty = 0.0; $total_rev = 0.0;
+    $total_qty = (float)($ph_tot['qty'] ?? 0); $total_rev = (float)($ph_tot['rev'] ?? 0);
     while ($sr = DB::fetch_assoc($sales_res)) {
-        $total_qty += (float)$sr['quantity'];
-        $total_rev += (float)$sr['line_total'];
+        // En kreditnota har intet fakturanummer - den stod som "#000000"
+        $ph_no = !empty($sr['credit_ref']) ? 'KN-' . str_pad((string)($sr['credit_note_no'] ?? ''), 6, '0', STR_PAD_LEFT) : '#' . str_pad((string)$sr['invoice_no'], 6, '0', STR_PAD_LEFT);
         $sales_rows[] = [
-            '<a href="invoice_view.php?id=' . (int)$sr['inv_id'] . '">#' . str_pad($sr['invoice_no'], 6, "0", STR_PAD_LEFT) . '</a>',
+            '<a href="invoice_view.php?id=' . (int)$sr['inv_id'] . '">' . $ph_no . '</a>',
             date(CONF_DATE_FORMAT, strtotime($sr['inv_date'])),
             htmlspecialchars($sr['cust_name']),
-            number_format((float)$sr['quantity'], 2, ',', '.'),
-            number_format((float)$sr['price_each'], 2, ',', '.'),
-            number_format((float)$sr['line_total'], 2, ',', '.') . ' ' . $cur,
+            fmt_dk((float)$sr['quantity']),
+            fmt_dk((float)$sr['price_each']),
+            fmt_dk((float)$sr['line_total']) . ' ' . $cur,
         ];
     }
 
     if (!empty($sales_rows)) {
         echo "<div style='max-width:900px; margin:20px auto;'>";
         htm_Card_(capt: '@Sales History', wdth: 900);
-        echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">'
-            . sprintf(lang('@%s units sold for a total of %s across %d invoice line(s).'), number_format($total_qty, 2, ',', '.'), number_format($total_rev, 2, ',', '.') . ' ' . $cur, count($sales_rows))
-            . '</p>';
+        htm_Note(sprintf(lang('@%s units sold for a total of %s across %d invoice line(s).'), fmt_dk($total_qty), fmt_dk($total_rev) . ' ' . $cur, (int)($ph_tot['n'] ?? count($sales_rows))), 'font-size:0.9em; margin-top:-5px;');
         htm_Table(
             ['@Invoice', '@Date', '@Customer', '@Qty', '@Price', '@Line Total'],
             $sales_rows, 'prod_sales_tbl', 100, '', true,
@@ -342,8 +316,8 @@ function updateMargin() {
     var costField = document.getElementById('prod_cost_field');
     var box = document.getElementById('margin_display');
     if (!priceField || !costField || !box) return;
-    var price = parseFloat((priceField.value || '0').toString().replace(',', '.')) || 0;
-    var cost = parseFloat((costField.value || '').toString().replace(',', '.'));
+    var price = tcNum(priceField.value);
+    var cost = costField.value.trim() === '' ? NaN : tcNum(costField.value);
     if (!costField.value || isNaN(cost) || price <= 0) { box.innerHTML = ''; return; }
     var margin = price - cost;
     var pct = price > 0 ? (margin / price * 100) : 0;

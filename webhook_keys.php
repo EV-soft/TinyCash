@@ -50,13 +50,8 @@ if (isset($_GET['revoke'])) {
     foreach ($all as $k) { if (($k['id'] ?? null) === $id) { $target = $k; break; } }
     if ($target && webhook_key_revoke($id)) {
         log_action($conn, 'REVOKE_WEBHOOK_KEY', 'webhook_keys', 0, ['label' => $target['label'] ?? null], ['revoked' => true]);
-        header('Location: webhook_keys.php?msg=revoked');
-        exit;
+        redirect('webhook_keys.php', '@Key revoked - any integration using it will stop working immediately.');
     }
-}
-if (isset($_GET['msg']) && $_GET['msg'] === 'revoked') {
-    $msg = lang('@Key revoked - any integration using it will stop working immediately.');
-    $msg_type = 'success';
 }
 
 htm_Header(capt: '@Webhook API Keys', mwidth: 1000);
@@ -79,7 +74,7 @@ if ($newly_generated_key) {
 
 // --- KORT: Opret ny nøgle ---
 htm_Card_(capt: '🆕 ' . lang('@Generate new key'), wdth: 800, form: 'generate_key_form', fold: true);
-echo '<p style="color:var(--text-muted); font-size:0.9em;">' . lang('@A key lets an external system (webshop/POS) create draft invoices via webhook_invoice.php, without logging in.') . '</p>';
+htm_Note(lang('@A key lets an external system (webshop/POS) create draft invoices via webhook_invoice.php, without logging in.'), 'font-size:0.9em;');
 echo '<div style="margin-bottom:12px;"><label>' . lang('@Label') . '</label><br>
       <input type="text" name="label" required placeholder="' . htmlspecialchars(lang('@e.g. Webshop production'), ENT_QUOTES) . '" style="width:100%; padding:8px; box-sizing:border-box;"></div>';
 htm_Button(icon: 'fa-key', labl: '@Generate Key', attr: 'name="generate_key" value="1"');
@@ -89,7 +84,7 @@ htm_Card_end();
 htm_Card_(capt: '🗂️ ' . lang('@Existing keys'), wdth: 800, fold: true);
 $keys = wk_mine(webhook_key_list());
 if (empty($keys)) {
-    echo '<p style="color:var(--text-muted);">' . lang('@No keys generated yet.') . '</p>';
+    htm_Note(lang('@No keys generated yet.'));
 } else {
     $head = ['@Label', '@Key (last 4)', '@Created', '@Last Used', '@Status', '@Actions'];
     $data = [];
@@ -119,7 +114,7 @@ htm_Card_end();
 $base_url = (!empty($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'dit-domæne') . dirname($_SERVER['SCRIPT_NAME'] ?? '/');
 $base_url = rtrim($base_url, '/') . '/webhook_invoice.php';
 htm_Card_(capt: '📖 ' . lang('@How to use it'), wdth: 800, fold: 'closed');
-echo '<p style="color:var(--text-muted); font-size:0.9em;">' . lang('@Send a POST request with a JSON body. The key can be sent as either header - use whichever your integration platform supports.') . '</p>';
+htm_Note(lang('@Send a POST request with a JSON body. The key can be sent as either header - use whichever your integration platform supports.'), 'font-size:0.9em;');
 
 echo '<p style="font-size:0.8em; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">' . htmlspecialchars('X-Webhook-Key') . '</p>';
 echo '<pre style="background:var(--bg-panel); padding:12px; border-radius:6px; overflow-x:auto; font-size:0.85em; white-space:pre-wrap;">' . htmlspecialchars(
@@ -149,8 +144,8 @@ echo '<pre style="background:var(--bg-panel); padding:12px; border-radius:6px; o
     "note": "Bestilt via webshop"
   }\''
 ) . '</pre>';
-echo '<p style="color:var(--text-muted); font-size:0.8em;">' . lang('@Note: on some shared hosting, the Authorization header is stripped by PHP-CGI/FastCGI before PHP ever sees it. If Authorization does not work, use X-Webhook-Key instead.') . '</p>';
-echo '<p style="color:var(--text-muted); font-size:0.85em;">' . lang('@Always creates a DRAFT invoice, never posts it directly - a bookkeeper must review and send/post it as usual. The product\'s SKU must already exist in the product catalog; price and VAT rate are taken from the product unless overridden in the payload. If the customer\'s email does not already exist, a new customer is created automatically.') . '</p>';
+htm_Note(lang('@Note: on some shared hosting, the Authorization header is stripped by PHP-CGI/FastCGI before PHP ever sees it. If Authorization does not work, use X-Webhook-Key instead.'), 'font-size:0.8em;');
+htm_Note(lang('@Always creates a DRAFT invoice, never posts it directly - a bookkeeper must review and send/post it as usual. The product\'s SKU must already exist in the product catalog; price and VAT rate are taken from the product unless overridden in the payload. If the customer\'s email does not already exist, a new customer is created automatically.'), 'font-size:0.85em;');
 htm_Card_end();
 
 htm_Footer();

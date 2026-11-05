@@ -9,13 +9,7 @@ require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
 require_once 'inc/help.lib.php';
-// RETTET (bruger-rapporteret: "backup" var ikke et klart begreb - manuel og
-// automatisk backup lå spredt på to helt forskellige sider uden nogen
-// tydelig adskillelse. Automatisk-backup-boksen boede FØR på
-// company_settings.php - en side om firmanavn/moms/valuta, ikke om backup -
-// og "Backup Management" her viste kun de manuelle handlinger uden nogen
-// status/fejlvisning for det automatiske system overhovedet). Flyttet hertil
-// og siden opdelt i to tydelige sektioner, se nedenfor.
+// RETTET. Flyttet hertil og siden opdelt i to tydelige sektioner, se nedenfor.
 require_once 'inc/auto_backup_integration.php';
 
 if (!isset($_SESSION['user_level']) || (int)$_SESSION['user_level'] < 3) {
@@ -59,12 +53,10 @@ echo "<div style='max-width: 1000px; margin: 0 auto; font-family: sans-serif; bo
     echo "<strong>" . lang('@Manual vs. Automatic') . ":</strong> " . lang('@This page covers two independent systems: backups YOU generate and download right now (below), and an automatic encrypted backup that runs by itself in the background and emails you a copy on a schedule (further down).');
     echo "</div>";
 
-    // RETTET (bruger-præciseret: "jeg mente htm_Card() med fold"): erstatter
-    // den håndrullede tonede div med et rigtigt htm_Card_()-kort - bruger den
-    // nye $bclr-parameter (tonet baggrund) sammen med den allerede byggede
-    // $fold-parameter (fold/luk-ikon), i stedet for en special-bygget wrapper.
-    // Rav/gul tone - "noget du selv skal gøre". De hvide indre kort
-    // ($cardF/$card) svæver oven på kortets tonede baggrund.
+    // RETTET (bruger-præciseret: "jeg mente htm_Card med fold"): erstatter den håndrullede tonede div med et
+    // rigtigt htm_Card_-kort - bruger den nye $bclr-parameter (tonet baggrund) sammen med den allerede byggede
+    // $fold-parameter (fold/luk-ikon), i stedet for en special-bygget wrapper. De hvide indre kort ($cardF/$card)
+    // svæver oven på kortets tonede baggrund.
     htm_Card_(capt: '🔧 ' . lang('@Manual Backup'), wdth: 1000, info: lang('@Actions you trigger yourself, right now.'), fold: true, bclr: '#fffbeb');
 
     // ══ SEKTION 1: REGNSKABS-BACKUP ═════════════════════════════════════════
@@ -103,14 +95,11 @@ echo "<div style='max-width: 1000px; margin: 0 auto; font-family: sans-serif; bo
     echo "<div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 10px;'>";
 
         // System- & konfigurations-backup
-        // RETTET (§bugs-batch-14-review): beskrivelsen sagde "database structure
-        // and configuration" - men backup_system.php bruger DB::dump_to_sql(),
-        // som eksporterer ALLE tabellers FULDE indhold (inkl. users.password_hash
-        // og alle kunde-/faktura-/regnskabsdata), ikke kun strukturen. Filens
-        // egen kodekommentar sagde det korrekt hele tiden ("Indeholder alle
-        // data: Kontoplan, brugere, transaktioner og FIRMADATA") - kun denne
-        // bruger-vendte tekst var misvisende, og kunne føre til at man
-        // behandlede filen som mindre følsom end den reelt er.
+        // RETTET: beskrivelsen sagde "database structure and configuration" - men backup_system.php bruger
+        // DB::dump_to_sql, som eksporterer ALLE tabellers FULDE indhold (inkl. users.password_hash og alle
+        // kunde-/faktura-/regnskabsdata), ikke kun strukturen. Filens egen kodekommentar sagde det korrekt hele
+        // tiden ("Indeholder alle data: Kontoplan, brugere, transaktioner og FIRMADATA") - kun denne bruger-vendte
+        // tekst var misvisende, og kunne føre til at man behandlede filen som mindre følsom end den reelt er.
         echo "<div style='$cardF'>";
         echo "<div><h3 style='$h3'>" . lang('@System Configuration') . "</h3>";
         echo "<p style='$p'>" . lang('@Full database dump (all data, including customers, invoices and user accounts) plus language files - despite the name, this is not limited to structure/configuration and is just as sensitive as the Full Data Archive.') . "</p></div>";
@@ -158,17 +147,10 @@ echo "<div style='max-width: 1000px; margin: 0 auto; font-family: sans-serif; bo
     echo "</p>";
     echo "</div>";
 
-    // ══ SEKTION: LOVKRAV - FLYT BACKUPS OFF-SITE (bruger-rapporteret) ═══════
-    // Flyttet hertil fra company_settings.php's "Sikkerhed - Om Backup"-kort -
-    // samme oprydning som automatisk-backup-boksen nedenfor. RETTET undervejs:
-    // den gamle tekst sagde "systemet gemmer AUTOMATISK backup-filer i
-    // backups-mappen" - men det er reelt kun de MANUELLE handlinger ovenfor
-    // (Full Data Archive/System Configuration/Program Source) der skriver
-    // til backups/; den ægte automatiske baggrundsproces sender kun en mail
-    // og gemmer intet lokalt (se inc/auto_backup.inc.php). At bruge ordet
-    // "automatisk" her, lige ved siden af en side der nu også har en helt
-    // bogstavelig "Automatisk Backup"-sektion, ville genindføre præcis den
-    // tvetydighed, denne omlægning skal fjerne - omformuleret.
+    // ══ SEKTION: LOVKRAV - FLYT BACKUPS OFF-SITE ═══════ Flyttet hertil fra company_settings.php's "Sikkerhed -
+    // Om Backup"-kort - samme oprydning som automatisk-backup-boksen nedenfor. At bruge ordet "automatisk" her,
+    // lige ved siden af en side der nu også har en helt bogstavelig "Automatisk Backup"-sektion, ville genindføre
+    // præcis den tvetydighed, denne omlægning skal fjerne - omformuleret.
     echo "<div style='$card margin-bottom: 10px;'>";
     $backup_notice = '<strong style="color: var(--color-warning); font-size: 14px;"><i class="fa-solid fa-cloud-arrow-down"></i> ' . lang('@Important regarding backup (Bookkeeping Act):') . '</strong>'
         . '<p style="margin: 5px 0 0 0; font-size: 13px; color: var(--text-main); line-height: 1.5;">' . lang('@Manually generated backup files (above) are saved in the backups folder on the server. To comply with legal data protection requirements, you must regularly download these .zip files and store them on an external data medium (e.g., a local hard drive, USB drive, or secure cloud storage).') . '</p>'
@@ -177,16 +159,8 @@ echo "<div style='max-width: 1000px; margin: 0 auto; font-family: sans-serif; bo
     echo "</div>";
 
     // ══ VEJLEDNING (fra hjælpesystemet, vist inline og oversat) ═════════════
-    // RETTET (bruger-rapporteret): indholdet handler UDELUKKENDE om manuel
-    // backup (download+upload til ekstern sky, MD5-verifikation af den
-    // manuelt genererede ZIP fra §Integritet-sektionen ovenfor) - stod FØR
-    // som en delt/generel sektion i bunden af siden, hvilket var misvisende.
-    // Flyttet ind under selve Manuel Backup-kortet i stedet. Den ene
-    // automatisk-relaterede sætning (master-kodeord) er samtidig fjernet fra
-    // selve hjælpeteksten - den var reelt redundant, render_auto_backup_
-    // settings() har allerede sin egen udførlige master-kodeord-status.
-    // Al lang prosa bor i json-data/help_system.json (+ _da), så den
-    // oversættes ordentligt og undgår extract_translations' 60-tegns-grænse.
+    // RETTET: indholdet handler UDELUKKENDE om manuel backup - stod FØR som en delt/generel sektion i bunden af
+    // siden, hvilket var misvisende. Flyttet ind under selve Manuel Backup-kortet i stedet.
     htm_Card_(capt: '📖 ' . lang('@Backup Guidance'), wdth: 1000, fold: 'closed');
     $user_lang = isset($_SESSION['lang']) ? $_SESSION['lang'] : 'da';
     $json_help_content = _help_get_content('backup.php', $user_lang);

@@ -1,7 +1,7 @@
 <?php # /save_layout.php v:1.3.0 d:2026-08-30 i:evs
 /* ==========================================================================
    Gemmer position/bredde for en design-blok på fakturaen (kaldt fra
-   invoice_view.php's Design Mode via saveToDB()-JS-funktionen).
+   invoice_view.php's Design Mode via docSaveBlock() i inc/doc_design.inc.php).
 
    Denne fil manglede helt i projektet, selvom invoice_view.php allerede
    kaldte den - derfor blev ændrede placeringer aldrig gemt: fetch() fejler
@@ -26,14 +26,10 @@ $pos_x      = $_POST['x'] ?? null;
 $pos_y      = $_POST['y'] ?? null;
 $width_mm   = $_POST['w'] ?? null;
 
-// Whitelist af gyldige bloknøgler - matcher design-block id'erne i invoice_view.php.
-// Forhindrer at et vilkårligt element_id kan indsættes/opdateres via dette endpoint.
-// RETTET (bruger-rapporteret: "Fejl ved gem af layout... status 400" -
-// vedvarede efter en tidligere, ANDEN rettelse af samme fejlmelding, se
-// invoice_view.php's egen kommentar for den første). block-foot-message
-// findes på selve fakturasiden (invoice_view.php), men manglede her -
-// ethvert forsøg på at flytte/resize netop DEN blok blev derfor korrekt,
-// men vildledende, afvist som "ugyldigt element-id".
+// Whitelist af gyldige bloknøgler - matcher design-block id'erne i invoice_view.php. Forhindrer at et vilkårligt
+// element_id kan indsættes/opdateres via dette endpoint.
+// RETTET. block-foot-message findes på selve fakturasiden (invoice_view.php), men manglede her - ethvert forsøg på
+// at flytte/resize netop DEN blok blev derfor korrekt, men vildledende, afvist som "ugyldigt element-id".
 $allowed_ids = IL_BLOCK_IDS;      // (listen bor nu i inc/invoice_layouts.inc.php - én kilde)
 
 if (!in_array($element_id, $allowed_ids, true)) {
@@ -54,7 +50,7 @@ $width_mm = (float)$width_mm;
 
 // Flere fakturalayouts (migreret): placeringen gemmes i det layout, der redigeres i Design Mode
 if (il_ready($conn)) {
-    $layout_id = il_valid_id($conn, $_POST['layout_id'] ?? 0);
+    $layout_id = il_valid_id($conn, $_POST['layout_id'] ?? 0, null);      // (faktura- eller tilbudslayout)
     if ($layout_id <= 0) {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => 'Unknown layout']);

@@ -27,30 +27,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $raw_email = trim($_POST['email'] ?? '');
     $raw_name  = trim($_POST['supplier_name'] ?? '');
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 31):
-    // valgfrie bankoplysninger - nødvendige for CSV-eksporten til
-    // bankbetaling (supplier_payment_export.php). Samme "stille degradering
-    // hvis ikke migreret endnu"-mønster som andre nyere felter.
-    $has_bank_cols = false;
-    if (DB::is_sqlite()) {
-        $bc = DB::query($conn, "PRAGMA table_info(suppliers)");
-        if ($bc) { while ($bcr = DB::fetch_assoc($bc)) { if ($bcr['name'] === 'supplier_reg_no') { $has_bank_cols = true; break; } } }
-    } else {
-        $bc = DB::query($conn, "SHOW COLUMNS FROM suppliers LIKE 'supplier_reg_no'");
-        $has_bank_cols = ($bc && DB::num_rows($bc) > 0);
-    }
+    // NYT: valgfrie bankoplysninger - nødvendige for CSV-eksporten til bankbetaling (supplier_payment_export.php).
+    // Samme "stille degradering hvis ikke migreret endnu"-mønster som andre nyere felter.
+    $has_bank_cols = db_has_column($conn, 'suppliers', 'supplier_reg_no');
     $reg_no_raw  = trim($_POST['supplier_reg_no'] ?? '');
     $acct_no_raw = trim($_POST['supplier_account_no'] ?? '');
     $reg_no_sql  = $reg_no_raw !== ''  ? "'" . DB::escape($conn, $reg_no_raw) . "'"  : 'NULL';
     $acct_no_sql = $acct_no_raw !== '' ? "'" . DB::escape($conn, $acct_no_raw) . "'" : 'NULL';
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): denne side
-    // kaldte FØR aldrig log_action() overhovedet - i modsætning til
-    // customer_edit.php/account_edit.php/vat_codes.php, som alle logger
-    // ændringer af stamdata. En leverandørs kontaktoplysninger, CVR eller
-    // betalingsbetingelser kunne dermed ændres helt usporbart. Henter
-    // "før"-billedet FØR selve UPDATE'en, samme mønster som
-    // account_edit.php's $before_row.
+    // NYT: denne side kaldte FØR aldrig log_action overhovedet - i modsætning til
+    // customer_edit.php/account_edit.php/vat_codes.php, som alle logger ændringer af stamdata. Henter
+    // "før"-billedet FØR selve UPDATE'en, samme mønster som account_edit.php's $before_row.
     $before_row = ($supplier_id > 0)
         ? DB::fetch_assoc(DB::query($conn, "SELECT * FROM suppliers WHERE supplier_id = $supplier_id"))
         : null;
@@ -107,8 +94,7 @@ if (isset($err) && $err !== '' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset
     $res = DB::query($conn, "SELECT * FROM suppliers WHERE supplier_id = $supplier_id");
     $sup = $res ? DB::fetch_assoc($res) : null;
     if (!$sup) {
-        header("Location: supplier_list.php");
-        exit;
+        redirect("supplier_list.php");
     }
 } else {
     $sup = [
@@ -137,11 +123,9 @@ htm_Card_(capt: '@Supplier Information', wdth: 550, form: 'edit_supplier_form');
         echo '<div style="flex:1;">';
         htm_Field(icon: 'fa-id-card', labl: '@CVR', name: 'cvr', valu: $sup['cvr'], extr: 'align-left onblur="checkCvrDuplicate(this.value, \'supplier\', '.$supplier_id.')"', wdth: '100%');
         echo '</div>';
-        // NYT (bruger-anmodet, CVR-opslag) - se customer_edit.php's samme
-        // tilføjelse for den fulde begrundelse (cvr_proxy.php/cvrapi.dk).
-        // "tc-info-fill" (htm_page.lib.php): mørkere tekst/ikon i dark-temaet,
-        // hvor var(--color-info) er lysegrå og ellers gør ikonet ulæseligt
-        // (samme rettelse som customer_edit.php's identiske knap).
+        // NYT - se customer_edit.php's samme tilføjelse for den fulde begrundelse (cvr_proxy.php/cvrapi.dk).
+        // "tc-info-fill" (htm_page.lib.php): mørkere tekst/ikon i dark-temaet, hvor var(--color-info) er lysegrå
+        // og ellers gør ikonet ulæseligt (samme rettelse som customer_edit.php's identiske knap).
         echo '<button type="button" onclick="cvrLookup(this)" class="tc-info-fill" style="flex-shrink:0; margin-bottom:2px; padding:9px 10px; background:var(--color-info); color:var(--text-light); border:none; border-radius:4px; cursor:pointer;" data-hint="'.lang('@Look up company name, address, phone and email from the CVR number').'"><i class="fa-solid fa-magnifying-glass"></i></button>';
         echo '</div>';
         htm_Field(icon: 'fa-phone', labl: '@Phone', name: 'phone', valu: $sup['phone'], extr: 'align-left', wdth: '33%');
@@ -159,18 +143,9 @@ htm_Card_(capt: '@Supplier Information', wdth: 550, form: 'edit_supplier_form');
 
     htm_Field(icon: 'fa-sticky-note', labl: '@Notes', name: 'notes', valu: $sup['notes'], type: 'textarea', extr: 'align-left', wdth: '100%');
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 31):
-    // valgfrie bankoplysninger - kun vist hvis migrationen er kørt. Bruges
-    // udelukkende af CSV-eksporten til bankbetaling (supplier_payment_
-    // export.php) - påvirker ikke selve udgiftsflowet.
-    $show_bank_fields = false;
-    if (DB::is_sqlite()) {
-        $bc2 = DB::query($conn, "PRAGMA table_info(suppliers)");
-        if ($bc2) { while ($bcr2 = DB::fetch_assoc($bc2)) { if ($bcr2['name'] === 'supplier_reg_no') { $show_bank_fields = true; break; } } }
-    } else {
-        $bc2 = DB::query($conn, "SHOW COLUMNS FROM suppliers LIKE 'supplier_reg_no'");
-        $show_bank_fields = ($bc2 && DB::num_rows($bc2) > 0);
-    }
+    // NYT: valgfrie bankoplysninger - kun vist hvis migrationen er kørt. Bruges udelukkende af CSV-eksporten til
+    // bankbetaling (supplier_payment_export.php) - påvirker ikke selve udgiftsflowet.
+    $show_bank_fields = db_has_column($conn, 'suppliers', 'supplier_reg_no');
     if ($show_bank_fields) {
         echo "<div style='display:flex; width:100%;'>";
         htm_Field(icon: 'fa-building-columns', labl: '@Bank Reg. No.', name: 'supplier_reg_no', valu: $sup['supplier_reg_no'] ?? '', extr: 'align-left', wdth: '30%', hint: '@Optional - used for the bank payment CSV export.');

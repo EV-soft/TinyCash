@@ -40,10 +40,9 @@ function field_visibility_defaults(): array {
     return [1 => true, 2 => true, 3 => true];
 }
 
-// Kan den indloggede bruger se feltet (samme regel som render_hideable_field())? Et skjult felt er
-// slet ikke med i formularen - gemmekoden må da IKKE skrive en tom værdi over den gemte. RETTET:
-// en L1/L2-bruger der gemte en kunde/et produkt, slettede ellers kreditgrænse, fakturasprog,
-// fakturalayout, rykker-fravalg og kostpris, når en admin havde skjult felterne for niveauet.
+// Kan den indloggede bruger se feltet (samme regel som render_hideable_field)? RETTET: en L1/L2-bruger der gemte
+// en kunde/et produkt, slettede ellers kreditgrænse, fakturasprog, fakturalayout, rykker-fravalg og kostpris, når
+// en admin havde skjult felterne for niveauet.
 function field_visible_to_user($conn, string $item_key): bool {
     static $overrides = null;
     if ($overrides === null) $overrides = get_field_visibility_overrides($conn);
@@ -76,25 +75,19 @@ function field_visible_to_user($conn, string $item_key): bool {
 function render_hideable_field($overrides, string $item_key, bool $is_admin, int $user_level, callable $render_field, bool $has_own_box = false): void {
     $vis = $overrides[$item_key] ?? field_visibility_defaults();
 
-    // RETTET (bruger-anmodet: "kan det ikke ændres så skjul i L1/L2 også
-    // virker for admin"): fjernet den tidligere "en admin ser ALTID feltet"-
-    // undtagelse - skjul-reglen gælder nu ens for alle niveauer, admin
-    // inklusive. I praksis ændrer dette intet for en RIGTIG admin-konto
-    // (role_to_level('admin') === 3, inc/db_connect.inc.php, og context-
-    // menuen i inc/menu.inc.php har kun afkrydsningsfelter for niveau 1/2 -
-    // niveau 3 kan aldrig sættes skjult via UI'en) - brugeren bekræftede at
-    // dette er den tilsigtede sikkerhedsmekanisme ("Admin kan vel bare
-    // skifte til L3 hvis indstilling skal ændres").
+    // RETTET: fjernet den tidligere "en admin ser ALTID feltet"- undtagelse - skjul-reglen gælder nu ens for alle
+    // niveauer, admin inklusive. I praksis ændrer dette intet for en RIGTIG admin-konto (role_to_level('admin')
+    // === 3, inc/db_connect.inc.php, og context-menuen i inc/menu.inc.php har kun afkrydsningsfelter for niveau
+    // 1/2 - niveau 3 kan aldrig sættes skjult via UI'en) - brugeren bekræftede at dette er den tilsigtede
+    // sikkerhedsmekanisme ("Admin kan vel bare skifte til L3 hvis indstilling skal ændres").
     if (empty($vis[$user_level])) {
         return; // skjult for dette niveau - udelades helt, ikke kun CSS-skjult
     }
 
     if ($is_admin) {
-        // RETTET (bruger-anmodet, runde 28-opfølgning #2): "Tillægsfelt"-
-        // badgeteksten fjernet - den stiplede blå kant alene er nok til at
-        // markere feltet som et tillægsfelt, uden at overskygge feltets
-        // egen, funktionelle label (fx "Kreditgrænse"). data-hint bevarer
-        // stadig en forklaring ved hover, for dem der er i tvivl.
+        // RETTET: "Tillægsfelt"- badgeteksten fjernet - den stiplede blå kant alene er nok til at markere feltet
+        // som et tillægsfelt, uden at overskygge feltets egen, funktionelle label (fx "Kreditgrænse"). data-hint
+        // bevarer stadig en forklaring ved hover, for dem der er i tvivl.
         $cls = 'tc-hideable-field' . ($has_own_box ? '' : ' tc-no-existing-box');
         echo '<div class="' . $cls . '" data-fieldkey="' . htmlspecialchars($item_key, ENT_QUOTES) . '"'
             . ' data-hidden-l1="' . (empty($vis[1]) ? '1' : '0') . '"'

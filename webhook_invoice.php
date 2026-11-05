@@ -82,6 +82,7 @@ if (!empty($key_entry['account_id'])) {
     $_SESSION['account_id'] = $key_entry['account_id'];
 }
 require_once __DIR__ . '/inc/db_connect.inc.php';
+require_once __DIR__ . '/inc/core_utils.lib.php';      // (tc_utf8() - UTF-8-kontrol af JSON-kroppen)
 require_once __DIR__ . '/inc/audit.inc.php';
 
 // --- Webbutik: hører nøglen til en butiksforbindelse (shop_connections.php), bestemmer butikkens valg hvad
@@ -104,7 +105,7 @@ if (shop_ready($conn) && ($key_id_chk = (string)($key_entry['id'] ?? '')) !== ''
 }
 
 // --- 3. Læs + valider payload ----------------------------------------------
-$raw     = file_get_contents('php://input');
+$raw     = tc_utf8((string)file_get_contents('php://input'));      // (ugyldig UTF-8 -> json_decode fejlede eller gemte ødelagte tegn)
 $payload = json_decode((string)$raw, true);
 if (!is_array($payload)) {
     http_response_code(400);
@@ -140,14 +141,7 @@ if (filter_var($cust_email, FILTER_VALIDATE_EMAIL) === false) {
 # kolonnen ikke er migreret endnu (db-setup/migrate_invoice_external_ref.php)
 # - samme "stille degradering"-mønster som resten af kodebasen bruger for
 # nyere, valgfrie kolonner.
-$has_external_ref_col = false;
-if (DB::is_sqlite()) {
-    $c = DB::query($conn, "PRAGMA table_info(invoices)");
-    if ($c) { while ($cr = DB::fetch_assoc($c)) { if ($cr['name'] === 'external_ref') { $has_external_ref_col = true; break; } } }
-} else {
-    $c = DB::query($conn, "SHOW COLUMNS FROM invoices LIKE 'external_ref'");
-    $has_external_ref_col = ($c && DB::num_rows($c) > 0);
-}
+$has_external_ref_col = db_has_column($conn, 'invoices', 'external_ref');
 if ($has_external_ref_col && $external_id !== '') {
     $dup = DB::fetch_assoc(DB::query($conn, "SELECT inv_id FROM invoices WHERE external_ref = '" . DB::escape($conn, $external_id) . "'"));
     if ($dup) {
@@ -203,6 +197,9 @@ $default_currency = $s['currency'] ?? 'DKK';
 $default_terms    = is_numeric(trim((string)($s['default_payment_terms'] ?? ''))) ? (int)$s['default_payment_terms'] : 8;      // RETTET: feltet er en betalingstekst - (int) af teksten gav 0 dage
 
 // RETTET: kun aktive kunder - ikke en kunde i papirkurven (se inc/shop.inc.php shop_customer())
+// RETTET: kunde, faktura og linjer blev skrevet uden transaktion - fejlede en linje, stod en halv faktura tilbage (og
+// svaret sagde alligevel success); fejlede fakturaen, var kunden oprettet alene. Nu alt eller intet.
+DB::begin_transaction($conn);
 $cust_row = DB::fetch_assoc(DB::query($conn, "SELECT cust_id, cust_payment_days FROM customers WHERE LOWER(cust_email) = LOWER('" . DB::escape($conn, $cust_email) . "') AND " . customers_active_filter($conn)));
 if ($cust_row) {
     $cust_id = (int)$cust_row['cust_id'];
@@ -210,6 +207,7 @@ if ($cust_row) {
 } else {
     $cust_name = trim((string)($customer['name'] ?? ''));
     if ($cust_name === '') {
+        DB::rollback($conn);
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => 'customer.name is required when the customer does not already exist (matched by email).']);
         exit;
@@ -222,8 +220,9 @@ if ($cust_row) {
     $ins = DB::query($conn, "INSERT INTO customers (cust_name, cust_email, cust_phone, cust_address, cust_cvr, cust_payment_days)
         VALUES ('$db_name', '$db_email', '$cust_phone', '$cust_address', '$cust_cvr', $default_terms)");
     if (!$ins) {
+        $wh_err = DB::error($conn);  DB::rollback($conn);
         http_response_code(500);
-        echo json_encode(['success' => false, 'error' => 'Failed to create customer: ' . DB::error($conn)]);
+        echo json_encode(['success' => false, 'error' => 'Failed to create customer: ' . $wh_err]);
         exit;
     }
     $cust_id = DB::insert_id($conn);
@@ -244,21 +243,28 @@ $ins = DB::query($conn, "INSERT INTO invoices
     (cust_id, inv_date, inv_due_date, inv_status, inv_note, currency$ext_ref_col)
     VALUES ($cust_id, '$inv_date', '$inv_due_date', 'draft', '$db_note', '$db_currency'$ext_ref_val)");
 if (!$ins) {
+    $wh_err = DB::error($conn);  DB::rollback($conn);
     http_response_code(500);
-    echo json_encode(['success' => false, 'error' => 'Failed to create invoice: ' . DB::error($conn)]);
+    echo json_encode(['success' => false, 'error' => 'Failed to create invoice: ' . $wh_err]);
     exit;
 }
 $inv_id = DB::insert_id($conn);
 
 foreach ($resolved_lines as $rl) {
     $txt = DB::escape($conn, $rl['text']);
-    DB::query($conn, "INSERT INTO invoice_lines (inv_id, line_text, quantity, price_each, line_vat_rate, prod_id)
-        VALUES ($inv_id, '$txt', {$rl['qty']}, {$rl['price']}, {$rl['vat']}, {$rl['prod_id']})");
+    if (!DB::query($conn, "INSERT INTO invoice_lines (inv_id, line_text, quantity, price_each, line_vat_rate, prod_id)
+        VALUES ($inv_id, '$txt', {$rl['qty']}, {$rl['price']}, {$rl['vat']}, {$rl['prod_id']})")) {
+        $wh_err = DB::error($conn);  DB::rollback($conn);
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Failed to create invoice line: ' . $wh_err]);
+        exit;
+    }
 }
 
 log_action($conn, 'CREATE_DRAFT_INVOICE_WEBHOOK', 'invoices', $inv_id, null, [
     'cust_id' => $cust_id, 'external_id' => ($external_id !== '' ? $external_id : null), 'webhook_key_label' => $key_entry['label'] ?? null,
 ]);
 
+DB::commit($conn);
 http_response_code(201);
-echo json_encode(['success' => true, 'invoice_id' => $inv_id, 'status' => 'draft']);
+echo json_encode(['success' => true, 'invoice_id' => (int)$inv_id, 'status' => 'draft']);      // (var en streng - 409-svaret giver et tal)

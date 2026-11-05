@@ -65,7 +65,7 @@ if ($done) {
 
 htm_Card_('@Switch to the Standard Chart of Accounts', 1200);
 echo '<p style="margin:0 0 8px;"><a href="setup_chart.php?tpl=official" data-hint="' . lang('@Look through the whole standard chart of accounts - nothing is changed') . '"><i class="fa fa-eye"></i> ' . lang('@View the Standard Chart of Accounts') . '</a></p>';
-echo '<p style="color:var(--text-muted); line-height:1.5;">' . lang('@Posted entries cannot be moved, so the switch applies from a date: each of your accounts gets a standard account as its replacement, the balances of balance sheet accounts are transferred with one voucher, and everything that points to an old account (settings, VAT codes, products, web shops, bank rules, fixed assets, budgets, drafts) points to the replacement from then on. The old accounts are switched off - their history stays in the reports.') . '</p>';
+htm_Note(lang('@Posted entries cannot be moved, so the switch applies from a date: each of your accounts gets a standard account as its replacement, the balances of balance sheet accounts are transferred with one voucher, and everything that points to an old account (settings, VAT codes, products, web shops, bank rules, fixed assets, budgets, drafts) points to the replacement from then on. The old accounts are switched off - their history stays in the reports.'), 'line-height:1.5;');
 
 // Uden import: kun de standardkonti der vælges som afløsere, oprettes ved skiftet - hele planen kan stadig importeres
 if (!$std_imported) {
@@ -83,15 +83,15 @@ if ($plan) {
         $rows = [];
         foreach ($plan['transfers'] as [$old, $new, $b]) {
             $rows[] = [$old . ' ' . htmlspecialchars($own[$old]['acc_name']), $new . ' ' . htmlspecialchars($std[$new]['acc_name']),
-                       '<div style="text-align:right;">' . number_format($b, 2, ',', '.') . ' ' . $cur . '</div>'];
+                       '<div style="text-align:right;">' . fmt_dk($b) . ' ' . $cur . '</div>'];
         }
         if ($rows) htm_Table(['@From', '@To', '@Balance'], $rows, 'cs_tr', 200);
-        else echo '<p style="color:var(--text-muted);">' . lang('@No balances need to be transferred.') . '</p>';
+        else htm_Note(lang('@No balances need to be transferred.'));
         echo '<form method="post" style="margin-top:12px;">' . csrf_field(false)
            . '<input type="hidden" name="switch_date" value="' . htmlspecialchars($date) . '">';
         foreach ($plan['map'] as $o => $n) echo '<input type="hidden" name="map[' . (int)$o . ']" value="' . (int)$n . '">';
         echo '<button type="submit" name="confirm_switch" value="1" style="background:var(--color-danger); color:#fff; border:0; padding:10px 16px; border-radius:4px; cursor:pointer; font-weight:bold;"'
-           . ' onclick="return confirm(' . htmlspecialchars(json_encode(lang('@Carry out the switch? The transfer is posted and cannot be undone except by a new posting.')), ENT_QUOTES) . ')">'
+           . ' onclick="' . htm_confirm_js('@Carry out the switch? The transfer is posted and cannot be undone except by a new posting.') . '">'
            . '<i class="fa-solid fa-right-left"></i> ' . sprintf(lang('@Carry out the switch (%d accounts)'), count($plan['map'])) . '</button></form>';
         echo '<hr style="margin:20px 0; border:0; border-top:1px solid var(--border-color);">';
     }
@@ -108,7 +108,7 @@ if ($cs_conf) {
                 'alt' => lang('@Import the standard account as number'), 'keep' => lang('@Do nothing (choose another replacement below)')];
     echo '<h3 style="margin:14px 0 4px;"><i class="fa-solid fa-triangle-exclamation" style="color:var(--color-warning);"></i> '
        . sprintf(lang('@Numbers used by your own accounts (%d)'), count($cs_conf)) . '</h3>';
-    echo '<p style="color:var(--text-muted); margin:0 0 8px; line-height:1.5;">' . lang('@The standard account cannot be imported while your account has its number. An account without postings can be moved; an account with the same content can become the standard account (it keeps its history, but earlier reports show the new name); otherwise the standard account can be imported under a free number - SAF-T still sees it as the standard account.') . '</p>';
+    htm_Note(lang('@The standard account cannot be imported while your account has its number. An account without postings can be moved; an account with the same content can become the standard account (it keeps its history, but earlier reports show the new name); otherwise the standard account can be imported under a free number - SAF-T still sees it as the standard account.'), 'margin:0 0 8px; line-height:1.5;');
     echo '<form method="post">' . csrf_field(false) . '<input type="hidden" name="switch_date" value="' . htmlspecialchars($date) . '">';
     $rows = [];
     foreach ($cs_conf as $no => $c) {
@@ -131,7 +131,7 @@ if ($cs_conf) {
     htm_Table(['@No.', '@Your account', '@Standard account', '@Solution'], $rows, 'cs_clash', 400, '', true, ['width:70px;', '', '', 'width:470px;']);
     echo '<p style="font-size:0.85em; color:var(--text-muted); margin:4px 0 0;">★ ' . lang('@suggested') . '</p>';
     echo '<button type="submit" name="resolve_conflicts" value="1" style="margin-top:8px; padding:9px 16px; border-radius:4px; border:0; background:var(--color-primary); color:#fff; cursor:pointer;"'
-       . ' onclick="return confirm(' . htmlspecialchars(json_encode(lang('@Carry out the chosen solutions? Accounts are moved, renamed or imported now - nothing is posted.')), ENT_QUOTES) . ')">'
+       . ' onclick="' . htm_confirm_js('@Carry out the chosen solutions? Accounts are moved, renamed or imported now - nothing is posted.') . '">'
        . '<i class="fa-solid fa-wand-magic-sparkles"></i> ' . lang('@Solve the conflicts') . '</button></form>';
     echo '<script>function csClash(s){var t=document.getElementById("cs-t-"+s.dataset.no); if(t) t.hidden=!(s.value==="move"||s.value==="alt");}</script>';
     echo '<hr style="margin:20px 0; border:0; border-top:1px solid var(--border-color);">';
@@ -157,7 +157,7 @@ foreach ($own as $id => $a) {
     foreach ($a['roles'] as $r) $badges .= ' <span style="background:var(--bg-panel); border:1px solid var(--border-color); border-radius:8px; padding:1px 6px; font-size:0.8em;">' . htmlspecialchars($role_txt[$r] ?? $r) . '</span>';
     $rows[] = [
         $id, htmlspecialchars($a['acc_name']) . $badges, htmlspecialchars(lang('@' . ucfirst((string)$a['acc_type']))),
-        '<div style="text-align:right;">' . (in_array($a['acc_type'], CS_BALANCE_TYPES, true) ? number_format($a['balance'], 2, ',', '.') : '<span style="color:var(--text-muted);">-</span>') . '</div>',
+        '<div style="text-align:right;">' . (in_array($a['acc_type'], CS_BALANCE_TYPES, true) ? fmt_dk($a['balance']) : '<span style="color:var(--text-muted);">-</span>') . '</div>',
         '<select name="map[' . $id . ']" style="width:100%; padding:4px;">' . $opts . '</select>',
     ];
 }

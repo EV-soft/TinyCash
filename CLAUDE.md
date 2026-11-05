@@ -64,6 +64,30 @@ Root files pair a view (`*_edit.php`, `*_list.php`, `*_view.php`) with a POST ha
   `inc/Kodestandard.txt` — match it when adding parameters.
 - Each source file starts with a version header comment:
   `# path v:X.Y.Z d:YYYY-MM-DD i:author`. Bump it when you make substantive changes.
+- **Redirect + status message:** a handler ends with `redirect($url, '@Message', 'success'|'error'|'warning'|'info')`
+  (`inc/php2htm.lib.php`). It stores a session flash shown once above the next page's first `htm_Card_()`
+  (fallback `htm_Footer()`; pages with their own `<head>` call `flash_render()`). Do **not** add new
+  `?msg=`/`?err=` query flags. Dynamic text: `sprintf(lang('@...'), ...)`, and `htmlspecialchars()` any user/DB data.
+- **Actions started by a link are POST:** the header JS (`htm_ActionLinkJs()`) turns a click on an action link into a
+  POST with the CSRF token, and `inc/auth.inc.php` refuses an action as GET. Files named `*_action(s).php`,
+  `*_duplicate.php`, `send_*.php` are actions automatically; a page that both renders and acts (e.g. `?del=`) must be
+  listed in `csrf_get_actions()`. From JS use `tcPost(url)`, never `location.href = action_url`.
+- **Shared helpers in `inc/db_connect.inc.php` — use them instead of hand-rolled code:**
+  numbers `fmt_dk($n, $dec=2)` (display, 1.234,56) / `fmt_dk_input()` (input/CSV, 1234,56) — `number_format` only
+  for machine formats (OIOUBL/SAF-T); schema `db_has_table()` / `db_has_column()` (cached per request, cleared
+  automatically by ALTER/CREATE/DROP through `DB::query`); settings `setting('key', $default)` / `get_settings()`
+  (cached, cleared by any write to `settings` through the DB class); input `tc_num($raw, $min, $max)`, `tc_pct()`,
+  `tc_is_date()`, `tc_account_ok()`, `tc_project_ok()`, `tc_customer_ok()` (null/false = invalid).
+  Customer-facing documents: `inc/doc_paper.inc.php` — `doc_customer_lang()`, `doc_lang_push()/doc_lang_pop()`,
+  `doc_company()`. New queries that take user text use `DB::prepare_and_execute()` with `?` parameters.
+- **Confirmations in an on*-attribute:** `onclick="' . htm_confirm_js('@Text') . '"` (or `htm_confirm_js($text, "tcPost('url')")`
+  for "ask, then act") - never hand-escape with `addslashes`/`htmlspecialchars`/`json_encode` (one wrong order and an
+  apostrophe or `"` in the text silently skips the confirm). In a `<script>` block use `confirm(<?= json_encode(...) ?>)`.
+- Muted explanatory text under a card heading: `htm_Note($html, $styl)` — not a hand-written `<p style="color:var(--text-muted)">`.
+- **Comments explain why the code is the way it is, in 1–3 lines** — no bug-round history (`§bugs-batch-…`, `[[…]]`,
+  "runde 28"). The full history removed on 2026-11-04 is in `tools/kommentar_historik_2026-11-04.txt`.
+- After adding UI text, run `php tools/missing_translations.php --where` — an empty Danish translation shows the
+  English key to Danish users.
 
 ## Translation / i18n
 

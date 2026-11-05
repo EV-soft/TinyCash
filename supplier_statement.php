@@ -11,11 +11,11 @@ require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
 
 $supplier_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if ($supplier_id <= 0) { header("Location: supplier_list.php"); exit; }
+if ($supplier_id <= 0) { redirect("supplier_list.php"); }
 
 $res_s = DB::query($conn, "SELECT * FROM suppliers WHERE supplier_id = $supplier_id");
 $sup   = $res_s ? DB::fetch_assoc($res_s) : null;
-if (!$sup) { header("Location: supplier_list.php"); exit; }
+if (!$sup) { redirect("supplier_list.php"); }
 
 $s   = get_settings($conn);
 $cur = $s['currency'] ?? 'DKK';
@@ -46,9 +46,12 @@ echo '</div>';
 htm_Card_end();
 
 // --- Data ---
+// RETTET: kladder (intet bilagsnummer) og indtægtsbilag talte med i forbrug, skyld og forfaldne - og fik en
+// "Betal nu"-knap som mark_expense_paid() alligevel afviser. Samme filter som aging_report.php's kreditorside.
 $res_e = DB::query($conn, "SELECT exp_id, exp_date, voucher_no, description, amount, due_date, paid_date
                             FROM expenses
                             WHERE supplier_id = $supplier_id AND is_cancelled = 0
+                              AND voucher_no IS NOT NULL AND (exp_type IS NULL OR exp_type != 'income')
                             ORDER BY exp_date DESC, exp_id DESC");
 $expenses = [];
 $total_spend = 0.0; $total_owed = 0.0; $overdue_count = 0;
@@ -69,10 +72,10 @@ htm_Card_(capt: '@Summary', wdth: 1000);
 echo '<div style="display:flex; gap:20px; flex-wrap:wrap;">';
 echo '<div style="flex:1; min-width:180px; text-align:center; padding:10px;">'
     . '<div style="font-size:0.8em; color:var(--text-muted); text-transform:uppercase;">' . lang('@Total Spend') . '</div>'
-    . '<div style="font-size:1.6em; font-weight:bold;">' . number_format($total_spend, 2, ',', '.') . ' ' . $cur . '</div></div>';
+    . '<div style="font-size:1.6em; font-weight:bold;">' . fmt_dk($total_spend) . ' ' . $cur . '</div></div>';
 echo '<div style="flex:1; min-width:180px; text-align:center; padding:10px;">'
     . '<div style="font-size:0.8em; color:var(--text-muted); text-transform:uppercase;">' . lang('@Amount Owed') . '</div>'
-    . '<div style="font-size:1.6em; font-weight:bold; color:' . ($total_owed > 0.01 ? 'var(--color-warning)' : 'var(--text-main)') . ';">' . number_format($total_owed, 2, ',', '.') . ' ' . $cur . '</div></div>';
+    . '<div style="font-size:1.6em; font-weight:bold; color:' . ($total_owed > 0.01 ? 'var(--color-warning)' : 'var(--text-main)') . ';">' . fmt_dk($total_owed) . ' ' . $cur . '</div></div>';
 echo '<div style="flex:1; min-width:180px; text-align:center; padding:10px;">'
     . '<div style="font-size:0.8em; color:var(--text-muted); text-transform:uppercase;">' . lang('@Overdue') . '</div>'
     . '<div style="font-size:1.6em; font-weight:bold; color:' . ($overdue_count > 0 ? 'var(--color-danger)' : 'var(--text-main)') . ';">' . $overdue_count . '</div></div>';
@@ -93,8 +96,7 @@ foreach ($expenses as $e) {
     } elseif (!empty($e['due_date'])) {
         $overdue = ($e['due_date'] < $today);
         $status_html = '<span style="color:'.($overdue ? 'var(--color-danger)' : 'var(--color-warning)').';"><i class="fa-solid fa-clock"></i> ' . sprintf(lang('@Due %s'), date(CONF_DATE_FORMAT, strtotime($e['due_date']))) . '</span>';
-        $confirm = addslashes(lang('@Register that this expense has now been paid from the bank account?'));
-        $action_html = '<a href="expense_actions.php?action=mark_paid&id=' . (int)$e['exp_id'] . '" data-hint="' . lang('@Register the expense as paid from the bank account (you are asked first)') . '" onclick="return confirm(\''.$confirm.'\');" '
+        $action_html = '<a href="expense_actions.php?action=mark_paid&id=' . (int)$e['exp_id'] . '" data-hint="' . lang('@Register the expense as paid from the bank account (you are asked first)') . '" onclick="' . htm_confirm_js('@Register that this expense has now been paid from the bank account?') . '" '
             . 'class="no-print" style="background:var(--color-success); color:#fff; padding:4px 10px; border-radius:4px; text-decoration:none; font-weight:bold; font-size:0.85em;">'
             . '<i class="fa-solid fa-money-bill-wave"></i> ' . lang('@Pay Now') . '</a>';
     }
@@ -103,7 +105,7 @@ foreach ($expenses as $e) {
         date(CONF_DATE_FORMAT, strtotime($e['exp_date'])),
         '<a href="expense_edit.php?id=' . (int)$e['exp_id'] . '">#' . htmlspecialchars((string)$e['voucher_no']) . '</a>',
         htmlspecialchars($e['description'] ?? ''),
-        number_format((float)$e['amount'], 2, ',', '.') . ' ' . $cur,
+        fmt_dk((float)$e['amount']) . ' ' . $cur,
         $status_html,
         $action_html,
     ];

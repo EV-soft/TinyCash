@@ -22,7 +22,7 @@ switch ($period_type) {
         $period_num   = max(1, min(12, $period_num));
         $period_start = sprintf('%04d-%02d-01', $year, $period_num);
         $period_end   = date('Y-m-t', strtotime($period_start));
-        $period_label = date('F', mktime(0, 0, 0, $period_num, 1)) . ' ' . $year;
+        $period_label = tc_month_name($period_num) . ' ' . $year;      // RETTET: date('F') var altid engelsk
         break;
     case 'quarter':
         $period_num   = max(1, min(4, $period_num));
@@ -86,14 +86,14 @@ fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
 
 fputcsv($output, [lang('@VAT Report') . ' - ' . $period_label], ';');
 fputcsv($output, [], ';');
-fputcsv($output, [lang('@Sales VAT'), number_format($sales_vat, 2, ',', '') . ' kr'], ';');
-fputcsv($output, [lang('@Purchase VAT'), number_format($purchase_vat, 2, ',', '') . ' kr'], ';');
-fputcsv($output, [lang('@VAT Payable (rounded to whole DKK for TastSelv)'), number_format(round($vat_payable), 0, ',', '') . ' kr'], ';');
+fputcsv($output, [lang('@Sales VAT'), fmt_dk_input($sales_vat) . ' kr'], ';');
+fputcsv($output, [lang('@Purchase VAT'), fmt_dk_input($purchase_vat) . ' kr'], ';');
+fputcsv($output, [lang('@VAT Payable (rounded to whole DKK for TastSelv)'), fmt_dk_input(round($vat_payable), 0) . ' kr'], ';');
 fputcsv($output, [], ';');
 fputcsv($output, [lang('@VAT Code'), lang('@Net Amount'), lang('@VAT Rate')], ';');
 if ($res) {
     while ($row = DB::fetch_assoc($res)) {
-        fputcsv($output, [csv_safe($row['vat_id'] ?? '-'), number_format($row['net_amount'], 2, ',', ''), number_format($row['vat_rate'], 0) . '%'], ';');
+        fputcsv($output, [csv_safe($row['vat_id'] ?? '-'), fmt_dk_input($row['net_amount']), fmt_pct($row['vat_rate']) . '%'], ';');
     }
 }
 

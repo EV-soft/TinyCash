@@ -16,11 +16,9 @@ require_once 'inc/depot_worker.inc.php';
 require_once 'inc/help.lib.php';
 
 $id  = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-// NYT (runde 30, expense_lines): standard tom liste - kun en EKSISTERENDE
-// udgift ($id > 0) kan have gemte linjer, se fetchet nedenfor. Uden denne
-// unconditional default var variablen slet ikke defineret ved en NY
-// udgift (id=0), hvilket gav en rå TypeError i array_map() ved rendering
-// af split-formularen (selv-fanget live under test).
+// NYT: standard tom liste - kun en EKSISTERENDE udgift ($id > 0) kan have gemte linjer, se fetchet nedenfor. Uden
+// denne unconditional default var variablen slet ikke defineret ved en NY udgift (id=0), hvilket gav en rå
+// TypeError i array_map ved rendering af split-formularen.
 $existing_expense_lines = [];
 $msg = ""; $err = "";
 
@@ -52,8 +50,7 @@ $paid_date   = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_ai_action']) && $_POST['toggle_ai_action'] === '1') {
     $_SESSION['use_ai_scan'] = isset($_POST['use_ai_scan_toggle']) ? 1 : 0;
-    header("Location: expense_edit.php?id=" . $id);
-    exit;
+    redirect("expense_edit.php?id=" . $id);
 }
 $use_ai_scan = isset($_SESSION['use_ai_scan']) ? (int)$_SESSION['use_ai_scan'] : 1;
 
@@ -68,25 +65,16 @@ if ($id === 0 && isset($_GET['proj_id'])) {
     $proj = (int)$_GET['proj_id'];
 }
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): "Dupliker
-// udgift" fra expense_list.php - samme "$id===0 && isset($_GET[...])"-
-// mønster som ?type=income/?proj_id lige ovenfor. Forudfylder KUN
-// beskrivende/beløbsmæssige felter fra kilde-udgiften - IKKE bilaget (en ny
-// udgift har sit eget, andet bilag), IKKE voucher_no (den nye er endnu ikke
-// bogført), og IKKE forfalds-/betalingsdato (en frisk, ubetalt post). Selve
-// oprettelsen sker først når brugeren rent faktisk trykker Gem - i
-// modsætning til invoice_duplicate.php er der bevidst INGEN silent
-// database-INSERT her, da en gemt udgift her ALTID får sit voucher_no med
-// det samme (ingen ufarlig "kladde"-tilstand at oprette i baggrunden som
-// hos fakturaer - se filens egen header-kommentar).
+// NYT: "Dupliker udgift" fra expense_list.php - samme "$id===0 && isset($_GET[...])"- mønster som
+// ?type=income/?proj_id lige ovenfor. Selve oprettelsen sker først når brugeren rent faktisk trykker Gem - i
+// modsætning til invoice_duplicate.php er der bevidst INGEN silent database-INSERT her, da en gemt udgift her
+// ALTID får sit voucher_no med det samme.
 if ($id === 0 && isset($_GET['dup'])) {
     $dup_id = (int)$_GET['dup'];
-    // RETTET (samme fund som expense_list.php's Rediger-knap): "Dupliker" må
-    // gerne bruge en ANNULLERET udgift som datakilde - den kopierer kun felt-
-    // værdier ind i en helt NY, ubogført kladde og rører aldrig selve
-    // kilde-posten, så uforanderligheden af den annullerede original brydes
-    // ikke. Uden dette filtreret fra fandt SELECT'et intet, og knappen endte
-    // med at åbne en helt tom formular uden nogen advarsel om hvorfor.
+    // RETTET (samme fund som expense_list.php's Rediger-knap): "Dupliker" må gerne bruge en ANNULLERET udgift som
+    // datakilde - den kopierer kun felt-værdier ind i en helt NY, ubogført kladde og rører aldrig selve
+    // kilde-posten, så uforanderligheden af den annullerede original brydes ikke. Uden dette filtreret fra fandt
+    // SELECT'et intet, og knappen endte med at åbne en helt tom formular uden nogen advarsel om hvorfor.
     $dup_res = DB::query($conn, "SELECT * FROM expenses WHERE exp_id = $dup_id");
     if ($dup_exp = DB::fetch_assoc($dup_res)) {
         $supp          = $dup_exp['supplier'];
@@ -124,14 +112,11 @@ if ($id > 0) {
         $due_date    = $exp['due_date']  ?? '';
         $paid_date   = $exp['paid_date'] ?? '';
     } else {
-        header("Location: expense_list.php?err=not_found");
-        exit;
+        redirect('expense_list.php', '@The expense was not found (it may have been deleted or cancelled).', 'error');
     }
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 30):
-    // hent eksisterende kontoopdeling (hvis nogen) til forudfyldning af
-    // split-formularen. Tom liste = ikke splittet, samme "syntetisk enkelt
-    // linje"-fald tilbage som expense_get_lines() selv bruger ved bogføring.
+    // NYT: hent eksisterende kontoopdeling (hvis nogen) til forudfyldning af split-formularen. Tom liste = ikke
+    // splittet, samme "syntetisk enkelt linje"-fald tilbage som expense_get_lines selv bruger ved bogføring.
     $existing_expense_lines = [];
     if (expense_lines_has_table($conn)) {
         $el_res = DB::query($conn, "SELECT account_id, amount, description FROM expense_lines WHERE exp_id = $id ORDER BY line_id ASC");
@@ -160,15 +145,18 @@ $posted_exp_date   = $exp['exp_date']   ?? null;
 $s = get_settings($conn);
 $currency_module = !empty($s['module_currency']) && $s['module_currency'] == '1';
 
-// NYT (leverandørmodul): valgfri dropdown til at koble en leverandørstamdata-
-// post til udgiften - fritekstfeltet 'supplier' forbliver den reelle,
-// gemte værdi (autofyldes af valget via JS, se formularen), så AI-scan og
-// alle eksisterende rapporter der læser den rå tekst er upåvirkede.
+// NYT (leverandørmodul): valgfri dropdown til at koble en leverandørstamdata-post til udgiften - fritekstfeltet
+// 'supplier' forbliver den reelle, gemte værdi (autofyldes af valget via JS, se formularen), så AI-scan og alle
+// eksisterende rapporter der læser den rå tekst er upåvirkede.
 $supplier_options = ['' => lang('@-- Select existing supplier (optional) --')];
 $supplier_days_by_id = [];
 // @ - degraderer stille til "ingen leverandører endnu" hvis migrate_suppliers.php
 // ikke er kørt endnu (tabellen findes ikke), i stedet for at fejle hele siden.
-$sup_res = @DB::query($conn, "SELECT supplier_id, supplier_name, payment_days FROM suppliers WHERE is_active = 1 AND " . suppliers_active_filter($conn) . " ORDER BY supplier_name ASC");
+// RETTET: en udgift hvis leverandør siden er deaktiveret eller lagt i papirkurven, mistede stille sin kobling ved
+// næste gem (leverandøren manglede i listen, så feltet blev sendt tomt). Den allerede valgte beholdes nu, som i
+// recurring_expense_edit.php.
+$sup_keep_id = (int)($supplier_id ?? 0);
+$sup_res = @DB::query($conn, "SELECT supplier_id, supplier_name, payment_days FROM suppliers WHERE (is_active = 1 AND " . suppliers_active_filter($conn) . ") OR supplier_id = $sup_keep_id ORDER BY supplier_name ASC");
 if ($sup_res) {
     while ($sr = DB::fetch_assoc($sup_res)) {
         $supplier_options[(int)$sr['supplier_id']] = htmlspecialchars($sr['supplier_name']);
@@ -176,22 +164,11 @@ if ($sup_res) {
     }
 }
 
-// RETTET (bagudkompatibilitet): expenses.supplier_id/due_date/paid_date
-// findes kun EFTER db-setup/migrate_suppliers.php er kørt. Uden dette tjek
-// ville et forsøg på at bruge "Ikke betalt endnu" på en ikke-migreret
-// installation lade som om leverandørgælden blev sporet, mens den faktiske
-// due_date/paid_date-opdatering nedenfor (samme "stille fejl"-mønster som
-// no_attachment_reason) reelt aldrig gemte noget. Skjuler derfor selve
-// leverandør-/betalingssektionen i formularen, indtil migrationen er kørt,
-// i stedet for at tilbyde en funktion der ser ud til at virke, men ikke gør.
+// RETTET (bagudkompatibilitet): expenses.supplier_id/due_date/paid_date findes kun EFTER
+// db-setup/migrate_suppliers.php er kørt. Skjuler derfor selve leverandør-/betalingssektionen i formularen, indtil
+// migrationen er kørt, i stedet for at tilbyde en funktion der ser ud til at virke, men ikke gør.
 function expense_edit_col_exists($conn, $col) {
-    if (DB::is_sqlite()) {
-        $res = DB::query($conn, "PRAGMA table_info(expenses)");
-        if ($res) { while ($row = DB::fetch_assoc($res)) { if (strtolower($row['name']) === strtolower($col)) return true; } }
-        return false;
-    }
-    $res = DB::query($conn, "SHOW COLUMNS FROM expenses LIKE '$col'");
-    return ($res && DB::num_rows($res) > 0);
+    return db_has_column($conn, 'expenses', $col);
 }
 $supplier_module_ready = expense_edit_col_exists($conn, 'supplier_id')
     && expense_edit_col_exists($conn, 'due_date')
@@ -227,22 +204,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Apache-niveau som endnu et lag.
     $allowed_ext = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'gif', 'txt', 'csv', 'doc', 'docx', 'xls', 'xlsx'];
 
+    // RETTET: en valgt fil der ikke kunne uploades (fx større end serverens upload_max_filesize) blev stille ignoreret -
+    // udgiften blev gemt UDEN bilaget, uden at brugeren fik det at vide
+    if (!empty($_FILES['attachment']['name']) && (int)$_FILES['attachment']['error'] !== UPLOAD_ERR_OK) {
+        redirect('expense_edit.php?id=' . (int)$id, sprintf(lang('@The attachment could not be uploaded (the maximum is %s per file) - nothing was saved.'), ini_get('upload_max_filesize')), 'error');
+    }
     if (!empty($_FILES['attachment']['name']) && $_FILES['attachment']['error'] == 0) {
         $ext = strtolower(pathinfo($_FILES["attachment"]["name"], PATHINFO_EXTENSION));
         if (!in_array($ext, $allowed_ext, true)) {
-            die(lang('@Error: This file type is not allowed as an attachment.'));
+            redirect('expense_edit.php?id=' . (int)$id, '@Error: This file type is not allowed as an attachment.', 'error');      // (var en hvid side)
         }
-        // RETTET (§bugs-batch-18-review): uniqid() er UDEN "more_entropy" blot
-        // en hex-kodning af serverens præcise ur-tidspunkt (sekund+mikrosekund)
-        // på kaldetidspunktet - PHP's egen dokumentation advarer eksplicit mod
-        // at bruge den til sikkerhedsformål. Da uploads/ er bevidst offentligt
-        // web-tilgængeligt uden login (bilag vises direkte via <a
-        // href="uploads/...">), og filnavnet i praksis lækkes til enhver der
-        // ser siden, kunne datoen+dette forudsigelige mønster i teorien
-        // indsnævre et gæt på ET ANDET bilags filnavn markant, hvis blot ét
-        // upload-tidspunkt fra samme session/dag er kendt. Erstattet med en
-        // reel kryptografisk tilfældig værdi (random_bytes), uafhængig af
-        // serverens ur.
+        // RETTET: uniqid er UDEN "more_entropy" blot en hex-kodning af serverens præcise ur-tidspunkt
+        // (sekund+mikrosekund) på kaldetidspunktet - PHP's egen dokumentation advarer eksplicit mod at bruge den
+        // til sikkerhedsformål. Da uploads/ er bevidst offentligt web-tilgængeligt uden login (bilag vises direkte
+        // via <a href="uploads/...">), og filnavnet i praksis lækkes til enhver der ser siden, kunne datoen+dette
+        // forudsigelige mønster i teorien indsnævre et gæt på ET ANDET bilags filnavn markant, hvis blot ét
+        // upload-tidspunkt fra samme session/dag er kendt.
         $new_filename = "EXP_" . date('Ymd') . "_" . bin2hex(random_bytes(8)) . "." . $ext;
         if (move_uploaded_file($_FILES["attachment"]["tmp_name"], $target_dir . $new_filename)) {
             $file_to_scan = $target_dir . $new_filename;
@@ -263,24 +240,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? $candidate : null;
         if ($absolute_depot_path && file_exists($absolute_depot_path)) {
             $ext = strtolower(pathinfo($absolute_depot_path, PATHINFO_EXTENSION));
-            // RETTET (§bugs-batch-20-review): samme hvidliste som ved direkte
-            // upload ovenfor - kopieres en fil fra depotet ind i uploads/ (den
-            // offentligt tilgængelige mappe), skal endelsen være en reel
-            // bilagstype, uanset hvad der måtte være havnet i voucher_depot/.
+            // RETTET: samme hvidliste som ved direkte upload ovenfor - kopieres en fil fra depotet ind i uploads/
+            // (den offentligt tilgængelige mappe), skal endelsen være en reel bilagstype, uanset hvad der måtte
+            // være havnet i voucher_depot/.
             if (!in_array($ext, $allowed_ext, true)) {
                 die(lang('@Error: This file type is not allowed as an attachment.'));
             }
-            // RETTET (§bugs-batch-18-review): uniqid() er UDEN "more_entropy" blot
-        // en hex-kodning af serverens præcise ur-tidspunkt (sekund+mikrosekund)
-        // på kaldetidspunktet - PHP's egen dokumentation advarer eksplicit mod
-        // at bruge den til sikkerhedsformål. Da uploads/ er bevidst offentligt
-        // web-tilgængeligt uden login (bilag vises direkte via <a
-        // href="uploads/...">), og filnavnet i praksis lækkes til enhver der
-        // ser siden, kunne datoen+dette forudsigelige mønster i teorien
-        // indsnævre et gæt på ET ANDET bilags filnavn markant, hvis blot ét
-        // upload-tidspunkt fra samme session/dag er kendt. Erstattet med en
-        // reel kryptografisk tilfældig værdi (random_bytes), uafhængig af
-        // serverens ur.
+            // RETTET: uniqid er UDEN "more_entropy" blot en hex-kodning af serverens præcise ur-tidspunkt
+            // (sekund+mikrosekund) på kaldetidspunktet - PHP's egen dokumentation advarer eksplicit mod at bruge
+            // den til sikkerhedsformål. Da uploads/ er bevidst offentligt web-tilgængeligt uden login (bilag vises
+            // direkte via <a href="uploads/...">), og filnavnet i praksis lækkes til enhver der ser siden, kunne
+            // datoen+dette forudsigelige mønster i teorien indsnævre et gæt på ET ANDET bilags filnavn markant,
+            // hvis blot ét upload-tidspunkt fra samme session/dag er kendt.
         $new_filename = "EXP_" . date('Ymd') . "_" . bin2hex(random_bytes(8)) . "." . $ext;
             if (copy($absolute_depot_path, $target_dir . $new_filename)) {
                 $file_to_scan         = $target_dir . $new_filename;
@@ -303,29 +274,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $current_attachment   = $exp['attachment']; // gendan uændret
     }
 
-    $date     = htmlspecialchars($_POST['exp_date']    ?? $date);
-    $amount   = htmlspecialchars($_POST['amount']      ?? $amount);
-    $supp     = htmlspecialchars($_POST['supplier']    ?? $supp);
-    $desc     = htmlspecialchars($_POST['description'] ?? $desc);
-    $acc      = htmlspecialchars($_POST['account_id']  ?? $acc);
+    // RETTET: værdierne blev HTML-escapet HER, ved indlæsningen - og derfor gemt escapet i databasen: "Ulven & Co."
+    // blev til "Ulven &amp; Co." (i listen, eksporten, SAF-T og dubletkontrollen), og hver ny gem af udgiften escapede
+    // igen ("&amp;amp;"). Gemmes nu rå; al visning escaper selv (htm_Field, lister).
+    $date     = (string)($_POST['exp_date']    ?? $date);
+    $amount   = (string)($_POST['amount']      ?? $amount);
+    $supp     = trim((string)($_POST['supplier']    ?? $supp));
+    $desc     = trim((string)($_POST['description'] ?? $desc));
+    $acc      = (string)($_POST['account_id']  ?? $acc);
     $proj     = (int)($_POST['proj_id']   ?? 0);
+    if (!tc_project_ok($conn, $proj, $proj)) $proj = 0;      // RETTET: et projekt-id der ikke findes, blev gemt (løs henvisning i projektregnskabet)
     $exp_type = in_array($_POST['exp_type'] ?? '', ['expense','income']) ? $_POST['exp_type'] : 'expense';
 
     // NYT (leverandørmodul): valgfri leverandør-kobling + betalingsstatus.
     // Kun relevant ved NY oprettelse ($id === 0) - se formularen for hvorfor
     // en allerede bogført udgift ikke kan skifte betalingsmetode her.
     $post_supplier_id = ($supplier_module_ready && isset($_POST['supplier_id']) && (int)$_POST['supplier_id'] > 0) ? (int)$_POST['supplier_id'] : null;
+    // RETTET: leverandøren blev ikke kontrolleret - en udgift kunne knyttes til en leverandør der ikke findes
+    if ($post_supplier_id && !DB::fetch_assoc(DB::query($conn, "SELECT supplier_id FROM suppliers WHERE supplier_id = $post_supplier_id"))) $post_supplier_id = null;
     if ($post_supplier_id && trim($supp) === '') {
         // JS udfylder normalt fritekstfeltet automatisk ved valg - denne
         // server-side fallback dækker kun det usandsynlige tilfælde af en
         // klient uden JavaScript.
         $sup_row = DB::fetch_assoc(DB::query($conn, "SELECT supplier_name FROM suppliers WHERE supplier_id = $post_supplier_id"));
-        if ($sup_row) $supp = htmlspecialchars($sup_row['supplier_name']);
+        if ($sup_row) $supp = $sup_row['supplier_name'];
     }
     // eksisterende udgifter: uændret, styres kun via "Betal nu"; ikke-migreret
     // installation: altid "betalt med det samme", som hidtil.
     $pay_now = ($supplier_module_ready && $id === 0) ? (isset($_POST['pay_now']) ? 1 : 0) : 1;
     $post_due_date = trim($_POST['due_date'] ?? '');
+    if ($post_due_date !== '' && !tc_is_date($post_due_date)) $post_due_date = '';      // (en ugyldig forfaldsdato erstattes af leverandørens betalingsfrist)
 
     // Valuta-felter fra POST
     $post_currency      = strtoupper(preg_replace('/[^A-Z]/', '', $_POST['currency']      ?? $base_currency));
@@ -334,15 +312,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $post_exch_rate     = parse_dk_number($_POST['exch_rate']   ?? '');
 
     // Hvis fremmed valuta er valgt: beregn/gem kursdata
-    // RETTET (§currency-setting-is-cosmetic-label): "fremmed" afgøres nu mod
-    // $base_currency, og selve bogføringen sker i $base_currency - ikke en
-    // hardkodet 'DKK', som gjorde en SEK-baseret virksomheds egen SEK-udgift
-    // til en tilsyneladende "fremmed" DKK-postering.
+    // RETTET: "fremmed" afgøres nu mod $base_currency, og selve bogføringen sker i $base_currency - ikke en
+    // hardkodet 'DKK', som gjorde en SEK-baseret virksomheds egen SEK-udgift til en tilsyneladende "fremmed"
+    // DKK-postering.
     if ($post_orig_currency !== '' && $post_orig_currency !== $base_currency && $post_exch_rate > 0) {
         $orig_currency = $post_orig_currency;
         $orig_amount   = $post_orig_amount > 0 ? $post_orig_amount : null;
         $exch_rate     = $post_exch_rate;
         $currency      = $base_currency; // bogføres altid i firmaets bogføringsvaluta
+        // RETTET: kronebeløbet kom fra formularens felt (udfyldt af JS) - var det ikke opdateret (ændret kurs, indsat
+        // værdi, JS slået fra), blev fx 1.000 EUR à 7,46 bogført med et helt andet beløb. Nu: valutabeløb x kurs.
+        if ($orig_amount !== null) $amount = (string)round($orig_amount * $exch_rate, 2);
     } else {
         $orig_currency = null;
         $orig_amount   = null;
@@ -384,14 +364,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $final_file    = $new_filename ?? $current_attachment;
         $attachment_sq = ", attachment = '$final_file'";
 
-        // NYT (leverandørmodul): leverandørgæld-beregning. Kun relevant for
-        // en NY udgift (id===0, se $pay_now ovenfor) af typen 'expense' -
-        // en indtægt eller en allerede eksisterende postering bruger altid
-        // den gamle, uændrede "betalt med det samme"-opførsel.
+        // NYT (leverandørmodul): leverandørgæld-beregning. Kun relevant for en NY udgift (id===0, se $pay_now
+        // ovenfor) af typen 'expense' - en indtægt eller en allerede eksisterende postering bruger altid den
+        // gamle, uændrede "betalt med det samme"-opførsel.
         $db_supplier_id_sql = $post_supplier_id ? $post_supplier_id : 'NULL';
         if ($id === 0 && $exp_type === 'expense' && $pay_now == 0) {
             $days = $post_supplier_id ? ($supplier_days_by_id[$post_supplier_id] ?? 8) : 8;
-            $computed_due = $post_due_date !== ''
+            // RETTET: en forfaldsdato FØR udgiftsdatoen blev godtaget - gælden stod som forfalden fra første dag i
+            // restancelisten og betalingsfilen (fakturaen har samme kontrol). Leverandørens betalingsfrist bruges da.
+            $computed_due = ($post_due_date !== '' && $post_due_date >= $date)
                 ? $post_due_date
                 : date('Y-m-d', strtotime($date . " +$days days"));
             $db_due_date_sql  = "'" . DB::escape($conn, $computed_due) . "'";
@@ -409,15 +390,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $has_attachment   = ($final_file !== '' && $final_file !== null);
         $bilag_err        = '';
         if (!$has_attachment && $db_amount >= $attachment_limit) {
-            $bilag_err = sprintf(lang('@An attachment is required for amounts of %s kr or more.'), number_format($attachment_limit, 0, ',', '.'));
+            $bilag_err = sprintf(lang('@An attachment is required for amounts of %s kr or more.'), fmt_dk($attachment_limit, 0));
         } elseif (!$has_attachment && $reason_raw === '') {
             $bilag_err = lang('@Please state a reason for the missing attachment (the amount is under the limit).');
         }
 
-        // Periodespærring: en NY postering (eller ny bogføring af en
-        // redigeret kladde) må ikke kunne lande i en allerede låst periode -
-        // fandtes allerede for kreditnotaer/ledger-sletning, men manglede her
-        // (fundet ved en systematisk gennemgang, §bogforingslov-compliance).
+        // Periodespærring: en NY postering (eller ny bogføring af en redigeret kladde) må ikke kunne lande i en
+        // allerede låst periode - fandtes allerede for kreditnotaer/ledger-sletning, men manglede her.
         $date_lock_err = is_date_locked($conn, $date) ? lang('@The expense date is in a locked accounting period and cannot be saved.') : '';
 
         // Finansiel lås: en allerede bogført udgift må ikke kunne rettes "on
@@ -437,17 +416,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 30):
-        // valgfri opdeling på flere konti. Kun relevant/gemmes hvis udgiften
-        // IKKE allerede er bogført (samme uforanderligheds-vindue som amount/
-        // account_id ovenfor - $financial_lock_err ville allerede have
-        // blokeret et forsøg på at ÆNDRE amount/konto på en bogført udgift,
-        // men linjerne skal også eksplicit IGNORERES her, ellers kunne den
-        // underliggende kontofordeling stille ændres uden at ledger nogensinde
-        // blev genberegnet). Linjebeløbene SKAL summe til nøjagtigt det
-        // samme som selve amount-feltet - expenses.amount forbliver den
-        // autoritative "total brutto", vist alle andre steder i systemet
-        // (expense_list.php m.fl.), så de to må aldrig kunne afvige.
+        // NYT: valgfri opdeling på flere konti. Kun relevant/gemmes hvis udgiften IKKE allerede er bogført (samme
+        // uforanderligheds-vindue som amount/account_id ovenfor - $financial_lock_err ville allerede have blokeret
+        // et forsøg på at ÆNDRE amount/konto på en bogført udgift, men linjerne skal også eksplicit IGNORERES her,
+        // ellers kunne den underliggende kontofordeling stille ændres uden at ledger nogensinde blev genberegnet).
+        // Linjebeløbene SKAL summe til nøjagtigt det samme som selve amount-feltet - expenses.amount forbliver den
+        // autoritative "total brutto", vist alle andre steder i systemet (expense_list.php m.fl.), så de to må
+        // aldrig kunne afvige.
         $lines_err = '';
         $submitted_lines = [];
         $use_split = !$expense_already_posted && isset($_POST['line_account']) && is_array($_POST['line_account']);
@@ -470,7 +445,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // meningsløs "opdeling" på kun én linje.
                     $use_split = false;
                 } elseif (round($line_sum, 2) !== round($db_amount, 2)) {
-                    $lines_err = sprintf(lang('@The line amounts (%s) must add up to exactly the total amount (%s).'), number_format($line_sum, 2, ',', '.'), number_format($db_amount, 2, ',', '.'));
+                    $lines_err = sprintf(lang('@The line amounts (%s) must add up to exactly the total amount (%s).'), fmt_dk($line_sum), fmt_dk($db_amount));
                 }
             }
         }
@@ -479,6 +454,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $err = $bilag_err;
         } elseif ($attachment_lock_err !== '') {
             $err = $attachment_lock_err;
+        } elseif (!tc_is_date($date)) {      // RETTET: udgiftsdatoen blev ikke kontrolleret - en ugyldig dato blev bogført som journaldato
+            $err = lang('@Please enter a valid date.');
+        } elseif (!$use_split && (tc_num($amount) === null || abs((float)tc_num($amount)) < 0.005)) {      // ("abc", tomt eller 0 kr blev bogført som et tomt bilag og brugte et bilagsnummer)
+            $err = lang('@Please enter a valid amount.');
         } elseif ($date_lock_err !== '') {
             $err = $date_lock_err;
         } elseif ($financial_lock_err !== '') {
@@ -530,16 +509,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $store_reason = $has_attachment ? '' : DB::real_escape_string($conn, $reason_raw);
             DB::query($conn, "UPDATE expenses SET no_attachment_reason = '$store_reason' WHERE exp_id = $expense_id");
 
-            // NYT (leverandørmodul): samme "stille fejl hvis endnu ikke
-            // migreret"-mønster som no_attachment_reason ovenfor - kører kun
-            // hvis migrate_suppliers.php er kørt ($supplier_module_ready),
-            // så formularen aldrig kan have tilbudt "Ikke betalt endnu" uden
-            // at det reelt kunne gemmes (se $supplier_module_ready-tjekket).
-            // supplier_id må gerne opdateres ved BÅDE opret og redigering
-            // (beskrivende metadata) - due_date/paid_date sættes kun ved
-            // selve oprettelsen ($id===0), aldrig ved en efterfølgende
-            // redigering (de ændres derefter udelukkende via en rigtig
-            // betaling, expense_actions.php?action=mark_paid).
+            // NYT (leverandørmodul): samme "stille fejl hvis endnu ikke migreret"-mønster som no_attachment_reason
+            // ovenfor - kører kun hvis migrate_suppliers.php er kørt ($supplier_module_ready), så formularen
+            // aldrig kan have tilbudt "Ikke betalt endnu" uden at det reelt kunne gemmes (se
+            // $supplier_module_ready-tjekket). supplier_id må gerne opdateres ved BÅDE opret og redigering
+            // (beskrivende metadata) - due_date/paid_date sættes kun ved selve oprettelsen ($id===0), aldrig ved
+            // en efterfølgende redigering (de ændres derefter udelukkende via en rigtig betaling,
+            // expense_actions.php?action=mark_paid).
             if ($supplier_module_ready) {
                 DB::query($conn, "UPDATE expenses SET supplier_id = $db_supplier_id_sql WHERE exp_id = $expense_id");
                 if ($id === 0) {
@@ -547,11 +523,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde
-            // 30): gem den valgfri kontoopdeling FØR selve ledger-posteringen
-            // nedenfor (expense_get_lines() læser fra denne tabel). Kun for
-            // en IKKE allerede bogført udgift - se $use_split's egen
-            // beregning ovenfor for hvorfor.
+            // NYT: gem den valgfri kontoopdeling FØR selve ledger-posteringen nedenfor (expense_get_lines læser
+            // fra denne tabel). Kun for en IKKE allerede bogført udgift - se $use_split's egen beregning ovenfor
+            // for hvorfor.
             if (!$expense_already_posted && expense_lines_has_table($conn)) {
                 DB::query($conn, "DELETE FROM expense_lines WHERE exp_id = $expense_id");
                 if ($use_split) {
@@ -595,16 +569,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$expense_already_posted) {
                 DB::query($conn, "DELETE FROM ledger WHERE jou_id = $jou_id"); // ryd evt. rester før første postering
 
-                // RIGTIG dobbeltpostering. Beløbet er brutto (inkl. moms);
-                // momssatsen tages fra udgiften/linjen, ellers fra kontoen. Køb:
-                //   DEBET udgiftskonto (netto) + DEBET købsmoms + KREDIT bank (brutto).
-                // Indtægt vender fortegnene og bruger udgående moms. Balancerer til 0.
-                // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde
-                // 30): expense_get_lines() er nu den ENESTE autoritative kilde
-                // til beløb/konto(er) - returnerer ÉN syntetisk linje (denne
-                // udgifts egen account_id/amount/vat_rate) hvis udgiften ikke
-                // er splittet, så koden herunder er UÆNDRET i det almindelige
-                // (ikke-splittede) tilfælde, blot udtrukket til en løkke.
+                // RIGTIG dobbeltpostering. Beløbet er brutto (inkl. moms); momssatsen tages fra udgiften/linjen,
+                // ellers fra kontoen. Balancerer til 0.
+                // NYT: expense_get_lines er nu den ENESTE autoritative kilde til beløb/konto(er) - returnerer ÉN
+                // syntetisk linje (denne udgifts egen account_id/amount/vat_rate) hvis udgiften ikke er splittet,
+                // så koden herunder er UÆNDRET i det almindelige (ikke-splittede) tilfælde, blot udtrukket til en
+                // løkke.
                 $exp_lines = expense_get_lines($conn, $expense_id);
                 $gross     = 0.0;
                 $vat_total = 0.0;
@@ -614,12 +584,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $vat_acc   = $is_income ? (int)($s['conf_acc_vat'] ?? 6900) : (int)($s['conf_acc_purchase_vat'] ?? 6910);
                 $sign      = $is_income ? -1 : 1;   // udgift: DEBET konto; indtægt: KREDIT konto
 
-                // NYT (leverandørmodul): en udgift registreret som "Ikke betalt
-                // endnu" krediterer den konfigurerede kreditor-/gældskonto i
-                // stedet for banken - selve betalingen bogføres først senere,
-                // som en separat postering, når regningen reelt betales (se
-                // expense_actions.php?action=mark_paid). Gælder aldrig en
-                // indtægt - der findes intet "leverandørgæld"-begreb der.
+                // NYT (leverandørmodul): en udgift registreret som "Ikke betalt endnu" krediterer den
+                // konfigurerede kreditor-/gældskonto i stedet for banken - selve betalingen bogføres først senere,
+                // som en separat postering, når regningen reelt betales (se expense_actions.php?action=mark_paid).
+                // Gælder aldrig en indtægt - der findes intet "leverandørgæld"-begreb der.
                 $bank_or_creditor = ($supplier_module_ready && !$is_income && $pay_now == 0)
                     ? (int)($s['conf_acc_creditor'] ?? 4000)
                     : $acc_bank;
@@ -645,11 +613,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             DB::commit($conn);
             if ($file_to_delete && file_exists($file_to_delete)) @unlink($file_to_delete);
             if ($depot_file_to_remove && file_exists($depot_file_to_remove)) @unlink($depot_file_to_remove);
-            header("Location: expense_list.php?msg=saved");
-            exit;
+            redirect('expense_list.php', '@Expense saved successfully.');
         } else {
             DB::rollback($conn);
-            $err = "SQL Error: " . DB::error($conn);
+            $err = lang('@Error:') . ' ' . htmlspecialchars((string)DB::error($conn));
         }
         } // luk bilagsregel-else (gemning sprunget over ved valideringsfejl)
     }
@@ -752,13 +719,11 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
         echo '<div style="margin-bottom:15px; font-size:12px; color:#4a5568; line-height:1.4;">';
             htm_Field('fa-hashtag', '@Voucher',     'vouch',    ($id > 0 ? $vouch : lang('@Generated')), 'text', null, 'readonly class="text-center" leg:left', '30%');
             htm_Field('fa-calendar', '@Date',       'exp_date', $date,   'date', null, 'required onchange="checkExpenseDuplicate()"', '40%');
-            htm_Field('fa-coins',    sprintf(lang('@Amount %s'), $base_currency), 'amount',   number_format((float)$amount, 2, ',', ''), 'text', null, 'required onblur="checkExpenseDuplicate()" style="text-align:right;"', '30%');
+            htm_Field('fa-coins',    sprintf(lang('@Amount %s'), $base_currency), 'amount',   fmt_dk_input(parse_dk_number($amount)), 'text', null, 'required onblur="checkExpenseDuplicate()" style="text-align:right;"', '30%');
 
-            // NYT (leverandørmodul): skrivebeskyttet betalingsstatus for en
-            // allerede oprettet udgift - betalingsmetoden vælges kun ved
-            // selve oprettelsen (se payment-section nedenfor), og ændres
-            // derefter udelukkende via en rigtig betaling (mark_paid),
-            // aldrig ved almindelig redigering.
+            // NYT (leverandørmodul): skrivebeskyttet betalingsstatus for en allerede oprettet udgift -
+            // betalingsmetoden vælges kun ved selve oprettelsen (se payment-section nedenfor), og ændres derefter
+            // udelukkende via en rigtig betaling (mark_paid), aldrig ved almindelig redigering.
             if ($supplier_module_ready && $id > 0 && !empty($due_date)) {
                 $is_paid_row = !empty($paid_date);
                 $status_bg   = $is_paid_row ? 'var(--bg-alert-success)' : 'var(--bg-alert-warning)';
@@ -772,8 +737,7 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
                 }
                 echo '</span>';
                 if (!$is_paid_row) {
-                    $pay_confirm = addslashes(lang('@Register that this expense has now been paid from the bank account?'));
-                    echo '<a href="expense_actions.php?action=mark_paid&id='.$id.'" data-hint="' . lang('@Register the expense as paid from the bank account (you are asked first)') . '" onclick="return confirm(\''.$pay_confirm.'\');"
+                    echo '<a href="expense_actions.php?action=mark_paid&id='.$id.'" data-hint="' . lang('@Register the expense as paid from the bank account (you are asked first)') . '" onclick="' . htm_confirm_js('@Register that this expense has now been paid from the bank account?') . '"
                         style="background:var(--color-success); color:#fff; padding:5px 12px; border-radius:4px; text-decoration:none; font-weight:bold; font-size:0.85em; white-space:nowrap;">
                         <i class="fa-solid fa-money-bill-wave"></i> ' . lang('@Pay Now') . '</a>';
                 }
@@ -807,14 +771,14 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
 
             // Beløb i originalvaluta
             echo '<div><label style="font-size:11px; font-weight:bold; color:var(--text-muted);">'.lang('@Amount in currency').'</label>';
-            echo '<input type="text" name="orig_amount" id="fc-orig-amount" value="'.($orig_amount ? number_format($orig_amount, 2, ',', '') : '').'"
+            echo '<input type="text" name="orig_amount" id="fc-orig-amount" value="'.($orig_amount ? fmt_dk_input($orig_amount) : '').'"
                 oninput="calcDkk()" placeholder="0,00"
                 style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-main); font-size:13px; text-align:right; box-sizing:border-box;"></div>';
 
             // Kurs
             echo '<div><label style="font-size:11px; font-weight:bold; color:var(--text-muted);">'.lang('@Exchange rate').' <span id="fc-rate-date" style="font-weight:normal; color:var(--text-muted); font-size:10px;"></span></label>';
             echo '<div style="display:flex; gap:4px;">';
-            echo '<input type="text" name="exch_rate" id="fc-rate" value="'.($exch_rate ? number_format($exch_rate, 4, ',', '') : '').'"
+            echo '<input type="text" name="exch_rate" id="fc-rate" value="'.($exch_rate ? fmt_dk_input($exch_rate, 4) : '').'"
                 oninput="calcDkk()" placeholder="0,0000"
                 style="flex:1; padding:6px; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-main); font-size:13px; text-align:right;">';
             echo '<button type="button" onclick="fetchRate()" title="'.lang('@Fetch current rate').'"
@@ -831,10 +795,9 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
             } // if currency_module
             // ── Slut valuta-sektion ─────────────────────────────────────────
 
-            // NYT (leverandørmodul): valgfri dropdown til at koble en
-            // leverandørstamdata-post - udfylder fritekstfeltet 'supplier'
-            // automatisk via JS (fillSupplierName()), fritekstfeltet
-            // forbliver den reelt gemte værdi.
+            // NYT (leverandørmodul): valgfri dropdown til at koble en leverandørstamdata-post - udfylder
+            // fritekstfeltet 'supplier' automatisk via JS (fillSupplierName), fritekstfeltet forbliver den reelt
+            // gemte værdi.
             if ($supplier_module_ready) {
                 htm_Field(icon:'fa-industry', labl:'@Link to Supplier', name:'supplier_id', valu:$supplier_id ?? '',
                     type:'sele', opti:$supplier_options, extr:'onchange="fillSupplierName(this)" leg:left', wdth:'100%');
@@ -880,13 +843,9 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
             }
             echo '</div></div>';
 
-            // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde
-            // 30): valgfri opdeling af DENNE udgift på flere konti - fx en
-            // kvittering med både kontorartikler og bilekstra. Kun tilbudt
-            // hvis migrationen er kørt OG udgiften ikke allerede er bogført
-            // (samme uforanderligheds-vindue som selve kontofeltet ovenfor).
-            // "Bevar totalbeløbet" håndhæves server-side (se $lines_err) -
-            // klientens løbende sum er kun til øjeblikkelig visuel feedback.
+            // NYT: valgfri opdeling af DENNE udgift på flere konti - fx en kvittering med både kontorartikler og
+            // bilekstra. "Bevar totalbeløbet" håndhæves server-side (se $lines_err) - klientens løbende sum er kun
+            // til øjeblikkelig visuel feedback.
             if (expense_lines_has_table($conn) && !$expense_already_posted) {
                 $split_acc_opts = [];
                 $sa_res = DB::query($conn, "SELECT acc_id, acc_name" . acc_status_col($conn) . " FROM accounts WHERE acc_type = 'expense' AND " . acc_visible_sql($conn, '', array_column($existing_expense_lines, 'account_id')) . " ORDER BY " . acc_order_sql($conn) . "acc_id");
@@ -907,7 +866,7 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
                 ?>
                 <script>
                 var SPLIT_ACCOUNTS = <?php echo json_encode($split_acc_opts); ?>;
-                var SPLIT_EXISTING = <?php echo json_encode(array_map(fn($l) => ['account_id' => (int)$l['account_id'], 'amount' => number_format((float)$l['amount'], 2, ',', ''), 'description' => $l['description'] ?? ''], $existing_expense_lines)); ?>;
+                var SPLIT_EXISTING = <?php echo json_encode(array_map(fn($l) => ['account_id' => (int)$l['account_id'], 'amount' => fmt_dk_input((float)$l['amount']), 'description' => $l['description'] ?? ''], $existing_expense_lines)); ?>;
                 var splitLineIdx = 0;
                 function splitAccountOptionsHtml(selected) {
                     var h = '';
@@ -930,10 +889,10 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
                 function updateSplitSum() {
                     var sum = 0;
                     document.querySelectorAll('#split_lines_tbl input[name^="line_amount"]').forEach(function(inp) {
-                        sum += parseFloat((inp.value || '0').replace(/\./g, '').replace(',', '.')) || 0;
+                        sum += tcNum(inp.value);
                     });
                     document.getElementById('split_sum').textContent = sum.toLocaleString('da-DK', {minimumFractionDigits:2, maximumFractionDigits:2});
-                    var target = parseFloat((document.querySelector('input[name="amount"]').value || '0').replace(/\./g, '').replace(',', '.')) || 0;
+                    var target = tcNum(document.querySelector('input[name="amount"]').value);
                     document.getElementById('split_target').textContent = target.toLocaleString('da-DK', {minimumFractionDigits:2, maximumFractionDigits:2});
                     document.getElementById('split_sum').style.color = (Math.abs(sum - target) < 0.01) ? 'var(--color-success)' : 'var(--color-danger)';
                 }
@@ -974,7 +933,7 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
             echo '<div id="no-att-reason-wrap" style="margin-bottom:15px;">';
             echo '<label style="display:block; font-size:12px; font-weight:bold; color:#4a5568; margin-bottom:4px;">'
                . lang('@Reason for missing attachment') . ' <span style="font-weight:normal; color:#7f8c8d;">('
-               . sprintf(lang('@only for amounts under %s kr'), number_format($__att_limit, 0, ',', '.')) . ')</span></label>';
+               . sprintf(lang('@only for amounts under %s kr'), fmt_dk($__att_limit, 0)) . ')</span></label>';
             echo '<input type="text" name="no_attachment_reason" value="'.htmlspecialchars($no_attachment_reason).'" '
                . 'placeholder="'.lang('@E.g. small cash purchase, receipt lost').'" '
                . 'style="width:100%; box-sizing:border-box; padding:8px; border:1px solid #cbd5e0; border-radius:4px; font-size:13px;">';
@@ -983,7 +942,7 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
             // relevant). Ved beløb >= grænse SKAL der vedhæftes bilag i stedet.
             echo '<script>(function(){var limit='.json_encode($__att_limit).';'
                . 'var amt=document.querySelector("[name=amount]"),wrap=document.getElementById("no-att-reason-wrap");'
-               . 'function t(){if(!amt||!wrap)return;var v=parseFloat(String(amt.value).replace(",","."))||0;wrap.style.display=(v<limit)?"block":"none";}'
+               . 'function t(){if(!amt||!wrap)return;var v=tcNum(amt.value);wrap.style.display=(v<limit)?"block":"none";}'
                . 'if(amt){amt.addEventListener("input",t);amt.addEventListener("change",t);}t();})();</script>';
 
             echo '<input type="hidden" id="depot_file_path" name="depot_file_path" value="'.(isset($_POST['depot_file_path']) ? htmlspecialchars($_POST['depot_file_path']) : '').'">';
@@ -991,8 +950,8 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
             if (!$currency_module && $orig_currency && $orig_currency !== $base_currency) {
                 // Modul deaktiveret: bevar eksisterende valuta-værdier, så de ikke tabes ved gem
                 echo '<input type="hidden" name="orig_currency" value="'.htmlspecialchars($orig_currency).'">';
-                echo '<input type="hidden" name="orig_amount" value="'.($orig_amount ? number_format($orig_amount, 2, ',', '') : '').'">';
-                echo '<input type="hidden" name="exch_rate" value="'.($exch_rate ? number_format($exch_rate, 4, ',', '') : '').'">';
+                echo '<input type="hidden" name="orig_amount" value="'.($orig_amount ? fmt_dk_input($orig_amount) : '').'">';
+                echo '<input type="hidden" name="exch_rate" value="'.($exch_rate ? fmt_dk_input($exch_rate, 4) : '').'">';
             }
 
             $save_label = ($exp_type === 'income') ? lang('@Save Income') : lang('@Save Expense');
@@ -1024,9 +983,10 @@ function checkExpenseDuplicate() {
     var expDate  = document.querySelector('[name="exp_date"]');
     if (!supplier || !amount || !expDate) return;
     var s = (supplier.value || '').trim();
-    var a = (amount.value || '').toString().replace(',', '.');
+    var a = (amount.value || '').toString().trim();      // RETTET: "1.250,00" blev til "1.250.00" (= 1,25 på serveren) - serveren læser selv dansk talformat
+    var aNum = a === '' ? NaN : tcNum(a);
     var d = expDate.value || '';
-    if (s === '' || !a || parseFloat(a) <= 0 || !d) { box.style.display = 'none'; return; }
+    if (s === '' || !a || !(aNum > 0) || !d) { box.style.display = 'none'; return; }
     var params = new URLSearchParams({ supplier: s, amount: a, exp_date: d, exclude_id: <?php echo (int)$id; ?> });
     fetch('expense_duplicate_check.php?' + params.toString())
         .then(function(r) { return r.json(); })
@@ -1093,10 +1053,11 @@ function setRate(currency) {
 }
 
 function calcDkk() {
-    var origStr = document.getElementById('fc-orig-amount').value.replace(',', '.');
-    var rateStr = document.getElementById('fc-rate').value.replace(',', '.');
-    var orig    = parseFloat(origStr);
-    var rate    = parseFloat(rateStr);
+    // RETTET: "1.500,00" EUR blev læst som 1,5 og gav et forkert kronebeløb i beløbsfeltet
+    var origStr = document.getElementById('fc-orig-amount').value.trim();
+    var rateStr = document.getElementById('fc-rate').value.trim();
+    var orig    = origStr === '' ? NaN : tcNum(origStr);
+    var rate    = rateStr === '' ? NaN : tcNum(rateStr);
     if (!isNaN(orig) && !isNaN(rate) && rate > 0) {
         var dkk = orig * rate;
         var amountField = document.querySelector('input[name="amount"]');
@@ -1164,7 +1125,10 @@ dropzone.addEventListener('mousedown',(e)=>{ const dzRect=dropzone.getBoundingCl
 window.addEventListener('mousemove',(e)=>{ if(!isDragging)return; translateX=e.clientX-startX; translateY=e.clientY-startY; opdaterTransform(); });
 window.addEventListener('mouseup',()=>{ isDragging=false; zoomWrapper.style.cursor='grab'; });
 dropzone.addEventListener('wheel',(e)=>{ e.preventDefault(); const zi=0.15; const delta=e.deltaY<0?1:-1; const nz=Math.min(Math.max(1,currentZoom+delta*zi),5); if(nz===currentZoom)return; const dzRect=dropzone.getBoundingClientRect(); const mx=e.clientX-dzRect.left; const my=e.clientY-dzRect.top; const dx=(mx-translateX)/currentZoom; const dy=(my-translateY)/currentZoom; currentZoom=nz; translateX=mx-dx*currentZoom; translateY=my-dy*currentZoom; opdaterTransform(); });
-dropzone.addEventListener('dblclick',()=>{ nulstilVisning(); });
+// RETTET: dobbeltklik kaldte nulstilVisning(), som også SKJULER pdf-/billedvisningen (den bruges før en ny fil
+// indlæses) - vinduet blev blankt. Dobbeltklik nulstiller nu kun zoom og placering; bilaget bliver stående.
+function nulstilZoom() { currentZoom=1; translateX=0; translateY=0; zoomWrapper.style.cursor='grab'; opdaterTransform(); }
+dropzone.addEventListener('dblclick',()=>{ nulstilZoom(); });
 document.addEventListener("DOMContentLoaded",()=>{ skiftDepotTab('mail'); const f='<?php echo $current_attachment; ?>'; if(f!==''){previewDepotFile('uploads/'+f);badge.innerText='✓ '+"<?php echo lang('@Voucher ready'); ?>"+': '+f;badge.style.background='#2ecc71';badge.style.display='block';} if(document.getElementById('depot_file_path').value!==''||f!==''||MidlertidigFilFraPC!==null){panel.style.opacity='1';panel.style.pointerEvents='auto';if(document.getElementById('AccountPanelHint'))document.getElementById('AccountPanelHint').style.display='none';scanBtn.style.display='block';}else{panel.style.opacity='0.3';panel.style.pointerEvents='none';} });
 function highlightSelectedRadio(r) { document.querySelectorAll('.radio-card-btn').forEach(l=>l.classList.remove('active-radio-btn')); if(r.checked){r.closest('.radio-card-btn').classList.add('active-radio-btn');if(MidlertidigFilFraPC||document.getElementById('depot_file_path').value!==''||'<?php echo $current_attachment; ?>'!==''){badge.innerText='📂 '+"<?php echo lang('@Voucher to account'); ?>"+'#'+r.value;badge.style.background='#2ecc71';}}}
 function handleLocalFileSelect(i) { if(i.files&&i.files[0]){MidlertidigFilFraPC=i.files[0];document.getElementById('depot_file_path').value=''; nulstilVisning(); const u=URL.createObjectURL(MidlertidigFilFraPC); if(MidlertidigFilFraPC.type==="application/pdf"){pdfPreview.src=u;pdfPreview.style.display='block';}else if(MidlertidigFilFraPC.type.startsWith("image/")){imgPreview.src=u;imgPreview.style.display='block';} badge.innerText='📂 '+"<?php echo lang('@Local file'); ?>"+': '+MidlertidigFilFraPC.name;badge.style.background='#34495e';badge.style.display='block';panel.style.opacity='1';panel.style.pointerEvents='auto';if(document.getElementById('AccountPanelHint'))document.getElementById('AccountPanelHint').style.display='none';tjekVisScanKnap();}}

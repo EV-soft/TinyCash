@@ -29,8 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_note'])) {
         DB::query($conn, "INSERT INTO settings (setting_key, setting_value) VALUES ('arl_accounting_policy_note', '$note_esc')
                            ON DUPLICATE KEY UPDATE setting_value = '$note_esc'");
     }
-    header("Location: annual_report.php?year_id=" . (int)($_POST['year_id'] ?? 0) . "&msg=note_saved");
-    exit;
+    redirect('annual_report.php?year_id=' . (int)($_POST['year_id'] ?? 0), '@Note saved.');
 }
 
 // --- Vælg regnskabsår ---
@@ -48,9 +47,7 @@ showMenu();
 
 echo "<div style='max-width:900px; margin:0 auto; padding:10px;'>";
 
-if (isset($_GET['msg']) && $_GET['msg'] === 'note_saved') {
-    htm_Alert(lang('@Note saved.'), 'success');
-}
+flash_render();
 
 if (empty($years)) {
     htm_Alert(lang('@No fiscal years found. Run migrate_fiscal_years.php once (see db-setup/), or close a fiscal year in Close Fiscal Year first.'), 'error');
@@ -109,10 +106,10 @@ echo '<style>#report-page h3 { margin: 14px 0 6px; }</style>';
     // --- Resultatopgørelse ---
     echo '<h3 style="border-bottom:1px solid #ddd; padding-bottom:6px;">' . lang('@Income Statement') . '</h3>';
     echo '<table style="width:100%; border-collapse:collapse; font-size:0.95em; margin-bottom:14px;">';
-    echo '<tr><td style="padding:4px 0;">' . lang('@Net Revenue') . '</td><td style="padding:4px 0; text-align:right;">' . number_format($is['revenue'], 2, ',', '.') . '</td></tr>';
-    echo '<tr><td style="padding:4px 0;">' . lang('@Costs of goods and external expenses') . '</td><td style="padding:4px 0; text-align:right;">-' . number_format($is['total_costs'], 2, ',', '.') . '</td></tr>';
-    echo '<tr style="border-top:1px solid #333; font-weight:bold;"><td style="padding:5px 0;">' . lang('@Gross Profit') . '</td><td style="padding:5px 0; text-align:right;">' . number_format($is['gross_result'], 2, ',', '.') . '</td></tr>';
-    echo '<tr style="border-top:2px solid #333; font-weight:bold; font-size:1.05em;"><td style="padding:5px 0;">' . lang('@Result for the Year') . '</td><td style="padding:5px 0; text-align:right;">' . number_format($is['gross_result'], 2, ',', '.') . ' ' . $currency . '</td></tr>';
+    echo '<tr><td style="padding:4px 0;">' . lang('@Net Revenue') . '</td><td style="padding:4px 0; text-align:right;">' . fmt_dk($is['revenue']) . '</td></tr>';
+    echo '<tr><td style="padding:4px 0;">' . lang('@Costs of goods and external expenses') . '</td><td style="padding:4px 0; text-align:right;">-' . fmt_dk($is['total_costs']) . '</td></tr>';
+    echo '<tr style="border-top:1px solid #333; font-weight:bold;"><td style="padding:5px 0;">' . lang('@Gross Profit') . '</td><td style="padding:5px 0; text-align:right;">' . fmt_dk($is['gross_result']) . '</td></tr>';
+    echo '<tr style="border-top:2px solid #333; font-weight:bold; font-size:1.05em;"><td style="padding:5px 0;">' . lang('@Result for the Year') . '</td><td style="padding:5px 0; text-align:right;">' . fmt_dk($is['gross_result']) . ' ' . $currency . '</td></tr>';
     echo '</table>';
 
     // --- Balance ---
@@ -121,31 +118,31 @@ echo '<style>#report-page h3 { margin: 14px 0 6px; }</style>';
 
         echo '<div><strong>' . lang('@Assets') . '</strong><table style="width:100%; border-collapse:collapse; margin-top:6px;">';
         foreach ($bs['asset_rows'] as $r) {
-            echo '<tr><td style="padding:3px 0;">' . htmlspecialchars($r['acc_name']) . '</td><td style="padding:3px 0; text-align:right;">' . number_format($r['balance'], 2, ',', '.') . '</td></tr>';
+            echo '<tr><td style="padding:3px 0;">' . htmlspecialchars($r['acc_name']) . '</td><td style="padding:3px 0; text-align:right;">' . fmt_dk($r['balance']) . '</td></tr>';
         }
         if ($bs['vat_is_asset'] && $bs['vat_net'] != 0) {
-            echo '<tr><td style="padding:3px 0;">' . lang('@VAT receivable') . '</td><td style="padding:3px 0; text-align:right;">' . number_format($bs['vat_net'], 2, ',', '.') . '</td></tr>';
+            echo '<tr><td style="padding:3px 0;">' . lang('@VAT receivable') . '</td><td style="padding:3px 0; text-align:right;">' . fmt_dk($bs['vat_net']) . '</td></tr>';
         }
-        echo '<tr style="border-top:2px solid #333; font-weight:bold;"><td style="padding:5px 0;">' . lang('@Total Assets') . '</td><td style="padding:6px 0; text-align:right;">' . number_format($bs['assets_total'], 2, ',', '.') . '</td></tr>';
+        echo '<tr style="border-top:2px solid #333; font-weight:bold;"><td style="padding:5px 0;">' . lang('@Total Assets') . '</td><td style="padding:6px 0; text-align:right;">' . fmt_dk($bs['assets_total']) . '</td></tr>';
         echo '</table></div>';
 
         echo '<div><strong>' . lang('@Liabilities and Equity') . '</strong><table style="width:100%; border-collapse:collapse; margin-top:6px;">';
         foreach ($bs['equity_rows'] as $r) {
-            echo '<tr><td style="padding:3px 0;">' . htmlspecialchars($r['acc_name']) . '</td><td style="padding:3px 0; text-align:right;">' . number_format(-$r['balance'], 2, ',', '.') . '</td></tr>';
+            echo '<tr><td style="padding:3px 0;">' . htmlspecialchars($r['acc_name']) . '</td><td style="padding:3px 0; text-align:right;">' . fmt_dk(-$r['balance']) . '</td></tr>';
         }
-        echo '<tr><td style="padding:3px 0; font-style:italic;">' . lang('@Result for the year (not yet closed)') . '</td><td style="padding:3px 0; text-align:right;">' . number_format($bs['unclosed_result'], 2, ',', '.') . '</td></tr>';
+        echo '<tr><td style="padding:3px 0; font-style:italic;">' . lang('@Result for the year (not yet closed)') . '</td><td style="padding:3px 0; text-align:right;">' . fmt_dk($bs['unclosed_result']) . '</td></tr>';
         foreach ($bs['liability_rows'] as $r) {
-            echo '<tr><td style="padding:3px 0;">' . htmlspecialchars($r['acc_name']) . '</td><td style="padding:3px 0; text-align:right;">' . number_format(-$r['balance'], 2, ',', '.') . '</td></tr>';
+            echo '<tr><td style="padding:3px 0;">' . htmlspecialchars($r['acc_name']) . '</td><td style="padding:3px 0; text-align:right;">' . fmt_dk(-$r['balance']) . '</td></tr>';
         }
         if (!$bs['vat_is_asset'] && $bs['vat_net'] != 0) {
-            echo '<tr><td style="padding:3px 0;">' . lang('@VAT payable') . '</td><td style="padding:3px 0; text-align:right;">' . number_format(-$bs['vat_net'], 2, ',', '.') . '</td></tr>';
+            echo '<tr><td style="padding:3px 0;">' . lang('@VAT payable') . '</td><td style="padding:3px 0; text-align:right;">' . fmt_dk(-$bs['vat_net']) . '</td></tr>';
         }
-        echo '<tr style="border-top:2px solid #333; font-weight:bold;"><td style="padding:5px 0;">' . lang('@Total Liabilities and Equity') . '</td><td style="padding:6px 0; text-align:right;">' . number_format($bs['passives_total'], 2, ',', '.') . '</td></tr>';
+        echo '<tr style="border-top:2px solid #333; font-weight:bold;"><td style="padding:5px 0;">' . lang('@Total Liabilities and Equity') . '</td><td style="padding:6px 0; text-align:right;">' . fmt_dk($bs['passives_total']) . '</td></tr>';
         echo '</table></div>';
 
     echo '</div>';
     if (abs($bs['diff']) > 0.01) {
-        echo '<p style="color:#c0392b; font-size:0.85em;">⚠ ' . sprintf(lang('@Balance does not match by %s %s.'), number_format($bs['diff'], 2, ',', '.'), $currency) . '</p>';
+        echo '<p style="color:#c0392b; font-size:0.85em;">⚠ ' . sprintf(lang('@Balance does not match by %s %s.'), fmt_dk($bs['diff']), $currency) . '</p>';
     }
 
     // --- Noter ---
@@ -155,15 +152,10 @@ echo '<style>#report-page h3 { margin: 14px 0 6px; }</style>';
     // --- Ledelsespåtegning ---
     echo '<h3 style="border-bottom:1px solid #ddd; padding-bottom:6px; margin-top:16px;">' . lang('@Management Endorsement') . '</h3>';
     echo '<p style="font-size:0.9em; margin:6px 0;">' . lang('@We have today considered and approved the annual report for the fiscal year above. The annual report has been prepared in accordance with the Danish Financial Statements Act. In our opinion, the annual report gives a true and fair view of the company\'s financial position.') . '</p>';
-    // RETTET (se [[year-end-close-bugs-review]]): datoen på selve
-    // underskriftsblokken var altid dagens dato, gengenereret hver gang siden
-    // vises - to udskrifter af den "samme", allerede godkendte årsrapport på
-    // forskellige dage ville derfor vise to FORSKELLIGE underskriftsdatoer,
-    // hvilket underminerer dokumentets værdi som et dateret, uforanderligt
+    // RETTET: datoen på selve underskriftsblokken var altid dagens dato, gengenereret hver gang siden vises - to
+    // udskrifter af den "samme", allerede godkendte årsrapport på forskellige dage ville derfor vise to
+    // FORSKELLIGE underskriftsdatoer, hvilket underminerer dokumentets værdi som et dateret, uforanderligt
     // juridisk bilag. Bruger nu den faktiske afslutningsdato (fiscal_years.
-    // closed_at, sat én gang af year_end_close.php) når året er lukket;
-    // falder kun tilbage til dags dato mens året stadig er en forhåndsvisning
-    // (allerede tydeligt markeret som "ikke afsluttet endnu" ovenfor).
     $sign_date = !empty($selected['closed_at'])
         ? date(CONF_DATE_FORMAT, strtotime($selected['closed_at']))
         : date(CONF_DATE_FORMAT);

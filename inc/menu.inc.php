@@ -31,11 +31,9 @@
 // login) - modul-baserede punkter (Projekter) udelades i så fald.
 function get_menu_structure($conn): array {
     $module_projects = false;
-    // NYT (§currency-setting-is-cosmetic-label, Fase 2): momsrapporten
-    // (vat_report.php) er formet efter dansk momsindberetning (TastSelv-
-    // afrunding) og udelades derfor af menuen for en virksomhed, der bruger
-    // en anden bogføringsvaluta end DKK - siden selv spærrer stadig direkte
-    // adgang via require_dkk_base_currency().
+    // NYT: momsrapporten (vat_report.php) er formet efter dansk momsindberetning (TastSelv-afrunding) og udelades
+    // derfor af menuen for en virksomhed, der bruger en anden bogføringsvaluta end DKK - siden selv spærrer stadig
+    // direkte adgang via require_dkk_base_currency.
     $is_dkk_base = true;
     if ($conn) {
         $company_settings = get_settings($conn);
@@ -56,32 +54,22 @@ function get_menu_structure($conn): array {
                 // db-setup/migrate_quotes.php for den fulde begrundelse.
                 'quote_list.php'             => '📝 ' . lang('@Quotes'),
                 'quote_edit.php?id=0'        => '➕ ' . lang('@Create New Quote'),
-                // NYT (bruger-anmodet): "Indkøb" har et direkte underpunkt til
-                // leverandørlisten (supplier_list.php), men "Salg" havde intet
-                // tilsvarende direkte punkt til kundelisten - kun den
-                // kombinerede fakturaoversigt (sales_hub.php, allerede linket
-                // ovenfor). Kundelisten lever selv inde i sales_hub.php (der
-                // findes ingen separat customer_list.php), så punktet her
-                // peger på samme side med et anker (#c_card, sales_hub.php's
-                // kundekort-formular-id) direkte til kundesektionen, i stedet
-                // for at duplikere kundelisten i en helt ny fil.
+                // NYT: "Indkøb" har et direkte underpunkt til leverandørlisten (supplier_list.php), men "Salg"
+                // havde intet tilsvarende direkte punkt til kundelisten - kun den kombinerede fakturaoversigt
+                // (sales_hub.php, allerede linket ovenfor). Kundelisten lever selv inde i sales_hub.php (der
+                // findes ingen separat customer_list.php), så punktet her peger på samme side med et anker
+                // (#c_card, sales_hub.php's kundekort-formular-id) direkte til kundesektionen, i stedet for at
+                // duplikere kundelisten i en helt ny fil.
                 'sales_hub.php#c_card'       => '👥 ' . lang('@Customers'),
                 'reminders.php'              => '⏰ ' . lang('@Payment Reminders'),
-                // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"):
-                // parallel til reminders.php, blot for udløbne/snart-
-                // udløbne SENDTE tilbud i stedet for forfaldne fakturaer -
-                // se db-setup/migrate_quote_followup.php.
+                // NYT: parallel til reminders.php, blot for udløbne/snart-udløbne SENDTE tilbud i stedet for
+                // forfaldne fakturaer - se db-setup/migrate_quote_followup.php.
                 'quote_followup.php'         => '📨 ' . lang('@Quote Follow-up'),
-                // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"):
-                // masse-udsendelse af kontoudtog til alle kunder med en åben
-                // saldo - hidtil kunne customer_statement_send.php kun sende
-                // ét kontoudtog ad gangen, manuelt pr. kunde.
+                // NYT: masse-udsendelse af kontoudtog til alle kunder med en åben saldo - hidtil kunne
+                // customer_statement_send.php kun sende ét kontoudtog ad gangen, manuelt pr. kunde.
                 'customer_statements.php'    => '📊 ' . lang('@Account Statements'),
-                // NYT (bruger-anmodet, "kan bogholderen ønske sig mere",
-                // runde 27): ingen side kunne samle ALT om én kunde til ét
-                // dokument til en GDPR-indsigtsanmodning - se filens egen
-                // kommentar for hvorfor sletning/anonymisering bevidst ikke
-                // er en del af det.
+                // NYT: ingen side kunne samle ALT om én kunde til ét dokument til en GDPR-indsigtsanmodning - se
+                // filens egen kommentar for hvorfor sletning/anonymisering bevidst ikke er en del af det.
                 'customer_data_export.php'   => '🔒 ' . lang('@Customer Data Export (GDPR)'),
                 'recurring_invoices.php'     => '🔁 ' . lang('@Recurring Invoices'),
                 'mail_inbox.php?box=invoice' => '🗂️ ' . lang('@Invoice Copies Inbox'),
@@ -119,16 +107,11 @@ function get_menu_structure($conn): array {
                 'reports' => ['label' => '📊 ' . lang('@Reports') . ' <span style="float:right">▶</span>',
                     'submenu' => array_merge(
                         [
-                            // RETTET (bruger-anmodet, samme begrundelse som
-                            // Rapporter/Vedligeholdelse selv fik tidligere): et
-                            // punkt der selv åbner en flyout placeres ØVERST i
-                            // sin forældre-liste - flyout'en (i top-navigations-
-                            // tilstand) åbner altid ud for SIN EGEN vandrette
-                            // position i den overliggende dropdown, så jo længere
-                            // nede i listen den står, jo højere nede på skærmen
-                            // begynder den - og med seks undermenu-punkter kunne
-                            // Revision nemt løbe ud over vinduets underkant hvis
-                            // den lå nederst (hvor den stod FØR).
+                            // RETTET: et punkt der selv åbner en flyout placeres ØVERST i sin forældre-liste -
+                            // flyout'en (i top-navigations-tilstand) åbner altid ud for SIN EGEN vandrette
+                            // position i den overliggende dropdown, så jo længere nede i listen den står, jo
+                            // højere nede på skærmen begynder den - og med seks undermenu-punkter kunne Revision
+                            // nemt løbe ud over vinduets underkant hvis den lå nederst (hvor den stod FØR).
                             'audit' => ['label' => '🔍 ' . lang('@Audit') . ' <span style="float:right">▶</span>',
                                 'submenu' => [
                                     'account_card.php'             => '🗒️ ' . lang('@Account Card'),
@@ -144,37 +127,22 @@ function get_menu_structure($conn): array {
                                     // - se bank_balance_check.php's egen
                                     // kommentar.
                                     'bank_balance_check.php'        => '🏦 ' . lang('@Bank Balance Reconciliation'),
-                                    // NYT (bruger-anmodet, "kan bogholderen
-                                    // ønske sig mere"): samme afstemnings-
-                                    // princip som Subledger Reconciliation
-                                    // ovenfor, blot for momskontiene - se
-                                    // vat_reconciliation.php's egen kommentar.
+                                    // NYT: samme afstemnings-princip som Subledger Reconciliation ovenfor, blot
+                                    // for momskontiene - se vat_reconciliation.php's egen kommentar.
                                     'vat_reconciliation.php'        => '🧾 ' . lang('@VAT Reconciliation'),
                                     'segregation_audit.php'         => '👀 ' . lang('@Segregation of Duties Audit'),      // (fire-øjne-princippet - 👤 var mørkegrå på den mørke menu)
-                                    // NYT (bruger-anmodet, "kan bogholderen
-                                    // ønske sig mere"): login_log-tabellen
-                                    // blev allerede skrevet til ved hvert
-                                    // login-forsøg, men var usynlig - se
-                                    // login_history.php's egen kommentar.
+                                    // NYT: login_log-tabellen blev allerede skrevet til ved hvert login-forsøg,
+                                    // men var usynlig - se login_history.php's egen kommentar.
                                     'login_history.php'             => '🔐 ' . lang('@Login History'),
-                                    // NYT (bruger-anmodet, "kan bogholderen
-                                    // ønske sig mere"): mail_log-tabellen
-                                    // udfyldes nu automatisk af den fælles
-                                    // sendTinyMail() - se mail_log.php's
-                                    // egen kommentar.
+                                    // NYT: mail_log-tabellen udfyldes nu automatisk af den fælles sendTinyMail -
+                                    // se mail_log.php's egen kommentar.
                                     'mail_log.php'                  => '📧 ' . lang('@Sent Mail Log'),
-                                    // NYT (bruger-anmodet, "kan bogholderen
-                                    // ønske sig mere", runde 31): "Slet" på en
-                                    // kunde/leverandør er nu en gendannelig
-                                    // blødsletning - se filens egen kommentar.
+                                    // NYT: "Slet" på en kunde/leverandør er nu en gendannelig blødsletning - se
+                                    // filens egen kommentar.
                                     'trash_bin.php'                 => '🗑️ ' . lang('@Trash Bin'),
-                                    // NYT (bruger-anmodet, "kan bogholderen
-                                    // ønske sig mere", runde 26): kun fulde
-                                    // systembackups fandtes - ingen måde at
-                                    // hente et rent bilagsarkiv for ét
-                                    // regnskabsår til revisor/bogføringslovens
-                                    // 5-års opbevaringspligt - se filens egen
-                                    // kommentar.
+                                    // NYT: kun fulde systembackups fandtes - ingen måde at hente et rent
+                                    // bilagsarkiv for ét regnskabsår til revisor/bogføringslovens 5-års
+                                    // opbevaringspligt - se filens egen kommentar.
                                     'voucher_archive_export.php'    => '🗃️ ' . lang('@Voucher Archive Export'),
                                 ]],
                         ],
@@ -184,10 +152,7 @@ function get_menu_structure($conn): array {
                         [
                             'aging_report.php'       => '📆 ' . lang('@Aging Report'),
                             'report_income.php'      => '📊 ' . lang('@Profit & Loss Report'),
-                            // NYT (bruger-anmodet, "kan bogholderen ønske
-                            // sig mere"): budget_edit.php - se dens egen
-                            // kommentar og report_income.php's nye
-                            // afvigelseskolonne.
+                            // NYT: budget_edit.php -.php's nye afvigelseskolonne.
                             'budget_edit.php'        => '🎯 ' . lang('@Account Budgets'),
                             'balance_sheet.php'      => '⚖️ ' . lang('@Balance Sheet'),
                             'annual_report.php'      => '📜 ' . lang('@Annual Report'),
@@ -209,17 +174,13 @@ function get_menu_structure($conn): array {
             ]], */ 
         'system'     => ['label' => '⚙️ ' . lang('@System'),      'hint' => lang('@Settings and user management'),
             'submenu' => [
-                // RETTET (bruger-anmodet, samme begrundelse som Regnskab ->
-                // Rapporter ovenfor): "Vedligeholdelse" åbner selv en flyout med
-                // otte punkter - endnu mere udsat for at løbe ud over vinduets
-                // underkant end Rapporter, og derfor placeret allerøverst.
+                // RETTET: "Vedligeholdelse" åbner selv en flyout med otte punkter - endnu mere udsat for at løbe
+                // ud over vinduets underkant end Rapporter, og derfor placeret allerøverst.
                 'maintenance'              => ['label' => '🛠️ ' . lang('@Maintenance') . ' <span style="float:right">▶</span>',
                     'submenu' => [
                         'backup.php'              => '📥 ' . lang('@Backup Management'),
                         'backup_restore.php'      => '🔄 ' . lang('@Restore System'),
-                        // NYT (bruger-anmodet, "kan bogholderen ønske sig
-                        // mere", runde 30): verificerer en backup uden at
-                        // overskrive den rigtige database - se filens egen
+                        // NYT: verificerer en backup uden at overskrive den rigtige database - se filens egen
                         // kommentar.
                         'backup_test_restore.php' => '🧪 ' . lang('@Backup Test Restore'),
                         'setup_chart.php'         => ['label' => '📑 ' . lang('@Chart of Accounts Proposal'), 'hint' => lang('@Only Danish layout')],
@@ -241,10 +202,8 @@ function get_menu_structure($conn): array {
                 'shop_connections.php'       => '🛒 ' . lang('@Web Shops'),
                 '---_3'                      => '---',
                 'ai_help.php'                => 'ℹ️ ' . lang('@AI support'),
-                // NYT (bruger-anmodet): offentlig, login-fri AI-manual (se
-                // docs/ai_manual.md) - en ekstern AI/support-chatbot kan
-                // hente den direkte, men et menu-link her gør den nem at
-                // finde/dele for en administrator.
+                // NYT: offentlig, login-fri AI-manual (se docs/ai_manual.md) - en ekstern AI/support-chatbot kan
+                // hente den direkte, men et menu-link her gør den nem at finde/dele for en administrator.
                 'ai_manual.php'              => '🤖 ' . lang('@AI Manual'),
                 'about.php'                  => 'ℹ️ ' . lang('@About TinyCash'),
             ]],
@@ -326,14 +285,11 @@ function showMenu() {
         $company_name     = trim($company_settings['company_name'] ?? '');
     }
 
-    // Backup-advarsel - RETTET (bruger-rapporteret: "hvor er advarsels-banner
-    // når menuen er i sidepanel") - beregningen lå FØR kun nede ved selve
-    // #top-nav-renderingen, som CSS'en (body.sidebar-mode #top-nav {
-    // display:none}) skjuler HELT, når brugeren har skiftet til sidepanel-
-    // visning - #tc-sidebar-blokken havde aldrig fået sin egen kopi af
-    // advarslen. Flyttet herop, så BEGGE menu-visninger kan bruge samme
-    // beregnede $days_old/$alert_msg, i stedet for at risikere at de to
-    // kopier glider fra hinanden over tid.
+    // Backup-advarsel - RETTET - beregningen lå FØR kun nede ved selve #top-nav-renderingen, som CSS'en
+    // (body.sidebar-mode #top-nav { display:none}) skjuler HELT, når brugeren har skiftet til sidepanel-visning -
+    // #tc-sidebar-blokken havde aldrig fået sin egen kopi af advarslen. Flyttet herop, så BEGGE menu-visninger kan
+    // bruge samme beregnede $days_old/$alert_msg, i stedet for at risikere at de to kopier glider fra hinanden
+    // over tid.
     $days_old = 0;
     if ($conn) {
         $b_res = @DB::query($conn, "SELECT setting_value FROM settings WHERE setting_key = 'last_backup_time'");
@@ -360,15 +316,11 @@ function showMenu() {
     $menu = get_menu_structure($conn);
 
     if (!$adminExists) {
-        // Bootstrap-punkt, bevidst UNDTAGET fra det konfigurerbare
-        // synligheds-system nedenfor - uden en admin-konto endnu må dette
-        // punkt aldrig kunne skjules, ellers kunne man reelt låse sig selv
-        // ude af at kunne oprette den allerførste admin via menuen.
-        // RETTET (§bugs-batch-16-review): pegede på user_edit.php?id=0 - en
-        // ren REDIGERINGS-side (UPDATE ... WHERE user_id=0, og GET-visningen
-        // dør med "User not found" for id=0) som aldrig kunne oprette noget
-        // som helst. user_create.php er den egentlige opret-side, og har nu
-        // samme "ingen admin findes endnu"-undtagelse.
+        // Bootstrap-punkt, bevidst UNDTAGET fra det konfigurerbare synligheds-system nedenfor - uden en
+        // admin-konto endnu må dette punkt aldrig kunne skjules, ellers kunne man reelt låse sig selv ude af at
+        // kunne oprette den allerførste admin via menuen.
+        // RETTET: pegede på user_edit.php?id=0 - en ren REDIGERINGS-side (UPDATE... user_create.php er den
+        // egentlige opret-side, og har nu samme "ingen admin findes endnu"-undtagelse.
         $menu['system']['submenu'] = array_merge(
             ['user_create.php' => '🆕 ' . lang('@Create First Admin')],
             $menu['system']['submenu']
@@ -379,13 +331,10 @@ function showMenu() {
     $current_box  = isset($_GET['box']) ? $_GET['box'] : '';
 
     // ── Hjælpefunktion: er dette menu-punkt aktivt? ──────────────────────────
-    // RETTET (bruger-anmodet menu-omrokering, Regnskab -> Rapporter): tjekkede
-    // kun ÉT niveau af undermenu-nøgler - virkede fint mens hvert punkt i
-    // fx Regnskab's undermenu var en direkte .php-fil, men en NESTET
-    // undermenu (samme mønster som System -> Vedligeholdelse allerede brugte)
-    // har kun nøglen "reports"/"maintenance" på dette niveau, ikke de
-    // faktiske sidenavne længere nede - så det yderste menu-punkt ("Regnskab")
-    // mistede sin aktiv-markering når man besøgte fx balance_sheet.php.
+    // RETTET: tjekkede kun ÉT niveau af undermenu-nøgler - virkede fint mens hvert punkt i fx Regnskab's undermenu
+    // var en direkte.php-fil, men en NESTET undermenu (samme mønster som System -> Vedligeholdelse allerede
+    // brugte) har kun nøglen "reports"/"maintenance" på dette niveau, ikke de faktiske sidenavne længere nede - så
+    // det yderste menu-punkt ("Regnskab") mistede sin aktiv-markering når man besøgte fx balance_sheet.php.
     // Rekursiv nu, så den finder $current_page uanset hvor dybt den er nestet.
     $isActiveItem = function($url, $config) use (&$isActiveItem, $current_page, $current_box) {
         if ($current_page === $url) return true;
@@ -416,16 +365,12 @@ function showMenu() {
     // af siden selv (auth.inc.php + $rLev). Se menu_visibility.php's egen
     // advarselstekst.
     $overrides = get_menu_visibility_overrides($conn);
-    // RETTET (§bugs-batch-16-review): "Opret første admin"-punktet blev
-    // allerede tvangsindsat i $menu['system']['submenu'] ovenfor "uden at
-    // kunne skjules" - men det hjalp intet, hvis selve FORÆLDRE-kategorien
-    // "system" er skjult for brugerens niveau (get_menu_visibility_defaults()
-    // returnerer [1=>false,2=>true,3=>true] for den) - præcis niveau 1 er
-    // det mest sandsynlige niveau for en bruger der reelt står uden nogen
-    // admin. Hele "System"-sektionen (og dermed bootstrap-punktet i den)
-    // blev derfor aldrig vist til netop den bruger, exemption'en var lavet
-    // til at beskytte. Tvinger nu "system"-kategorien synlig, når ingen
-    // admin findes, uanset niveau.
+    // RETTET: "Opret første admin"-punktet blev allerede tvangsindsat i $menu['system']['submenu'] ovenfor "uden
+    // at kunne skjules" - men det hjalp intet, hvis selve FORÆLDRE-kategorien "system" er skjult for brugerens
+    // niveau (get_menu_visibility_defaults returnerer [1=>false,2=>true,3=>true] for den) - præcis niveau 1 er det
+    // mest sandsynlige niveau for en bruger der reelt står uden nogen admin. Hele "System"-sektionen (og dermed
+    // bootstrap-punktet i den) blev derfor aldrig vist til netop den bruger, exemption'en var lavet til at
+    // beskytte.
     $isAllowed = function($url) use ($uLev, $overrides, $adminExists) {
         if (!$adminExists && $url === 'system') return true;
         $allowedByLevel = $overrides[$url] ?? get_menu_visibility_defaults($url);
@@ -433,12 +378,9 @@ function showMenu() {
     };
     $isSubAllowed = $isAllowed; // samme opslag, samme tabel - blot kaldt fra to render-steder
 
-    // NYT (bruger-anmodet: højreklik-skjul-funktionen skal kunne vise/skifte
-    // L1 og L2 UAFHÆNGIGT af hinanden, ikke kun en samlet "skjul begge"-
-    // knap) - bygger data-hidden-l1/data-hidden-l2-attributter ud fra det
-    // allerede indlæste $overrides for hvert punkt, så context-menuen kan
-    // vise korrekt AFKRYDSET tilstand med det samme uden endnu et AJAX-kald.
-    // Kun beregnet/udskrevet for admins - ingen ekstra markup for alle andre.
+    // NYT - bygger data-hidden-l1/data-hidden-l2-attributter ud fra det allerede indlæste $overrides for hvert
+    // punkt, så context-menuen kan vise korrekt AFKRYDSET tilstand med det samme uden endnu et AJAX-kald. Kun
+    // beregnet/udskrevet for admins - ingen ekstra markup for alle andre.
     $isAdminUser = (($_SESSION['user_role'] ?? '') === 'admin');
     $ctxAttrs = function($url, $hasChildren = false) use ($isAdminUser, $overrides) {
         if (!$isAdminUser) return '';
@@ -455,18 +397,12 @@ function showMenu() {
     $themeIcons   = ['light' => '☀️', 'custom' => '✨', 'dark' => '🌙'];
     $currentIcon  = $themeIcons[$currentTheme] ?? '☀️';
     $current_l    = $_SESSION['lang'] ?? 'da';
-    // RETTET (bruger-anmodet, "kan bogholderen ønske sig mere" / flag-tabel-
-    // konsolidering): $fMap var en hardkodet, ufuldstændig sprog->flag-tabel
-    // (kun 8 af 13 sprog dækket) med en reel fejl - svensk hedder 'sv' i
-    // languages.json, men $fMap havde kun 'se'=>'se' (ikke en gyldig
-    // sprogkode her), så svensk faldt igennem til at bruge 'sv' direkte som
-    // ISO-landekode, som reelt er El Salvador, ikke Sverige. To andre,
-    // selvstændigt driftede kopier af samme tabel fandtes desuden i
-    // about.php og som en CSS-liste i inc/htm_page.lib.php. Alle tre
-    // erstattet af et 'flag'-felt direkte på hvert sprog i languages.json -
-    // indlæses nu ÉN gang her og genbruges af begge dropdown-render-
-    // blokke nedenfor (fjerner samtidig to redundante gen-indlæsninger af
-    // samme fil).
+    // RETTET: $fMap var en hardkodet, ufuldstændig sprog->flag-tabel (kun 8 af 13 sprog dækket) med en reel fejl -
+    // svensk hedder 'sv' i languages.json, men $fMap havde kun 'se'=>'se' (ikke en gyldig sprogkode her), så
+    // svensk faldt igennem til at bruge 'sv' direkte som ISO-landekode, som reelt er El Salvador, ikke Sverige.
+    // Alle tre erstattet af et 'flag'-felt direkte på hvert sprog i languages.json - indlæses nu ÉN gang her og
+    // genbruges af begge dropdown-render-blokke nedenfor (fjerner samtidig to redundante gen-indlæsninger af samme
+    // fil).
     $lang_file    = 'json-data/languages.json';
     $lang_data    = file_exists($lang_file) ? json_decode(file_get_contents($lang_file), true) : null;
     $flagMap      = [];
@@ -695,24 +631,14 @@ function showMenu() {
     }
     </script>';
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // RENDER-HJÆLPER: sub-menu items (bruges af BEGGE layouts)
-    // ═════════════════════════════════════════════════════════════════════════
-    // Renderes direkte — kaldes inline nedenfor
-    // RETTET (bruger-anmodet: Regnskab -> Rapporter -> Revision, en ny
-    // undermenu ÉT niveau dybere end Rapporter selv): denne funktion var FØR
-    // hårdkodet til præcis ét niveau af "flyout i flyout" - når den stødte på
-    // et punkt med sin egen 'submenu', rendrede den dets børn via en separat,
-    // ikke-rekursiv inline foreach, som antog børnene altid var almindelige
-    // links. Det virkede fint for Rapporter (kun ét sådant niveau nogen
-    // steder i træet indtil nu), men ville rendre en 4.-niveau-undermenu
-    // (Revision, som selv indeholder revisions-værktøjerne) som ét stort,
-    // ugyldigt link i stedet for endnu en flyout. Gjort reelt rekursiv - kald
-    // sig selv i stedet for at duplikere løkken - så ethvert nestings-dybde
-    // virker uden videre ændringer. Bonus: sub-sub-punkter (fx Revision-
-    // værktøjerne) får nu samme aktiv-markering og sidebar-hint-understøttelse
-    // som almindelige punkter, i stedet for slet ingen (den gamle inline-
-    // udgave manglede begge dele for netop dét niveau).
+    // ═════════════════════════════════════════════════════════════════════════ RENDER-HJÆLPER: sub-menu items
+    // (bruges af BEGGE layouts) ═════════════════════════════════════════════════════════════════════════ Renderes
+    // direkte — kaldes inline nedenfor
+    // RETTET: denne funktion var FØR hårdkodet til præcis ét niveau af "flyout i flyout" - når den stødte på et
+    // punkt med sin egen 'submenu', rendrede den dets børn via en separat, ikke-rekursiv inline foreach, som antog
+    // børnene altid var almindelige links. Det virkede fint for Rapporter (kun ét sådant niveau nogen steder i
+    // træet indtil nu), men ville rendre en 4.-niveau-undermenu (Revision, som selv indeholder
+    // revisions-værktøjerne) som ét stort, ugyldigt link i stedet for endnu en flyout.
     $renderSubItems = function($submenu, $mode) use (&$renderSubItems, $isSubAllowed, $current_page, $ctxAttrs) {
         // $mode: 'top' eller 'sidebar'
         foreach ($submenu as $subUrl => $subVal) {
@@ -731,16 +657,10 @@ function showMenu() {
             // enkelte punkter heri tjekkes stadig individuelt for niveau-
             // synlighed ($isSubAllowed), samme princip uanset nestings-dybde.
             if (is_array($subVal) && isset($subVal['submenu'])) {
-                // RETTET (bruger-rapporteret dobbelt pil, "Revision ▶ ▶"):
-                // top-tilstands-labels bærer selv en indlejret "▶" (i et
-                // <span style="float:right">, til visning i selve dropdown-
-                // linjen) - strip_tags() fjerner kun SELVE span-taggen, ikke
-                // pil-TEGNET som stod inde i den (det er tekstindhold, ikke
-                // opmærkning). Koden nedenfor tilføjede derefter SIN EGEN
-                // afsluttende " ▶" oveni, uanset - deraf dobbeltpilen i
-                // sidepanel-tilstand. Fjerner nu også selve tegnet, så kun ét
-                // pil-symbol (det tilføjede) er tilbage, uanset om en
-                // fremtidig label selv indeholder et eller ej.
+                // RETTET: top-tilstands-labels bærer selv en indlejret "▶" (i et <span style="float:right">, til
+                // visning i selve dropdown-linjen) - strip_tags fjerner kun SELVE span-taggen, ikke pil-TEGNET som
+                // stod inde i den (det er tekstindhold, ikke opmærkning). Fjerner nu også selve tegnet, så kun ét
+                // pil-symbol (det tilføjede) er tilbage, uanset om en fremtidig label selv indeholder et eller ej.
                 $ssLabel = trim(str_replace('▶', '', strip_tags($subVal['label'] ?? '')));
                 $ssKeyAttr = $ctxAttrs($subUrl, true);
                 if ($mode === 'top') {
@@ -777,13 +697,11 @@ function showMenu() {
     // ═════════════════════════════════════════════════════════════════════════
     echo '<div id="tc-sidebar"'.($show_backup_warning ? ' class="has-backup-warning"' : '').'>';
 
-    // Backup-advarsel som en lodret, 90-grader-roteret strimmel langs
-    // sidepanelets højre kant (bruger-anmodet placering) - $show_backup_
-    // warning/$backup_alert_short/$backup_alert_msg er alle beregnet én
-    // gang tidligt i showMenu(), se dens kommentar. position:absolute her
-    // ankrer til #tc-sidebar selv (som er position:fixed, altså allerede en
-    // positioneringskontekst) - strimlen ligger dermed INDENFOR sidepanelets
-    // egen bredde, ikke ud over kanten ind over selve sideindholdet.
+    // Backup-advarsel som en lodret, 90-grader-roteret strimmel langs sidepanelets højre kant -
+    // $show_backup_warning/$backup_alert_short/$backup_alert_msg er alle beregnet én gang tidligt i showMenu, se
+    // dens kommentar. position:absolute her ankrer til #tc-sidebar selv (som er position:fixed, altså allerede en
+    // positioneringskontekst) - strimlen ligger dermed INDENFOR sidepanelets egen bredde, ikke ud over kanten ind
+    // over selve sideindholdet.
     if ($show_backup_warning) {
         echo '<a id="sb-backup-warning" href="backup.php" data-hint="'.htmlspecialchars($backup_alert_msg, ENT_QUOTES).'">'
             . '<i class="fa-solid fa-triangle-exclamation"></i> <nbs>&nbsp;</nbs>' . htmlspecialchars($backup_alert_short)
@@ -795,10 +713,9 @@ function showMenu() {
     echo '<button class="sb-toggle" onclick="toggleMenuLayout()" title="'.lang('@Switch to top navigation').'"><i class="ti ti-layout-navbar"></i></button>';
     echo '<div class="sb-logo-block">';
     echo '<div class="sb-logo-text"><a href="about.php" style="color:white;text-decoration:none;"><img src="favicon.svg" alt="" style="width:28px; height:28px; top: 5px; position: relative;" /><span>Tiny</span>Cash</a></div>';
-    // RETTET (samme sweep som backup-advarslen ovenfor): manglede en else-
-    // gren her - #top-nav viser en "@Develop version w. errors"-note under
-    // logoet når intet firmanavn er sat op endnu (company_settings.php),
-    // men sidepanelets logo-blok havde kun grenen for det UDFYLDTE tilfælde.
+    // RETTET: manglede en else-gren her - #top-nav viser en "@Develop version w. errors"-note under logoet når
+    // intet firmanavn er sat op endnu (company_settings.php), men sidepanelets logo-blok havde kun grenen for det
+    // UDFYLDTE tilfælde.
     if ($company_name !== '')
         echo '<div class="sb-company" style="text-align: center;" title="'.htmlspecialchars($company_name).'">'.htmlspecialchars($company_name).'</div>';
     else
@@ -995,27 +912,20 @@ function showMenu() {
     // gang, tidligt i showMenu() (se dens kommentar), så #tc-sidebar-
     // visningen nedenfor kan bruge nøjagtig samme værdier.
     if ($show_backup_warning) {
-        // RETTET (bruger-rapporteret: "hvid forgrund på gul bg er vanskelig
-        // at læse på varselsbanner") - se samme rettelse på #sb-backup-warning
-        // ovenfor: sort tekst på den gule/orange var(--color-warning) i
-        // stedet for hvid.
-        // RETTET (bruger-anmodet): samme klikbarheds-forbedring som
-        // #sb-backup-warning ovenfor - <a> i stedet for <div>, direkte til
-        // backup.php.
+        // RETTET - se samme rettelse på #sb-backup-warning ovenfor: sort tekst på den gule/orange
+        // var(--color-warning) i stedet for hvid.
+        // RETTET: samme klikbarheds-forbedring som #sb-backup-warning ovenfor - <a> i stedet for <div>, direkte
+        // til backup.php.
         echo '<a href="backup.php" data-hint="' . lang('@Go to Backup Management and take a backup') . '" style="position:absolute;top:100%;left:0;right:0;background:var(--color-warning);color:#000;text-align:center;padding:6px 20px;font-size:13px;font-weight:bold;box-shadow:0 4px 6px rgba(0,0,0,0.1);z-index:8900;text-decoration:none;cursor:pointer;display:block;">
             <i class="fa-solid fa-triangle-exclamation" style="margin-right:8px;"></i>'.$backup_alert_msg.'</a>';
     }
 
     echo '</div></nav>';
 
-    // NY FUNKTION (bruger-anmodet): højreklik på et menupunkt -> mulighed for
-    // at skjule det for L1/L2 direkte fra selve menuen, uden at skulle inde
-    // på den separate menu_visibility.php-administrationsside. Kun indlejret
-    // for admins (samme rolle-tjek som menu_hide_action.php selv håndhæver
-    // server-side - klient-siden her er bekvemmelighed, ikke selve
-    // spærren). Event-delegation på document (ét lyttepunkt, ikke ét pr.
-    // menu-link) - fanger BÅDE sidepanel- og topnav-tilstand, da begge
-    // deler samme [data-menukey]-mærkning tilføjet ovenfor i denne funktion.
+    // NY FUNKTION: højreklik på et menupunkt -> mulighed for at skjule det for L1/L2 direkte fra selve menuen,
+    // uden at skulle inde på den separate menu_visibility.php-administrationsside. Event-delegation på document
+    // (ét lyttepunkt, ikke ét pr. menu-link) - fanger BÅDE sidepanel- og topnav-tilstand, da begge deler samme
+    // [data-menukey]-mærkning tilføjet ovenfor i denne funktion.
     if (($_SESSION['user_role'] ?? '') === 'admin') {
         ?>
         <style>

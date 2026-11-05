@@ -41,35 +41,17 @@ require_once 'inc/enablebanking.lib.php';
 if (isset($_GET['disconnect']) && (int)$_GET['disconnect'] > 0) {
     $did = (int)$_GET['disconnect'];
     $old = DB::fetch_assoc(DB::query($conn, "SELECT * FROM bank_connections WHERE conn_id = $did"));
+    if (!$old) redirect('bank_integration.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: meldte succes, selv om intet fandtes (dobbeltklik, en anden fane)
     if (DB::query($conn, "DELETE FROM bank_connections WHERE conn_id = $did") && $old) {
         log_action($conn, 'DISCONNECT_BANK', 'bank_connections', $did, $old, null);
     }
-    header("Location: bank_integration.php?msg=disconnected"); exit;
+    redirect('bank_integration.php', '@Bank connection removed');
 }
 
 htm_Header('@Bank Integration (PSD2)', 1100);
 showMenu();
 
-// NYT (v2.1.0/v2.2.0-følge, se bank_integration_callback.php): viser den
-// reelle API-/redirect-fejl, hvis en blev fanget, i stedet for kun en
-// generisk "prøv igen"-besked - genbrugt af både "pending" og "error" nedenfor.
-$showDetailBox = function() {
-    if (!empty($_GET['detail'])) {
-        htm_Banner('<span style="font-family:monospace; word-break:break-word;">' . htmlspecialchars($_GET['detail']) . '</span>', 'danger');
-    }
-};
-
-if (isset($_GET['msg'])) {
-    if ($_GET['msg'] === 'disconnected') htm_Alert(lang('@Bank connection removed'), 'success');
-    elseif ($_GET['msg'] === 'connected')    htm_Alert(lang('@Bank connected successfully! You can now sync transactions.'), 'success');
-    elseif ($_GET['msg'] === 'pending') {
-        htm_Alert(lang('@The bank has not confirmed the connection yet. Try again in a moment, or reconnect if this persists.'), 'error');
-        $showDetailBox();
-    } elseif ($_GET['msg'] === 'error') {
-        htm_Alert(lang('@Could not connect to the bank. Please try again.'), 'error');
-        $showDetailBox();
-    }
-}
+flash_render();
 
 $eb_ready = eb_credentials_configured();
 
@@ -87,8 +69,8 @@ if (!$eb_ready) {
     echo '<li>' . lang('@Add the application ID and the path to the downloaded private key file to the [enablebanking_config] section in inc/data/env.ini on the server (EB_APPLICATION_ID, EB_PRIVATE_KEY_PATH) - store the key file somewhere not web-accessible, e.g. directly in inc/') . '</li>';
     echo '<li>' . lang('@Register EB_REDIRECT_URL in Enable Banking\'s Control Panel exactly as you set it in inc/data/env.ini - unlike some other providers this address cannot vary per connection') . '</li>';
     echo '</ol>';
-    echo '<p style="color:var(--text-muted); font-size:0.9em;">' . lang('@Note: pricing for real production use is not published and requires contacting their sales team, but an application and sandbox can be created without a sales conversation.') . '</p>';
-    echo '<p style="color:var(--text-muted); font-size:0.9em;">' . lang('@This page will show the connection options automatically once the keys are in place - no other change needed.') . '</p>';
+    htm_Note(lang('@Note: pricing for real production use is not published and requires contacting their sales team, but an application and sandbox can be created without a sales conversation.'), 'font-size:0.9em;');
+    htm_Note(lang('@This page will show the connection options automatically once the keys are in place - no other change needed.'), 'font-size:0.9em;');
     htm_Card_end();
 }
 
@@ -96,18 +78,10 @@ if (!$eb_ready) {
 htm_Card_(capt: '@Connected Banks', wdth: 1100);
 $res = DB::query($conn, "SELECT bc.*, a.acc_name FROM bank_connections bc LEFT JOIN accounts a ON bc.acc_id = a.acc_id ORDER BY bc.created_at DESC");
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): samtykke-udløbs-
-// advarsel - se db-setup/migrate_bank_consent_expiry.php/bank_integration_
-// connect.php for hvor selve datoen nu gemmes. Samme "stille degradering
-// hvis ikke migreret endnu"-mønster som andre nyere kolonner.
-$has_expiry_col = false;
-if (DB::is_sqlite()) {
-    $becl = DB::query($conn, "PRAGMA table_info(bank_connections)");
-    if ($becl) { while ($beclr = DB::fetch_assoc($becl)) { if ($beclr['name'] === 'consent_expires_at') { $has_expiry_col = true; break; } } }
-} else {
-    $becl = DB::query($conn, "SHOW COLUMNS FROM bank_connections LIKE 'consent_expires_at'");
-    $has_expiry_col = ($becl && DB::num_rows($becl) > 0);
-}
+// NYT: samtykke-udløbs-advarsel - se db-setup/migrate_bank_consent_expiry.php/bank_integration_connect.php for
+// hvor selve datoen nu gemmes. Samme "stille degradering hvis ikke migreret endnu"-mønster som andre nyere
+// kolonner.
+$has_expiry_col = db_has_column($conn, 'bank_connections', 'consent_expires_at');
 $expiring_soon_count = 0;
 
 $headers = ['@Bank', '@Linked Account', '@Status', '@Last Sync'];
@@ -153,14 +127,12 @@ if ($res) {
                 $days_left = days_between(date('Y-m-d'), $row['consent_expires_at']);
                 $expiry_fmt = date(CONF_DATE_FORMAT, strtotime($row['consent_expires_at']));
                 if ($row['status'] === 'LN' && $days_left < 0) {
-                    // SELV-FANGET UNDER LIVE-TEST: $expiring_soon_count blev FØR
-                    // kun talt op i "udløber snart"-grenen nedenfor, ikke her i
-                    // "allerede udløbet"-grenen - banneret ("X forbindelser skal
-                    // snart gentilsluttes") talte derfor en allerede udløbet
-                    // forbindelse for LIDT, selvom den tydeligvis også er
-                    // omfattet af selve bannerteksten ("... eller er allerede
-                    // udløbet"). Bekræftet direkte: 2 problematiske forbindelser
-                    // (1 udløbet + 1 snart-udløbende) gav kun "1" i banneret.
+                    // SELV-FANGET UNDER LIVE-TEST: $expiring_soon_count blev FØR kun talt op i "udløber
+                    // snart"-grenen nedenfor, ikke her i "allerede udløbet"-grenen - banneret ("X forbindelser
+                    // skal snart gentilsluttes") talte derfor en allerede udløbet forbindelse for LIDT, selvom den
+                    // tydeligvis også er omfattet af selve bannerteksten ("... eller er allerede udløbet").
+                    // Bekræftet direkte: 2 problematiske forbindelser (1 udløbet + 1 snart-udløbende) gav kun "1"
+                    // i banneret.
                     $expiring_soon_count++;
                     $data_row[] = '<span style="color:var(--color-danger); font-weight:bold;"><i class="fa-solid fa-triangle-exclamation"></i> ' . sprintf(lang('@Expired %s'), $expiry_fmt) . '</span>';
                 } elseif ($row['status'] === 'LN' && $days_left <= 14) {
@@ -201,7 +173,7 @@ if ($eb_ready) {
 
     $institutions = eb_list_institutions($country);
     if (empty($institutions)) {
-        echo '<p style="color:var(--text-muted);">' . lang('@No banks found for this country, or the connection to Enable Banking failed - check that your API keys in inc/data/env.ini are correct and active.') . '</p>';
+        htm_Note(lang('@No banks found for this country, or the connection to Enable Banking failed - check that your API keys in inc/data/env.ini are correct and active.'));
     } else {
         require_once __DIR__ . '/inc/accounts.inc.php';     // valglisten: slukkede konti udeladt, dæmpede nederst
         $bi_bank = (int)(get_settings($conn)['conf_acc_bank'] ?? 5000);
@@ -231,19 +203,17 @@ if ($eb_ready) {
             echo '<span style="flex:1; font-weight:600;">' . htmlspecialchars($inst_name) . '</span>';
             echo '<input type="hidden" name="institution_name" value="' . htmlspecialchars($inst_name) . '">';
             echo '<input type="hidden" name="institution_country" value="' . htmlspecialchars($inst_country) . '">';
-            // NYT (v2.3.0-følge, se inc/enablebanking.lib.php): hver ASPSP kan
-            // oplyse sin egen "maximum_consent_validity" (i sekunder) i
-            // /aspsps-svaret - sendes videre uændret, så eb_start_authorization()
-            // kan respektere den i stedet for blindt at bede om 90 dage for alle.
+            // NYT (v2.3.0-følge, se inc/enablebanking.lib.php): hver ASPSP kan oplyse sin egen
+            // "maximum_consent_validity" (i sekunder) i /aspsps-svaret - sendes videre uændret, så
+            // eb_start_authorization kan respektere den i stedet for blindt at bede om 90 dage for alle.
             $inst_max_validity = isset($inst['maximum_consent_validity']) ? (int)$inst['maximum_consent_validity'] : '';
             echo '<input type="hidden" name="max_validity_seconds" value="' . htmlspecialchars((string)$inst_max_validity) . '">';
             echo '<div style="width:220px;">';
             htm_Select('acc_id', $account_options, (string)(get_settings($conn)['conf_acc_bank'] ?? ''), 'width:100%; padding:6px;');
             echo '</div>';
-            // NYT (v2.1.0-følge, se bank_integration_connect.php): psu_type
-            // var hårdkodet til "business" - flere sandbox-/mock-banker
-            // understøtter kun "personal". Standard sat til "personal" (mest
-            // sandsynlige for en sandbox-test), men valgbar pr. forbindelse.
+            // NYT (v2.1.0-følge, se bank_integration_connect.php): psu_type var hårdkodet til "business" - flere
+            // sandbox-/mock-banker understøtter kun "personal". Standard sat til "personal" (mest sandsynlige for
+            // en sandbox-test), men valgbar pr. forbindelse.
             echo '<div style="width:150px;">';
             htm_Select('psu_type', ['personal' => lang('@Personal'), 'business' => lang('@Business')], 'personal', 'width:100%; padding:6px;');
             echo '</div>';

@@ -12,14 +12,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 $action = trim($_POST['action'] ?? $_GET['action'] ?? '');
 
-$has_table = false;
-if (DB::is_sqlite()) {
-    $r = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='invoice_line_templates'");
-    $has_table = $r && DB::fetch_assoc($r);
-} else {
-    $r = DB::query($conn, "SHOW TABLES LIKE 'invoice_line_templates'");
-    $has_table = $r && DB::num_rows($r) > 0;
-}
+$has_table = db_has_table($conn, 'invoice_line_templates');
 if (!$has_table) {
     http_response_code(500);
     echo json_encode(['success' => false, 'error' => lang('@The invoice templates database structure has not been set up yet. Run the migration under System -> Maintenance -> Database migration.')]);
@@ -37,7 +30,8 @@ if ($action === 'list') {
 if ($action === 'get') {
     $tid = (int)($_GET['template_id'] ?? $_POST['template_id'] ?? 0);
     $items = [];
-    $res = DB::query($conn, "SELECT line_text, quantity, price_each, line_vat_rate, prod_id FROM invoice_line_template_items WHERE template_id = $tid ORDER BY item_id ASC");
+    $tpl_disc = db_has_column($conn, 'invoice_line_template_items', 'discount_pct') ? ', discount_pct' : '';
+    $res = DB::query($conn, "SELECT line_text, quantity, price_each, line_vat_rate, prod_id$tpl_disc FROM invoice_line_template_items WHERE template_id = $tid ORDER BY item_id ASC");
     if ($res) { while ($r = DB::fetch_assoc($res)) { $items[] = $r; } }
     echo json_encode(['success' => true, 'items' => $items]);
     exit;
@@ -67,12 +61,17 @@ if ($action === 'save') {
     foreach ($lines as $l) {
         $txt = DB::escape($conn, trim($l['line_text'] ?? ''));
         if ($txt === '') continue;
-        $qty = (float)($l['quantity'] ?? 0);
-        $prc = (float)($l['price_each'] ?? 0);
-        $vat = (float)($l['line_vat_rate'] ?? 0);
+        // RETTET: tallene kom som (float) af JS'ens parseFloat("1.500,00".replace(',', '.')) = 1,5 - en pris med
+        // tusindtalspunktum blev gemt som 1,50 kr. Feltværdien sendes nu rå og læses med parse_dk_number().
+        $qty = parse_dk_number($l['quantity'] ?? 0);
+        $prc = parse_dk_number($l['price_each'] ?? 0);
+        $vat = tc_pct($l['line_vat_rate'] ?? 0) ?? 0.0;
         $pid = (int)($l['prod_id'] ?? 0);
         $pid_sql = $pid > 0 ? $pid : 'NULL';
-        DB::query($conn, "INSERT INTO invoice_line_template_items (template_id, line_text, quantity, price_each, line_vat_rate, prod_id) VALUES ($tid, '$txt', $qty, $prc, $vat, $pid_sql)");
+        // RETTET: linjerabatten blev ikke gemt i skabelonen - linjen fik fuld pris, når skabelonen blev indsat
+        $has_disc = db_has_column($conn, 'invoice_line_template_items', 'discount_pct');
+        $disc = tc_pct($l['discount_pct'] ?? 0) ?? 0.0;
+        DB::query($conn, "INSERT INTO invoice_line_template_items (template_id, line_text, quantity, price_each, line_vat_rate, prod_id" . ($has_disc ? ', discount_pct' : '') . ") VALUES ($tid, '$txt', $qty, $prc, $vat, $pid_sql" . ($has_disc ? ", $disc" : '') . ")");
     }
     echo json_encode(['success' => true, 'template_id' => $tid]);
     exit;

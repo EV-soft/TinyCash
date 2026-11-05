@@ -13,30 +13,28 @@ require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
 require_once 'inc/audit.inc.php';
 
-$has_table = false;
-if (DB::is_sqlite()) {
-    $tchk = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='account_budgets'");
-    $has_table = ($tchk && DB::fetch_assoc($tchk));
-} else {
-    $tchk = DB::query($conn, "SHOW TABLES LIKE 'account_budgets'");
-    $has_table = ($tchk && DB::num_rows($tchk) > 0);
-}
+$has_table = db_has_table($conn, 'account_budgets');
 
 $year = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
 $msg = ''; $err = '';
 
 if ($has_table && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_budgets'])) {
     $post_year = (int)($_POST['year'] ?? $year);
-    $budgets = $_POST['budget'] ?? [];
+    if ($post_year < 1900 || $post_year > 2200) $post_year = (int)$year;      // (et ugyldigt år blev til år 0)
+    $budgets = (array)($_POST['budget'] ?? []);
+    $bad_budget = [];
     foreach ($budgets as $acc_id => $raw) {
         $acc_id = (int)$acc_id;
+        if (!tc_account_ok($conn, $acc_id)) continue;      // RETTET: et budget kunne gemmes på en konto der ikke findes
         // RETTET: et TOMT felt blev gemt som budget 0 - på alle konti ved første gem. "Intet budget" og "budget 0"
         // kunne så ikke skelnes, og resultatopgørelsen viste hver udgiftskonto som overskredet. Tomt = intet budget.
         if (trim((string)$raw) === '') {
             DB::query($conn, "DELETE FROM account_budgets WHERE acc_id = $acc_id AND year = $post_year");
             continue;
         }
-        $amount = parse_dk_number($raw);
+        // RETTET: "abc" eller "1000 kr" blev gemt som budget 0 - kontoen stod så som overskredet. Ugyldigt felt springes over.
+        $amount = tc_num($raw);
+        if ($amount === null) { $bad_budget[] = $acc_id; continue; }
         // Nulstiller til 0 i stedet for at slette rækken helt ved et tomt felt -
         // enklere at slå op/nulstille senere end at genskabe en slettet række.
         $exists = DB::num_rows(DB::query($conn, "SELECT 1 FROM account_budgets WHERE acc_id = $acc_id AND year = $post_year")) > 0;
@@ -49,12 +47,13 @@ if ($has_table && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_bu
     log_action($conn, 'UPDATE_ACCOUNT_BUDGETS', 'account_budgets', $post_year, null, ['year' => $post_year, 'accounts_updated' => count($budgets)]);
     $year = $post_year;
     $msg = lang('@Budgets saved successfully');
+    if ($bad_budget) $msg .= ' ' . sprintf(lang('@%d field(s) did not contain a valid amount and were not saved (account %s).'), count($bad_budget), implode(', ', $bad_budget));
 }
 
 htm_Header('@Account Budgets');
 showMenu();
 
-if ($msg) htm_Alert($msg, 'success');
+if ($msg) htm_Alert($msg, empty($bad_budget) ? 'success' : 'warning');
 if ($err) htm_Alert($err, 'error');
 
 if (!$has_table) {
@@ -80,7 +79,7 @@ $bud_res = DB::query($conn, "SELECT acc_id, budget_amount FROM account_budgets W
 while ($b = DB::fetch_assoc($bud_res)) { $existing[(int)$b['acc_id']] = (float)$b['budget_amount']; }
 
 htm_Card_(lang('@Account Budgets') . ' - ' . $year, 900);
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">' . lang('@Set one annual budget amount per account - compared against the actual posted amount on report_income.php for the same year.') . '</p>';
+htm_Note(lang('@Set one annual budget amount per account - compared against the actual posted amount on report_income.php for the same year.'), 'font-size:0.9em; margin-top:-5px;');
 echo '<form method="post">';
 csrf_field();
 echo '<input type="hidden" name="year" value="' . $year . '">';
@@ -93,7 +92,7 @@ while ($a = DB::fetch_assoc($acc_res)) {
         $type_label = $cur_type === 'income' ? lang('@Income Accounts') : lang('@Expense Accounts');
         echo '<tr><td colspan="2" style="padding:8px 10px; background:var(--bg-panel); font-weight:bold; font-size:0.85em; text-transform:uppercase; color:var(--text-muted);">' . $type_label . '</td></tr>';
     }
-    $val = isset($existing[(int)$a['acc_id']]) ? number_format($existing[(int)$a['acc_id']], 2, ',', '') : '';
+    $val = isset($existing[(int)$a['acc_id']]) ? fmt_dk_input($existing[(int)$a['acc_id']]) : '';
     echo '<tr style="border-bottom:1px solid #eee;">';
     echo '<td style="padding:8px 10px;"><span style="color:#95a5a6; font-size:0.85em; margin-right:8px;">' . $a['acc_id'] . '</span>' . htmlspecialchars($a['acc_name']) . '</td>';
     echo '<td style="padding:8px 10px; text-align:right;"><input type="text" name="budget[' . (int)$a['acc_id'] . ']" value="' . $val . '" placeholder="0,00" style="width:150px; padding:6px; text-align:right;"></td>';

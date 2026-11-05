@@ -21,28 +21,14 @@ const ACC_STD_CHART_FILE = __DIR__ . '/../json-data/standardkontoplan_2026.json'
 function acc_status_ready($conn): bool {
     static $ready = null;
     if ($ready === null) {
-        $ready = false;
-        if (DB::is_sqlite()) {
-            $r = DB::query($conn, "PRAGMA table_info(accounts)");
-            if ($r) while ($c = DB::fetch_assoc($r)) if ($c['name'] === 'acc_status') { $ready = true;  break; }
-        } else {
-            $r = DB::query($conn, "SHOW COLUMNS FROM accounts LIKE 'acc_status'");
-            $ready = $r && DB::num_rows($r) > 0;
-        }
+        $ready = db_has_column($conn, 'accounts', 'acc_status');
     }
     return $ready;
 }
 
 // Kolonnen (idempotent) - kaldt af db-setup/migrate_account_status.php og create_all_tables_for()
 function acc_ensure_schema($conn, bool $is_sqlite): array {
-    $has = false;
-    if ($is_sqlite) {
-        $r = DB::query($conn, "PRAGMA table_info(accounts)");
-        if ($r) while ($c = DB::fetch_assoc($r)) if ($c['name'] === 'acc_status') { $has = true;  break; }
-    } else {
-        $r = DB::query($conn, "SHOW COLUMNS FROM accounts LIKE 'acc_status'");
-        $has = $r && DB::num_rows($r) > 0;
-    }
+    $has = db_has_column($conn, 'accounts', 'acc_status');
     if ($has) return ["[SPRUNGET OVER] Kolonnen 'acc_status' findes allerede på accounts."];
     $ok = DB::query($conn, "ALTER TABLE accounts ADD COLUMN acc_status " . ($is_sqlite ? "TEXT DEFAULT 'active'" : "VARCHAR(10) NOT NULL DEFAULT 'active'"));
     if (!$ok) return ["[FEJL] accounts.acc_status: " . DB::error($conn)];
@@ -106,7 +92,7 @@ function acc_set_status($conn, int $acc_id, string $status, bool $force = false)
         // advarslen kom hver gang og betød ingenting
         $bal = in_array($acc['acc_type'], ['income', 'expense'], true) ? 0.0 : acc_balance($conn, $acc_id);
         if (abs($bal) >= 0.005 && !$force) {
-            return ['ok' => false, 'confirm' => true, 'msg' => sprintf(lang('@The account %d has a balance of %s. Normally a balance is cleared first - switch it off anyway?'), $acc_id, number_format($bal, 2, ',', '.'))];
+            return ['ok' => false, 'confirm' => true, 'msg' => sprintf(lang('@The account %d has a balance of %s. Normally a balance is cleared first - switch it off anyway?'), $acc_id, fmt_dk($bal))];
         }
     }
     DB::query($conn, "UPDATE accounts SET acc_status = '$status' WHERE acc_id = $acc_id");

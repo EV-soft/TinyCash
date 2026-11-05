@@ -16,37 +16,30 @@ require_once 'inc/fixed_assets.inc.php';
 $action = $_GET['action'] ?? '';
 
 if (!in_array($action, ['run_depreciation', 'cancel'], true)) {
-    header("Location: fixed_asset_list.php");
-    exit;
+    redirect("fixed_asset_list.php");
 }
 
-// NYT (§bugs-batch-26-review): et fejlregistreret anlægsaktiv (forkert beløb/
-// dato/konto) havde INGEN korrektionsvej overhovedet - hvert andet
-// posteringsflow i appen har en (udgifter annulleres med en modpostering,
-// fakturaer krediteres, banklinjer kan slettes), men et anlægsaktiv kunne
-// hverken rettes (finansielle felter låses bevidst ved bogføring, samme
-// princip som udgifter) eller fjernes - kun "Afhænd" fandtes, som semantisk
-// betyder et REELT salg/kasseret, ikke en fortrydelse af en fejltastning.
-// Tilføjet "Fortryd registrering": kun muligt hvis aktivet ALDRIG er
-// afskrevet endnu (accumulated_depreciation = 0) og ikke allerede afhændet -
-// altså kun mens den eneste økonomiske hændelse er selve anskaffelses-
-// posteringen. Poster en ren modpostering (samme beløb, modsat fortegn) og
-// markerer aktivet 'cancelled', ligesom expense_actions.php's annullering -
-// aldrig en hård sletning, af hensyn til revisionssporet.
+// NYT: et fejlregistreret anlægsaktiv (forkert beløb/dato/konto) havde INGEN korrektionsvej overhovedet - hvert
+// andet posteringsflow i appen har en (udgifter annulleres med en modpostering, fakturaer krediteres, banklinjer
+// kan slettes), men et anlægsaktiv kunne hverken rettes (finansielle felter låses bevidst ved bogføring, samme
+// princip som udgifter) eller fjernes - kun "Afhænd" fandtes, som semantisk betyder et REELT salg/kasseret, ikke
+// en fortrydelse af en fejltastning. Tilføjet "Fortryd registrering": kun muligt hvis aktivet ALDRIG er afskrevet
+// endnu (accumulated_depreciation = 0) og ikke allerede afhændet - altså kun mens den eneste økonomiske hændelse
+// er selve anskaffelses-posteringen.
 if ($action === 'cancel') {
     $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-    if ($id <= 0) { header("Location: fixed_asset_list.php"); exit; }
+    if ($id <= 0) { redirect("fixed_asset_list.php"); }
 
     $res   = DB::query($conn, "SELECT * FROM fixed_assets WHERE asset_id = $id");
     $asset = $res ? DB::fetch_assoc($res) : null;
-    if (!$asset || $asset['status'] !== 'active' || (float)$asset['accumulated_depreciation'] != 0) {
-        header("Location: fixed_asset_list.php?msg=cannot_cancel");
-        exit;
+    if (!$asset) redirect('fixed_asset_list.php', '@Not found - it may already have been deleted.', 'error');      // (fik før beskeden "allerede afskrevet")
+    if ($asset['status'] !== 'active' || (float)$asset['accumulated_depreciation'] != 0) {
+        redirect('fixed_asset_list.php', '@This asset cannot be undone - it has already been depreciated or disposed of. Use Dispose instead.', 'error');
     }
 
     $today = date('Y-m-d');
     if (is_date_locked($conn, $today)) {
-        die(lang('@Today\'s date is in a locked accounting period and this cannot be posted.'));
+        redirect('fixed_asset_list.php', "@Today's date is in a locked accounting period and this cannot be posted.", 'error');
     }
 
     DB::begin_transaction($conn);
@@ -71,28 +64,37 @@ if ($action === 'cancel') {
             VALUES ('$today', '$jou_text', 'fixed_asset_cancellation', $voucher_no, '$jou_currency'{$cb['val']})");
         $jou_id = DB::insert_id($conn);
 
-        ledger_post($conn, $jou_id, (int)$asset['asset_account_id'], $cost * -1); // KREDIT aktivkonto (fortrydes)
-        ledger_post($conn, $jou_id, $acc_bank, $cost);                           // DEBET bank (pengene "kommer tilbage")
+        // Spejler anskaffelsens EGNE linjer (aktiv, evt. købsmoms, bank) - en anskaffelse inkl. moms (fixed_asset_edit.php)
+        // har en købsmomslinje, som en fast "aktiv mod bank"-modpostering ville efterlade, og banken fik så for lidt tilbage.
+        $acq_lines = [];
+        if (!empty($asset['voucher_no'])) {
+            $al_res = DB::query($conn, "SELECT l.acc_id, l.amount FROM ledger l JOIN journal j ON j.jou_id = l.jou_id
+                WHERE j.voucher_no = " . (int)$asset['voucher_no'] . " AND j.trans_type = 'fixed_asset_acquisition'");
+            while ($al_res && ($al = DB::fetch_assoc($al_res))) $acq_lines[] = $al;
+        }
+        if ($acq_lines) {
+            foreach ($acq_lines as $al) ledger_post($conn, $jou_id, (int)$al['acc_id'], -1 * (float)$al['amount'], true);
+        } else {
+            ledger_post($conn, $jou_id, (int)$asset['asset_account_id'], $cost * -1); // KREDIT aktivkonto (fortrydes)
+            ledger_post($conn, $jou_id, $acc_bank, $cost);                           // DEBET bank (pengene "kommer tilbage")
+        }
 
         log_action($conn, 'CANCEL_FIXED_ASSET', 'fixed_assets', $id,
             ['status' => 'active'], ['status' => 'cancelled', 'cancel_voucher_no' => $voucher_no]);
 
         DB::commit($conn);
-        header("Location: fixed_asset_list.php?msg=cancelled");
-        exit;
+        redirect('fixed_asset_list.php', '@Asset registration undone - the acquisition posting has been reversed.');
     } catch (Exception $e) {
         DB::rollback($conn);
-        die(lang('@Error:') . ' ' . $e->getMessage());
+        redirect('fixed_asset_list.php', lang('@Error:') . ' ' . htmlspecialchars($e->getMessage()), 'error');
     }
 }
 
-// RETTET (bruger-anmodet, "kan bogholderen ønske sig mere"):
-// fa_whole_months_between() flyttet til inc/fixed_assets.inc.php (kræves
-// ovenfor) - genbruges nu også af fixed_asset_list.php's nye "skyldig
-// afskrivning"-forhåndsvisning, se den fils egen kommentar for baggrunden.
+// RETTET: fa_whole_months_between flyttet til inc/fixed_assets.inc.php (kræves ovenfor) - genbruges nu også af
+// fixed_asset_list.php's nye "skyldig afskrivning"-forhåndsvisning, se den fils egen kommentar for baggrunden.
 $today = date('Y-m-d');
 if (is_date_locked($conn, $today)) {
-    die(lang('@Today\'s date is in a locked accounting period and depreciation cannot be posted.'));
+    redirect('fixed_asset_list.php', "@Today's date is in a locked accounting period and depreciation cannot be posted.", 'error');
 }
 
 $res = DB::query($conn, "SELECT * FROM fixed_assets WHERE status = 'active'");
@@ -130,10 +132,9 @@ foreach ($assets as $asset) {
         // NYT (BEK 811/2026-gennemgang, [[digital-standard-bookkeeping-registration-goal]]).
         $cb = journal_created_by_sql($conn);
 
-        // RETTET: alle skyldige måneder blev bogført som ÉT beløb med DAGS dato - kørt i januar for oktober-
-        // december, landede hele afskrivningen i det nye år (forkert regnskabsår, forkert resultat i begge år).
-        // Nu én postering pr. kalenderår, dateret på den sidste afskrevne måned i året. En del der ville falde
-        // i en låst periode, lægges over i den næste åbne del (der kan ikke bogføres bagud i en låst periode).
+        // RETTET: alle skyldige måneder blev bogført som ÉT beløb med DAGS dato - kørt i januar for
+        // oktober-december, landede hele afskrivningen i det nye år (forkert regnskabsår, forkert resultat i begge
+        // år). Nu én postering pr. kalenderår, dateret på den sidste afskrevne måned i året.
         $monthly = round(round((float)$asset['acquisition_cost'] - (float)$asset['residual_value'], 2) / ((int)$asset['useful_life_years'] * 12), 2);
         $chunks = [];      // år => ['date' => sidste afskrevne måneds dato, 'months' => n]
         for ($mi = 1; $mi <= $months; $mi++) {
@@ -182,5 +183,4 @@ foreach ($assets as $asset) {
     }
 }
 
-header("Location: fixed_asset_list.php?msg=depreciated&count=$posted_count");
-exit;
+redirect('fixed_asset_list.php', $posted_count > 0 ? sprintf(lang('@Depreciation posted for %d asset(s).'), $posted_count) : '@No depreciation was due for any active asset.');

@@ -30,15 +30,23 @@ if (!il_ready($conn)) {
 }
 
 $action = (string)($_POST['action'] ?? '');
-$id     = il_valid_id($conn, $_POST['layout_id'] ?? 0);
+// Layouttypen: et eksisterende layout har sin egen; et nyt får 'doc' (tilbud) eller typen fra det kopierede layout
+$id     = il_valid_id($conn, $_POST['layout_id'] ?? 0, null);
+$copy   = il_valid_id($conn, $_POST['copy_from'] ?? 0, null);
+$doc    = $id > 0 ? il_layout_doc($conn, $id) : ($copy > 0 ? il_layout_doc($conn, $copy)
+        : (in_array($_POST['doc'] ?? '', IL_DOC_TYPES, true) ? $_POST['doc'] : 'invoice'));
+if ($doc !== 'invoice' && !il_doc_ready($conn)) {
+    il_answer(false, ['error' => lang('@Quote layouts need a database update: System -> Maintenance -> Database migration (Several invoice layouts).')], 500);
+}
 
 if ($action === 'create') {
     $name = il_clean_name($_POST['name'] ?? '');
     if ($name === '')                  il_answer(false, ['error' => lang('@Please enter a name for the layout.')]);
-    if (il_name_taken($conn, $name))   il_answer(false, ['error' => lang('@A layout with this name already exists.')]);
-    $from = il_valid_id($conn, $_POST['copy_from'] ?? 0) ?: il_default_id($conn);
+    if (il_name_taken($conn, $name, 0, $doc)) il_answer(false, ['error' => lang('@A layout with this name already exists.')]);
+    $from = il_valid_id($conn, $_POST['copy_from'] ?? 0, $doc) ?: il_default_id($conn, $doc);
     DB::begin_transaction($conn);
-    $ok = DB::insert($conn, 'invoice_layouts', ['name' => $name, 'is_default' => 0, 'created_at' => date('Y-m-d H:i:s')]);
+    $ok = DB::insert($conn, 'invoice_layouts', ['name' => $name, 'is_default' => 0, 'created_at' => date('Y-m-d H:i:s')]
+        + (il_doc_ready($conn) ? ['doc_type' => $doc] : []));
     $new_id = $ok ? (int)DB::insert_id($conn) : 0;
     if ($new_id > 0) {
         foreach (il_blocks($conn, $from) as $b) {
@@ -53,13 +61,13 @@ if ($action === 'create') {
 }
 
 if ($id <= 0) il_answer(false, ['error' => lang('@Unknown layout.')]);
-$list = il_list($conn);
+$list = il_list($conn, $doc);
 $old  = $list[$id];
 
 if ($action === 'rename') {
     $name = il_clean_name($_POST['name'] ?? '');
     if ($name === '')                     il_answer(false, ['error' => lang('@Please enter a name for the layout.')]);
-    if (il_name_taken($conn, $name, $id)) il_answer(false, ['error' => lang('@A layout with this name already exists.')]);
+    if (il_name_taken($conn, $name, $id, $doc)) il_answer(false, ['error' => lang('@A layout with this name already exists.')]);
     if (!DB::update($conn, 'invoice_layouts', ['name' => $name], 'layout_id', $id)) il_answer(false, ['error' => DB::error($conn)], 500);
     log_action($conn, 'RENAME_INVOICE_LAYOUT', 'invoice_layouts', $id, ['name' => $old['name']], ['name' => $name]);
     il_answer(true, ['layout_id' => $id]);
@@ -67,7 +75,7 @@ if ($action === 'rename') {
 
 if ($action === 'set_default') {
     DB::begin_transaction($conn);
-    $ok = DB::query($conn, "UPDATE invoice_layouts SET is_default = 0 WHERE layout_id <> $id")
+    $ok = DB::query($conn, "UPDATE invoice_layouts SET is_default = 0 WHERE layout_id <> $id" . il_doc_sql($conn, $doc))      // (kun standarden for samme type)
        && DB::query($conn, "UPDATE invoice_layouts SET is_default = 1 WHERE layout_id = $id");
     if (!$ok) { DB::rollback($conn);  il_answer(false, ['error' => DB::error($conn)], 500); }
     DB::commit($conn);
@@ -77,7 +85,7 @@ if ($action === 'set_default') {
 
 if ($action === 'delete') {
     if ((int)$old['is_default'] === 1) il_answer(false, ['error' => lang('@The default layout cannot be deleted - make another layout the default first.')]);
-    $used = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM invoices WHERE inv_layout_id = $id AND LOWER(inv_status) <> 'draft'"));
+    $used = $doc === 'invoice' ? DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM invoices WHERE inv_layout_id = $id AND LOWER(inv_status) <> 'draft'")) : [0];
     if ($used && (int)$used[0] > 0) {
         il_answer(false, ['error' => sprintf(lang('@This layout is used by %d posted invoice(s) and cannot be deleted - they must still look the way they were sent.'), (int)$used[0])]);
     }
@@ -89,10 +97,11 @@ if ($action === 'delete') {
     if (!$ok) { DB::rollback($conn);  il_answer(false, ['error' => DB::error($conn)], 500); }
     DB::commit($conn);
     log_action($conn, 'DELETE_INVOICE_LAYOUT', 'invoice_layouts', $id, ['name' => $old['name']], null);
-    il_answer(true, ['layout_id' => il_default_id($conn)]);
+    il_answer(true, ['layout_id' => il_default_id($conn, $doc)]);
 }
 
 if ($action === 'assign') {
+    if ($doc !== 'invoice') il_answer(false, ['error' => 'Only invoice layouts can be assigned to an invoice']);
     $inv_id = (int)($_POST['inv_id'] ?? 0);
     $inv = DB::fetch_assoc(DB::query($conn, "SELECT inv_id, inv_status FROM invoices WHERE inv_id = $inv_id"));
     if (!$inv) il_answer(false, ['error' => lang('@Invoice not found.')]);

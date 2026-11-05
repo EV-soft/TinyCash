@@ -28,13 +28,7 @@ require_once __DIR__ . '/recurring_invoices.inc.php'; // genbruger recurring_nex
 // supplier_id/due_date/paid_date findes kun EFTER db-setup/migrate_suppliers.php
 // er kørt).
 function recurring_expenses_col_exists($conn, $col) {
-    if (DB::is_sqlite()) {
-        $res = DB::query($conn, "PRAGMA table_info(expenses)");
-        if ($res) { while ($row = DB::fetch_assoc($res)) { if (strtolower($row['name']) === strtolower($col)) return true; } }
-        return false;
-    }
-    $res = DB::query($conn, "SHOW COLUMNS FROM expenses LIKE '$col'");
-    return ($res && DB::num_rows($res) > 0);
+    return db_has_column($conn, 'expenses', $col);
 }
 
 function recurring_expenses_check($conn) {
@@ -92,25 +86,20 @@ function generate_recurring_expense($conn, int $recur_id, bool $auto = false): ?
     $settings = get_settings($conn);
     $currency = DB::escape($conn, $settings['currency'] ?? 'DKK');
 
-    // BEVIDST ingen 'attachment'/'voucher_no' i INSERT'en (begge forbliver
-    // NULL) - se filens header. expense_edit.php's egen bilagskrav-validering
-    // (§bilagskrav-på-udgifter) tager automatisk over, når bogholderen åbner
-    // og gemmer denne kladde, præcis som ved enhver anden ubogført udgift.
-    //
-    // RETTET (selv-fanget under live-test): supplier_id findes kun EFTER
-    // db-setup/migrate_suppliers.php er kørt (samme forbehold expense_edit.php
-    // selv håndterer via sin $supplier_module_ready-variabel) - på en
-    // installation UDEN leverandørmodulet ville en ubetinget "supplier_id"-
-    // kolonne i INSERT'en gøre HELE forespørgslen ugyldig, DB::query() ville
-    // returnere false, og funktionen ville stille returnere null uden
-    // nogensinde at oprette rækken. Værre end blot manglende data: skemaets
-    // next_run_date/last_run_date var allerede fremrykket i claim-trinnet
-    // ovenfor, så den tabte kørsel ville aldrig blive forsøgt igen. Bygger nu
-    // kolonnelisten dynamisk ud fra hvad der reelt findes, ligesom
-    // expense_edit.php selv gør.
+    // BEVIDST ingen 'attachment'/'voucher_no' i INSERT'en (begge forbliver NULL) - se filens header.
+    // expense_edit.php's egen bilagskrav-validering tager automatisk over, når bogholderen åbner og gemmer denne
+    // kladde, præcis som ved enhver anden ubogført udgift.
+    // RETTET: supplier_id findes kun EFTER db-setup/migrate_suppliers.php er kørt (samme forbehold
+    // expense_edit.php selv håndterer via sin $supplier_module_ready-variabel) - på en installation UDEN
+    // leverandørmodulet ville en ubetinget "supplier_id"- kolonne i INSERT'en gøre HELE forespørgslen ugyldig,
+    // DB::query ville returnere false, og funktionen ville stille returnere null uden nogensinde at oprette
+    // rækken. Bygger nu kolonnelisten dynamisk ud fra hvad der reelt findes, ligesom expense_edit.php selv gør.
     $has_supplier_id = recurring_expenses_col_exists($conn, 'supplier_id');
     $cols = "exp_date, supplier, description, account_id, amount, created_by, proj_id, exp_type, currency";
-    $vals = "'$today', '$supplier', '$description', $account_id, $amount, $created_by, $proj_sql, '$exp_type', '$currency'";
+    // Det automatiske tjek indhenter én periode ad gangen: kladden får periodens planlagte dato (før fik alle i dag -
+    // tre måneders husleje efter en pause landede i samme, forkerte momsperiode). "Generér nu" = i dag.
+    $exp_date = ($auto && tc_is_date((string)($tmpl['next_run_date'] ?? ''))) ? $tmpl['next_run_date'] : $today;
+    $vals = "'$exp_date', '$supplier', '$description', $account_id, $amount, $created_by, $proj_sql, '$exp_type', '$currency'";
     if ($has_supplier_id) {
         $cols = "supplier_id, $cols";
         $vals = "$supplier_id_sql, $vals";

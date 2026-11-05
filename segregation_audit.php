@@ -105,9 +105,7 @@ showMenu();
 
 echo "<div style='max-width:1000px; margin:0 auto; padding:10px;'>";
 
-echo '<p style="color:var(--text-muted); margin-bottom:10px;">'
-    . lang('@Shows, for each posted expense/invoice, who created it and who posted it, and flags cases where the same person did both - a classic segregation-of-duties (maker-checker) audit. This is READ-ONLY: it does not prevent or require anything, it only reports on what already happened. Credit notes, bank reconciliation, and year-end closing are single-step actions in the current design (always the same user by construction) and are not included below.')
-    . '</p>';
+htm_Note(lang('@Shows, for each posted expense/invoice, who created it and who posted it, and flags cases where the same person did both - a classic segregation-of-duties (maker-checker) audit. This is READ-ONLY: it does not prevent or require anything, it only reports on what already happened. Credit notes, bank reconciliation, and year-end closing are single-step actions in the current design (always the same user by construction) and are not included below.'), 'margin-bottom:10px;');
 
 if ($user_count <= 1) {
     htm_Alert(lang('@Only one user account exists in the system - segregation of duties is not possible until a second user is created.'), 'warning', 900, true);
@@ -116,7 +114,7 @@ if ($user_count <= 1) {
 // --- UDGIFTER ---
 htm_Card_(lang('@Expenses'), 900);
 if ($exp_total > 0) {
-    echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:0;">' . sprintf(lang('@%d of %d expenses were posted by the same person who created them.'), $exp_same, $exp_total) . '</p>';
+    htm_Note(sprintf(lang('@%d of %d expenses were posted by the same person who created them.'), $exp_same, $exp_total), 'font-size:0.9em; margin-top:0;');
 }
 if (empty($exp_rows)) {
     echo '<p style="text-align:center; color:var(--text-muted); padding:20px;">' . lang('@No posted expenses found.') . '</p>';
@@ -140,7 +138,7 @@ htm_Card_end();
 // --- FAKTURAER ---
 htm_Card_(lang('@Invoices'), 900);
 if ($inv_total > 0) {
-    echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:0;">' . sprintf(lang('@%d of %d invoices were posted by the same person who created them.'), $inv_same, $inv_total) . '</p>';
+    htm_Note(sprintf(lang('@%d of %d invoices were posted by the same person who created them.'), $inv_same, $inv_total), 'font-size:0.9em; margin-top:0;');
 }
 if (empty($inv_rows)) {
     echo '<p style="text-align:center; color:var(--text-muted); padding:20px;">' . lang('@No posted invoices found.') . '</p>';
@@ -162,7 +160,7 @@ htm_Card_end();
 
 // --- DIVERSE POSTERING (oplysende) ---
 htm_Card_(lang('@Manual Journal Entries'), 900);
-echo '<p style="color:var(--text-muted);">' . sprintf(lang('@Manual journal entries (Diverse Postering) are a single-step action in the current design - the creator and poster are always the same person. %d entries found.'), $manual_count) . '</p>';
+htm_Note(sprintf(lang('@Manual journal entries (Diverse Postering) are a single-step action in the current design - the creator and poster are always the same person. %d entries found.'), $manual_count));
 htm_Card_end();
 
 echo "</div>";

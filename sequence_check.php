@@ -38,26 +38,35 @@ function seq_compress_ranges(array $numbers): string {
 
 // RETTET: array_unique() fjernede dubletterne FØR optællingen - et bilags- eller fakturanummer der var brugt TO
 // gange, blev aldrig rapporteret, og det er netop det en revisor leder efter (to bilag med samme nummer).
+// Huller som intervaller - range($min, $max) byggede hele rækken i hukommelsen (et spring til et nyt startnummer,
+// fx 1009 -> 99101, gav "98.096 manglende fakturaer" og kunne lægge siden ned). Et hul på over SEQ_JUMP numre er et
+// spring i nummerserien (nyt startnummer) og vises for sig, ikke som manglende numre.
+const SEQ_JUMP = 1000;
 function seq_find_gaps(array $numbers): array {
     $all     = array_map('intval', $numbers);
     $dupes   = array_keys(array_filter(array_count_values($all), fn($c) => $c > 1));
     sort($dupes);
     $numbers = array_values(array_unique($all));
     if (empty($numbers)) {
-        return ['min' => null, 'max' => null, 'count' => 0, 'expected' => 0, 'missing' => [], 'dupes' => []];
+        return ['min' => null, 'max' => null, 'count' => 0, 'expected' => 0, 'missing' => [], 'missing_count' => 0, 'jumps' => [], 'dupes' => []];
     }
     sort($numbers);
-    $min = $numbers[0];
-    $max = end($numbers);
-    $expected = $max - $min + 1;
-    $missing = array_values(array_diff(range($min, $max), $numbers));
-    return ['min' => $min, 'max' => $max, 'count' => count($numbers), 'expected' => $expected, 'missing' => $missing, 'dupes' => $dupes];
+    $missing = [];  $missing_count = 0;  $jumps = [];
+    for ($i = 1, $n = count($numbers); $i < $n; $i++) {
+        $a = $numbers[$i - 1] + 1;  $b = $numbers[$i] - 1;
+        if ($b < $a) continue;
+        if ($b - $a + 1 > SEQ_JUMP) { $jumps[] = [$numbers[$i - 1], $numbers[$i]];  continue; }
+        $missing[] = [$a, $b];  $missing_count += $b - $a + 1;
+    }
+    $min = $numbers[0];  $max = end($numbers);
+    return ['min' => $min, 'max' => $max, 'count' => count($numbers), 'expected' => count($numbers) + $missing_count,
+            'missing' => $missing, 'missing_count' => $missing_count, 'jumps' => $jumps, 'dupes' => $dupes];
 }
 
 function seq_render_section($capt, array $gaps) {
     htm_Card_($capt, 900);
     if ($gaps['count'] === 0) {
-        echo '<p style="color:var(--text-muted); text-align:center; padding:20px;">' . lang('@No numbered entries found yet.') . '</p>';
+        htm_Note(lang('@No numbered entries found yet.'), 'text-align:center; padding:20px;');
         htm_Card_end();
         return;
     }
@@ -77,10 +86,12 @@ function seq_render_section($capt, array $gaps) {
     if (empty($gaps['missing'])) {
         htm_Alert(lang('@No gaps found - the sequence is complete.'), 'success', 900, true);
     } else {
-        $count = count($gaps['missing']);
-        htm_Alert(sprintf(lang('@%d missing number(s) found in the sequence:'), $count), 'error', 900, true);
+        htm_Alert(sprintf(lang('@%d missing number(s) found in the sequence:'), $gaps['missing_count']), 'error', 900, true);
         echo '<div style="padding:12px; background:var(--bg-panel); border-radius:6px; font-family:monospace; font-weight:bold; color:var(--color-danger);">'
-            . htmlspecialchars(seq_compress_ranges($gaps['missing'])) . '</div>';
+            . htmlspecialchars(implode(', ', array_map(fn($r) => $r[0] === $r[1] ? (string)$r[0] : $r[0] . '–' . $r[1], $gaps['missing']))) . '</div>';
+    }
+    foreach ($gaps['jumps'] as [$from, $to]) {
+        htm_Alert(sprintf(lang('@The series jumps from %d to %d - a new start number? Not counted as missing numbers.'), $from, $to), 'warning', 900, true);
     }
     htm_Card_end();
 }
@@ -104,9 +115,7 @@ showMenu();
 
 echo "<div style='max-width:1000px; margin:0 auto; padding:10px;'>";
 
-echo '<p style="color:var(--text-muted); margin-bottom:20px;">'
-    . lang('@This checks that voucher numbers (journal.voucher_no) and invoice numbers (invoices.invoice_no) each form an unbroken sequence, with no gaps - one of the first things an auditor checks, since a gap could mean something was deleted outside the normal flows.')
-    . '</p>';
+htm_Note(lang('@This checks that voucher numbers (journal.voucher_no) and invoice numbers (invoices.invoice_no) each form an unbroken sequence, with no gaps - one of the first things an auditor checks, since a gap could mean something was deleted outside the normal flows.'), 'margin-bottom:20px;');
 
 seq_render_section(lang('@Voucher Number Sequence'), $voucher_gaps);
 seq_render_section(lang('@Invoice Number Sequence'), $invoice_gaps);

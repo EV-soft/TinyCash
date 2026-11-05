@@ -52,18 +52,13 @@ if ($box_type === 'invoice') {
 }
 
 if (empty($imap_server) || empty($imap_user)) {
-    // RETTET (bruger-rapporteret "Kritisk fejl: Ugyldigt eller ulæseligt
-    // konfigurationsformat i env.ini") - selve beskeden var faktuelt forkert:
-    // tjekket ovenfor betyder blot at DENNE postkasses IMAP_*-nøgler er tomme
-    // i env.ini (helt normalt og forventet - mail-modtagelse er en valgfri
-    // funktion, se tinycash.boot.txt), ikke at env.ini's FORMAT er ugyldigt/
-    // ulæseligt (det ville i givet fald ramme ALLE indstillinger, ikke kun
-    // denne ene postkasse). Desuden kørte die() FØR htm_Header()/showMenu()
-    // nogensinde blev kaldt, så brugeren endte på en helt bar, ustylet side
-    // uden nogen vej tilbage til resten af programmet - i modstrid med
-    // sidens egen struktur og hele appens ellers gennemgående mønster
-    // (bank_integration.php viser fx en rigtig vejledningsside, ikke et
-    // die(), når dens tilsvarende valgfrie nøgler mangler).
+    // RETTET - selve beskeden var faktuelt forkert: tjekket ovenfor betyder blot at DENNE postkasses IMAP_*-nøgler
+    // er tomme i env.ini (helt normalt og forventet - mail-modtagelse er en valgfri funktion, se
+    // tinycash.boot.txt), ikke at env.ini's FORMAT er ugyldigt/ulæseligt (det ville i givet fald ramme ALLE
+    // indstillinger, ikke kun denne ene postkasse). Desuden kørte die FØR htm_Header/showMenu nogensinde blev
+    // kaldt, så brugeren endte på en helt bar, ustylet side uden nogen vej tilbage til resten af programmet - i
+    // modstrid med sidens egen struktur og hele appens ellers gennemgående mønster (bank_integration.php viser fx
+    // en rigtig vejledningsside, ikke et die, når dens tilsvarende valgfrie nøgler mangler).
     $missing_keys = [
         'invoice' => 'IMAP_INVOICE_SERVER / IMAP_INVOICE_USER / IMAP_INVOICE_PASS',
         'vendor'  => 'IMAP_VENDOR_SERVER / IMAP_VENDOR_USER / IMAP_VENDOR_PASS',
@@ -202,14 +197,9 @@ showMenu();
 
 $base_url = 'mail_inbox.php?box=' . $box_type;
 
-// RETTET: hele denne <style>-blok brugte opdigtede "--theme-*"-variabler
-// (--theme-primary, --theme-text-main, --theme-bg-panel, --theme-border-color
-// osv.), som IKKE findes noget sted i systemet. De faldt derfor konstant
-// tilbage til deres hårdkodede fallback-værdier, uanset tema. Det konkrete
-// symptom: den aktive fane brugte fallback #3498db som baggrund - som er
-// NØJAGTIG samme blå farve som custom-temaets --bg-main (sidebaggrunden) -
-// så den aktive fane forsvandt visuelt ind i baggrunden. Alle "--theme-*"
-// er nu erstattet med de rigtige, eksisterende variabler fra htm_page.lib.php.
+// RETTET: hele denne <style>-blok brugte opdigtede "--theme-*"-variabler (--theme-primary, --theme-text-main,
+// --theme-bg-panel, --theme-border-color osv.), som IKKE findes noget sted i systemet. De faldt derfor konstant
+// tilbage til deres hårdkodede fallback-værdier, uanset tema.
 echo '<style>
     .page-title-bar { max-width: 1800px; margin: 10px auto 5px auto; display: flex; justify-content: space-between; align-items: center; padding-bottom: 5px; }
     .page-title-bar h1 { margin: 0; font-size: 24px; color: var(--text-main); font-weight: 600; display: flex; align-items: center; gap: 10px; }
@@ -290,10 +280,9 @@ if (!$mbox) {
     if ($total_messages == 0) {
         echo '    <div class="no-mail-selected">' . lang('@The inbox is empty.') . '</div>';
     } else {
-        // RETTET (bruger-rapporteret langsom sideindlæsning): hentede FØR
-        // header og uid med to separate IMAP-kald PR. mail (op til 30 tur-
-        // retur-kald til mailserveren for 15 viste mails). imap_fetch_overview()
-        // henter det hele i ÉT kald for hele det viste interval.
+        // RETTET: hentede FØR header og uid med to separate IMAP-kald PR. mail (op til 30 tur-retur-kald til
+        // mailserveren for 15 viste mails). imap_fetch_overview henter det hele i ÉT kald for hele det viste
+        // interval.
         $overview_raw = imap_fetch_overview($mbox, $end . ':' . $start, 0);
         $overview_by_msgno = [];
         foreach ($overview_raw as $ov) {

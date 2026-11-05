@@ -10,8 +10,7 @@ if (!function_exists('lang')) require_once __DIR__ . '/php2htm.lib.php';     // 
 // RETTET: hele omsætningen blev bogført på Firmaindstillingernes salgskonto - varens egen konto (Varekartotek ->
 // "Konto") blev aldrig brugt, så fx salg af ydelser, EU-salg eller en varegruppe med egen konto endte samlet på én
 // konto, og momsgrundlaget pr. momskode blev forkert. Nettobeløbet fordeles nu pr. varens salgskonto (en
-// indtægtskonto der findes), ellers standardkontoen. Beløbene i DKK som invoice_dkk_totals(); en øreafrunding
-// lægges på den største post, så summen altid er $total_excl. Bruges både af fakturaen og af kreditnotaen.
+// indtægtskonto der findes), ellers standardkontoen.
 function invoice_sales_split($conn, int $inv_id, int $default_acc, float $total_excl): array {
     $disc = invoice_discount_sql($conn, 'il.');
     $exch = DB::fetch_assoc(DB::query($conn, "SELECT exch_rate FROM invoices WHERE inv_id = $inv_id"));
@@ -49,9 +48,9 @@ function invoice_post($conn, int $inv_id, bool $track_stock = true): int {
     $acc_vat     = (int)($global_settings['conf_acc_vat']     ?? 6900); // Moms, salg (udgående)
 
     // 1. Tjek status + hent dato + valutakurs.
-    $row = DB::fetch_assoc(DB::query($conn, "SELECT inv_status, inv_date, exch_rate FROM invoices WHERE inv_id = $inv_id"));
+    $row = DB::fetch_assoc(DB::query($conn, "SELECT inv_status, inv_date, exch_rate, cust_id FROM invoices WHERE inv_id = $inv_id"));
     if (!$row) {
-        throw new Exception('Fakturaen blev ikke fundet i systemet');
+        throw new Exception(lang('@The invoice was not found.'));
     }
     // Case-ufølsom: statusværdier er inkonsistente i data ('DRAFT' fra faktura-
     // formularen vs. 'draft' i backend/rapporter). strtolower gør posteringen
@@ -60,19 +59,20 @@ function invoice_post($conn, int $inv_id, bool $track_stock = true): int {
         throw new Exception('Fakturaen er allerede bogført (Status: ' . $row['inv_status'] . ')');
     }
     $inv_date = $row['inv_date'];
+    if (!tc_is_date(substr((string)$inv_date, 0, 10))) throw new Exception(lang('@Please enter a valid date.'));      // (en kladde med ugyldig dato bogføres ikke)
 
-    // Periodespærring: en NY postering må ikke kunne bogføres ind i en
-    // allerede låst periode - kreditnota-flowet (invoice_credit.php) havde
-    // allerede dette tjek, men selve fakturabogføringen manglede det (fundet
-    // ved en systematisk gennemgang, §bogforingslov-compliance).
+    // Periodespærring: en NY postering må ikke kunne bogføres ind i en allerede låst periode - kreditnota-flowet
+    // (invoice_credit.php) havde allerede dette tjek, men selve fakturabogføringen manglede det.
     if (is_date_locked($conn, $inv_date)) {
-        throw new Exception('Fakturadatoen er i en låst regnskabsperiode og kan ikke bogføres.');
+        throw new Exception(lang('@The invoice date is in a locked accounting period and cannot be posted.'));
     }
+    // RETTET: en kladde til en kunde i papirkurven kunne bogføres - en bogført faktura på en kunde der ikke vises nogen steder
+    if (!tc_customer_ok($conn, (int)($row['cust_id'] ?? 0))) throw new Exception(lang('@The customer is in the trash bin - restore the customer first.'));
     // RETTET: en faktura uden linjer kunne bogføres - den fik et fakturanummer og et bilagsnummer (hulfri
     // nummerserier) og kunne bagefter kun fjernes med en kreditnota
     $line_cnt = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM invoice_lines WHERE inv_id = $inv_id"));
     if (!$line_cnt || (int)$line_cnt[0] === 0) {
-        throw new Exception('Fakturaen har ingen linjer og kan ikke bogføres.');
+        throw new Exception(lang('@The invoice has no lines and cannot be posted.'));
     }
 
     // 2. Beløb: netto + moms + omregning til DKK - via den fælles
@@ -113,7 +113,7 @@ function invoice_post($conn, int $inv_id, bool $track_stock = true): int {
     }
     $recheck = DB::fetch_assoc(DB::query($conn, "SELECT inv_status, invoice_no FROM invoices WHERE inv_id = $inv_id"));
     if (!$recheck || strtolower($recheck['inv_status']) !== 'sent' || (int)$recheck['invoice_no'] !== $next_invoice_no) {
-        throw new Exception('Fakturaen blev allerede bogført af en anden, samtidig forespørgsel (kapløb) - intet blev dublet.');
+        throw new Exception(lang('@The invoice was already posted by another, simultaneous request - nothing was duplicated.'));
     }
 
     // 5. FINANSBOGFØRING (dobbelt bogholderi jf. bogføringsloven)
@@ -176,11 +176,11 @@ function invoice_register_payment($conn, int $inv_id, string $date, float $amoun
     global $global_settings;
     $amount = round($amount, 2);
     if (abs($amount) < 0.005) return;
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) throw new Exception('Ugyldig betalingsdato.');
-    if (is_date_locked($conn, $date)) throw new Exception('Betalingsdatoen er i en låst regnskabsperiode.');
+    if (!tc_is_date($date)) throw new Exception(lang('@Invalid payment date.'));
+    if (is_date_locked($conn, $date)) throw new Exception(lang('@The payment date is in a locked accounting period.'));
     $inv = DB::fetch_assoc(DB::query($conn, "SELECT inv_id, invoice_no, inv_status FROM invoices WHERE inv_id = $inv_id"));
-    if (!$inv) throw new Exception('Fakturaen findes ikke.');
-    if (strtolower((string)$inv['inv_status']) === 'draft') throw new Exception('Fakturaen er en kladde - bogfør den først.');
+    if (!$inv) throw new Exception(lang('@The invoice does not exist.'));
+    if (strtolower((string)$inv['inv_status']) === 'draft') throw new Exception(lang('@The invoice is a draft - post it first.'));
     $acc_debitor = (int)($global_settings['conf_acc_debitor'] ?? 8100);
 
     $voucher_no = next_voucher_no($conn);
@@ -207,18 +207,26 @@ function invoice_register_payment($conn, int $inv_id, string $date, float $amoun
         ['amount' => $amount, 'date' => $date, 'debit_acc' => $debit_acc, 'voucher_no' => $voucher_no, 'open_after' => $open, 'note' => $note]);
 }
 
-// Opretter og bogfører en kreditnota til en bogført faktura. $qtys: [line_id => mængde der krediteres]
-// (mangler en linje: hele dens mængde; 0: linjen krediteres ikke). Returnerer kreditnotaens inv_id.
-// $track_stock: lægges varerne tilbage på lager? null = som da fakturaen blev bogført (se nedenfor).
+// Opretter og bogfører en kreditnota til en bogført faktura. null = som da fakturaen blev bogført (se nedenfor).
+// RETTET: en faktura afskrevet som tab (invoice_writeoff.php) kunne stadig krediteres. Afskrivningen ligger som en
+// "betaling" med afskrivningsteksten (se cs_is_writeoff_note).
+function invoice_is_written_off($conn, int $inv_id): bool {
+    require_once __DIR__ . '/customer_statement.inc.php';
+    $res = DB::query($conn, "SELECT note FROM invoice_payments WHERE inv_id = $inv_id");
+    while ($res && ($r = DB::fetch_assoc($res))) { if (cs_is_writeoff_note((string)($r['note'] ?? ''))) return true; }
+    return false;
+}
+
 function invoice_create_credit($conn, int $credit_ref, array $qtys, string $credit_date_raw, string $credit_note_raw, ?bool $track_stock = null): int {
     global $global_settings;
     $orig = DB::fetch_assoc(DB::query($conn, "SELECT i.*, c.cust_name FROM invoices i JOIN customers c ON i.cust_id = c.cust_id WHERE i.inv_id = $credit_ref"));
-    if (!$orig) throw new Exception('Fakturaen findes ikke.');
-    if (strtolower((string)$orig['inv_status']) === 'draft') throw new Exception('En kladde kan ikke krediteres.');
-    if (!empty($orig['credit_ref'])) throw new Exception('En kreditnota kan ikke selv krediteres.');
+    if (!$orig) throw new Exception(lang('@The invoice does not exist.'));
+    if (strtolower((string)$orig['inv_status']) === 'draft') throw new Exception(lang('@A draft cannot be credited.'));
+    if (!empty($orig['credit_ref'])) throw new Exception(lang('@A credit note cannot itself be credited.'));
     if (DB::fetch_assoc(DB::query($conn, "SELECT inv_id FROM invoices WHERE credit_ref = $credit_ref LIMIT 1"))) throw new Exception('Fakturaen er allerede krediteret.');
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $credit_date_raw)) throw new Exception('Ugyldig kreditnotadato.');
-    if (is_date_locked($conn, $credit_date_raw)) throw new Exception('Kreditnotadatoen er i en låst regnskabsperiode.');
+    if (invoice_is_written_off($conn, $credit_ref)) throw new Exception(lang('@This invoice has been written off as bad debt and cannot be credited - the receivable is already closed.'));
+    if (!tc_is_date($credit_date_raw)) throw new Exception(lang('@Invalid credit note date.'));
+    if (is_date_locked($conn, $credit_date_raw)) throw new Exception(lang('@The credit note date is in a locked accounting period.'));
     // RETTET: kreditnotaen kunne dateres FØR fakturaen den krediterer (eller ud i fremtiden) - den kom så i en
     // tidligere momsperiode end selve salget, og debitorens kontoudtog viste krediteringen før fakturaen
     if ($credit_date_raw < substr((string)$orig['inv_date'], 0, 10) || $credit_date_raw > date('Y-m-d')) {
@@ -249,30 +257,18 @@ function invoice_create_credit($conn, int $credit_ref, array $qtys, string $cred
     require_once __DIR__ . '/invoice_layouts.inc.php';
     if (il_ready($conn)) DB::query($conn, "UPDATE invoices SET inv_layout_id = " . il_for_invoice($conn, $orig) . " WHERE inv_id = $new_inv_id");
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde
-    // 33): kreditnotaen fik hidtil ALDRIG et eget kundevendt
-    // fakturanummer (kun voucher_no i journalen) - se
-    // next_credit_note_no()'s egen kommentar (inc/db_connect.inc.php).
-    // Stille degradering hvis migrationen ikke er kørt endnu (samme
-    // mønster som andre nyere kolonner i denne kodebase).
+    // NYT: kreditnotaen fik hidtil ALDRIG et eget kundevendt fakturanummer (kun voucher_no i journalen) - se
+    // next_credit_note_no's egen kommentar (inc/db_connect.inc.php). Stille degradering hvis migrationen ikke er
+    // kørt endnu (samme mønster som andre nyere kolonner i denne kodebase).
     $cn_no = next_credit_note_no($conn);
     if ($cn_no !== null) {
         DB::query($conn, "UPDATE invoices SET credit_note_no = $cn_no WHERE inv_id = $new_inv_id");
     }
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): en
-    // linje med rabat skal krediteres med SAMME rabatprocent - ellers
-    // ville kreditnotaen (negativ mængde, men ingen rabat) IKKE
-    // nulstille originalen præcist, kun tilnærmelsesvist (for meget
-    // krediteret, svarende til selve rabatbeløbet).
-    $has_discount_col_credit = false;
-    if (DB::is_sqlite()) {
-        $dcc_credit = DB::query($conn, "PRAGMA table_info(invoice_lines)");
-        if ($dcc_credit) { while ($dccr_credit = DB::fetch_assoc($dcc_credit)) { if ($dccr_credit['name'] === 'discount_pct') { $has_discount_col_credit = true; break; } } }
-    } else {
-        $dcc_credit = DB::query($conn, "SHOW COLUMNS FROM invoice_lines LIKE 'discount_pct'");
-        $has_discount_col_credit = ($dcc_credit && DB::num_rows($dcc_credit) > 0);
-    }
+    // NYT: en linje med rabat skal krediteres med SAMME rabatprocent - ellers ville kreditnotaen (negativ mængde,
+    // men ingen rabat) IKKE nulstille originalen præcist, kun tilnærmelsesvist (for meget krediteret, svarende til
+    // selve rabatbeløbet).
+    $has_discount_col_credit = db_has_column($conn, 'invoice_lines', 'discount_pct');
 
     // 2. Kopiér linjer med negativt antal (nulstiller originalen HELT,
     // eller kun DELVIST - se dens egen kommentar nedenfor for
@@ -371,12 +367,12 @@ function invoice_create_credit($conn, int $credit_ref, array $qtys, string $cred
     // samtidig, allerede committet kreditnota; SQLite serialiserer skrivningerne)
     $cn_count = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM invoices WHERE credit_ref = $credit_ref" . (DB::is_sqlite() ? '' : ' FOR UPDATE')));
     if (!$cn_count || (int)$cn_count[0] > 1) {
-        throw new Exception('Fakturaen blev allerede krediteret af en anden, samtidig forespørgsel (kapløb) - intet blev dublet.');
+        throw new Exception(lang('@The invoice was already credited by another, simultaneous request - nothing was duplicated.'));
     }
     if (!$is_partial) {
         $upd_result = DB::query($conn, "UPDATE invoices SET inv_status = 'credited' WHERE inv_id = $credit_ref AND inv_status != 'credited'");
         if (!$upd_result || DB::affected_rows($conn, $upd_result) < 1) {
-            throw new Exception('Fakturaen blev allerede krediteret af en anden, samtidig forespørgsel (kapløb) - intet blev dublet.');
+            throw new Exception(lang('@The invoice was already credited by another, simultaneous request - nothing was duplicated.'));
         }
     }
 
@@ -430,15 +426,12 @@ function invoice_create_credit($conn, int $credit_ref, array $qtys, string $cred
     $acc_sales   = (int)($global_settings['conf_acc_sales']   ?? 1000);
     $acc_vat     = (int)($global_settings['conf_acc_vat']     ?? 6900);
 
-    // Kreditnota vender salget (modsatte fortegn af en normal postering):
-    //   KREDIT debitor       = − total inkl. moms (reducerer tilgodehavende)
-    //   DEBET  omsætning     = + netto            (reducerer omsætning)
-    //   DEBET  udgående moms = + momsbeløb        (reducerer moms)
-    // RETTET (KRITISK): totalerne er fra kreditnotaens EGNE linjer (runde 32), og de har negative mængder -
-    // beløbene er altså allerede negative. "* -1" vendte dem en gang til: siden da bogførte en kreditnota
-    // som en faktura (DEBET debitor, KREDIT omsætning/moms) - tilgodehavende, omsætning og moms steg i
-    // stedet for at falde. Samme formel som fakturaens egen bogføring (invoice_post_action.php) giver
-    // nu det rigtige fortegn ud fra dokumentets egne (negative) beløb.
+    // Kreditnota vender salget (modsatte fortegn af en normal postering): KREDIT debitor = − total inkl. moms
+    // (reducerer tilgodehavende) DEBET omsætning = + netto (reducerer omsætning) DEBET udgående moms = + momsbeløb
+    // (reducerer moms)
+    // RETTET (KRITISK): totalerne er fra kreditnotaens EGNE linjer, og de har negative mængder - beløbene er altså
+    // allerede negative. "* -1" vendte dem en gang til: siden da bogførte en kreditnota som en faktura (DEBET
+    // debitor, KREDIT omsætning/moms) - tilgodehavende, omsætning og moms steg i stedet for at falde.
     ledger_post($conn, $jou_id, $acc_debitor, $total_incl_vat);
     foreach (invoice_sales_split($conn, $new_inv_id, $acc_sales, $total_excl_vat) as $s_acc => $s_amt) ledger_post($conn, $jou_id, $s_acc, $s_amt * -1);      // (samme konti som fakturaen)
     if ($total_vat != 0) {

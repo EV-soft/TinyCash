@@ -20,13 +20,10 @@ if (isset($_POST['create_admin']) && !$adminExists) {
     $initials = DB::real_escape_string($conn, trim($_POST['username']));
     $pw = $_POST['password'] ?? '';
 
-    // RETTET (§bugs-batch-20-review): denne side - selve den ALLERFØRSTE
-    // adgangskode i systemet, på den ALLERFØRSTE admin-konto - havde INTET
-    // server-side tjek overhovedet, hverken for tomt felt eller mindstelængde
-    // (kun formularens "required"-attribut, som et håndlavet POST frit kan
-    // omgå). "password=" (tom streng) ville stille hashe og gemme en gyldig,
-    // tom adgangskode for den nyoprettede admin. Samme 8-tegns mindstekrav
-    // som user_create.php/user_edit.php (se dem for baggrund).
+    // RETTET: denne side - selve den ALLERFØRSTE adgangskode i systemet, på den ALLERFØRSTE admin-konto - havde
+    // INTET server-side tjek overhovedet, hverken for tomt felt eller mindstelængde (kun formularens
+    // "required"-attribut, som et håndlavet POST frit kan omgå). Samme 8-tegns mindstekrav som
+    // user_create.php/user_edit.php (se dem for baggrund).
     if (trim($initials) === '' || strlen($pw) < 8) {
         $message = "<div style='background:#f8d7da; color:#721c24; padding:15px; border-radius:4px; margin-bottom:20px;'>
                     ❌ " . lang('@Password must be at least 8 characters long') . "</div>";
@@ -34,16 +31,9 @@ if (isset($_POST['create_admin']) && !$adminExists) {
     } else {
         $pass_hash = password_hash($pw, PASSWORD_DEFAULT);
         $role = 'admin';
-        // RETTET (§bugs-batch-15-review): samme fund som [[user-role-level-sync-fix]]
-        // (user_create.php/user_edit.php), men i den EGENTLIGE første-admin-
-        // bootstrap-side, som blev overset dengang. user_level manglede helt her -
-        // kolonnens standardværdi (1) betød, at selve den allerførste admin på en
-        // helt frisk installation blev oprettet med user_role='admin' men
-        // user_level=1, og dermed reelt afvist af ethvert $rLev-baseret adgangstjek
-        // i resten af appen (kontoplan, filbrowser, backup, indstillinger...),
-        // selvom brugerlisten (som tjekker user_role direkte) ville vise dem som
-        // admin. Kun init_demo_data.php's hårdkodede demo-admin havde begge felter
-        // korrekte - denne, den RIGTIGE første-gangs-opsætningsside, gjorde ikke.
+        // RETTET: samme fund som (user_create.php/user_edit.php), men i den EGENTLIGE første-admin-bootstrap-side,
+        // som blev overset dengang. Kun init_demo_data.php's hårdkodede demo-admin havde begge felter korrekte -
+        // denne, den RIGTIGE første-gangs-opsætningsside, gjorde ikke.
         $level = role_to_level($role);
         $sql = "INSERT INTO users (username, password_hash, user_role, user_level)
                 VALUES ('$initials', '$pass_hash', '$role', $level)";

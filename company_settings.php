@@ -20,59 +20,53 @@ require_once 'inc/php2htm.lib.php';
 require_once 'inc/audit.inc.php';
 require_once 'inc/field_visibility.inc.php';
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): invoice_view.php
-// har allerede kigget efter images/logo.png og vist den på fakturaen - men
-// der var INGEN måde at uploade/skifte det logo gennem brugerfladen, kun
-// direkte filsystem-/FTP-adgang til serveren. Uden det viste hver eneste
-// faktura teksten "Logo missing" direkte til kunden. Egen, lille formular
-// (ikke via den store indstillings-formular nedenfor, som ikke har
-// multipart/form-data) - samme udvidelses-hvidliste/tilfældige-filnavn-
-// mønster som expense_edit.php's bilagsupload, men gemmer altid som
-// "logo.<ext>" (fast, forudsigeligt navn - invoice_view.php skal kunne
-// finde den uden en database-opslag), og sletter altid alle ANDRE
-// logo.*-filer først, så der aldrig ligger flere modstridende logoer.
-$LOGO_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+// NYT: invoice_view.php har allerede kigget efter images/logo.png og vist den på fakturaen - men der var INGEN
+// måde at uploade/skifte det logo gennem brugerfladen, kun direkte filsystem-/FTP-adgang til serveren. Egen, lille
+// formular (ikke via den store indstillings-formular nedenfor, som ikke har multipart/form-data) - samme
+// udvidelses-hvidliste/tilfældige-filnavn-mønster som expense_edit.php's bilagsupload, men gemmer altid som
+// "logo.<ext>" (fast, forudsigeligt navn - invoice_view.php skal kunne finde den uden en database-opslag), og
+// sletter altid alle ANDRE logo.*-filer først, så der aldrig ligger flere modstridende logoer.
+$LOGO_EXTS = TC_LOGO_EXTS;
+$logo_dir  = __DIR__ . '/' . tc_logo_dir();      // pr. regnskab - se tc_logo_dir()
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_logo'])) {
+    // RETTET: et for stort logo (upload_max_filesize) blev stille ignoreret
+    if (!empty($_FILES['logo_file']['name']) && (int)$_FILES['logo_file']['error'] !== UPLOAD_ERR_OK) {
+        redirect('company_settings.php', sprintf(lang('@The attachment could not be uploaded (the maximum is %s per file) - nothing was saved.'), ini_get('upload_max_filesize')), 'error');
+    }
     if (!empty($_FILES['logo_file']['name']) && $_FILES['logo_file']['error'] == 0) {
         $ext = strtolower(pathinfo($_FILES['logo_file']['name'], PATHINFO_EXTENSION));
         if (!in_array($ext, $LOGO_EXTS, true)) {
-            header("Location: company_settings.php?msg=logo_bad_type"); exit;
+            redirect('company_settings.php', '@Error: Please upload a PNG, JPG, WEBP or GIF image.', 'error');
         }
-        foreach ($LOGO_EXTS as $e) { @unlink(__DIR__ . '/images/logo.' . $e); }
-        if (move_uploaded_file($_FILES['logo_file']['tmp_name'], __DIR__ . '/images/logo.' . $ext)) {
+        foreach ($LOGO_EXTS as $e) { @unlink($logo_dir . 'logo.' . $e); }
+        if (move_uploaded_file($_FILES['logo_file']['tmp_name'], $logo_dir . 'logo.' . $ext)) {
             log_action($conn, 'UPDATE_COMPANY_LOGO', 'settings', 0, null, ['action' => 'uploaded', 'ext' => $ext]);
-            header("Location: company_settings.php?msg=logo_updated"); exit;
+            redirect('company_settings.php', '@Logo updated successfully.');
         }
     }
-    header("Location: company_settings.php?msg=logo_error"); exit;
+    redirect('company_settings.php', '@Error: Could not save the uploaded logo.', 'error');
 }
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_logo'])) {
-    foreach ($LOGO_EXTS as $e) { @unlink(__DIR__ . '/images/logo.' . $e); }
+    foreach ($LOGO_EXTS as $e) { @unlink($logo_dir . 'logo.' . $e); }
     log_action($conn, 'UPDATE_COMPANY_LOGO', 'settings', 0, null, ['action' => 'removed']);
-    header("Location: company_settings.php?msg=logo_removed"); exit;
+    redirect('company_settings.php', '@Logo removed.');
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_settings'])) {
 
-    // Hent de nuværende conf_acc_*-værdier FØR gemning, til revisionssporet -
-    // disse styrer, hvor ALT fremtidig automatisk postering lander (bank,
-    // debitor, salg, moms), kvalitativt anderledes end almindelige felter
-    // som firmanavn/adresse. En ændring her kunne stille og roligt omdirigere
-    // fremtidige posteringer uden spor. Bruger-anmodet.
-    // RETTET (leverandørmodul, se db-setup/migrate_suppliers.php): tilføjet
-    // conf_acc_creditor til revisionslisten - styrer, hvor "Ikke betalt
-    // endnu"-udgifter krediteres i stedet for banken, lige så følsom som de
-    // øvrige særlige posteringskonti.
+    // Hent de nuværende conf_acc_*-værdier FØR gemning, til revisionssporet - disse styrer, hvor ALT fremtidig
+    // automatisk postering lander (bank, debitor, salg, moms), kvalitativt anderledes end almindelige felter som
+    // firmanavn/adresse. Bruger-anmodet.
+    // RETTET (leverandørmodul, se db-setup/migrate_suppliers.php): tilføjet conf_acc_creditor til revisionslisten
+    // - styrer, hvor "Ikke betalt endnu"-udgifter krediteres i stedet for banken, lige så følsom som de øvrige
+    // særlige posteringskonti.
     $conf_acc_keys = ['conf_acc_bank', 'conf_acc_debitor', 'conf_acc_creditor', 'conf_acc_sales', 'conf_acc_vat', 'conf_acc_purchase_vat', 'conf_acc_fx', 'conf_acc_bad_debt'];
     $before_settings = get_settings($conn);
 
-    // RETTET (BEK 811/2026-gennemgang, Bilag 3 "låste stamoplysninger", se
-    // [[digital-standard-bookkeeping-registration-goal]]): navn/adresse/CVR-nr
-    // må kun opdateres via et officielt CVR-opslag (company_cvr_sync_action.php),
-    // ALDRIG ved frit indtastet tekst - heller ikke via et forfalsket POST-kald
-    // direkte mod denne handler. Felterne er ganske vist readonly/styret i selve
-    // formularen (se nedenfor), men det er kun kosmetisk beskyttelse; springes
-    // derfor eksplicit over her, uanset hvad der måtte stå i $_POST['set'].
+    // RETTET: navn/adresse/CVR-nr må kun opdateres via et officielt CVR-opslag (company_cvr_sync_action.php),
+    // ALDRIG ved frit indtastet tekst - heller ikke via et forfalsket POST-kald direkte mod denne handler.
+    // Felterne er ganske vist readonly/styret i selve formularen (se nedenfor), men det er kun kosmetisk
+    // beskyttelse; springes derfor eksplicit over her, uanset hvad der måtte stå i $_POST['set'].
     $cvr_locked_keys = ['company_cvr', 'company_name', 'company_address', 'company_zip', 'company_city'];
 
     // RETTET: låsedatoen kunne flyttes BAGUD eller slettes her - også til før et regnskabsår der er lukket ved
@@ -133,49 +127,30 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_settings'])) {
         log_action($conn, 'UPDATE_POSTING_ACCOUNTS', 'settings', 0, $acc_old, $acc_new);
     }
 
-    header("Location: company_settings.php?msg=updated" . (!empty($cs_lock_err) ? '&lock_err=1' : ''));
-    exit;
+    if (!empty($cs_lock_err)) flash($cs_lock_err, 'error');
+    redirect('company_settings.php', '@Settings updated successfully');
 }
 
 $comp = get_settings($conn);
-$msg = (isset($_GET['msg']) && $_GET['msg'] == 'updated') ? lang('@Settings updated successfully') : "";
-if (!empty($_GET['lock_err'])) {
-    $ld_floor_row = @DB::query($conn, "SELECT MAX(end_date) AS d FROM fiscal_years WHERE is_closed = 1");
-    $ld_floor = $ld_floor_row ? (string)(DB::fetch_assoc($ld_floor_row)['d'] ?? '') : '';
-    if ($ld_floor !== '') $cs_lock_err = sprintf(lang('@The lock date cannot be earlier than the end of the last closed fiscal year (%s).'), date(CONF_DATE_FORMAT, strtotime($ld_floor)));
-}
 
 htm_Header(capt: '@Settings');
 showMenu();
 
-// NYT (bruger-anmodet): samme højreklik-skjul-mønster som menuen (inc/field_
-// visibility.inc.php). BEMÆRK: siden er allerede admin-only ($rLev=3), så
-// at skjule et felt her for L1/L2 har ingen praktisk effekt i dag - bygget
-// alligevel for konsistens, jf. brugerens eksplicitte godkendelse.
+// NYT: samme højreklik-skjul-mønster som menuen (inc/field_visibility.inc.php). BEMÆRK: siden er allerede
+// admin-only ($rLev=3), så at skjule et felt her for L1/L2 har ingen praktisk effekt i dag - bygget alligevel for
+// konsistens, jf. brugerens eksplicitte godkendelse.
 $fv_overrides = get_field_visibility_overrides($conn);
 $fv_is_admin  = true;
 $fv_uLev      = (int)($_SESSION['user_level'] ?? 1);
 
-if($msg) htm_Alert(text: $msg, type: 'success');
-if (!empty($cs_lock_err)) htm_Alert(text: $cs_lock_err, type: 'error');
-if (isset($_GET['msg'])) {
-    if ($_GET['msg'] === 'logo_updated') htm_Alert(lang('@Logo updated successfully.'), 'success');
-    elseif ($_GET['msg'] === 'logo_removed') htm_Alert(lang('@Logo removed.'), 'success');
-    elseif ($_GET['msg'] === 'logo_bad_type') htm_Alert(lang('@Error: Please upload a PNG, JPG, WEBP or GIF image.'), 'error');
-    elseif ($_GET['msg'] === 'logo_error') htm_Alert(lang('@Error: Could not save the uploaded logo.'), 'error');
-    elseif ($_GET['msg'] === 'cvr_synced') htm_Alert(lang('@Company name and address fetched and locked from the official CVR register.'), 'success');
-    elseif ($_GET['msg'] === 'cvr_sync_error') htm_Alert(lang('@CVR lookup failed:') . ' ' . htmlspecialchars($_GET['detail'] ?? ''), 'error');
-}
+flash_render();
 
 // Find det aktuelle logo (uanset hvilken af de tilladte endelser det blev
 // gemt med) - invoice_view.php gør nøjagtig samme tjek for at vise det.
-$current_logo_path = null;
-foreach ($LOGO_EXTS as $e) {
-    if (file_exists(__DIR__ . '/images/logo.' . $e)) { $current_logo_path = 'images/logo.' . $e; break; }
-}
+$current_logo_path = tc_logo_path();      // pr. regnskab - se tc_logo_dir()
 
 htm_Card_(capt: '@Company Logo', wdth: 550);
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">' . lang('@Shown at the top of every invoice and quote. Recommended: a transparent PNG, roughly 60px tall.') . '</p>';
+htm_Note(lang('@Shown at the top of every invoice and quote. Recommended: a transparent PNG, roughly 60px tall.'), 'font-size:0.9em; margin-top:-5px;');
 if ($current_logo_path) {
     echo '<div style="margin-bottom:15px;"><img src="' . htmlspecialchars($current_logo_path) . '?t=' . time() . '" style="max-height:80px; max-width:100%; border:1px solid var(--border-color); border-radius:4px; padding:8px; background:#fff;"></div>';
 } else {
@@ -187,7 +162,7 @@ echo '<input type="file" name="logo_file" accept=".png,.jpg,.jpeg,.webp,.gif" re
 echo '<button type="submit" name="upload_logo" value="1" style="background:var(--color-primary); color:white; border:none; padding:8px 16px; border-radius:4px; cursor:pointer; font-weight:bold;"><i class="fa fa-upload"></i> ' . lang('@Upload') . '</button>';
 echo '</form>';
 if ($current_logo_path) {
-    echo '<form method="POST" style="margin-top:8px;" onsubmit="return confirm(\'' . addslashes(lang('@Remove the current logo? Invoices will show placeholder text until you upload a new one.')) . '\');">';
+    echo '<form method="POST" style="margin-top:8px;" onsubmit="' . htm_confirm_js('@Remove the current logo? Invoices will show placeholder text until you upload a new one.') . '">';
     csrf_field();
     echo '<button type="submit" name="remove_logo" value="1" style="background:none; border:none; color:var(--color-danger); cursor:pointer; font-size:0.85em; padding:0;"><i class="fa fa-trash"></i> ' . lang('@Remove logo') . '</button>';
     echo '</form>';
@@ -209,15 +184,11 @@ csrf_field();
 // =====================================================================
 htm_Card_(capt: '@Company - Information', wdth: 650);
 
-// RETTET (BEK 811/2026-gennemgang, Bilag 3 "låste stamoplysninger", se
-// [[digital-standard-bookkeeping-registration-goal]]): firmanavn/CVR-nr/
-// adresse/postnr/by må ikke længere frit kunne indtastes - de må kun
-// opdateres via et officielt CVR-opslag (company_cvr_sync_action.php), som
-// slår nummeret op SERVER-SIDE og skriver kun det, det officielle svar
-// faktisk indeholder. Firmanavn/adresse/postnr/by er derfor readonly;
-// CVR-nummerfeltet er bevidst stadig et almindeligt tekstfelt (det er selve
-// opslagsnøglen), men gemmes KUN via knappen nedenfor - den almindelige
-// Gem-knap ignorerer det (se skip-listen i gemme-handleren ovenfor).
+// RETTET: firmanavn/CVR-nr/adresse/postnr/by må ikke længere frit kunne indtastes - de må kun opdateres via et
+// officielt CVR-opslag (company_cvr_sync_action.php), som slår nummeret op SERVER-SIDE og skriver kun det, det
+// officielle svar faktisk indeholder. Firmanavn/adresse/postnr/by er derfor readonly; CVR-nummerfeltet er bevidst
+// stadig et almindeligt tekstfelt (det er selve opslagsnøglen), men gemmes KUN via knappen nedenfor - den
+// almindelige Gem-knap ignorerer det (se skip-listen i gemme-handleren ovenfor).
 htm_Field(icon: 'fa-building', labl: '@Company Name', name: 'set[company_name]', valu: $comp['company_name'] ?? '', legd:'align-left', extr: 'readonly', hint: '@Locked - can only be updated via an official CVR lookup (see the button next to the CVR Number field).');
 echo "<div style='display:flex; width:100%; gap:6px; align-items:flex-end;'>";
     echo '<div style="width:34%; display:flex; gap:4px; align-items:flex-end;">';
@@ -249,10 +220,8 @@ htm_Field(
 );
 htm_Field(icon: 'fa-user-tie', labl: '@Management Name (for signing)', name: 'set[company_management_name]', valu: $comp['company_management_name'] ?? '', wdth: '52%', legd:'align-left', hint: '@Name of the director/owner who signs the annual report.');
 htm_Field(icon: 'fa-city', labl: '@City (for signing location)', name: 'set[company_city]', valu: $comp['company_city'] ?? '', wdth: '30%', legd:'align-left', extr: 'readonly', hint: '@Locked - can only be updated via an official CVR lookup.');
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): company_zip
-// blev allerede læst af export_oioubl.php, men havde intet indtastningsfelt
-// nogen steder i UI'et - kunne kun sættes ved direkte databaseadgang. En
-// OIOUBL-e-faktura ville derfor altid have et tomt postnummer.
+// NYT: company_zip blev allerede læst af export_oioubl.php, men havde intet indtastningsfelt nogen steder i UI'et
+// - kunne kun sættes ved direkte databaseadgang. En OIOUBL-e-faktura ville derfor altid have et tomt postnummer.
 htm_Field(icon: 'fa-mail-bulk', labl: '@Postal Code', name: 'set[company_zip]', valu: $comp['company_zip'] ?? '', wdth: '18%', legd:'align-left', extr: 'readonly', hint: '@Locked - can only be updated via an official CVR lookup.');
 htm_Field(
     icon: 'fa-map-marker-alt',
@@ -273,12 +242,10 @@ htm_Field(icon: 'fa-piggy-bank', labl: '@Account No.', name: 'set[bank_acc]', va
 htm_Field(icon: 'fa-mobile-screen', labl: '@MobilePay Number', name: 'set[company_mobilepay]', valu: $comp['company_mobilepay'] ?? '', wdth: '50%', legd:'align-left');
 htm_Field(icon: 'fa-globe', labl: '@Website', name: 'set[company_web]', valu: $comp['company_web'] ?? '', wdth: '50%', legd:'align-left');
 htm_Field(icon: 'fa-info-circle', labl: '@Extra Info', name: 'set[company_extra]', valu: $comp['company_extra'] ?? '', wdth: '100%', legd:'align-left');
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): export_oioubl.php
-// læste allerede default_payment_terms med et hardkodet dansk fallback
-// ("Betaling bedes overført til vores bankkonto."), men feltet fandtes
-// ingen steder i UI'et - kunne kun sættes ved direkte databaseadgang. Hver
-// eneste OIOUBL-e-faktura ville derfor altid vise nøjagtig samme
-// betalingstekst, uanset virksomhedens reelle betalingsbetingelser.
+// NYT: export_oioubl.php læste allerede default_payment_terms med et hardkodet dansk fallback ("Betaling bedes
+// overført til vores bankkonto."), men feltet fandtes ingen steder i UI'et - kunne kun sættes ved direkte
+// databaseadgang. Hver eneste OIOUBL-e-faktura ville derfor altid vise nøjagtig samme betalingstekst, uanset
+// virksomhedens reelle betalingsbetingelser.
 htm_Field(icon: 'fa-file-invoice-dollar', labl: '@Payment Terms (shown on OIOUBL e-invoices)', name: 'set[default_payment_terms]', valu: $comp['default_payment_terms'] ?? 'Betaling bedes overført til vores bankkonto.', type: 'textarea', legd: 'align-left', extr: 'rows="2"');
 echo '<br><br><hr><br>';
 htm_Field(icon: 'fa-comment-alt', labl: '@Default Email Message', name: 'set[default_mail_body]', valu: tc_custom_mail_body($comp), type: 'textarea', legd: 'align-left', extr: 'rows="3" placeholder="' . htmlspecialchars(lang('@Empty: a translated standard text in the language of the customer')) . '"');      // RETTET: var forudfyldt med engelsk tekst, der blev gemt og overstyrede den oversatte
@@ -316,16 +283,10 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
         legd: 'align-left'
     );
 
-    // RETTET (bruger-anmodet, "kun 5 valuta-navne, kan det kombineres med
-    // sprogtabellen"): var før en fastlåst, hardkodet 5-valuta-liste (kun
-    // dansk tekst, aldrig kørt gennem lang()). Udleder nu valuta-listen fra
-    // languages.json's 'currency'/'currency_name'-felter (samme felter
-    // inc/currency_widget.php's valutaomregner og about.php's flag-visning
-    // nu deler kilde med) - én valuta-linje pr. UNIKT valutakode, ikke pr.
-    // sprog (flere sprog deler fx EUR), i den rækkefølge de først optræder i
-    // sprogtabellen. Falder tilbage til den oprindelige 5-liste hvis
-    // languages.json af en eller anden grund ikke kan læses, så siden aldrig
-    // viser en tom valuta-vælger.
+    // RETTET: var før en fastlåst, hardkodet 5-valuta-liste (kun dansk tekst, aldrig kørt gennem lang). Udleder nu
+    // valuta-listen fra languages.json's 'currency'/'currency_name'-felter (samme felter inc/currency_widget.php's
+    // valutaomregner og about.php's flag-visning nu deler kilde med) - én valuta-linje pr. UNIKT valutakode, ikke
+    // pr. sprog (flere sprog deler fx EUR), i den rækkefølge de først optræder i sprogtabellen.
     $currency_options = [];
     $lang_data_cur = @json_decode(file_get_contents('json-data/languages.json'), true);
     if (!empty($lang_data_cur['language'])) {
@@ -443,10 +404,8 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
         legd: 'align-left'
     );
 
-    // NYT (§reel-multi-valuta-bogforing): bruges af reconcile_action.php når
-    // en udenlandsk faktura afsluttes med en kursforskel mellem det bogførte
-    // DKK-beløb og det faktisk indbetalte - se db-setup/migrate_currency_
-    // gainloss.php.
+    // NYT: bruges af reconcile_action.php når en udenlandsk faktura afsluttes med en kursforskel mellem det
+    // bogførte DKK-beløb og det faktisk indbetalte - se db-setup/migrate_currency_gainloss.php.
     htm_Field(
         icon: 'fa-money-bill-transfer',
         labl: '@Currency Gain/Loss Account',
@@ -498,16 +457,11 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
         legd: 'align-left'
     );
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 25):
-    // ingen side sporede SKATs momsfrist - vat_report.php lod allerede
-    // vælge periodetype (måned/kvartal/halvår), men intet mindede om selve
-    // fristen. BEVIDST ikke en automatisk udregnet SKAT-formel (den varierer
-    // reelt efter virksomhedens konkrete momsperiode og kan ikke garanteres
-    // korrekt herfra) - i stedet et almindeligt, bogholder-indtastet
-    // datofelt, samme "sikre, ikke-gættende" mønster som PSD2-udløbs-
-    // advarslen (§bookkeeper-wishlist-round23). Dashboard-advarslen
-    // (index.php) opdaterer sig ikke af sig selv - forbliver bevidst "forfalden"
-    // indtil bogholderen selv sætter den næste dato, efter angivelsen er indsendt.
+    // NYT: ingen side sporede SKATs momsfrist - vat_report.php lod allerede vælge periodetype
+    // (måned/kvartal/halvår), men intet mindede om selve fristen. BEVIDST ikke en automatisk udregnet SKAT-formel
+    // (den varierer reelt efter virksomhedens konkrete momsperiode og kan ikke garanteres korrekt herfra) - i
+    // stedet et almindeligt, bogholder-indtastet datofelt, samme "sikre, ikke-gættende" mønster som
+    // PSD2-udløbs-advarslen.
     htm_Field(
         icon: 'fa-calendar-check',
         labl: '@Next VAT Deadline',
@@ -519,13 +473,8 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
         legd: 'align-left'
     );
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 27):
-    // reminder_action.php sendte tidligere PRÆCIS samme mailtekst uanset om
-    // det var 1. eller 4. rykker - se dens egen kommentar for de nye,
-    // optrappende skabeloner. Beløbet her BEVIDST kun nævnt i mailteksten
-    // fra 2. rykker og frem, aldrig automatisk lagt oveni det opkrævede
-    // beløb eller posteret - samme "sikre, ikke-gættende"-princip som
-    // momsfristen ovenfor.
+    // NYT: reminder_action.php sendte tidligere PRÆCIS samme mailtekst uanset om det var 1. eller 4. rykker -.
+    // Beløbet her BEVIDST kun nævnt i mailteksten fra 2.
     htm_Field(
         icon: 'fa-triangle-exclamation',
         labl: '@Reminder Fee Amount',
@@ -540,16 +489,14 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
 echo '</div>';
 
 // --- EXPORT ---
-// RETTET (§bugs-batch-12-review): knappen kaldte export_saft.php, som ikke
-// fandtes noget sted i projektet - hvert klik endte på en rå 404. Filen er
-// nu bygget (rigtig OECD SAF-T Financial-lignende eksport af kontoplan,
-// kunder, leverandører og hele hovedbogen for et valgt år) - knappen linker
-// til dens periode-valgsside i stedet for at forsøge et direkte download.
+// RETTET: knappen kaldte export_saft.php, som ikke fandtes noget sted i projektet - hvert klik endte på en rå 404.
+// Filen er nu bygget (rigtig OECD SAF-T Financial-lignende eksport af kontoplan, kunder, leverandører og hele
+// hovedbogen for et valgt år) - knappen linker til dens periode-valgsside i stedet for at forsøge et direkte
+// download.
 echo '<div style="margin-top:20px; border-top:1px solid var(--border-color); padding-top:15px; text-align:left;">';
-// RETTET (§currency-setting-is-cosmetic-label, Fase 2): SAF-T er en dansk
-// SKAT-specifik eksport - knappen er derfor grå/deaktiveret når firmaets
-// bogføringsvaluta ikke er DKK (siden selv spærrer stadig direkte adgang
-// via require_dkk_base_currency(), dette er kun for at undgå en dødt link).
+// RETTET: SAF-T er en dansk SKAT-specifik eksport - knappen er derfor grå/deaktiveret når firmaets
+// bogføringsvaluta ikke er DKK (siden selv spærrer stadig direkte adgang via require_dkk_base_currency, dette er
+// kun for at undgå en dødt link).
 $__base_currency_saft = strtoupper($comp['currency'] ?? 'DKK');
 if ($__base_currency_saft === 'DKK') {
     htm_Button(
@@ -568,11 +515,8 @@ if ($__base_currency_saft === 'DKK') {
         attr: 'disabled data-hint="'.lang('@This feature follows Danish-specific tax and bookkeeping rules, and is only available when your company\'s base currency is DKK.').'"'
     );
 }
-// NYT (BEK 811/2026-gennemgang, Bilag 3 "dataportabilitet", se
-// [[digital-standard-bookkeeping-registration-goal]]): modstykket til
-// eksport-knappen ovenfor - lader en SAF-T-fil (egen eller et andet
-// systems) blive uploadet og gjort permanent tilgængelig som en
-// skrivebeskyttet oversigt, se saft_import.phps egen begrundelse.
+// NYT: modstykket til eksport-knappen ovenfor - lader en SAF-T-fil (egen eller et andet systems) blive uploadet og
+// gjort permanent tilgængelig som en skrivebeskyttet oversigt, se saft_import.phps egen begrundelse.
 htm_Button(
     icon: 'fa-upload',
     labl: '@Import SAF-T',
@@ -651,17 +595,13 @@ echo '</div>';
 
 echo '</form>';
 
-// RETTET (bruger-rapporteret, samme oprydning som automatisk-backup-boksen
-// nedenfor): "Sikkerhed - Om Backup"-kortet er flyttet til backup.php's
-// Manuel Backup-sektion (det handler om backups/-mappen, som kun de manuelle
-// handlinger reelt skriver til - se rettelsen der for hvorfor "automatically"
+// RETTET: "Sikkerhed - Om Backup"-kortet er flyttet til backup.php's Manuel Backup-sektion (det handler om
+// backups/-mappen, som kun de manuelle handlinger reelt skriver til - se rettelsen der for hvorfor "automatically"
 // i den gamle tekst selv var en del af forvirringen).
 
-// RETTET (bruger-rapporteret: "backup" var ikke et klart begreb): den fulde
-// automatisk-backup-boks (status/fejl/opsætning) er flyttet til backup.php,
-// under sin egen "🤖 Automatisk Backup"-sektion, samlet med resten af alt
-// der hedder backup i stedet for spredt ud på en helt anden side om
-// firmaindstillinger. Et kort krydslink herfra, så man stadig finder den.
+// RETTET: den fulde automatisk-backup-boks (status/fejl/opsætning) er flyttet til backup.php, under sin egen "🤖
+// Automatisk Backup"-sektion, samlet med resten af alt der hedder backup i stedet for spredt ud på en helt anden
+// side om firmaindstillinger. Et kort krydslink herfra, så man stadig finder den.
 echo '<div style="max-width:650px; margin:0 auto 20px; padding:0 5px;">';
 echo '<a href="backup.php" data-hint="' . lang('@Go to Backup Management') . '" style="display:block; background:var(--bg-panel); border:1px solid var(--border-color); border-radius:8px; padding:14px 18px; text-decoration:none; color:var(--text-main); font-size:0.9em;">';
 echo '<i class="fa-solid fa-shield-halved" style="color:var(--color-primary); margin-right:8px;"></i>' . lang('@Automatic backup status and setup has moved to Backup Management') . ' <i class="fa-solid fa-arrow-right" style="margin-left:4px;"></i>';
@@ -675,7 +615,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
     const currencyInput = document.querySelector('select[name="set[currency]"]');
     const originalValue = "<?php echo $comp['currency'] ?? 'DKK'; ?>";
     if (currencyInput.value !== originalValue) {
-        if (!confirm("<?php echo lang('@Warning: You are changing the base currency. This may cause inconsistencies in historical reports. Are you sure?'); ?>")) {
+        if (!confirm(<?php echo json_encode(lang('@Warning: You are changing the base currency. This may cause inconsistencies in historical reports. Are you sure?')); ?>)) {
             e.preventDefault();
         }
     }

@@ -21,63 +21,36 @@ $file_path = __DIR__ . '/data/global_notepad.html';
 // 1. WORKER-LOGIK (Kører KUN når der gemmes data via POST)
 // =========================================================================
 if (isset($_GET['notepad_action']) && $_GET['notepad_action'] === 'save') {
-    // RETTET: manglede session_name('TCC_V100_SESSION') før session_start().
-    // Denne gren kaldes direkte via fetch() til inc/notepad.inc.php uden om
-    // auth.inc.php - det er derfor det FØRSTE sessionsberøring på denne
-    // forespørgsel. Uden det rigtige navn startede PHP en helt ny, ukendt
-    // session i stedet for at genoptage brugerens rigtige TCC_V100_SESSION
-    // (samme fejlklasse som blev fundet i logout.php, set_lang.php og
-    // htm_Header()). Betyder i praksis, at et evt. fremtidigt genaktiveret
-    // sikkerhedstjek på $_SESSION['user_role'] herunder ALDRIG ville virke.
+    // RETTET: manglede session_name før session_start. Denne gren kaldes direkte via fetch til inc/notepad.inc.php
+    // uden om auth.inc.php - det er derfor det FØRSTE sessionsberøring på denne forespørgsel.
     if (session_status() === PHP_SESSION_NONE) { 
         session_name('TCC_V100_SESSION');
         session_start(); 
     }
     
-    // KRITISK (§bugs-batch-15-review): dette sikkerhedstjek var udkommenteret,
-    // og notepad.inc.php er selv eksplicit hvidlistet i inc/.htaccess
-    // ("Require all granted") for at kunne kaldes direkte via fetch() uden om
-    // hele side-loadet (og dermed uden om auth.inc.php). Uden tjekket kunne
-    // ENHVER på internettet - helt uden login - POSTe vilkårligt HTML/JS til
-    // dette endpoint, som blev gemt UESCAPET og derefter vist rå (via
-    // contenteditable-div'en nedenfor) på HVER ENESTE sidevisning for ALLE
-    // brugere, fordi notepad.inc.php inkluderes fra htm_Footer() - dvs. reelt
-    // en fuldt uautentificeret, lagret XSS mod enhver indlogget bruger
-    // (inkl. admin), udløst af en helt anonym angriber. Fundet ved en
-    // gennemgang af inc/.htaccess's hvidlistede undtagelser.
+    // KRITISK: dette sikkerhedstjek var udkommenteret, og notepad.inc.php er selv eksplicit hvidlistet i
+    // inc/.htaccess ("Require all granted") for at kunne kaldes direkte via fetch uden om hele side-loadet (og
+    // dermed uden om auth.inc.php). Uden tjekket kunne ENHVER på internettet - helt uden login - POSTe vilkårligt
+    // HTML/JS til dette endpoint, som blev gemt UESCAPET og derefter vist rå (via contenteditable-div'en nedenfor)
+    // på HVER ENESTE sidevisning for ALLE brugere, fordi notepad.inc.php inkluderes fra htm_Footer - dvs. reelt en
+    // fuldt uautentificeret, lagret XSS mod enhver indlogget bruger (inkl. admin), udløst af en helt anonym
+    // angriber.
     if (!isset($_SESSION['user_id']) || (int)$_SESSION['user_id'] <= 0) {
         die('error_session');
     }
 
-    // NYT (§bugs-batch-27-review): ALVORLIGT FUND - dette gem-endepunkt havde
-    // INTET CSRF-tjek, selvom resten af appen fik CSRF-beskyttelse tidligere
-    // denne session (se csrf-protection-added.md). Det blev overset dengang,
-    // fordi det hverken er et <form>-baseret POST (den programmatiske
-    // eftersøgning dengang ledte specifikt efter <form>-tags) eller går
-    // gennem inc/auth.inc.php's globale CSRF-vagt (denne fil bevidst
-    // undgår hele auth.inc.php, se filens egen header-kommentar). Da
-    // notesblokken er GLOBAL og DELT på tværs af ALLE brugere, og vises
-    // uescaped via contenteditable/innerHTML på HVER sidevisning i hele
-    // appen, ville en ekstern, uautentificeret angriber kunne narre en
-    // hvilken som helst logget-ind bruger til (via et auto-indsendt
-    // cross-site <form enctype="text/plain">, samme trusselsmodel som
-    // resten af CSRF-arbejdet allerede er baseret på - SameSite=Lax
-    // beskytter ikke mod dette, se [[csrf-protection-added]]) at overskrive
-    // notesblokken med vilkårlig HTML/JS, som derefter ville køre i
-    // browseren hos ENHVER bruger der efterfølgende besøger en hvilken som
-    // helst side - en CSRF-til-lagret-XSS-kæde der rammer hele
-    // brugerbasen, ikke kun offeret for selve CSRF-forsøget. Tokenet kan
-    // ikke sendes som et almindeligt $_POST-felt her (selve request-
-    // kroppen ER notesindholdet, ikke et form-kodet felt - $_POST er
-    // derfor altid tomt for dette kald), så det bæres i stedet i
-    // forespørgselsstrengen (se scriptet nedenfor, samme sted tokenet
-    // allerede indlejres for save_layout.php/storage_browser.php).
+    // NYT: ALVORLIGT FUND - dette gem-endepunkt havde INTET CSRF-tjek, selvom resten af appen fik CSRF-beskyttelse
+    // tidligere denne session (se csrf-protection-added.md). Det blev overset dengang, fordi det hverken er et
+    // <form>-baseret POST (den programmatiske eftersøgning dengang ledte specifikt efter <form>-tags) eller går
+    // gennem inc/auth.inc.php's globale CSRF-vagt (denne fil bevidst undgår hele auth.inc.php, se filens egen
+    // header-kommentar).
     if (empty($_SESSION['csrf_token']) || empty($_GET['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_GET['csrf_token'])) {
         die('error_csrf');
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $notes_content = file_get_contents('php://input');
+        require_once __DIR__ . '/core_utils.lib.php';      // (filen kaldes også direkte, uden auth.inc.php)
+        $notes_content = tc_utf8((string)file_get_contents('php://input'));      // (se tc_utf8())
         // Selv-helbredende: en frisk installation har ofte ikke inc/data/-
         // mappen endnu. Opret den før skrivning, så notesblokken virker uden
         // manuelt setup. (Deny-from-all .htaccess i inc/data/ rammer kun
@@ -117,7 +90,7 @@ if (file_exists($file_path)) {
    samme accentfarve/-tykkelse, blot som en fuld ramme rundt om selve den
    runde knap i stedet for kun foroven på en vandret bjælke. Samme rettelse
    givet til den nye søge-knap lige nedenfor. */ ?>
-<button type="button" class="no-print" onclick="toggleGlobalNotes()" style="position: fixed; bottom: 20px; right: 3px; z-index: 10001; background: #2c3e50; color: white; border: 2px solid var(--color-primary); border-radius: 50%; width: 50px; height: 50px; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;" title="<?php echo lang('@Open Notepad (Alt + N)'); ?>">
+<button type="button" class="no-print" onclick="toggleGlobalNotes()" style="position: fixed; bottom: 20px; right: 3px; z-index: 10001; background: #2c3e50; color: white; border: 2px solid var(--color-primary); border-radius: 50%; width: 40px; height: 40px; box-sizing: border-box; font-size: 18px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;" title="<?php echo lang('@Open Notepad (Alt + N)'); ?>">
     📝
 </button>
 

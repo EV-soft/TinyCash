@@ -14,21 +14,28 @@ $recur_id = (int)($_GET['id'] ?? 0);
 
 // --- GEM ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recur'])) {
+    // Linjens momssats er et frit talfelt - en tastefejl som 250 eller -25 må ikke bogføres (tom linje = 0 %)
+    foreach ((array)($_POST['line_vat'] ?? []) as $vchk) {
+        if (trim((string)$vchk) !== '' && tc_pct($vchk) === null) redirect("recurring_invoice_edit.php?id=" . (int)($_GET['id'] ?? 0), '@The VAT rate must be between 0 and 100 %.', 'error');
+    }
     $cust_id       = (int)$_POST['cust_id'];
+    $re_keep_cust  = $recur_id > 0 ? (int)(DB::fetch_row(DB::query($conn, "SELECT cust_id FROM recurring_invoices WHERE recur_id = $recur_id"))[0] ?? 0) : 0;
+    if (!tc_customer_ok($conn, $cust_id, $re_keep_cust)) redirect("recurring_invoice_edit.php?id=$recur_id", '@Please choose a customer from the list.', 'error');      // RETTET: en kunde der ikke findes (eller ligger i papirkurven) blev godtaget - en bogført faktura stod da på debitorkontoen uden kunde
     $interval_type = in_array($_POST['interval_type'], ['monthly', 'quarterly', 'yearly'], true) ? $_POST['interval_type'] : 'monthly';
     $next_run      = DB::escape($conn, $_POST['next_run_date']);
     // RETTET (ALVORLIGT): datoen blev ikke kontrolleret - et tomt felt gemte '' som næste kørsel. '' er "før" enhver
     // dato, så det automatiske tjek dannede en kladde ved HVER sidevisning og regnede videre fra 1970 (strtotime('')):
     // hundredvis af kladder. Nu skal datoen være gyldig.
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($_POST['next_run_date'] ?? '')) || !strtotime((string)$_POST['next_run_date'])) {
-        die(lang('@Please enter a valid next run date.'));
+    if (!tc_is_date($_POST['next_run_date'] ?? '')) {
+        redirect("recurring_invoice_edit.php?id=" . (int)($_GET['id'] ?? 0), '@Please enter a valid next run date.', 'error');
     }
-    $due_days      = (int)$_POST['inv_due_days'];
+    $due_days      = max(0, min(365, (int)($_POST['inv_due_days'] ?? 8)));      // (negative dage gav fakturaer, der var forfaldne før de blev udstedt)
     $is_active     = isset($_POST['is_active']) ? 1 : 0;
     $cust_ref      = DB::escape($conn, $_POST['cust_reference'] ?? '');
     $inv_note      = DB::escape($conn, $_POST['inv_note'] ?? '');
     $deliv         = DB::escape($conn, $_POST['delivery_address'] ?? '');
     $proj_id       = (int)($_POST['proj_id'] ?? 0);
+    if (!tc_project_ok($conn, $proj_id, $proj_id)) $proj_id = 0;      // RETTET: et projekt-id der ikke findes, blev gemt (løs henvisning i projektregnskabet)
     $proj_sql      = ($proj_id > 0) ? $proj_id : 'NULL';
 
     if ($recur_id > 0) {
@@ -60,19 +67,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recur'])) {
             $vat = parse_dk_number($_POST['line_vat'][$k]);
             $prod_row = DB::fetch_assoc(DB::query($conn, "SELECT prod_name FROM products WHERE prod_id=$pid"));
             $txt = DB::escape($conn, $prod_row['prod_name'] ?? $_POST['line_text'][$k]);
+            if ($pid > 0 && $qty <= 0) $GLOBALS['tc_dropped_lines'] = ($GLOBALS['tc_dropped_lines'] ?? 0) + 1;      // RETTET: en udfyldt linje med antal 0 eller negativt forsvandt stille - nu en advarsel efter gem
             if ($pid <= 0 || $qty <= 0) continue;
             DB::query($conn, "INSERT INTO recurring_invoice_lines
                 (recur_id, line_text, quantity, price_each, line_vat_rate, prod_id, proj_id)
                 VALUES ($recur_id, '$txt', $qty, $prc, $vat, $pid, $proj_sql)");
         }
     }
-    header("Location: recurring_invoice_edit.php?id=$recur_id&msg=saved"); exit;
+    if (!empty($GLOBALS['tc_dropped_lines'])) flash(sprintf(lang('@%d line(s) with a quantity of 0 or less were not saved - use a credit note to reduce an invoice.'), $GLOBALS['tc_dropped_lines']), 'warning');
+    redirect("recurring_invoice_edit.php?id=$recur_id", '@Changes saved successfully');
 }
 
 // --- HENT DATA ---
 if ($recur_id > 0) {
     $tmpl = DB::fetch_assoc(DB::query($conn, "SELECT * FROM recurring_invoices WHERE recur_id=$recur_id"));
-    if (!$tmpl) die(lang('@Invoice not found'));
+    if (!$tmpl) redirect("recurring_invoice_edit.php?id=" . (int)($_GET['id'] ?? 0), '@Invoice not found', 'error');
     $tmpl_lines = [];
     $lines_res = DB::query($conn, "SELECT * FROM recurring_invoice_lines WHERE recur_id=$recur_id ORDER BY rline_id");
     while ($l = DB::fetch_assoc($lines_res)) { $tmpl_lines[] = $l; }
@@ -89,8 +98,7 @@ htm_Header($recur_id > 0 ? lang('@Edit Recurring Invoice') : lang('@New Recurrin
 showMenu();
 
 $tools = htm_Button('fa-list', '@Back to List', 'secondary', 'recurring_invoices.php', '', 'data-hint="'.lang('@Return to the recurring invoices list').'"', '', false);
-$card_msg = isset($_GET['msg']) ? htm_Alert(lang('@Changes saved successfully'), 'success', 700, false) : '';
-htm_Card_($recur_id > 0 ? '@Edit Recurring Invoice' : '@New Recurring Invoice', 1000, $card_msg, 'edit_form', true, $tools);
+htm_Card_($recur_id > 0 ? '@Edit Recurring Invoice' : '@New Recurring Invoice', 1000, '', 'edit_form', true, $tools);
 
 echo '<input type="hidden" name="recur_id" value="'.$recur_id.'">';
 
@@ -114,14 +122,11 @@ htm_Field(icon:'fa-calendar-plus', labl:'@Next Run Date', name:'next_run_date', 
     hint:'@The date the first (or next) draft invoice will be generated', extr:'id="next_run_field" onchange="updateRecurPreview()"', echo:true);
 htm_Field(icon:'fa-calendar-check', labl:'@Payment Days', name:'inv_due_days', valu:$tmpl['inv_due_days'], type:'number', extr:'id="due_days_field" min="0"', echo:true);
 echo '</div>';
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): kun ÉN dato
-// ("Næste kørsel") blev vist - ingen måde at se de følgende par datoer FØR
-// gem, hvilket gør det svært at opdage en fejl i intervallet (fx en
-// månedlig skabelon der utilsigtet rammer den 31. og dermed springer
-// uregelmæssigt - PHP's strtotime('+1 month') og JS's setMonth() har
-// begge samme "dag overløber til næste måned"-opførsel ved en kort måned,
-// så forhåndsvisningen her rammer PRÆCIS samme datoer som
-// recurring_next_date() (inc/recurring_invoices.inc.php) reelt vil bruge).
+// NYT: kun ÉN dato ("Næste kørsel") blev vist - ingen måde at se de følgende par datoer FØR gem, hvilket gør det
+// svært at opdage en fejl i intervallet (fx en månedlig skabelon der utilsigtet rammer den 31. og dermed springer
+// uregelmæssigt - PHP's strtotime('+1 month') og JS's setMonth har begge samme "dag overløber til næste
+// måned"-opførsel ved en kort måned, så forhåndsvisningen her rammer PRÆCIS samme datoer som recurring_next_date
+// (inc/recurring_invoices.inc.php) reelt vil bruge).
 echo '<div id="recur_preview" style="margin:-5px 0 15px; font-size:0.85em; color:var(--text-muted);"></div>';
 
 echo '<label style="display:flex; align-items:center; gap:8px; margin:10px 0 20px; cursor:pointer;">';
@@ -160,10 +165,9 @@ for ($i = 0; $i < 5; $i++) {
 htm_Table(['@Description', '@Qty', '@Price', '@VAT %'], $tbl_data, 'line_tbl', 25, '', true,
     ['width:55%;', 'width:15%;', 'width:15%;', 'width:15%;']);
 
-// Totaler (kun firmaets bogføringsvaluta - fremmed valuta er ikke
-// understøttet for faste fakturaer i denne version, se recurring-invoices)
-// RETTET (§currency-setting-is-cosmetic-label): etiketten var hardkodet
-// "DKK" uanset firmaets faktisk konfigurerede valuta.
+// Totaler (kun firmaets bogføringsvaluta - fremmed valuta er ikke understøttet for faste fakturaer i denne
+// version, se recurring-invoices)
+// RETTET: etiketten var hardkodet "DKK" uanset firmaets faktisk konfigurerede valuta.
 $default_currency = $global_settings['currency'] ?? 'DKK';
 echo '<div style="margin:20px 0; padding:15px; background:#f8f9fa; border-radius:6px; max-width:350px; margin-left:auto;">
     <table style="width:100%; font-size:1.05em; border-collapse:collapse;">
@@ -225,9 +229,9 @@ function calculateInvoiceTotals() {
     const vatF = document.getElementsByName('line_vat[]');
     let sub = 0, vat = 0;
     for (let i = 0; i < qtyF.length; i++) {
-        let q = parseFloat(qtyF[i].value.toString().replace(',','.')) || 0;
-        let p = parseFloat(priF[i].value.toString().replace(',','.')) || 0;
-        let v = parseFloat(vatF[i].value.toString().replace(',','.')) || 0;
+        let q = tcNum(qtyF[i].value);      // ("1.500,00" blev til 1,5 i totalerne)
+        let p = tcNum(priF[i].value);
+        let v = tcNum(vatF[i].value);
         sub += q * p;
         vat += q * p * (v / 100);
     }

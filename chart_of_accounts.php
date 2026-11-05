@@ -41,9 +41,7 @@ htm_Header('@Chart of Accounts');
 showMenu();
 
 echo "<div style='max-width:1000px; margin:0 auto; padding:10px;'>";
-if (isset($_GET['msg']) && $_GET['msg'] == 'updated') {
-    htm_Alert('@Account updated successfully', 'success', 700);
-}
+flash_render();
 if ($st_msg !== '') {
     htm_Alert($st_msg . ($st_confirm ? ' <button type="submit" form="accStatusForm" name="set_status" value="' . htmlspecialchars($st_confirm) . '" style="margin-left:8px;">' . lang('@Switch it off anyway') . '</button>' : ''), $st_msg_type, 1000);
 }
@@ -57,15 +55,13 @@ $top_btn = htm_Button('fa-plus', '@Add New Account', 'success', 'account_edit.ph
     . ' ' . htm_Button('fa-eye', '@View the Standard Chart of Accounts', 'secondary', 'setup_chart.php?tpl=official', '', 'data-hint="'.lang('@Look through the official standard chart of accounts before you import it or switch to it').'"', '', false);
 htm_Card_('@Chart of Accounts', 1000, '', 'acc_card', true, $top_btn);
 
-// "Særlige konti" = dem der er navngivet direkte i Firmaindstillinger og
-// styrer den automatiske postering (conf_acc_*) - markeres med en kulørt
-// baggrund + rolle-mærkat, så det er tydeligt hvorfor de ikke bare må
-// omdøbes/slettes uden at rette indstillingen først (bruger-anmodet).
+// "Særlige konti" = dem der er navngivet direkte i Firmaindstillinger og styrer den automatiske postering
+// (conf_acc_*) - markeres med en kulørt baggrund + rolle-mærkat, så det er tydeligt hvorfor de ikke bare må
+// omdøbes/slettes uden at rette indstillingen først.
 $s = get_settings($conn);
-// RETTET (§bugs-batch-24-review): manglede conf_acc_creditor - samme liste
-// duplikeret fra account_delete.php, som fik nøjagtig samme rettelse (se
-// dens kommentar). Kun visningsmæssig konsekvens her (badge/farve), men bør
-// stemme overens med den liste der reelt beskytter kontoen mod sletning.
+// RETTET: manglede conf_acc_creditor - samme liste duplikeret fra account_delete.php, som fik nøjagtig samme
+// rettelse (se dens kommentar). Kun visningsmæssig konsekvens her (badge/farve), men bør stemme overens med den
+// liste der reelt beskytter kontoen mod sletning.
 $special_accounts = [
     (int)($s['conf_acc_bank'] ?? 5000)         => ['label' => lang('@Bank'),                 'bg' => '#dbeafe', 'fg' => '#1e40af'],
     (int)($s['conf_acc_debitor'] ?? 8100)      => ['label' => lang('@Debitors'),              'bg' => '#d1fae5', 'fg' => '#065f46'],
@@ -92,7 +88,7 @@ if ($st_ready) {
     $has_std = (bool)DB::fetch_assoc(DB::query($conn, "SELECT std_id FROM std_accounts WHERE std_id = 1010"));
     echo '<span style="margin-left:auto;"></span>';
     echo '<button type="submit" form="accStatusForm" name="import_std" value="1" style="padding:5px 12px; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-panel); color:var(--text-main); cursor:pointer;"'
-       . ' onclick="return confirm(' . htmlspecialchars(json_encode(lang('@Import the standard chart of accounts of the Danish Business Authority? About 485 accounts are added switched off - accounts whose number you already use are skipped. Switch on the accounts you need.')), ENT_QUOTES) . ')"'
+       . ' onclick="' . htm_confirm_js('@Import the standard chart of accounts of the Danish Business Authority? About 485 accounts are added switched off - accounts whose number you already use are skipped. Switch on the accounts you need.') . '"'
        . ' data-hint="' . htmlspecialchars(lang('@The official standard chart of accounts (2026) - added switched off, numbered and mapped to the standard (SAF-T)')) . '">'
        . '<i class="fa-solid fa-file-import"></i> ' . ($has_std ? lang('@Import the standard chart again') : lang('@Import the standard chart of accounts')) . '</button>';
     echo '</div>';
@@ -111,7 +107,7 @@ if (!$res) {
 } else {
     while ($row = DB::fetch_assoc($res)) {
         $vat_txt = $row['vat_name'] ?: lang('@None');
-        $rate_txt = (isset($row['vat_rate']) && $row['vat_rate'] > 0) ? number_format($row['vat_rate'], 0) . "%" : "-";
+        $rate_txt = (isset($row['vat_rate']) && $row['vat_rate'] > 0) ? fmt_pct($row['vat_rate']) . "%" : "-";
         $id = (int)$row['acc_id'];
 
         $accRowActions = [

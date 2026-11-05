@@ -8,12 +8,11 @@
 # (reconcile_one_bank_line(), send_single_reminder(), mark_expense_paid(),
 # get_customer_statement_data()).
 
-// Antal HELE måneder mellem to datoer (afrundet ned) - en påbegyndt, endnu
-// ikke fuldført måned afskrives ikke endnu, den tælles med ved NÆSTE kørsel.
+// Antal HELE måneder mellem to datoer - en påbegyndt, endnu ikke fuldført måned afskrives ikke endnu, den tælles
+// med ved NÆSTE kørsel.
 // RETTET: et aktiv anskaffet den 29.-31. gled: "+1 month" fra 31/1 gav 3/3 (februar sprang over), så
-// last_depreciated_date kunne lande EFTER i dag og afskrivningen fulgte derefter den 3. i stedet for
-// månedens slutning - og DateTime::diff() talte 31/1 -> 28/2 som 0 hele måneder. Nu samme regel som
-// recurring_next_date(): samme dag i måneden, højst månedens sidste - den sidste forbliver den sidste.
+// last_depreciated_date kunne lande EFTER i dag og afskrivningen fulgte derefter den 3. i stedet for månedens
+// slutning - og DateTime::diff talte 31/1 -> 28/2 som 0 hele måneder.
 function fa_add_months(string $date, int $n): string {
     $t = strtotime($date);
     $y = (int)date('Y', $t);  $m = (int)date('n', $t) + $n;  $d = (int)date('j', $t);
@@ -51,6 +50,11 @@ function fa_calculate_due_depreciation(array $asset, string $today): ?array {
     if ($months <= 0) return null;
 
     $amount = round($monthly_dep * $months, 2);
+    // RETTET: blev månedsraten rundet NED (fx 1.000 / 84 mdr = 11,90), manglede der et par øre ved levetidens
+    // udløb, som så blev bogført som en ekstra afskrivning måneden EFTER levetiden. Når levetiden er nået, tages
+    // hele resten med i denne kørsel - og fa_build_full_schedule() afslutter på samme måde.
+    $life_end = fa_add_months($asset['acquisition_date'], (int)$asset['useful_life_years'] * 12);
+    if (fa_add_months($start_from, $months) >= $life_end) $amount = PHP_FLOAT_MAX;
 
     // Aldrig afskriv ud over den afskrivningsbare basis (anskaffelsessum
     // minus scrapværdi) - sidste rate afkortes til reelt at ramme præcis
@@ -106,7 +110,7 @@ function fa_build_full_schedule(array $asset): array {
         // kalenderår) afkortes til reelt at ramme scrapværdien præcist -
         // samme afrundingsprincip som fa_calculate_due_depreciation().
         $remaining = round($depreciable_base - $accumulated, 2);
-        if ($year_dep >= $remaining) { $year_dep = $remaining; $months_left = $months_in_year; }
+        if ($year_dep >= $remaining || $months_in_year >= $months_left) { $year_dep = $remaining; $months_left = $months_in_year; }
 
         $accumulated = round($accumulated + $year_dep, 2);
         $schedule[] = [

@@ -35,10 +35,17 @@ function tc_eng_target_settings(string $src_type, array $config): array {
 // ANDEN fil/database end den aktive - så kilden aldrig kan overskrives ved et uheld.
 function tc_eng_open_target(array $t, ?string $override = null) {
     if ($t['type'] === 'sqlite') {
-        $rel = $override ?? $t['path'];
-        $abs = (preg_match('~^([A-Za-z]:[\\\\/]|/)~', $rel)) ? $rel : (dirname(__DIR__) . '/inc/' . $rel);
-        $dir = dirname($abs);
-        if (!is_dir($dir)) mkdir($dir, 0755, true);
+        // #2 (sikkerhed): et bruger-/CSRF-leveret target må IKKE kunne traversere
+        // ud af mappen (../), bruge en absolut sti, eller - via basename - ramme
+        // en anden fil end en SQLite-database (fx env.ini). Målet afgrænses derfor
+        // til inc/data/ og skal være ét rent filnavn med en SQLite-endelse.
+        $fname = basename((string)($override ?? $t['path']));
+        if (!preg_match('/^[A-Za-z0-9._-]+\.(sqlite|sqlite3|db)$/', $fname)) {
+            throw new Exception('Ugyldigt mål-filnavn "' . $fname . '". Angiv ét filnavn der ender på .sqlite - det gemmes i inc/data/.');
+        }
+        $base = dirname(__DIR__) . '/inc/data/';
+        if (!is_dir($base)) mkdir($base, 0755, true);
+        $abs = $base . $fname;
         $pdo = new PDO('sqlite:' . $abs);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         return ['type' => 'sqlite', 'pdo' => $pdo, 'where' => $abs];
@@ -168,10 +175,27 @@ function tc_engine_migrate($src_conn, string $src_type, array $dst, array &$log)
                 $ph = implode(', ', array_fill(0, count($colnames), '?'));
                 $stmt = mysqli_prepare($dh, "INSERT INTO `" . str_replace('`', '``', $table) . "` ($qd_list) VALUES ($ph)");
                 if (!$stmt) throw new Exception('MySQL prepare: ' . mysqli_error($dh));
+                // #3: SQLite er typeløs og gemmer ofte '' (eller ikke-numerisk) i
+                // tal-kolonner. Bundet som streng ind i en numerisk MySQL-kolonne
+                // afviser strict mode (STRICT_TRANS_TABLES, std. siden 5.7) med
+                // fejl 1366. Pr. kolonne: er måltypen numerisk, og er den nullbar?
+                $num_mask = [];
+                foreach ($cols as $cm) {
+                    $tt = tc_eng_map_type($cm['type'], 'mysql', $cm['pk']);
+                    $num_mask[] = ['num' => (strpos($tt, 'INT') !== false || strpos($tt, 'DECIMAL') !== false),
+                                   'nullable' => !$cm['notnull']];
+                }
                 $sr = DB::query($src_conn, 'SELECT * FROM ' . ($src_type === 'mysql' ? "`$table`" : "\"$table\""));
                 while ($row = DB::fetch_assoc($sr)) {
                     $vals = array_values($row);
-                    $types = str_repeat('s', count($vals));            // alt som streng; MySQL caster til kolonnetypen
+                    // '' / NULL / ikke-numerisk i en numerisk kolonne -> NULL (hvis
+                    // nullbar) ellers 0, så strict mode ikke afviser rækken.
+                    foreach ($vals as $i => $v) {
+                        if (($num_mask[$i]['num'] ?? false) && !is_numeric($v)) {
+                            $vals[$i] = $num_mask[$i]['nullable'] ? null : 0;
+                        }
+                    }
+                    $types = str_repeat('s', count($vals));            // resten som streng; MySQL caster til kolonnetypen
                     $refs = [];
                     foreach ($vals as $k => $v) $refs[$k] = &$vals[$k];
                     mysqli_stmt_bind_param($stmt, $types, ...$refs);

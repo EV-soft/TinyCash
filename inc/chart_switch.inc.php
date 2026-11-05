@@ -45,9 +45,8 @@ function cs_family(string $type): string {
 // skelne dem fra en af dine egne konti der blot er knyttet til standarden.
 const CS_ALT_SETTING = 'chart_std_alt';
 function cs_alt_map($conn): array {
-    $r = DB::fetch_assoc(DB::query($conn, "SELECT setting_value FROM settings WHERE setting_key = '" . CS_ALT_SETTING . "'"));
     $out = [];
-    foreach ((array)json_decode((string)($r['setting_value'] ?? ''), true) as $k => $v) $out[(int)$k] = (int)$v;
+    foreach ((array)json_decode((string)(get_settings($conn)[CS_ALT_SETTING] ?? ''), true) as $k => $v) $out[(int)$k] = (int)$v;
     return $out;
 }
 
@@ -134,7 +133,7 @@ function cs_own_accounts($conn): array {
     $role_type = ['conf_acc_bank' => 'bank', 'conf_acc_debitor' => 'asset', 'conf_acc_creditor' => 'liability', 'conf_acc_sales' => 'income',
                   'conf_acc_vat' => 'vat', 'conf_acc_purchase_vat' => 'vat', 'conf_acc_fx' => 'expense', 'conf_acc_bad_debt' => 'expense'];
     foreach ($roles as $id => $rl) {
-        if (isset($out[$id]) || DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = $id"))) continue;
+        if (isset($out[$id]) || tc_account_ok($conn, $id)) continue;
         if (($used[$id] ?? 0) === 0) continue;
         $out[$id] = ['acc_id' => $id, 'acc_name' => '⚠ ' . lang('@not in the chart of accounts'), 'acc_type' => $role_type[$rl[0]] ?? 'asset',
                      'std_ref_id' => null, 'vat_rate' => null, 'vat_code' => null, 'acc_status' => 'active', 'postings' => $used[$id],
@@ -210,7 +209,7 @@ function cs_plan($conn, array $map_in, string $date): array {
     $own = cs_own_accounts($conn);
     $std = cs_std_available($conn);
     $out = ['errors' => [], 'warnings' => [], 'map' => [], 'transfers' => []];
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !strtotime($date)) { $out['errors'][] = lang('@Please enter a valid date.');  return $out; }
+    if (!tc_is_date($date)) { $out['errors'][] = lang('@Please enter a valid date.');  return $out; }
     if (is_date_locked($conn, $date)) $out['errors'][] = lang('@The date is in a locked accounting period.');
     foreach ($map_in as $old => $new) {
         $old = (int)$old;  $new = (int)$new;
@@ -328,13 +327,7 @@ function cs_execute($conn, array $map_in, string $date): array {
 }
 
 function shop_tbl_exists_cs($conn, string $t): bool {
-    static $cache = [];
-    if (!isset($cache[$t])) {
-        $r = DB::is_sqlite() ? DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='" . DB::escape($conn, $t) . "'")
-                             : DB::query($conn, "SHOW TABLES LIKE '" . DB::escape($conn, $t) . "'");
-        $cache[$t] = DB::is_sqlite() ? (bool)($r && DB::fetch_assoc($r)) : ($r && DB::num_rows($r) > 0);
-    }
-    return $cache[$t];
+    return db_has_table($conn, $t);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -369,20 +362,7 @@ const CS_ACC_REFS = [
 ];
 
 function cs_col_exists($conn, string $t, string $c): bool {
-    static $cache = [];
-    $k = "$t.$c";
-    if (!isset($cache[$k])) {
-        if (!shop_tbl_exists_cs($conn, $t)) return $cache[$k] = false;
-        if (DB::is_sqlite()) {
-            $cache[$k] = false;
-            $r = DB::query($conn, "PRAGMA table_info($t)");
-            if ($r) while ($x = DB::fetch_assoc($r)) if ($x['name'] === $c) $cache[$k] = true;
-        } else {
-            $r = DB::query($conn, "SHOW COLUMNS FROM $t LIKE '" . DB::escape($conn, $c) . "'");
-            $cache[$k] = $r && DB::num_rows($r) > 0;
-        }
-    }
-    return $cache[$k];
+    return db_has_column($conn, $t, $c);
 }
 
 // Et ledigt kontonummer tæt på $near: hverken i din kontoplan eller et standardnummer
@@ -450,7 +430,7 @@ function cs_resolve_conflicts($conn, array $actions, array $targets): array {
         if (!in_array($act, $c['options'], true)) { $out['errors'][] = sprintf(lang('@%d: this solution is not possible for the account.'), $no);  continue; }
         if (in_array($act, ['move', 'alt'], true)) {
             $t = (int)($targets[$no] ?? 0);
-            $clash = $t <= 0 || isset($doc[$t]) || isset($claimed[$t]) || DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = $t"))
+            $clash = $t <= 0 || isset($doc[$t]) || isset($claimed[$t]) || tc_account_ok($conn, $t)
                   || DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM ledger WHERE acc_id = $t LIMIT 1"));      // (posteringer uden konto)
             if ($clash) { $out['errors'][] = sprintf(lang('@%1$d: the number %2$d is not free - choose a number that is neither used by you nor in the standard chart.'), $no, $t);  continue; }
             $claimed[$t] = true;

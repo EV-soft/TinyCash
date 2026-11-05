@@ -18,10 +18,11 @@ $msg = ''; $err = '';
 if (isset($_GET['del']) && (int)$_GET['del'] > 0) {
     $del_id = (int)$_GET['del'];
     $old = DB::fetch_assoc(DB::query($conn, "SELECT * FROM recurring_invoices WHERE recur_id = $del_id"));
+    if (!$old) redirect('recurring_invoices.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: meldte succes, selv om intet fandtes (dobbeltklik, en anden fane)
     DB::query($conn, "DELETE FROM recurring_invoice_lines WHERE recur_id = $del_id");
     if (DB::query($conn, "DELETE FROM recurring_invoices WHERE recur_id = $del_id")) {
         if ($old) log_action($conn, 'DELETE_RECURRING_INVOICE', 'recurring_invoices', $del_id, $old, null);
-        header("Location: recurring_invoices.php?msg=deleted"); exit;
+        redirect('recurring_invoices.php', '@Deleted successfully');
     }
 }
 
@@ -29,6 +30,7 @@ if (isset($_GET['del']) && (int)$_GET['del'] > 0) {
 if (isset($_GET['toggle']) && (int)$_GET['toggle'] > 0) {
     $tid = (int)$_GET['toggle'];
     $cur = DB::fetch_assoc(DB::query($conn, "SELECT is_active, next_run_date, interval_type FROM recurring_invoices WHERE recur_id = $tid"));
+    if (!$cur) redirect('recurring_invoices.php', '@Not found - it may already have been deleted.', 'error');
     if ($cur) {
         $new_active = $cur['is_active'] ? 0 : 1;
         DB::query($conn, "UPDATE recurring_invoices SET is_active = $new_active WHERE recur_id = $tid");
@@ -42,7 +44,7 @@ if (isset($_GET['toggle']) && (int)$_GET['toggle'] > 0) {
         }
         log_action($conn, 'TOGGLE_RECURRING_INVOICE', 'recurring_invoices', $tid, ['is_active' => $cur['is_active']], ['is_active' => $new_active]);
     }
-    header("Location: recurring_invoices.php?msg=toggled"); exit;
+    redirect('recurring_invoices.php', '@Status updated');
 }
 
 // --- Generér nu ---
@@ -50,26 +52,19 @@ if (isset($_GET['gen']) && (int)$_GET['gen'] > 0) {
     $gid = (int)$_GET['gen'];
     $new_inv_id = generate_recurring_invoice($conn, $gid);
     if ($new_inv_id) {
-        header("Location: invoice_edit.php?id=$new_inv_id&msg=saved"); exit;
+        redirect("invoice_edit.php?id=$new_inv_id", '@Changes saved successfully');
     } else {
-        header("Location: recurring_invoices.php?msg=generr"); exit;
+        redirect('recurring_invoices.php', '@Could not generate an invoice from this template', 'error');
     }
 }
 
-// --- Spring næste kørsel over (bruger-anmodet, "kan bogholderen ønske sig
-// mere"): før kunne en skabelon kun sættes helt til/fra - en kunde der fx
-// holder ferie én måned krævede enten at bogholderen huskede at slå
-// skabelonen fra OG til igen bagefter, eller bare lod den generere en
-// kladde man alligevel aldrig bogførte. Fremrykker next_run_date ÉT
-// interval (samme recurring_next_date() som selve den automatiske
-// generering bruger, se inc/recurring_invoices.inc.php), uden at oprette
-// nogen fakturakladde og uden at røre last_run_date (der blev jo reelt
-// ikke "kørt" noget denne gang). Atomisk claim (WHERE next_run_date =
-// den kendte gamle værdi) - samme TOCTOU-sikre mønster som resten af
-// appens statusskift, i tilfælde af to samtidige klik/faner. ---
+// --- Spring næste kørsel over: før kunne en skabelon kun sættes helt til/fra - en kunde der fx holder ferie én
+// måned krævede enten at bogholderen huskede at slå skabelonen fra OG til igen bagefter, eller bare lod den
+// generere en kladde man alligevel aldrig bogførte. ---
 if (isset($_GET['skip']) && (int)$_GET['skip'] > 0) {
     $sid = (int)$_GET['skip'];
     $cur = DB::fetch_assoc(DB::query($conn, "SELECT next_run_date, interval_type FROM recurring_invoices WHERE recur_id = $sid"));
+    if (!$cur) redirect('recurring_invoices.php', '@Not found - it may already have been deleted.', 'error');
     if ($cur && !empty($cur['next_run_date'])) {
         $new_next = recurring_next_date($cur['next_run_date'], $cur['interval_type']);
         $claim = DB::prepare_and_execute($conn,
@@ -80,25 +75,16 @@ if (isset($_GET['skip']) && (int)$_GET['skip'] > 0) {
                 ['next_run_date' => $cur['next_run_date']], ['next_run_date' => $new_next]);
         }
     }
-    header("Location: recurring_invoices.php?msg=skipped"); exit;
+    redirect('recurring_invoices.php', '@Next occurrence skipped - the schedule has moved forward by one interval.');
 }
 
 htm_Header('@Recurring Invoices', 1200);
 showMenu();
 
-if (isset($_GET['msg'])) {
-    if ($_GET['msg'] === 'deleted') htm_Alert(lang('@Deleted successfully'), 'success');
-    elseif ($_GET['msg'] === 'toggled') htm_Alert(lang('@Status updated'), 'success');
-    elseif ($_GET['msg'] === 'generr') htm_Alert(lang('@Could not generate an invoice from this template'), 'error');
-    elseif ($_GET['msg'] === 'skipped') htm_Alert(lang('@Next occurrence skipped - the schedule has moved forward by one interval.'), 'success');
-}
-
 $tools = htm_Button(icon: 'fa-plus', labl: '@New Recurring Invoice', type: 'success', link: 'recurring_invoice_edit.php?id=0', attr: 'data-hint="'.lang('@Create a new recurring invoice template').'"', echo: false);
 htm_Card_(capt: '@Recurring Invoices', wdth: 1200, tool: $tools);
 
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">' .
-    lang('@Templates for invoices that repeat automatically (e.g. monthly rent or a subscription). A new draft invoice is generated on the scheduled date - it is never posted automatically, you still review and post it yourself like any other invoice.') .
-    '</p>';
+htm_Note(lang('@Templates for invoices that repeat automatically (e.g. monthly rent or a subscription). A new draft invoice is generated on the scheduled date - it is never posted automatically, you still review and post it yourself like any other invoice.'), 'font-size:0.9em; margin-top:-5px;');
 
 $res = DB::query($conn, "SELECT r.*, c.cust_name FROM recurring_invoices r
                           LEFT JOIN customers c ON r.cust_id = c.cust_id
@@ -136,7 +122,7 @@ if ($res) {
              'hint' => $row['is_active'] ? '@Pause' : '@Resume', 'type' => 'warning'];
 
         $data[] = [
-            htmlspecialchars($row['cust_name'] ?? '---') . '<br><small style="color:var(--text-muted);">' . number_format($total, 2, ',', '.') . ' DKK/' . lang($interval_labels[$row['interval_type']] ?? $row['interval_type']) . '</small>',
+            htmlspecialchars($row['cust_name'] ?? '---') . '<br><small style="color:var(--text-muted);">' . fmt_dk($total) . ' DKK/' . lang($interval_labels[$row['interval_type']] ?? $row['interval_type']) . '</small>',
             lang($interval_labels[$row['interval_type']] ?? $row['interval_type']),
             $row['next_run_date'] ? date(CONF_DATE_FORMAT, strtotime($row['next_run_date'])) : '-',
             $row['last_run_date'] ? date(CONF_DATE_FORMAT, strtotime($row['last_run_date'])) : lang('@Never'),

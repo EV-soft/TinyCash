@@ -6,12 +6,10 @@
 function htm_Header($capt = 'Tiny Cash', $mwidth = 1600, $echo = true, $force_theme = null) {
     if (!$echo) ob_start();
 
-    // RETTET: manglede session_name('TCC_V100_SESSION') før session_start().
-    // Denne fallback rammes kun, hvis INGEN session er aktiv endnu (fx hvis
-    // en side nogensinde kalder htm_Header() uden først at være gået gennem
-    // auth.inc.php/login.php, som ellers sætter navnet korrekt) - men uden
-    // det rigtige navn ville PHP i så fald starte en helt forkert, ukendt
-    // session (samme fejlklasse som blev fundet i logout.php og set_lang.php).
+    // RETTET: manglede session_name før session_start. Denne fallback rammes kun, hvis INGEN session er aktiv
+    // endnu (fx hvis en side nogensinde kalder htm_Header uden først at være gået gennem auth.inc.php/login.php,
+    // som ellers sætter navnet korrekt) - men uden det rigtige navn ville PHP i så fald starte en helt forkert,
+    // ukendt session.
     if (session_status() === PHP_SESSION_NONE) {
         session_name('TCC_V100_SESSION');
         session_start();
@@ -33,14 +31,8 @@ function htm_Header($capt = 'Tiny Cash', $mwidth = 1600, $echo = true, $force_th
         $saved_theme = 'light';
     }
 
-// RETTET (§bugs-batch-13-review): $capt blev skrevet direkte ind i <title>
-// uden nogen escaping. De fleste kald sender en statisk '@Nøgle'-tekst (helt
-// ufarligt), men flere sider (customer_edit.php, customer_statement.php)
-// bygger $capt dynamisk ved at sammensætte det med rå, brugerkontrolleret
-// data (fx et kundenavn) - en kunde med navnet '</title><script>...</script>'
-// kunne dermed bryde ud af <title> og få reel, kørende JavaScript ind i
-// <head> for enhver der åbnede den kundes side. htmlspecialchars() er et
-// no-op for almindelig statisk tekst, så alle andre kald er upåvirkede.
+// RETTET: $capt blev skrevet direkte ind i <title> uden nogen escaping. htmlspecialchars er et no-op for
+// almindelig statisk tekst, så alle andre kald er upåvirkede.
 echo '<!DOCTYPE html><html lang="'.$html_lang.'" data-theme="'.$saved_theme.'"><head><meta charset="UTF-8">
     <title>'.htmlspecialchars(lang($capt)).'</title>';
 
@@ -295,29 +287,66 @@ echo '
         document.cookie = "theme=" + themeName + ";expires=" + d.toUTCString() + ";path=/;SameSite=Strict";
     }
 
-    // CSRF for handlinger via et link (GET): nøglen lægges på linket i det øjeblik det klikkes - se csrf_get_actions()
-    (function () {
-        var reg = ' . json_encode(array_map(fn($r) => ['p' => $r['params'], 'ro' => $r['read_only'] ?? []], csrf_get_actions())) . ', tok = ' . json_encode(csrf_token()) . ';
-        function sign(a) {
-            if (!tok || !a.href) return;
-            var u;  try { u = new URL(a.href, location.href); } catch (e) { return; }
-            if (u.origin !== location.origin || u.searchParams.has("csrf_token")) return;
-            var r = reg[u.pathname.split("/").pop()];
-            if (!r || !r.p.some(function (p) { var v = u.searchParams.get(p); return v !== null && v !== "" && r.ro.indexOf(v) < 0; })) return;
-            u.searchParams.set("csrf_token", tok);
-            a.href = u.toString();
-        }
-        ["click", "auxclick", "contextmenu"].forEach(function (ev) {
-            document.addEventListener(ev, function (e) { var a = e.target.closest ? e.target.closest("a[href]") : null;  if (a) sign(a); }, true);
-        });
-    })();
+    ' . htm_ActionLinkJs() . '
     </script></head><body>';
     if (!$echo) return ob_get_clean();
+}
+
+# HANDLINGS-LINKS SOM POST (bruges af htm_Header() og af sider der bygger deres egen <head>, fx invoice_view.php)
+function htm_ActionLinkJs(): string {
+    return '
+    // Handlinger via et link sendes som POST med CSRF-nøglen i formularen - se csrf_get_actions()/csrf_action_by_name().
+    // tcPost(url) bruges også af JS der selv starter en handling (i stedet for location.href = url).
+    (function () {
+        var reg = ' . json_encode(array_map(fn($r) => ['p' => $r['params'], 'ro' => $r['read_only'] ?? []], csrf_get_actions())) . ', tok = ' . json_encode(csrf_token()) . ';
+        var byName = /^(send_[a-z0-9_]+|[a-z0-9_]+_actions?|[a-z0-9_]+_duplicate)\.php$/;
+        // Et tal fra et inputfelt - samme regler som parse_dk_number() på serveren: "1.500,00", "1500.00", "1 500,50"
+        // og "1.234.567" giver alle det rigtige tal (parseFloat(v.replace(",", ".")) gav 1,5 for "1.500,00"). Ugyldigt = 0.
+        window.tcNum = function (v) {
+            var s = String(v == null ? "" : v).replace(/[\s  \x27]/g, "");
+            if (s === "") return 0;
+            if ((s.match(/\./g) || []).length > 1) s = s.replace(/\./g, "");
+            if ((s.match(/,/g) || []).length > 1) s = s.replace(/,/g, "");
+            var c = s.lastIndexOf(","), d = s.lastIndexOf(".");
+            if (c >= 0 && d >= 0) s = c > d ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+            else if (c >= 0) s = s.replace(",", ".");
+            var n = parseFloat(s);
+            return isFinite(n) ? n : 0;
+        };
+        window.tcPost = function (url, target) {
+            var f = document.createElement("form");
+            f.method = "post";  f.action = url;  f.style.display = "none";
+            if (target) f.target = target;
+            [["csrf_token", tok], ["_tc_link", "1"]].forEach(function (kv) {
+                var i = document.createElement("input");  i.type = "hidden";  i.name = kv[0];  i.value = kv[1];  f.appendChild(i);
+            });
+            document.body.appendChild(f);  f.submit();
+        };
+        function isAction(href) {
+            var u;  try { u = new URL(href, location.href); } catch (e) { return false; }
+            if (u.origin !== location.origin) return false;
+            var file = u.pathname.split("/").pop(), r = reg[file];
+            var ps = r ? r.p : (byName.test(file) ? Array.from(u.searchParams.keys()) : []), ro = r ? r.ro : [];
+            return ps.some(function (p) { var v = u.searchParams.get(p); return v !== null && v !== "" && ro.indexOf(v) < 0; });
+        }
+        // Boble-fasen: en onclick="return confirm(...)" der svarer nej, har allerede annulleret klikket
+        function onLink(e) {
+            if (e.defaultPrevented || (e.button !== 0 && e.button !== 1)) return;
+            var a = e.target.closest ? e.target.closest("a[href]") : null;
+            if (!a || a.hasAttribute("download") || !isAction(a.href)) return;
+            e.preventDefault();
+            tcPost(a.href, (e.button === 1 || e.ctrlKey || e.metaKey || e.shiftKey) ? "_blank" : (a.target || ""));
+        }
+        document.addEventListener("click", onLink);
+        document.addEventListener("auxclick", onLink);
+    })();
+    ';
 }
 
 # FOOTER
 function htm_Footer($echo = true) {
     if (!$echo) ob_start();
+    flash_render(); // en side uden htm_Card_() viser stadig en ventende flash-besked
 
     echo '<div id="tc-hint" style="position:fixed; display:none; background: var(--color-dark); color: var(--text-light); 
           padding:8px 15px; border-radius:4px; border-left:4px solid var(--color-warning); z-index:2147483647; 
@@ -510,16 +539,12 @@ function htm_Footer($echo = true) {
         }
         include_once 'notepad.inc.php';
 
-        // Global søgning (bruger-anmodet): flyttet ud af selve menuen og
-        // givet sin egen flydende rund knap i stedet, samme mønster og
-        // placering som notesblok-/valuta-knapperne ovenfor (§global-search-
-        // feature). Byttede plads med valuta-knappen (bruger-anmodet): søgning
-        // sidder nu fast på bottom:70px (lige over notesblokken), valuta rykket
-        // til bottom:120px i inc/currency_widget.php - ingen gap-udfyldnings-
-        // logik nødvendig mere, da søgning altid ligger under valuta uanset om
-        // valuta-modulet er aktivt. Ren navigation (ingen popup/modal som de to
-        // andre), derfor et almindeligt <a>, ikke en <button> med onclick.
-        echo '<a href="search.php" class="no-print" style="position: fixed; bottom: 70px; right: 3px; z-index: 10001; background: #2c3e50; color: white; border: 2px solid var(--color-primary); border-radius: 50%; width: 50px; height: 50px; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; text-decoration: none;" title="' . lang('@Search') . '">🔍</a>';
+        // Global søgning: flyttet ud af selve menuen og givet sin egen flydende rund knap i stedet, samme mønster
+        // og placering som notesblok-/valuta-knapperne ovenfor. Byttede plads med valuta-knappen: søgning sidder
+        // nu fast på bottom:70px (lige over notesblokken), valuta rykket til bottom:120px i
+        // inc/currency_widget.php - ingen gap-udfyldnings-logik nødvendig mere, da søgning altid ligger under
+        // valuta uanset om valuta-modulet er aktivt.
+        echo '<a href="search.php" class="no-print" style="position: fixed; bottom: 68px; right: 3px; z-index: 10001; background: #2c3e50; color: white; border: 2px solid var(--color-primary); border-radius: 50%; width: 40px; height: 40px; box-sizing: border-box; font-size: 18px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; text-decoration: none;" title="' . lang('@Search') . '">🔍</a>';
 
         // Automatisk krypteret off-site backup: tjekkes ved hver sidevisning,
         // men udfører kun reelt arbejde hvis 21+ dage siden sidste backup OG
@@ -531,12 +556,9 @@ function htm_Footer($echo = true) {
             }
         }
 
-        // Gentagne/faste fakturaer: samme "tjek ved hver sidevisning, udfør
-        // kun arbejde hvis forfaldent"-mønster som auto-backup ovenfor (ingen
-        // rigtig cron-adgang på almindelig delt hosting). Opretter altid kun
-        // KLADDER, aldrig bogførte fakturaer direkte. Fejler tavst (try/catch)
-        // hvis tabellerne ikke findes endnu (§migrate_recurring_invoices) - må
-        // ikke kunne vælte en helt almindelig sidevisning.
+        // Gentagne/faste fakturaer: samme "tjek ved hver sidevisning, udfør kun arbejde hvis forfaldent"-mønster
+        // som auto-backup ovenfor (ingen rigtig cron-adgang på almindelig delt hosting). Fejler tavst (try/catch)
+        // hvis tabellerne ikke findes endnu - må ikke kunne vælte en helt almindelig sidevisning.
         if (isset($GLOBALS['conn']) && $GLOBALS['conn']) {
             require_once __DIR__ . '/recurring_invoices.inc.php';
             if (function_exists('recurring_invoices_check')) {
@@ -544,14 +566,9 @@ function htm_Footer($echo = true) {
             }
         }
 
-        // Gentagne/faste udgifter: udgiftssidens modstykke til ovenstående,
-        // samme "tjek ved hver sidevisning"-mønster. Opretter altid kun
-        // UBOGFØRTE udgifter, aldrig bogført direkte - se
-        // inc/recurring_expenses.inc.php's egen kommentar for hvorfor det er
-        // endnu strengere begrundet her end for fakturaer. Fejler tavst
-        // (try/catch) hvis tabellen ikke findes endnu
-        // (§migrate_recurring_expenses) - må ikke kunne vælte en helt
-        // almindelig sidevisning.
+        // Gentagne/faste udgifter: udgiftssidens modstykke til ovenstående, samme "tjek ved hver
+        // sidevisning"-mønster. Fejler tavst (try/catch) hvis tabellen ikke findes endnu - må ikke kunne vælte en
+        // helt almindelig sidevisning.
         if (isset($GLOBALS['conn']) && $GLOBALS['conn']) {
             require_once __DIR__ . '/recurring_expenses.inc.php';
             if (function_exists('recurring_expenses_check')) {

@@ -33,7 +33,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $vat_account = (!empty($vat_account_raw)) ? intval($vat_account_raw) : "NULL";
 
     if (empty($vat_id)) {
-        die("❌ " . lang('@Error: VAT ID cannot be empty.'));
+        redirect('vat_codes.php', '@Error: VAT ID cannot be empty.', 'error');      // (var et rå die() uden sideskal)
+    }
+    // RETTET: satsen blev ikke kontrolleret - en momskode på fx 250 % eller -25 % blev gemt, og alle konti med koden
+    // beregnede derefter forkert moms på fakturaer og udgifter. Samme grænse som fakturalinjernes momssats.
+    if (tc_pct($_POST['vat_rate'] ?? '') === null) {
+        redirect('vat_codes.php', '@The VAT rate must be between 0 and 100 %.', 'error');
     }
 
     // 2. Tjek om koden eksisterer (UPSERT logik)
@@ -42,13 +47,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // RETTET: formularen "Tilføj ny momskode" OVERSKREV stille en eksisterende kode med samme id (fx S25 med en ny
     // sats) - koden som kontiene allerede bruger. En ny kode med et brugt id afvises nu (en rettelse sender update=1).
     if ($is_update && empty($_POST['update'])) {
-        $_SESSION['flash_error'] = sprintf(lang('@The VAT code %s already exists - tick "Change the existing code" to change it.'), htmlspecialchars($_POST['vat_id']));
-        header("Location: vat_codes.php"); exit;
+        flash(sprintf(lang('@The VAT code %s already exists - tick "Change the existing code" to change it.'), htmlspecialchars($_POST['vat_id'])), 'error');
+        redirect("vat_codes.php");
     }
     // RETTET: momskontoen blev ikke kontrolleret - en kode kunne pege på en konto der ikke findes
-    if ($vat_account !== "NULL" && !DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = " . (int)$vat_account))) {
-        $_SESSION['flash_error'] = sprintf(lang('@The account %d does not exist in the chart of accounts - check Company Settings (posting accounts) or the chart of accounts. Nothing was posted.'), (int)$vat_account);
-        header("Location: vat_codes.php"); exit;
+    if ($vat_account !== "NULL" && !tc_account_ok($conn, $vat_account)) {
+        flash(sprintf(lang('@The account %d does not exist in the chart of accounts - check Company Settings (posting accounts) or the chart of accounts. Nothing was posted.'), (int)$vat_account), 'error');
+        redirect("vat_codes.php");
     }
 
     // Hent momskodens data FØR en evt. opdatering, til revisionssporet -
@@ -82,18 +87,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         // RETTET: vat_list.php findes ikke i projektet (vat_codes.php er den
         // reelle side) - hvert vellykket gem sendte derfor brugeren til en 404.
-        header("Location: vat_codes.php?msg=success");
-        exit;
+        redirect('vat_codes.php', '@VAT code saved.');
     } else {
-        // RETTET (§find-fem-fejl runde 40): ikke længere et råt die() med
-        // motor-fejltekst + hele SQL-forespørgslen uden sidens skal - se
-        // filens header. Fejlbeskeden flashes til sessionen og vises af
-        // vat_codes.php, som allerede har fuld header/menu/footer.
-        $_SESSION['flash_error'] = lang('@Error saving VAT code:') . ' ' . DB::error($conn);
-        header("Location: vat_codes.php");
-        exit;
+        // RETTET: ikke længere et råt die med motor-fejltekst + hele SQL-forespørgslen uden sidens skal - se
+        // filens header. Fejlbeskeden flashes til sessionen og vises af vat_codes.php, som allerede har fuld
+        // header/menu/footer.
+        flash(lang('@Error saving VAT code:') . ' ' . htmlspecialchars((string)DB::error($conn)), 'error');
+        redirect("vat_codes.php");
     }
 } else {
-    header("Location: vat_codes.php");
-    exit;
+    redirect("vat_codes.php");
 }

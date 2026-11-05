@@ -17,19 +17,19 @@ $action = $_GET['action'] ?? '';
 $id     = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if (!in_array($action, ['mark_sent', 'mark_accepted', 'mark_rejected', 'reopen', 'convert'], true) || $id <= 0) {
-    header("Location: quote_list.php"); exit;
+    redirect("quote_list.php");
 }
 
 $q = DB::fetch_assoc(DB::query($conn, "SELECT * FROM quotes WHERE quote_id = $id"));
-if (!$q) { header("Location: quote_list.php"); exit; }
+if (!$q) { redirect("quote_list.php", '@Not found - it may already have been deleted.', 'error'); }      // (var en tavs omdirigering)
 
 if ($action === 'mark_sent') {
     $claim = DB::prepare_and_execute($conn, "UPDATE quotes SET status = 'sent' WHERE quote_id = ? AND status = 'draft'", [$id]);
     if ($claim && DB::affected_rows($conn, $claim) > 0) {
         log_action($conn, 'MARK_QUOTE_SENT', 'quotes', $id, ['status' => 'draft'], ['status' => 'sent']);
-        header("Location: quote_list.php?msg=sent");
+        redirect('quote_list.php', '@Quote marked as sent.');
     } else {
-        header("Location: quote_list.php?msg=bad_status");
+        redirect('quote_list.php', "@This action is not valid for the quote's current status.", 'error');
     }
     exit;
 }
@@ -37,7 +37,7 @@ if ($action === 'mark_sent') {
 // RETTET: et tilbud kunne accepteres (og derefter konverteres til faktura med tilbuddets priser), selvom dets
 // gyldighed var udløbet - virksomheden er ikke bundet af et udløbet tilbud. Genåbn det og forlæng gyldigheden.
 if ($action === 'mark_accepted' && !empty($q['valid_until']) && $q['valid_until'] < date('Y-m-d')) {
-    header("Location: quote_list.php?msg=expired"); exit;
+    redirect('quote_list.php', '@The quote has expired and cannot be accepted - reopen it and extend the validity date first.', 'error');
 }
 if ($action === 'mark_accepted' || $action === 'mark_rejected') {
     $new_status = ($action === 'mark_accepted') ? 'accepted' : 'rejected';
@@ -51,9 +51,9 @@ if ($action === 'mark_accepted' || $action === 'mark_rejected') {
         [$new_status, $now, $id]);
     if ($claim && DB::affected_rows($conn, $claim) > 0) {
         log_action($conn, 'MARK_QUOTE_' . strtoupper($new_status), 'quotes', $id, ['status' => $q['status']], ['status' => $new_status]);
-        header("Location: quote_list.php?msg=" . ($new_status === 'accepted' ? 'accepted' : 'rejected'));
+        redirect('quote_list.php', $new_status === 'accepted' ? '@Quote marked as accepted.' : '@Quote marked as rejected.');
     } else {
-        header("Location: quote_list.php?msg=bad_status");
+        redirect('quote_list.php', "@This action is not valid for the quote's current status.", 'error');
     }
     exit;
 }
@@ -62,14 +62,15 @@ if ($action === 'reopen') {
     $claim = DB::prepare_and_execute($conn, "UPDATE quotes SET status = 'draft' WHERE quote_id = ? AND status IN ('sent','rejected')", [$id]);
     if ($claim && DB::affected_rows($conn, $claim) > 0) {
         log_action($conn, 'REOPEN_QUOTE', 'quotes', $id, ['status' => $q['status']], ['status' => 'draft']);
-        header("Location: quote_list.php?msg=reopened");
+        redirect('quote_list.php', '@Quote reopened to draft.');
     } else {
-        header("Location: quote_list.php?msg=bad_status");
+        redirect('quote_list.php', "@This action is not valid for the quote's current status.", 'error');
     }
     exit;
 }
 
 if ($action === 'convert') {
+    if (!tc_customer_ok($conn, (int)$q['cust_id'])) redirect('quote_list.php', '@The customer is in the trash bin - restore the customer first.', 'error');      // RETTET: dannede et dokument til en kunde i papirkurven
     // Atomisk claim FØRST - kun ét konverteringsforsøg må reelt oprette en
     // faktura, uanset dobbeltklik/to samtidige faner (samme TOCTOU-princip
     // som resten af appens statusskift).
@@ -91,12 +92,10 @@ if ($action === 'convert') {
         $cust_ref = DB::escape($conn, $q['cust_reference'] ?? '');
         $note     = DB::escape($conn, $q['quote_note'] ?? '');
         $deliv    = DB::escape($conn, $q['delivery_address'] ?? '');
-        // RETTET: hardkodede 'DKK' herunder ignorerede virksomhedens faktisk
-        // konfigurerede basisvaluta (Firmaindstillinger -> Valuta, det samme
-        // felt quote_view.php selv læser til at VISE tilbuddets beløb med) -
-        // en faktura oprettet herfra ville altså kunne blive tagget forkert
-        // som DKK, selvom tilbuddet blev vist og godkendt i en anden valuta.
-        // Samme fejlklasse som denne sessions §currency-gainloss-feature-sweep.
+        // RETTET: hardkodede 'DKK' herunder ignorerede virksomhedens faktisk konfigurerede basisvaluta
+        // (Firmaindstillinger -> Valuta, det samme felt quote_view.php selv læser til at VISE tilbuddets beløb
+        // med) - en faktura oprettet herfra ville altså kunne blive tagget forkert som DKK, selvom tilbuddet blev
+        // vist og godkendt i en anden valuta. Samme fejlklasse som denne sessions
         $inv_currency = DB::escape($conn, $s['currency'] ?? 'DKK');
 
         // Samme princip som recurring_invoices/inc/recurring_invoices.inc.php:
@@ -106,7 +105,7 @@ if ($action === 'convert') {
         $ok = DB::query($conn, "INSERT INTO invoices
             (cust_id, inv_date, inv_due_date, inv_status, cust_reference, inv_note, delivery_address, currency, proj_id)
             VALUES (" . (int)$q['cust_id'] . ", '$inv_date', '$due_date', 'draft', '$cust_ref', '$note', '$deliv', '$inv_currency', $proj_sql)");
-        if (!$ok) throw new Exception('Kunne ikke oprette fakturakladde: ' . DB::error($conn));
+        if (!$ok) throw new Exception('insert_failed');
         $new_inv_id = DB::insert_id($conn);
 
         $lines_res = DB::query($conn, "SELECT * FROM quote_lines WHERE quote_id = $id");
@@ -125,13 +124,14 @@ if ($action === 'convert') {
             ['status' => 'converted', 'invoice_id' => $new_inv_id]);
 
         DB::commit($conn);
-        header("Location: invoice_edit.php?id=$new_inv_id&msg=saved");
+        redirect("invoice_edit.php?id=$new_inv_id", '@Changes saved successfully');
     } catch (Exception $e) {
         DB::rollback($conn);
         if ($e->getMessage() === 'bad_status') {
-            header("Location: quote_list.php?msg=bad_status");
-        } else {
-            die(lang('@Error:') . ' ' . $e->getMessage());
+            redirect('quote_list.php', "@This action is not valid for the quote's current status.", 'error');
+        } else {      // (var en hvid side med en hårdkodet dansk tekst og rå databasefejl)
+            error_log('[quote_actions convert] ' . DB::error($conn));
+            redirect("quote_view.php?id=$id", '@The draft invoice could not be created - nothing was changed.', 'error');
         }
     }
     exit;

@@ -20,17 +20,13 @@ if (isset($_POST['save_account'])) {
     $name       = DB::escape($conn, $_POST['acc_name']);
     $type       = DB::escape($conn, $_POST['acc_type']);
     $vat_code   = trim(DB::escape($conn, $_POST['vat_code']));
-    // RETTET (§find-fem-fejl runde 40): brugte (float) direkte i stedet for
-    // parse_dk_number(), i modsætning til vat_save.php's egen håndtering af
-    // nøjagtig samme felt (samme fejlklasse som [[invoice-line-comma-amount-fix]]).
-    // (float)"7,5" afkortes stille til 7.0 i PHP - lav praktisk risiko via et
-    // <input type=number> (accepterer typisk ikke komma), men samme lave-
-    // risiko-men-ret-for-konsistens begrundelse som vat_save.php allerede gav.
+    // RETTET: brugte (float) direkte i stedet for parse_dk_number, i modsætning til vat_save.php's egen håndtering
+    // af nøjagtig samme felt (samme fejlklasse som). (float)"7,5" afkortes stille til 7.0 i PHP - lav praktisk
+    // risiko via et <input type=number> (accepterer typisk ikke komma), men samme
+    // lave-risiko-men-ret-for-konsistens begrundelse som vat_save.php allerede gav.
     $vat_rate   = parse_dk_number($_POST['vat_rate']);
-    // NYT (BEK 811/2026-gennemgang, Bilag 3 "bogføringsguide/konterings-
-    // vejledning", se [[digital-standard-bookkeeping-registration-goal]]):
-    // fri konteringsvejledning pr. konto - vises på chart_of_accounts.php
-    // (tooltip) og journal_entry.php (direkte ved selve konteringen).
+    // NYT: fri konteringsvejledning pr. konto - vises på chart_of_accounts.php (tooltip) og journal_entry.php
+    // (direkte ved selve konteringen).
     $guidance   = trim($_POST['guidance'] ?? '');
     $guidance_sql = DB::escape($conn, $guidance);
 
@@ -38,14 +34,6 @@ if (isset($_POST['save_account'])) {
     $std_ref_id = trim($_POST['std_ref_id']);
     $std_ref_sql = ($std_ref_id === '') ? "NULL" : (int)$std_ref_id;
 
-    if ($vat_code !== '' && $vat_code !== '0') {
-        $check_vat = DB::query($conn, "SELECT vat_id FROM vat_codes WHERE vat_id = '$vat_code'");
-        if (DB::num_rows($check_vat) == 0) {
-            $insert_vat = "INSERT INTO vat_codes (vat_id, vat_name, vat_rate) 
-                           VALUES ('$vat_code', '" . DB::escape($conn, lang('@Oprettet via konto')) . "', $vat_rate)";
-            DB::query($conn, $insert_vat);
-        }
-    }
 
     // Hent kontoens data FØR en evt. opdatering, til revisionssporet - en
     // ændret kontotype (fx udgift -> indtægt) eller momskode kan stille
@@ -57,10 +45,8 @@ if (isset($_POST['save_account'])) {
         $before_row = $before_res ? DB::fetch_assoc($before_res) : null;
     }
 
-    // RETTET: typen på en konto MED posteringer kunne ændres - fx indtægt -> aktiv. Det flyttede stille hele
-    // kontoens historik mellem resultatopgørelse og balance i alle rapporter, også i lukkede år og
-    // årsrapporter der allerede var afleveret. En konto med posteringer beholder sin type; brug en ny konto
-    // (og en postering der flytter saldoen), hvis typen var forkert.
+    // RETTET: typen på en konto MED posteringer kunne ændres - fx indtægt -> aktiv. En konto med posteringer
+    // beholder sin type; brug en ny konto (og en postering der flytter saldoen), hvis typen var forkert.
     $acc_type_locked = false;
     if ($before_row && (string)$before_row['acc_type'] !== (string)$_POST['acc_type']) {
         $has_post = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM ledger WHERE acc_id = $id"));
@@ -87,7 +73,18 @@ if (isset($_POST['save_account'])) {
                 WHERE acc_id = $id";
     }
 
-    if (DB::query($conn, $sql)) {
+    // RETTET: kun browserens "required" stod imellem - en konto uden navn, konto nr. 0 (et ikke-tal) og en momssats
+    // på fx 250 % blev gemt. Ugyldige værdier afvises nu på serveren.
+    if (trim((string)($_POST['acc_name'] ?? '')) === '' || ($id == 0 && $new_id <= 0) || tc_pct($_POST['vat_rate'] ?? '0') === null && trim((string)($_POST['vat_rate'] ?? '')) !== '') {
+        $message = htm_Alert(lang('@Please enter an account number, a name and a VAT rate between 0 and 100 %.'), 'error', 700, false);
+    } elseif ($id == 0 && tc_account_ok($conn, $new_id)) {      // (gav en rå "UNIQUE constraint failed: accounts.acc_id")
+        $message = htm_Alert(sprintf(lang('@Account %d already exists in the chart of accounts.'), $new_id), 'error', 700, false);
+    } elseif (DB::query($conn, $sql)) {
+        // En ny momskode oprettes først nu, hvor kontoen er gemt - før blev den oprettet, også når kontoen blev afvist
+        // (fx en momssats på 250 %), og den ugyldige kode blev liggende
+        if ($vat_code !== '' && $vat_code !== '0' && DB::num_rows(DB::query($conn, "SELECT vat_id FROM vat_codes WHERE vat_id = '$vat_code'")) == 0) {
+            DB::query($conn, "INSERT INTO vat_codes (vat_id, vat_name, vat_rate) VALUES ('$vat_code', '" . DB::escape($conn, lang('@Created from an account')) . "', $vat_rate)");
+        }
         // Log kun ved en reel ændring af type/momskode, ikke ved en
         // gemning af rene navne-/rate-redigeringer.
         if ($before_row && ((string)$before_row['acc_type'] !== (string)$_POST['acc_type'] || (string)($before_row['vat_code'] ?? '') !== (string)$vat_code)) {
@@ -95,10 +92,10 @@ if (isset($_POST['save_account'])) {
                 ['acc_type' => $before_row['acc_type'], 'vat_code' => $before_row['vat_code']],
                 ['acc_type' => $_POST['acc_type'], 'vat_code' => $vat_code]);
         }
-        header("Location: " . ($acc_type_locked ? "account_edit.php?id=$id&err=type_locked" : "chart_of_accounts.php?msg=updated"));
-        exit;
+        if ($acc_type_locked) redirect("account_edit.php?id=$id", '@The account has postings, so its type cannot be changed - the other changes are saved.', 'warning');
+        redirect('chart_of_accounts.php', '@Account updated successfully');
     } else {
-        $message = htm_Alert(lang('@Error saving account') . ": " . DB::error($conn), 'error', 0, true);
+        $message = htm_Alert(lang('@Error saving account') . ": " . htmlspecialchars((string)DB::error($conn)), 'error', 700, false);
     }
 }
 
@@ -143,7 +140,6 @@ htm_Header($id == 0 ? "@New Account" : "@Edit Account");
 showMenu();
 
 htm_Card_($id == 0 ? "@Create New Account" : "@Edit Account: " . $id, "500");
-if (($_GET['err'] ?? '') === 'type_locked') $message .= htm_Alert(lang('@The account has postings, so its type cannot be changed - the other changes are saved.'), 'warning', 0, true);
 echo $message;
 ?>
 
@@ -167,10 +163,9 @@ echo $message;
         <select name="acc_type" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-card); color:var(--text-main);">
             <?php 
             // RETTET 2026-08-15: manglede 'income'/'bank'/'vat'/'equity' - kun
-            // 'revenue'/'expense'/'asset'/'liability' var mulige at vælge, selv
-            // om resten af systemet (posteringer, rapporter, årsafslutning)
-            // forudsætter 'income' (ikke 'revenue'), samt 'bank'/'vat'/'equity'.
-            // Se regnskabslov-status i hukommelsen for den fulde analyse.
+            // 'revenue'/'expense'/'asset'/'liability' var mulige at vælge, selv om resten af systemet
+            // (posteringer, rapporter, årsafslutning) forudsætter 'income' (ikke 'revenue'), samt
+            // 'bank'/'vat'/'equity'. Se regnskabslov-status i hukommelsen for den fulde analyse.
             $types = [
                 'income'    => '@Income (Revenue)',
                 'expense'   => '@Expense (Costs)',

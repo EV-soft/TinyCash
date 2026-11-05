@@ -15,13 +15,13 @@ require_once 'inc/db_connect.inc.php';
 require_once 'inc/audit.inc.php';
 
 $src_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if ($src_id <= 0) { header("Location: quote_list.php"); exit; }
+if ($src_id <= 0) { redirect("quote_list.php"); }
 
-$table_exists = @DB::query($conn, "SELECT 1 FROM quotes LIMIT 1") !== false;
-if (!$table_exists) { header("Location: quote_list.php"); exit; }
+$table_exists = db_has_table($conn, 'quotes');
+if (!$table_exists) { redirect("quote_list.php"); }
 
 $src = DB::fetch_assoc(DB::query($conn, "SELECT * FROM quotes WHERE quote_id = $src_id"));
-if (!$src) { header("Location: quote_list.php"); exit; }
+if (!$src) { redirect("quote_list.php"); }
 
 // Ny gyldighedsdato beregnes frisk (i dag + 30 dage, samme standard som
 // quote_edit.php's egen nye-tilbud-forvalg) - i stedet for at kopiere
@@ -30,6 +30,7 @@ if (!$src) { header("Location: quote_list.php"); exit; }
 $today       = date('Y-m-d');
 $valid_until = date('Y-m-d', strtotime('+30 days'));
 
+if (!tc_customer_ok($conn, (int)$src['cust_id'])) redirect("quote_view.php?id=$src_id", '@The customer is in the trash bin - restore the customer first.', 'error');      // RETTET: dannede et dokument til en kunde i papirkurven
 $cust_id_sql  = (int)$src['cust_id'];
 $deliv_sql    = "'" . DB::escape($conn, $src['delivery_address'] ?? '') . "'";
 $note_sql     = "'" . DB::escape($conn, $src['quote_note'] ?? '') . "'";
@@ -67,7 +68,7 @@ while ($l = DB::fetch_assoc($lres)) {
 log_action($conn, 'DUPLICATE_QUOTE', 'quotes', $new_id, ['source_quote_id' => $src_id], ['cust_id' => $cust_id_sql, 'quote_date' => $today]);
 
 DB::commit($conn);
-header("Location: quote_edit.php?id=$new_id&msg=duplicated&src=$src_id");
+redirect("quote_edit.php?id=$new_id", sprintf(lang('@New draft created as a duplicate of quote #%d - review and adjust before sending.'), $src_id), 'info');
 ob_end_flush();
 exit;
 ?>

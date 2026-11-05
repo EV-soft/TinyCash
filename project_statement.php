@@ -15,16 +15,19 @@ require_once 'inc/php2htm.lib.php';
 require_once 'inc/project_statement.inc.php';
 
 $proj_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if ($proj_id <= 0) { header("Location: project_view.php"); exit; }
+if ($proj_id <= 0) { redirect("project_view.php"); }
 
 $s   = get_settings($conn);
 $cur = $s['currency'] ?? 'DKK';
 
 $from = isset($_GET['from']) && $_GET['from'] !== '' ? $_GET['from'] : '';
 $to   = isset($_GET['to'])   && $_GET['to']   !== '' ? $_GET['to']   : '';
+// RETTET: samme manglende datokontrol som customer_statement.php havde - en ugyldig dato ("31-06-2026") blev
+// sammenlignet som tekst, filtrerede stille den forkerte periode og blev vist som "01-01-1970 eller tidligere".
+foreach (['from', 'to'] as $ps_k) if ($$ps_k !== '' && (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $$ps_k) || !checkdate((int)substr($$ps_k, 5, 2), (int)substr($$ps_k, 8, 2), (int)substr($$ps_k, 0, 4)))) $$ps_k = '';
 
 $stmt = get_project_statement_data($conn, $proj_id, $from, $to);
-if ($stmt === null) { header("Location: project_view.php"); exit; }
+if ($stmt === null) { redirect("project_view.php"); }
 $proj             = $stmt['proj'];
 $visible_events   = $stmt['visible_events'];
 $opening_balance  = $stmt['opening_balance'];
@@ -35,12 +38,9 @@ htm_Header($title, 1100);
 showMenu();
 
 // --- Projektinfo ---
-// RETTET (bruger-anmodet: "udskrivning af projektkort skal kun omfatte
-// kortet samt nr./navn øverst") - hele dette kort (datoer/status/knapper)
-// samt menuen (begge visningstilstande - topmenu ELLER sidebar) skjules nu
-// ved print, se @media print-blokken i filens bund. Et separat, minimalt
-// print-only-overskrift (kun sagsnummer + kundenavn) indsættes i stedet
-// direkte i selve Kontokort-kortet nedenfor, synligt KUN ved print.
+// RETTET - hele dette kort (datoer/status/knapper) samt menuen (begge visningstilstande - topmenu ELLER sidebar)
+// skjules nu ved print, se @media print-blokken i filens bund. Et separat, minimalt print-only-overskrift (kun
+// sagsnummer + kundenavn) indsættes i stedet direkte i selve Kontokort-kortet nedenfor, synligt KUN ved print.
 echo '<div class="no-print" id="projInfoCard">';
 htm_Card_(capt: '@Project Information', wdth: 1100);
 echo '<div style="display:flex; flex-wrap:wrap; gap:25px; align-items:flex-start;">';
@@ -63,18 +63,14 @@ htm_Card_end();
 echo '</div>'; // #projInfoCard
 
 // --- Periodefilter ---
-// RETTET (bruger-anmodet: "flyt filter ind i kontokortets tool") - fandtes
-// FØR som sit eget kort over selve kontokortet - flyttet ind i selve
-// kontokort-kortets tool-område (samme lille værktøjslinje ved siden af
-// kort-titlen, som fx time_list.php/quote_list.php allerede bruger til en
-// enkelt knap) - her i stedet en kompakt, inline periodevælger, da den hører
-// naturligt sammen med netop DETTE kort, ikke som et selvstændigt filter-kort
-// for sig. htm_Field() er for "tung" (hel fieldset/legend-boks pr. felt) til
-// en værktøjslinje - håndbygget i stedet, samme tema-CSS-variabler som
-// resten af appen allerede bruger konsekvent.
-// RETTET (bruger-rapporteret: "datofilteret er for småt") - padding/
-// skriftstørrelse forøget, og en min-width tilføjet paa selve datofelterne,
-// saa den fulde dato (dd-mm-åååå) altid er synlig uden at blive klippet af.
+// RETTET - fandtes FØR som sit eget kort over selve kontokortet - flyttet ind i selve kontokort-kortets
+// tool-område (samme lille værktøjslinje ved siden af kort-titlen, som fx time_list.php/quote_list.php allerede
+// bruger til en enkelt knap) - her i stedet en kompakt, inline periodevælger, da den hører naturligt sammen med
+// netop DETTE kort, ikke som et selvstændigt filter-kort for sig. htm_Field er for "tung" (hel
+// fieldset/legend-boks pr. felt) til en værktøjslinje - håndbygget i stedet, samme tema-CSS-variabler som resten
+// af appen allerede bruger konsekvent.
+// RETTET - padding/skriftstørrelse forøget, og en min-width tilføjet paa selve datofelterne, saa den fulde dato
+// (dd-mm-åååå) altid er synlig uden at blive klippet af.
 $filter_tool = '<form method="get" action="project_statement.php" class="no-print" style="display:flex; gap:8px; align-items:center;">'
     . '<input type="hidden" name="id" value="' . $proj_id . '">'
     . '<input type="date" name="from" value="' . htmlspecialchars($from) . '" style="padding:7px 10px; min-width:150px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-card); color:var(--text-main); font-size:1em;" title="' . htmlspecialchars(lang('@From'), ENT_QUOTES) . '">'
@@ -87,11 +83,9 @@ if ($from !== '' || $to !== '') {
 $filter_tool .= '</form>';
 
 // --- Kontokort (tabel + sammendrag i ÉT kort) ---
-// RETTET (bruger-anmodet: "flyt resume ind i kortes bund") - "@Summary"
-// fandtes FØR som sit eget kort ovenfor selve kontokortet - saldoen hører
-// naturligt til EFTER selve tabellen (en slutsum under de linjer, den
-// summerer), flyttet til bunden af dette kort i stedet, se nedenfor efter
-// htm_Table()-kaldet.
+// RETTET - "@Summary" fandtes FØR som sit eget kort ovenfor selve kontokortet - saldoen hører naturligt til EFTER
+// selve tabellen (en slutsum under de linjer, den summerer), flyttet til bunden af dette kort i stedet, se
+// nedenfor efter htm_Table-kaldet.
 htm_Card_(capt: '@Account Card', wdth: 1100, tool: $filter_tool);
 
 // Print-only overskrift (sagsnummer + kundenavn) - se begrundelsen ved
@@ -109,7 +103,7 @@ if ($from !== '' && !empty($opening_balance)) {
         date(CONF_DATE_FORMAT, strtotime($from)) . ' ' . lang('@or earlier'),
         '<em>' . lang('@Opening Balance') . '</em>',
         '',
-        '<strong>' . number_format($opening_balance, 2, ',', '.') . ' ' . $cur . '</strong>',
+        '<strong>' . fmt_dk($opening_balance) . ' ' . $cur . '</strong>',
     ];
 }
 
@@ -118,8 +112,8 @@ foreach ($visible_events as $e) {
     $data[] = [
         date(CONF_DATE_FORMAT, strtotime($e['date'])),
         '<a href="' . $e['link'] . '">' . htmlspecialchars($e['label']) . '</a>',
-        '<span style="color:' . $amount_color . ';">' . number_format($e['amount'], 2, ',', '.') . ' ' . $cur . '</span>',
-        number_format($e['balance'], 2, ',', '.') . ' ' . $cur,
+        '<span style="color:' . $amount_color . ';">' . fmt_dk($e['amount']) . ' ' . $cur . '</span>',
+        fmt_dk($e['balance']) . ' ' . $cur,
     ];
 }
 
@@ -135,31 +129,21 @@ if (empty($data)) {
 $bal_color = $total_balance > 0.01 ? 'var(--color-danger)' : ($total_balance < -0.01 ? 'var(--color-success)' : 'var(--text-main)');
 echo '<div style="margin-top:15px; padding-top:15px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; align-items:center; gap:10px;">'
     . '<span style="font-size:0.85em; color:var(--text-muted); text-transform:uppercase;">' . lang('@Balance') . '</span>'
-    . '<span style="font-size:1.4em; font-weight:bold; color:' . $bal_color . ';">' . number_format($total_balance, 2, ',', '.') . ' ' . $cur . '</span>'
+    . '<span style="font-size:1.4em; font-weight:bold; color:' . $bal_color . ';">' . fmt_dk($total_balance) . ' ' . $cur . '</span>'
     . '</div>';
 
 htm_Card_end();
 
-// RETTET (bruger-anmodet: "udskrivning af projektkort skal kun omfatte
-// kortet samt nr./navn øverst") - udvidet fra kun .no-print/.floating-
-// action-bar til også at skjule selve menuen (#top-nav i topmenu-tilstand,
-// #tc-sidebar i sidebar-tilstand - se inc/menu.inc.php) og toolbaren/
-// zoom-knapperne i htm_Header(), så KUN kontokort-kortet (med print-only-
-// overskriften sat ind ovenfor) er synligt ved print.
-// RETTET (bruger-anmodet: "rulleknap og csvknap skal heller ikke med") -
-// CSV-eksportknappen (htm_Table()'s egen, ID-løse knap - matches via dens
-// onclick-indhold, kun denne sides eget print-CSS, påvirker ikke andre
-// sider der også bruger htm_Table()) kan skjules med almindelig CSS.
-// RETTET (bruger-rapporteret: "jeg ser rulleknappen" - selvom #fab-scroll-top
-// allerede ligger inde i .floating-action-bar, som allerede var skjult, og
-// derfor IKKE var den reelle årsag): "rulleknappen" var tabellens egen
-// scrollbar - htm_Table()'s ID-løse scroll-wrapper (margin-bottom:60px;
-// max-height:'.$vhgh.'; overflow:auto;, se inc/php2htm.lib.php) klipper
-// tabellen til 600px på skærmen, og samme klipning (med synlig scrollbar)
-// gjaldt hidtil også ved print - en udskrevet kontoudskrift skal vise HELE
-// tabellen hen over flere sider, ikke kun det synlige scroll-udsnit. Fjernet
-// via JS ved selve print-tidspunktet (wrapperen har ingen class/id at ramme
-// med almindelig CSS - den er en anonym div umiddelbart før #statementTbl).
+// RETTET - udvidet fra kun.no-print/.floating-action-bar til også at skjule selve menuen (#top-nav i
+// topmenu-tilstand, #tc-sidebar i sidebar-tilstand - se inc/menu.inc.php) og toolbaren/zoom-knapperne i
+// htm_Header, så KUN kontokort-kortet (med print-only-overskriften sat ind ovenfor) er synligt ved print.
+// RETTET - CSV-eksportknappen (htm_Table's egen, ID-løse knap - matches via dens onclick-indhold, kun denne sides
+// eget print-CSS, påvirker ikke andre sider der også bruger htm_Table) kan skjules med almindelig CSS.
+// RETTET: "rulleknappen" var tabellens egen scrollbar - htm_Table's ID-løse scroll-wrapper (margin-bottom:60px;
+// max-height:'.$vhgh.'; overflow:auto;, se inc/php2htm.lib.php) klipper tabellen til 600px på skærmen, og samme
+// klipning (med synlig scrollbar) gjaldt hidtil også ved print - en udskrevet kontoudskrift skal vise HELE
+// tabellen hen over flere sider, ikke kun det synlige scroll-udsnit. Fjernet via JS ved selve print-tidspunktet
+// (wrapperen har ingen class/id at ramme med almindelig CSS - den er en anonym div umiddelbart før #statementTbl).
 echo '<style>@media print {
     .no-print, .floating-action-bar, #top-nav, #tc-sidebar, #projInfoCard,
     #tc-hint, button[onclick*="exportCsv"] { display:none !important; }

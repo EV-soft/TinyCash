@@ -17,12 +17,17 @@ $action  = $_GET['action'] ?? '';
 $proj_id = isset($_GET['proj_id']) ? (int)$_GET['proj_id'] : 0;
 
 if ($action !== 'invoice' || $proj_id <= 0) {
-    header("Location: time_list.php"); exit;
+    redirect("time_list.php");
 }
 
 $proj = DB::fetch_assoc(DB::query($conn, "SELECT * FROM projects WHERE proj_id = $proj_id"));
-if (!$proj || empty($proj['cust_id'])) {
-    header("Location: time_list.php?proj_id=$proj_id&msg=nothing_to_invoice"); exit;
+if (!$proj) {
+    redirect("time_list.php?proj_id=$proj_id", '@No unbilled, billable hours found for this project.', 'error');
+}
+// RETTET: et projekt UDEN kunde gav beskeden "ingen ufakturerede timer" - selvom timerne stod lige på listen, så
+// brugeren ikke kunne se hvad der var galt. Fakturaen skal have en kunde: sæt den på projektet først.
+if (empty($proj['cust_id'])) {
+    redirect("time_list.php?proj_id=$proj_id", '@This project has no customer - choose a customer on the project before invoicing its hours.', 'error');
 }
 
 DB::begin_transaction($conn);
@@ -36,8 +41,7 @@ try {
 
     if (empty($entries)) {
         DB::rollback($conn);
-        header("Location: time_list.php?proj_id=$proj_id&msg=nothing_to_invoice");
-        exit;
+        redirect("time_list.php?proj_id=$proj_id", '@No unbilled, billable hours found for this project.', 'error');
     }
 
     $ids = array_map(fn($e) => (int)$e['entry_id'], $entries);
@@ -59,9 +63,8 @@ try {
     $tc_days  = DB::fetch_assoc(DB::query($conn, "SELECT cust_payment_days FROM customers WHERE cust_id = " . (int)$proj['cust_id']));
     $due_days = max(0, (int)($tc_days['cust_payment_days'] ?? 8));
     $due_date = date('Y-m-d', strtotime("+$due_days days"));
-    // RETTET: hardkodede 'DKK' ignorerede virksomhedens faktisk konfigurerede
-    // basisvaluta (Firmaindstillinger -> Valuta) - tredje forekomst af samme
-    // fejl fundet i quote_actions.php og inc/recurring_invoices.inc.php i
+    // RETTET: hardkodede 'DKK' ignorerede virksomhedens faktisk konfigurerede basisvaluta (Firmaindstillinger ->
+    // Valuta) - tredje forekomst af samme fejl fundet i quote_actions.php og inc/recurring_invoices.inc.php i
     // denne runde, alle tre tydeligvis kopieret fra samme oprindelige mønster.
     $settings     = get_settings($conn);
     $inv_currency = DB::escape($conn, $settings['currency'] ?? 'DKK');
@@ -85,7 +88,7 @@ try {
         ['invoice_id' => $inv_id, 'entry_count' => count($ids), 'entry_ids' => $ids_list]);
 
     DB::commit($conn);
-    header("Location: invoice_edit.php?id=$inv_id&msg=saved");
+    redirect("invoice_edit.php?id=$inv_id", '@Changes saved successfully');
 } catch (Exception $e) {
     DB::rollback($conn);
     die(lang('@Error:') . ' ' . $e->getMessage());

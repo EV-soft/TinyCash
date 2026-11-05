@@ -9,16 +9,12 @@
 ob_start();
 
 // Sørg for at login bruger NØJAGTIG samme navn og parametre som auth.inc.php
-// RETTET (§bugs-batch-20-review): denne kommentar LOVEDE "nøjagtig samme
-// parametre som auth.inc.php", men kopierede reelt kun session_name() -
-// selve session_set_cookie_params()-kaldet (httponly/secure/samesite) fra
-// auth.inc.php manglede helt her. Da login.php er den FØRSTE side der
-// nogensinde starter en session (før man overhovedet er logget ind), fik
-// selve den indledende session-cookie derfor INGEN af de hærdede
-// egenskaber - bekræftet direkte: Set-Cookie-linjen fra denne side manglede
-// HttpOnly/SameSite/Secure fuldstændig, uanset at auth.inc.php sætter dem
-// korrekt på alle ØVRIGE sider. Kalder nu samme opsætning som
-// auth.inc.php, inklusiv den betingede 'secure'-værdi.
+// RETTET: denne kommentar LOVEDE "nøjagtig samme parametre som auth.inc.php", men kopierede reelt kun session_name
+// - selve session_set_cookie_params-kaldet (httponly/secure/samesite) fra auth.inc.php manglede helt her. Da
+// login.php er den FØRSTE side der nogensinde starter en session (før man overhovedet er logget ind), fik selve
+// den indledende session-cookie derfor INGEN af de hærdede egenskaber - bekræftet direkte: Set-Cookie-linjen fra
+// denne side manglede HttpOnly/SameSite/Secure fuldstændig, uanset at auth.inc.php sætter dem korrekt på alle
+// ØVRIGE sider.
 if (session_status() === PHP_SESSION_NONE) {
     session_name('TCC_V100_SESSION');
     $is_https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
@@ -33,23 +29,18 @@ if (session_status() === PHP_SESSION_NONE) {
     ]);
     session_start();
 }
-// --- NYT: LÆS EVT. VALGT DATABASE-TYPE FRA FORMULAREN, FØR db_connect.inc.php
-// KØRER. db_connect.inc.php læser $_SESSION['db_type'] og bruger den sektion
-// (mysql_config/sqlite_config) i stedet for env.ini's statiske ACTIVE_DB.
-// Kun 'mysql'/'sqlite' accepteres - selve forbindelsesoplysningerne kommer
-// STADIG udelukkende fra env.ini, brugeren vælger blot hvilken af de to
-// allerede konfigurerede sektioner der skal bruges.
+// --- NYT: LÆS EVT. VALGT DATABASE-TYPE FRA FORMULAREN, FØR db_connect.inc.php KØRER. db_connect.inc.php læser
+// $_SESSION['db_type'] og bruger den sektion (mysql_config/sqlite_config) i stedet for env.ini's statiske
+// ACTIVE_DB.
 if (isset($_POST['db_type']) && in_array($_POST['db_type'], ['mysql', 'sqlite'], true)) {
     $_SESSION['db_type'] = $_POST['db_type'];
 }
 
-// --- NYT: VALG AF REGNSKAB (flere regnskaber pr. installation) ---
-// Læses FØR db_connect.inc.php køres, præcis som db_type ovenfor - så det
-// regnskab brugeren lige har valgt bliver det, siden rent faktisk forbinder
-// til på denne sidevisning. Findes inc/data/accounts.json slet ikke
-// (almindelig ét-regnskabs-installation), returnerer account_list() altid
-// et tomt array, og hele denne mekanisme er et no-op - se
-// inc/account.lib.php og inc/db_connect.inc.php.
+// --- NYT: VALG AF REGNSKAB (flere regnskaber pr. installation) --- Læses FØR db_connect.inc.php køres, præcis som
+// db_type ovenfor - så det regnskab brugeren lige har valgt bliver det, siden rent faktisk forbinder til på denne
+// sidevisning. Findes inc/data/accounts.json slet ikke (almindelig ét-regnskabs-installation), returnerer
+// account_list altid et tomt array, og hele denne mekanisme er et no-op - se inc/account.lib.php og
+// inc/db_connect.inc.php.
 require_once 'inc/account.lib.php';
 // RETTET (SIKKERHED): et skift af regnskab beholdt brugerens login - user_id fra regnskab A blev siddende, og i
 // regnskab B er samme user_id en ANDEN bruger (måske administrator). En bruger kunne altså skifte regnskab og være
@@ -68,13 +59,13 @@ if (isset($_GET['change_account'])) {
     header("Location: login.php");
     exit;
 }
-// Præcis ét registreret regnskab -> vælges automatisk, uden ekstra klik.
-// Sker FØR db_connect.inc.php køres, så selv denne (første) sidevisning
+// Intet regnskab valgt endnu -> det første registrerede vælges automatisk (ved 2+ kan det skiftes i dropdown'en
+// øverst i login-formularen). Sker FØR db_connect.inc.php køres, så selv denne (første) sidevisning
 // forbinder til det rigtige regnskab, ikke env.inis statiske fallback.
 if (empty($_SESSION['account_id'])) {
-    $only_account = account_list();
-    if (count($only_account) === 1) {
-        $_SESSION['account_id'] = $only_account[0]['id'];
+    $first_account = account_list();
+    if (count($first_account) >= 1) {
+        $_SESSION['account_id'] = $first_account[0]['id'];
     }
 }
 
@@ -91,16 +82,10 @@ require_once 'inc/php2htm.lib.php';
 require_once 'inc/audit.inc.php';
 require_once 'inc/totp.lib.php';
 
-// --- NYT: skal regnskabsvælgeren vises? ---
-// 0 eller 1 aktive regnskaber -> vælgeren springes helt over (0 bevarer
-// dagens oplevelse byte-for-byte for almindelige installationer; det ene
-// tilfælde af "1" er allerede valgt automatisk ovenfor, FØR forbindelsen
-// blev oprettet). Kun ved 2+ aktive regnskaber, OG intet allerede valgt i
-// sessionen, vises et selvstændigt trin FØR selve login-formularen. At
-// oprette et nyt regnskab kræver admin-login og sker derfor bevidst IKKE
+// Regnskabsvælger: ved 2+ aktive regnskaber vises en dropdown øverst i login-formularen (se nedenfor);
+// 0 eller 1 -> ingen vælger. At oprette et nyt regnskab kræver admin-login og sker derfor bevidst IKKE
 // herfra, men fra regnskabs-administration inde i selve programmet.
 $accounts = account_list();
-$show_account_picker = (count($accounts) >= 2 && empty($_SESSION['account_id']));
 
 // Find env-filen (samme logik som db_connect)
 // RETTET: env.ini flyttet til inc/data/env.ini - de gamle stier bevaret
@@ -154,10 +139,8 @@ function login_complete_session(array $row, string $chosen_db_type, ?string $cho
     $_SESSION['user_role']  = (string)$row['user_role'];
     $_SESSION['lang']       = 'da';
     $_SESSION['db_type']    = $chosen_db_type;
-    // NYT: bevar det valgte regnskab på tværs af session-nulstillingen
-    // ovenfor, præcis som db_type - ellers ville en vellykket 2FA-runde
-    // (som selv går via denne funktion) stille skifte tilbage til intet
-    // regnskab valgt.
+    // NYT: bevar det valgte regnskab på tværs af session-nulstillingen ovenfor, præcis som db_type - ellers ville
+    // en vellykket 2FA-runde (som selv går via denne funktion) stille skifte tilbage til intet regnskab valgt.
     if ($chosen_account_id !== null) {
         $_SESSION['account_id'] = $chosen_account_id;
     }
@@ -165,42 +148,22 @@ function login_complete_session(array $row, string $chosen_db_type, ?string $cho
     $_SESSION['auth_account_id'] = (string)($_SESSION['account_id'] ?? '');
 }
 
-// RETTET (§bugs-batch-18-review): inc/auth.inc.php sætter en "redirect_to"-
-// cookie to steder (session-timeout og "ikke logget ind"), tydeligt beregnet
-// til at sende brugeren tilbage til den SIDE de reelt var på vej til, ikke
-// bare forsiden - men INTET nogensinde LÆSTE cookien igen. Login endte derfor
-// altid på index.php, uanset hvilken dybt-linket side brugeren egentlig
-// prøvede at nå (fx en bestemt faktura). Samme lokal-sti-validering som
-// project_actions.php's return_to (åben omdirigering forhindret): kun en
-// relativ sti, aldrig et andet domæne.
+// RETTET: inc/auth.inc.php sætter en "redirect_to"- cookie to steder, tydeligt beregnet til at sende brugeren
+// tilbage til den SIDE de reelt var på vej til, ikke bare forsiden - men INTET nogensinde LÆSTE cookien igen.
+// Login endte derfor altid på index.php, uanset hvilken dybt-linket side brugeren egentlig prøvede at nå (fx en
+// bestemt faktura).
 function login_get_safe_redirect(): string {
     $target = $_COOKIE['redirect_to'] ?? '';
-    // $_SERVER['REQUEST_URI'] (hvad cookien altid er sat fra) starter altid
-    // med ÉT enkelt "/" - kræver derfor præcis ét indledende "/" efterfulgt
-    // af et alfanumerisk tegn (udelukker dermed også "//evil.com", som ville
-    // kræve "/" som andet tegn). ":" indgår bevidst ikke i det tilladte
-    // tegnsæt, så et forsøg på at smugle et fuldt skema ind (fx
-    // "/x?u=http://evil.com") ville stadig fejle regex'en i sin helhed.
-    //
-    // RETTET (§bugs-batch-34-review): "%" var IKKE med i det tilladte
-    // tegnsæt - REQUEST_URI (som cookien altid er sat fra, se auth.inc.php)
-    // er den RÅ, stadig procent-kodede forespørgselslinje, og ethvert
-    // forespørgselsparameter der reelt indeholder tegn som "+"/"/"/"="
-    // (fx en base64-lignende OAuth-kode, som bank_integration_callback.php's
-    // ?code=...&state=... fra Enable Banking) ville komme URL-kodet som
-    // %2B/%2F/%3D i selve REQUEST_URI. Uden "%" i tegnsættet fejlede HELE
-    // regex'en for enhver sådan URL, og login endte tavst på index.php i
-    // stedet for at fuldføre den bankforbindelse brugeren var midt i - netop
-    // det scenarie denne mekanisme blev bygget til (en flertrins, ekstern
-    // omdirigering, hvor sessionen kan nå at udløbe undervejs hos banken).
-    // Bekræftet direkte: samme funktion kaldt med en %2B/%2F/%3D-holdig
-    // sti faldt tilbage til "index.php" FØR denne rettelse. At tilføje "%"
-    // genindfører IKKE åben omdirigering - stien skal stadig starte med
-    // netop ét "/" efterfulgt af et alfanumerisk tegn (blokerer "//evil.com"),
-    // og ":" er fortsat helt udelukket (blokerer et indlejret skema, også et
-    // kodet forsøg som "%3A" ville stadig kun optræde som en harmløs, bogstavelig
-    // tekststreng i selve Location-headeren, ikke noget browseren selv afkoder
-    // og dermed omtolker).
+    // $_SERVER['REQUEST_URI'] (hvad cookien altid er sat fra) starter altid med ÉT enkelt "/" - kræver derfor
+    // præcis ét indledende "/" efterfulgt af et alfanumerisk tegn (udelukker dermed også "//evil.com", som ville
+    // kræve "/" som andet tegn). ":" indgår bevidst ikke i det tilladte tegnsæt, så et forsøg på at smugle et
+    // fuldt skema ind (fx "/x?u=http://evil.com") ville stadig fejle regex'en i sin helhed.
+    // RETTET: "%" var IKKE med i det tilladte tegnsæt - REQUEST_URI (som cookien altid er sat fra, se
+    // auth.inc.php) er den RÅ, stadig procent-kodede forespørgselslinje, og ethvert forespørgselsparameter der
+    // reelt indeholder tegn som "+"/"/"/"=" (fx en base64-lignende OAuth-kode, som bank_integration_callback.php's
+    // ?code=...&state=... Uden "%" i tegnsættet fejlede HELE regex'en for enhver sådan URL, og login endte tavst
+    // på index.php i stedet for at fuldføre den bankforbindelse brugeren var midt i - netop det scenarie denne
+    // mekanisme blev bygget til.
     if ($target !== ''
         && preg_match('#^/[A-Za-z0-9][A-Za-z0-9_\-./?=&%]*$#', $target)
         && strpos($target, 'login.php') === false) {
@@ -211,17 +174,11 @@ function login_get_safe_redirect(): string {
 
 // 2. Håndter Login-post, TRIN 1 (brugernavn + adgangskode)
 if (isset($_POST['login'])) {
-    // RETTET (fundet ved "find fem fejl"-sweep af flere-regnskaber-
-    // funktionen): login.php's egen formular render'er ganske vist et
-    // csrf_token-felt (htm_Card_(form: 'login.php') kalder csrf_field()
-    // automatisk), men INTET her tjekkede det nogensinde - inc/auth.inc.php's
-    // centrale csrf_verify()-gate gælder udtrykkeligt kun "hver POST fra en
-    // logget-ind bruger" (se php2htm.lib.php's egen kommentar) og dækker
-    // derfor bevidst ikke login.php, som netop kører FØR nogen er logget ind.
-    // Uden dette tjek er selve login-handlingen sårbar over for "login CSRF"
-    // (en angriber kan bygge en selv-afsendende formular, der logger et offer
-    // ind på en session med angriberens EGNE, allerede kendte oplysninger,
-    // uden offeret nogensinde selv har indtastet noget).
+    // RETTET: login.php's egen formular render'er ganske vist et csrf_token-felt (htm_Card_(form: 'login.php')
+    // kalder csrf_field automatisk), men INTET her tjekkede det nogensinde - inc/auth.inc.php's centrale
+    // csrf_verify-gate gælder udtrykkeligt kun "hver POST fra en logget-ind bruger" (se php2htm.lib.php's egen
+    // kommentar) og dækker derfor bevidst ikke login.php, som netop kører FØR nogen er logget ind. Uden dette tjek
+    // er selve login-handlingen sårbar over for "login CSRF".
     if (!csrf_verify()) {
         $error_msg = "Sikkerhedstjek fejlede (CSRF) - genindlæs siden og prøv igen.";
     } else {
@@ -230,24 +187,16 @@ if (isset($_POST['login'])) {
     $ip       = $_SERVER['REMOTE_ADDR'];
     $ua       = $_SERVER['HTTP_USER_AGENT'];
 
-    // RETTET (se [[bugs-batch-10-review]]): login_log har hele tiden
-    // registreret hvert mislykkede loginforsøg (bruger, IP, tidspunkt), men
-    // intet nogensinde LÆSTE de data igen - der var ingen øvre grænse for,
-    // hvor mange adgangskoder en angriber kunne afprøve mod et kendt
-    // brugernavn. Simpel, praktisk låsning: 5 mislykkede forsøg mod samme
-    // brugernavn inden for 15 minutter blokerer yderligere forsøg i den
-    // periode - bruger den allerede eksisterende login_log-tabel, ingen ny
-    // migration nødvendig. Tjekkes FØR selve kodeordstjekket, så et låst
-    // forsøg aldrig når frem til password_verify().
-    // RETTET (§bugs-batch-16-review): tjekkede kun status = 'Failed' (selve
-    // adgangskode-trinnet) - et mislykket 2FA-forsøg logges som
-    // 'Failed - 2FA' (se trin 2 nedenfor) og talte derfor ALDRIG med. En
-    // angriber der allerede havde en gyldig adgangskode kunne dermed afprøve
-    // 6-cifrede TOTP-koder helt uden nogen låsning, selvom hele pointen med
-    // denne tæller var at forhindre netop den slags gennemprøvning.
+    // RETTET: login_log har hele tiden registreret hvert mislykkede loginforsøg (bruger, IP, tidspunkt), men intet
+    // nogensinde LÆSTE de data igen - der var ingen øvre grænse for, hvor mange adgangskoder en angriber kunne
+    // afprøve mod et kendt brugernavn. Tjekkes FØR selve kodeordstjekket, så et låst forsøg aldrig når frem til
+    // password_verify.
+    // RETTET: tjekkede kun status = 'Failed' (selve adgangskode-trinnet) - et mislykket 2FA-forsøg logges som
+    // 'Failed - 2FA' (se trin 2 nedenfor) og talte derfor ALDRIG med. En angriber der allerede havde en gyldig
+    // adgangskode kunne dermed afprøve 6-cifrede TOTP-koder helt uden nogen låsning, selvom hele pointen med denne
+    // tæller var at forhindre netop den slags gennemprøvning.
     // RETTET: på MySQL (utf8mb4_*_ci) matcher "WHERE username = ?" uden hensyn til store/små bogstaver - men
-    // tælleren over mislykkede forsøg talte hver skrivemåde for sig. "admin", "Admin", "ADMIN", "aDmin" ...
-    // gav dermed 5 forsøg HVER, og 5-forsøgs-låsen kunne omgås. Tælleren er nu også uafhængig af store/små.
+    // tælleren over mislykkede forsøg talte hver skrivemåde for sig. Tælleren er nu også uafhængig af store/små.
     $lock_check_sql = "SELECT COUNT(*) AS n FROM login_log
                         WHERE LOWER(logged_username) = LOWER(?) AND status LIKE 'Failed%'
                           AND login_time >= " . (DB::is_sqlite() ? "datetime('now', '-15 minutes')" : "DATE_SUB(NOW(), INTERVAL 15 MINUTE)");
@@ -257,19 +206,15 @@ if (isset($_POST['login'])) {
     if ($recent_failures >= 5) {
         $error_msg = "For mange mislykkede loginforsøg. Prøv igen om 15 minutter.";
     } else {
-        // VIGTIGT: hvis migrate_2fa.php ikke er kørt endnu, findes totp_*-
-        // kolonnerne ikke, og forespørgslen ville ellers kaste en uhåndteret
-        // PDOException - der ville låse ALLE brugere (inkl. admin) helt ude,
-        // også fra at kunne nå frem til selve migrationen (som kræver login).
-        // Prøv derfor den fulde forespørgsel først, og fald tilbage til den
-        // gamle 5-kolonne-udgave (2FA behandlet som slået fra) hvis den fejler.
-        // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): samme
-        // "prøv den fulde forespørgsel, fald tilbage hvis kolonnen ikke findes
-        // endnu"-mønster som totp_*-kolonnerne allerede bruger nedenfor - is_active
-        // findes kun efter db-setup/migrate_user_active_status.php er kørt.
-        // Manglende kolonne behandles som "aktiv" (kolonnens eget DEFAULT 1 når
-        // den findes), ikke som "afvist" - en frisk installation uden migrationen
-        // kørt endnu må aldrig kunne låse admin ude af sit eget system.
+        // VIGTIGT: hvis migrate_2fa.php ikke er kørt endnu, findes totp_*- kolonnerne ikke, og forespørgslen ville
+        // ellers kaste en uhåndteret PDOException - der ville låse ALLE brugere (inkl. admin) helt ude, også fra
+        // at kunne nå frem til selve migrationen (som kræver login). Prøv derfor den fulde forespørgsel først, og
+        // fald tilbage til den gamle 5-kolonne-udgave (2FA behandlet som slået fra) hvis den fejler.
+        // NYT: samme "prøv den fulde forespørgsel, fald tilbage hvis kolonnen ikke findes endnu"-mønster som
+        // totp_*-kolonnerne allerede bruger nedenfor - is_active findes kun efter
+        // db-setup/migrate_user_active_status.php er kørt. Manglende kolonne behandles som "aktiv" (kolonnens eget
+        // DEFAULT 1 når den findes), ikke som "afvist" - en frisk installation uden migrationen kørt endnu må
+        // aldrig kunne låse admin ude af sit eget system.
         try {
             $sql = "SELECT user_id, username, password_hash, user_role, user_level, totp_enabled, totp_secret, totp_recovery_codes, is_active FROM users WHERE username = ?";
             $res = DB::prepare_and_execute($conn, $sql, [$initials]);
@@ -296,13 +241,9 @@ if (isset($_POST['login'])) {
                 // NYT: samme princip for det valgte regnskab.
                 $chosen_account_id = $_SESSION['account_id'] ?? null;
 
-                // To-faktor-login (§bank-integration-psd2's naboprojekt på
-                // forslagslisten, §Sikkerhed): hvis slået til for denne bruger,
-                // er adgangskoden kun FØRSTE faktor - login fuldføres IKKE her.
-                // $_SESSION['user_id'] sættes bevidst ikke endnu - auth.inc.php
-                // ville ellers betragte brugeren som fuldt logget ind før 2.
-                // faktor er bekræftet. Ingen login_log-post ved dette trin -
-                // kun ved et REELT fuldført (eller fejlet) 2FA-forsøg nedenfor.
+                // To-faktor-login: hvis slået til for denne bruger, er adgangskoden kun FØRSTE faktor - login
+                // fuldføres IKKE her. $_SESSION['user_id'] sættes bevidst ikke endnu - auth.inc.php ville ellers
+                // betragte brugeren som fuldt logget ind før 2.
                 if (!empty($row['totp_enabled'])) {
                     $_SESSION['totp_pending'] = [
                         'user_id'         => (int)$row['user_id'],
@@ -350,11 +291,9 @@ if (isset($_POST['totp_login']) && !empty($_SESSION['totp_pending'])) {
     $ip      = $_SERVER['REMOTE_ADDR'];
     $ua      = $_SERVER['HTTP_USER_AGENT'];
 
-    // RETTET (§bugs-batch-16-review): dette trin havde INTET eget
-    // låsningstjek - en angriber der allerede kender adgangskoden (og derfor
-    // nåede hertil) kunne afprøve 6-cifrede TOTP-koder ubegrænset, uden
-    // nogensinde at ramme trin 1's 5-forsøgs-låsning. Samme
-    // 5-forsøg/15-minutters-princip, nu håndhævet her også.
+    // RETTET: dette trin havde INTET eget låsningstjek - en angriber der allerede kender adgangskoden (og derfor
+    // nåede hertil) kunne afprøve 6-cifrede TOTP-koder ubegrænset, uden nogensinde at ramme trin 1's
+    // 5-forsøgs-låsning. Samme 5-forsøg/15-minutters-princip, nu håndhævet her også.
     $lock_check_sql = "SELECT COUNT(*) AS n FROM login_log
                         WHERE LOWER(logged_username) = LOWER(?) AND status LIKE 'Failed%'
                           AND login_time >= " . (DB::is_sqlite() ? "datetime('now', '-15 minutes')" : "DATE_SUB(NOW(), INTERVAL 15 MINUTE)");
@@ -438,6 +377,25 @@ htm_Card_(
     form: 'login.php'
 );
 
+// Regnskabsvælger (bruger-anmodet: flyttet op øverst som dropdown i stedet for et separat trin med knapper).
+// Vises ved 1+ regnskaber (også ét, så navn og motor altid ses øverst) og ikke under 2FA-trinnet (et skift dér ville glemme den halvt indloggede bruger).
+// Et skift poster formularen med det samme (uden 'login'), så siden genindlæses forbundet til det valgte
+// regnskab - og med et nyt csrf_token, da login_forget_user() rydder det gamle ved skift af regnskab.
+if (count($accounts) >= 1 && empty($_SESSION['totp_pending'])) {
+    $eng_names = ['sqlite' => 'SQLite', 'mysql' => 'MySQL'];
+    $acc_opts  = [];
+    foreach ($accounts as $acc) {
+        $eng = (($acc['engine'] ?? 'sqlite') === 'mysql') ? 'mysql' : 'sqlite';
+        $acc_opts[$acc['id']] = ($acc['name'] ?? $acc['id'])
+            . (!empty($acc['is_demo']) ? ' (' . lang('@Demo') . ')' : '')
+            . ' · ' . $eng_names[$eng];
+    }
+    htm_Field(icon: 'fa-building', labl: '@Ledger', name: 'account_id', valu: (string)($_SESSION['account_id'] ?? ''),
+        type: 'sele', opti: $acc_opts, extr: 'onchange="this.form.submit()"',
+        hint: '@Choose which ledger to sign in to.');
+    htm_nl(2);
+}
+
 if ($error_msg) { htm_alert($error_msg, 'error', 300); }
 if (($_GET['msg'] ?? '') === 'admin_created') {
     htm_alert(lang('@Administrator account created. Please log in.'), 'success', 300);
@@ -447,48 +405,6 @@ if (($_GET['msg'] ?? '') === 'account_disabled') {
     // sender hertil, når en allerede aktiv session opdages tilhøre en konto
     // der siden er blevet deaktiveret (se dens egen kommentar).
     htm_alert(lang('@Your account has been disabled. Contact your administrator.'), 'error', 300);
-}
-
-if ($show_account_picker) {
-    // --- NYT TRIN 0: VÆLG REGNSKAB (kun vist ved 2+ registrerede regnskaber,
-    // se account_list()/inc/account.lib.php). Hver knap poster sit eget
-    // account_id ind i den allerede åbne formular (htm_Card_(form:
-    // 'login.php') ovenfor) - fanges af opsamlings-koden øverst i filen,
-    // hvorefter siden genindlæses og viser den almindelige login-formular.
-    echo '<p style="text-align:center; color:var(--text-muted); font-size:0.9rem;">' . lang('@Choose which ledger to sign in to.') . '</p>';
-    // NYT (bruger-anmodet): regnskaberne grupperes efter databasemotor (SQLite / MySQL), så det er tydeligt hvilken
-    // motor hvert regnskab kører på - et regnskab kan ligge på hver sin motor (se account_resolve_settings()).
-    $by_engine = ['sqlite' => [], 'mysql' => []];
-    foreach ($accounts as $acc) {
-        $eng = (($acc['engine'] ?? 'sqlite') === 'mysql') ? 'mysql' : 'sqlite';
-        $by_engine[$eng][] = $acc;
-    }
-    $eng_meta = ['sqlite' => ['SQLite', 'fa-database'], 'mysql' => ['MySQL', 'fa-server']];
-    $multi_engine = !empty($by_engine['sqlite']) && !empty($by_engine['mysql']);
-    foreach ($by_engine as $eng => $list) {
-        if (!$list) continue;
-        if ($multi_engine) {
-            echo '<div style="display:flex; align-items:center; gap:8px; margin:14px 2px 6px; color:var(--text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.5px;">'
-                . '<i class="fa ' . $eng_meta[$eng][1] . '"></i> ' . htmlspecialchars($eng_meta[$eng][0])
-                . '<span style="flex:1; height:1px; background:var(--border-color);"></span></div>';
-        }
-        foreach ($list as $acc) {
-            $label = htmlspecialchars($acc['name'] ?? $acc['id']);
-            $badge = !empty($acc['is_demo'])
-                ? ' <span style="font-size:0.75em; color:var(--color-warning);">(' . lang('@Demo') . ')</span>'
-                : '';
-            // Motoren vises også som et lille mærke til højre, så den er synlig selv når der kun er én motor
-            $eng_badge = '<span style="float:right; font-size:0.72em; color:var(--text-muted); border:1px solid var(--border-color); border-radius:8px; padding:1px 7px;">'
-                . '<i class="fa ' . $eng_meta[$eng][1] . '" style="margin-right:4px;"></i>' . htmlspecialchars($eng_meta[$eng][0]) . '</span>';
-            echo '<button type="submit" name="account_id" value="' . htmlspecialchars($acc['id'], ENT_QUOTES) . '" style="display:block; width:100%; margin-bottom:8px; padding:10px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-panel); color:var(--text-main); cursor:pointer; text-align:left; font-size:0.95rem;">'
-                . '<i class="fa fa-building" style="margin-right:8px; color:var(--color-primary);"></i>' . $label . $badge . $eng_badge
-                . '</button>';
-        }
-    }
-    htm_Card_end();
-    echo '</div>';
-    htm_Footer();
-    exit;
 }
 
 if (!empty($_SESSION['totp_pending'])) {
@@ -514,17 +430,6 @@ if (!empty($_SESSION['totp_pending'])) {
     exit;
 }
 
-// NYT: link tilbage til regnskabsvælgeren - kun vist når der reelt er noget
-// at vælge imellem (2+ registrerede regnskaber) og ét allerede er valgt.
-if (count($accounts) >= 2 && !empty($_SESSION['account_id'])) {
-    $current_account = account_get($_SESSION['account_id']);
-    $current_label   = htmlspecialchars($current_account['name'] ?? $_SESSION['account_id']);
-    echo '<div style="text-align:center; margin-bottom:15px; font-size:0.85em; color:var(--text-muted);">'
-        . '<i class="fa fa-building"></i> ' . $current_label
-        . ' &middot; <a href="login.php?change_account=1" style="color:var(--color-primary); text-decoration:none;">' . lang('@Change ledger') . '</a>'
-        . '</div>';
-}
-
 // Input felter
 htm_Field(icon: 'fa-user', labl: '@Initials', name: 'initials', extr: 'required autofocus',
     hint:'@User name', plho: '@Enter initials...');
@@ -535,10 +440,8 @@ htm_Field(icon: 'fa-lock', labl: '@Password', name: 'password', type: 'password'
     hint:'@User password', plho: '••••••••');
 htm_nl(2);
 
-// --- NYT: DATABASE-TYPE VÆLGER ---
-// $db_type er sat af db_connect.inc.php og afspejler den database, siden
-// rent faktisk lige har forbundet til (enten fra et tidligere valg i
-// sessionen, eller env.ini's ACTIVE_DB som fallback ved en frisk session).
+// --- NYT: DATABASE-TYPE VÆLGER --- $db_type er sat af db_connect.inc.php og afspejler den database, siden rent
+// faktisk lige har forbundet til.
 $is_mysql  = ($db_type === 'mysql');
 $is_sqlite = ($db_type === 'sqlite');
 
@@ -548,11 +451,16 @@ $is_sqlite = ($db_type === 'sqlite');
 $mysql_disabled = $mysql_configured ? '' : 'disabled';
 $mysql_style    = $mysql_configured ? 'cursor:pointer;' : 'cursor:not-allowed; opacity: 0.4;';
 $mysql_title    = $mysql_configured ? '' : ' title="'.lang('@MySQL is not configured').'"';
+$info           = '';
 if ($mysql_disabled ) $info= '<br>'.lang('@MySQL is not setup (disabled) ');
     
+// RETTET: når installationen bruger REGNSKABER (accounts.json), bestemmes motoren af det VALGTE regnskab (se
+// regnskabsvælgeren med motor-mærker ovenfor), ikke af denne globale radio. Vis derfor kun motor-radioen på en
+// klassisk ét-database-installation UDEN regnskaber; ellers styrer regnskabet motoren.
+if (empty($accounts)):
 echo '<div style="margin-bottom: 15px; padding: 10px 12px; border: 1px solid var(--border-fieldset, #ccc); border-radius: 8px; background: var(--bg-panel, #f8f9fa);"
       data-hint="'.lang('@SQLite up to 50,000 accounting entries<br>MySQL Many many more...<br>MySQL requires advanced installation').$info.'">';
-      
+
 echo '  <div style="font-size: 0.8rem; color: var(--text-muted, #666); margin-bottom: 8px;">
             <i class="fa fa-database" style="margin-right: 5px; color: var(--color-primary);"></i>' . lang('@Database') . '
         </div>';
@@ -567,6 +475,7 @@ echo '  <label style="display:inline-flex; align-items:center; gap:5px; '.$mysql
             <input type="radio" name="db_type" value="mysql" ' . ($is_mysql ? 'checked' : '') . ' ' . $mysql_disabled .'> ' . lang('@MySQL (server)') . '
         </label>';
 echo '</div>';
+endif;
 /* 
 echo '<div style="margin-bottom: 15px; padding: 10px 12px; border: 1px solid var(--border-fieldset, #ccc); border-radius: 8px; background: var(--bg-panel, #f8f9fa);"
       data-hint="'.lang('@SQLite up to 50,000 accounting entries<br>MySQL Many many more...<br>MySQL requires advanced installation').'">';

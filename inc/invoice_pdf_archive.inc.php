@@ -21,12 +21,11 @@
 # filnavn under folder_key 'invoices'/'einvoices' og slår det op mod
 # invoices.invoice_no.
 
-// Den permanente arkivsti for en fakturas PDF-kopi. Returnerer null hvis
-// fakturaen (endnu) ikke er bogført - den har da intet invoice_no at
-// navngive filen efter, og skal (endnu) ikke arkiveres.
-// RETTET: en kreditnota har intet fakturanummer (kun sit eget kreditnotanummer, credit_note_no) - stien blev
-// null, så kreditnotaen kunne ikke mailes ("ikke bogført endnu") og blev ALDRIG arkiveret, selvom den er et
-// bilag på linje med fakturaen. Den arkiveres nu som creditnote_<nr>.pdf (uden nummerserie: creditnote_id<id>).
+// Den permanente arkivsti for en fakturas PDF-kopi. Returnerer null hvis fakturaen (endnu) ikke er bogført - den
+// har da intet invoice_no at navngive filen efter, og skal (endnu) ikke arkiveres.
+// RETTET: en kreditnota har intet fakturanummer (kun sit eget kreditnotanummer, credit_note_no) - stien blev null,
+// så kreditnotaen kunne ikke mailes ("ikke bogført endnu") og blev ALDRIG arkiveret, selvom den er et bilag på
+// linje med fakturaen. Den arkiveres nu som creditnote_<nr>.pdf (uden nummerserie: creditnote_id<id>).
 function invoice_archive_pdf_path($conn, int $inv_id): ?string {
     $row = DB::fetch_assoc(DB::query($conn, "SELECT * FROM invoices WHERE inv_id = $inv_id"));
     if (!$row) return null;
@@ -53,19 +52,13 @@ function invoice_has_archived_pdf($conn, int $inv_id): bool {
 function invoice_store_uploaded_pdf($conn, int $inv_id): array {
     $path = invoice_archive_pdf_path($conn, $inv_id);
     if ($path === null) {
-        return ['success' => false, 'error' => 'Fakturaen er ikke bogført endnu - intet fakturanummer at arkivere under.', 'path' => null];
+        return ['success' => false, 'error' => lang('@The invoice has not been posted yet - there is no invoice number to archive it under.'), 'path' => null];
     }
 
-    // RETTET (find-fem-fejl-gennemgang): send_invoice_action.php kaldte denne
-    // funktion UBETINGET ved hver (gen)afsendelse, og skrev dermed altid et
-    // FRISKT genereret PDF ind over det allerede arkiverede - uden selv at
-    // tjekke invoice_has_archived_pdf() først (i modsætning til invoice_view.
-    // phps egen "selv-helbred"-kald, som korrekt kun kører når arkivet
-    // mangler). Ændres fx firmaets logo/indstillinger mellem to afsendelser af
-    // SAMME faktura, ville det oprindelige, reelt udsendte dokument stille gå
-    // tabt - stik imod selve formålet med en permanent arkivering. Findes der
-    // allerede et arkiveret PDF, bruges det UÆNDRET igen (både som arkiv OG
-    // som selve mail-vedhæftningen) i stedet for at overskrive det.
+    // RETTET: send_invoice_action.php kaldte denne funktion UBETINGET ved hver (gen)afsendelse, og skrev dermed
+    // altid et FRISKT genereret PDF ind over det allerede arkiverede - uden selv at tjekke
+    // invoice_has_archived_pdf først (i modsætning til invoice_view. Findes der allerede et arkiveret PDF, bruges
+    // det UÆNDRET igen (både som arkiv OG som selve mail-vedhæftningen) i stedet for at overskrive det.
     if (invoice_has_archived_pdf($conn, $inv_id)) {
         return ['success' => true, 'error' => null, 'path' => $path];
     }
@@ -75,20 +68,20 @@ function invoice_store_uploaded_pdf($conn, int $inv_id): array {
 
     if (isset($_FILES['pdf_file']) && $_FILES['pdf_file']['error'] === UPLOAD_ERR_OK) {
         if (!move_uploaded_file($_FILES['pdf_file']['tmp_name'], $path)) {
-            return ['success' => false, 'error' => 'Kunne ikke flytte den uploadede fil.', 'path' => null];
+            return ['success' => false, 'error' => lang('@Could not move the uploaded file.'), 'path' => null];
         }
     } elseif (isset($_POST['pdf_data'])) {
         $data = $_POST['pdf_data'];
         if (strpos($data, ',') !== false) $data = explode(',', $data)[1];
         if (file_put_contents($path, base64_decode($data)) === false) {
-            return ['success' => false, 'error' => 'Kunne ikke skrive PDF-filen til disk.', 'path' => null];
+            return ['success' => false, 'error' => lang('@Could not write the PDF file to disk.'), 'path' => null];
         }
     } else {
-        return ['success' => false, 'error' => 'Ingen PDF-data modtaget fra browseren.', 'path' => null];
+        return ['success' => false, 'error' => lang('@No PDF data received from the browser.'), 'path' => null];
     }
 
     if (!file_exists($path) || filesize($path) === 0) {
-        return ['success' => false, 'error' => 'PDF-filen kunne ikke gemmes eller var tom.', 'path' => null];
+        return ['success' => false, 'error' => lang('@PDF file could not be saved or was empty.'), 'path' => null];
     }
     // RETTET: hvad som helst blev gemt som fakturaens permanente PDF - en afbrudt/forkert upload (html2pdf
     // fejlede, en HTML-fejlside, en anden fil) blev liggende, og invoice_has_archived_pdf() (kun størrelse > 0)
@@ -96,7 +89,7 @@ function invoice_store_uploaded_pdf($conn, int $inv_id): array {
     $fh = @fopen($path, 'rb');  $head = $fh ? fread($fh, 5) : '';  if ($fh) { fseek($fh, max(0, filesize($path) - 1024));  $tail = fread($fh, 1024);  fclose($fh); }
     if ($head !== '%PDF-' || strpos($tail ?? '', '%%EOF') === false) {
         @unlink($path);
-        return ['success' => false, 'error' => 'Den modtagne fil er ikke en hel PDF - den er ikke gemt (forsøges igen næste gang fakturaen vises).', 'path' => null];
+        return ['success' => false, 'error' => lang('@The received file is not a complete PDF - it was not saved (it is tried again the next time the invoice is shown).'), 'path' => null];
     }
     return ['success' => true, 'error' => null, 'path' => $path];
 }

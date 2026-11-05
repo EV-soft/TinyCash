@@ -64,15 +64,15 @@ if ($creditor_supported) {
 function subledger_render_section($capt, $sub_total, $gl_total, $diff, $acc_id, $cur) {
     htm_Card_($capt, 900);
     echo '<div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:15px;">';
-    echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Sub-ledger Total') . '</div><div style="font-weight:bold; font-size:1.2em;">' . number_format($sub_total, 2, ',', '.') . ' ' . $cur . '</div></div>';
-    echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@General Ledger Balance') . ' (' . lang('@Account') . ' ' . $acc_id . ')</div><div style="font-weight:bold; font-size:1.2em;"><a href="account_card.php?acc_id=' . $acc_id . '">' . number_format($gl_total, 2, ',', '.') . ' ' . $cur . '</a></div></div>';
-    echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Difference') . '</div><div style="font-weight:bold; font-size:1.2em; color:' . (abs($diff) > 0.01 ? 'var(--color-danger)' : 'inherit') . ';">' . number_format($diff, 2, ',', '.') . ' ' . $cur . '</div></div>';
+    echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Sub-ledger Total') . '</div><div style="font-weight:bold; font-size:1.2em;">' . fmt_dk($sub_total) . ' ' . $cur . '</div></div>';
+    echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@General Ledger Balance') . ' (' . lang('@Account') . ' ' . $acc_id . ')</div><div style="font-weight:bold; font-size:1.2em;"><a href="account_card.php?acc_id=' . $acc_id . '">' . fmt_dk($gl_total) . ' ' . $cur . '</a></div></div>';
+    echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Difference') . '</div><div style="font-weight:bold; font-size:1.2em; color:' . (abs($diff) > 0.01 ? 'var(--color-danger)' : 'inherit') . ';">' . fmt_dk($diff) . ' ' . $cur . '</div></div>';
     echo '</div>';
 
     if (abs($diff) <= 0.01) {
         htm_Alert(lang('@Reconciled - the sub-ledger matches the general ledger control account.'), 'success', 900, true);
     } else {
-        htm_Alert(sprintf(lang('@NOT reconciled - the sub-ledger and general ledger control account differ by %s. This may indicate a posting outside the normal invoice/expense flows.'), number_format(abs($diff), 2, ',', '.') . ' ' . $cur), 'error', 900, true);
+        htm_Alert(sprintf(lang('@NOT reconciled - the sub-ledger and general ledger control account differ by %s. This may indicate a posting outside the normal invoice/expense flows.'), fmt_dk(abs($diff)) . ' ' . $cur), 'error', 900, true);
     }
     echo '<p><a href="aging_report.php">' . lang('@View Aging Report') . '</a> · <a href="account_card.php?acc_id=' . $acc_id . '">' . lang('@View Account Card') . '</a></p>';
     htm_Card_end();
@@ -83,9 +83,7 @@ showMenu();
 
 echo "<div style='max-width:1000px; margin:0 auto; padding:10px;'>";
 
-echo '<p style="color:var(--text-muted); margin-bottom:20px;">'
-    . lang('@Compares each sub-ledger total (open invoices, unpaid expenses) against its general ledger control account balance - the classic sub-ledger-to-general-ledger reconciliation. A mismatch means something posted to the control account outside the normal invoicing/expense flow.')
-    . '</p>';
+htm_Note(lang('@Compares each sub-ledger total (open invoices, unpaid expenses) against its general ledger control account balance - the classic sub-ledger-to-general-ledger reconciliation. A mismatch means something posted to the control account outside the normal invoicing/expense flow.'), 'margin-bottom:20px;');
 
 subledger_render_section(lang('@Accounts Receivable Reconciliation'), $sub_debitor, $gl_debitor, $diff_debitor, $acc_debitor, $cur);
 

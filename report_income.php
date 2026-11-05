@@ -17,12 +17,10 @@ showMenu();
 $s = get_settings($conn);
 $currency = $s['currency'] ?? 'DKK';
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): valgfrit årstal-
-// filter, kun til at kunne sammenligne mod et budget for ET bestemt år
-// (account_budgets, db-setup/migrate_account_budgets.php - ét årligt beløb
-// pr. konto, se budget_edit.php). Standard er stadig HELE bogføringen
-// (ingen filter, uændret fra før), præcis som banneret nedenfor allerede
-// forklarer - budget-sammenligningen vises kun når et konkret årstal vælges.
+// NYT: valgfrit årstal-filter, kun til at kunne sammenligne mod et budget for ET bestemt år (account_budgets,
+// db-setup/migrate_account_budgets.php - ét årligt beløb pr. konto, se budget_edit.php). Standard er stadig HELE
+// bogføringen (ingen filter, uændret fra før), præcis som banneret nedenfor allerede forklarer -
+// budget-sammenligningen vises kun når et konkret årstal vælges.
 $year_filter = (isset($_GET['year']) && trim($_GET['year']) !== '') ? (int)$_GET['year'] : null;
 $date_sql = $year_filter ? "j.jou_date BETWEEN '" . $year_filter . "-01-01' AND '" . $year_filter . "-12-31'" : '1=1';
 // RETTET: årsafslutningens lukkepostering (dateret på årets sidste dag) nulstiller netop indtægts- og
@@ -30,14 +28,7 @@ $date_sql = $year_filter ? "j.jou_date BETWEEN '" . $year_filter . "-01-01' AND 
 // det åbne år). Samme udelukkelse som trial_balance.php og inc/annual_report.lib.php.
 $date_sql .= " AND (j.trans_type IS NULL OR j.trans_type != 'year_end_close')";
 
-$has_budget_table = false;
-if (DB::is_sqlite()) {
-    $btchk = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='account_budgets'");
-    $has_budget_table = ($btchk && DB::fetch_assoc($btchk));
-} else {
-    $btchk = DB::query($conn, "SHOW TABLES LIKE 'account_budgets'");
-    $has_budget_table = ($btchk && DB::num_rows($btchk) > 0);
-}
+$has_budget_table = db_has_table($conn, 'account_budgets');
 $budgets = [];
 if ($has_budget_table && $year_filter) {
     $bud_res = DB::query($conn, "SELECT acc_id, budget_amount FROM account_budgets WHERE year = $year_filter");
@@ -109,10 +100,9 @@ echo "<div style='max-width:900px; margin:0 auto;'>";
     echo '<div><label style="font-size:0.85em; font-weight:bold; display:block;">' . lang('@Year') . '</label>';
     echo '<input type="number" name="year" value="' . htmlspecialchars((string)($_GET['year'] ?? '')) . '" placeholder="' . lang('@All Time') . '" style="width:110px; padding:6px;"></div>';
     htm_Button(labl: '@Show', type: 'primary', attr: 'data-hint="'.lang('@Show the income statement for this year, or leave empty for all-time').'"');
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 25):
-    // denne side bygger selv sin tabel i hånden (ikke htm_Table), som ellers
-    // ville have givet en gratis $expo-CSV-knap - se report_income_export.php,
-    // der genberegner PRÆCIS samme forespørgsler ud fra samme ?year=.
+    // NYT: denne side bygger selv sin tabel i hånden (ikke htm_Table), som ellers ville have givet en gratis
+    // $expo-CSV-knap - se report_income_export.php, der genberegner PRÆCIS samme forespørgsler ud fra samme
+    // ?year=.
     htm_Button(icon: 'fa-file-csv', labl: '@Download CSV', type: 'success',
         link: 'report_income_export.php' . ($year_filter ? '?year=' . $year_filter : ''),
         attr: 'data-hint="'.lang('@Download this income statement as CSV').'" style="margin-left:8px;"');
@@ -135,11 +125,11 @@ echo "<div style='max-width:900px; margin:0 auto;'>";
         <tr style="background:#f8f9fa; font-weight:bold; border-bottom: 2px solid #dee2e6;">
             <td style="padding:15px; text-transform: uppercase;"><?php echo lang('@REVENUE'); ?></td>
             <td style="padding:15px; text-align:right; color:#27ae60;">
-                <?php echo number_format($revenue, 2, ',', '.') . " " . $currency; ?>
+                <?php echo fmt_dk($revenue) . " " . $currency; ?>
             </td>
             <?php if ($show_budget_cols): $rev_diff = $revenue - $revenue_budget; ?>
-            <td style="padding:15px; text-align:right; color:var(--text-muted);"><?php echo $revenue_budget > 0 ? number_format($revenue_budget, 2, ',', '.') : '—'; ?></td>
-            <td style="padding:15px; text-align:right; font-weight:bold; color:<?php echo $rev_diff >= 0 ? '#27ae60' : '#e74c3c'; ?>;"><?php echo ($rev_diff >= 0 ? '+' : '') . number_format($rev_diff, 2, ',', '.'); ?></td>
+            <td style="padding:15px; text-align:right; color:var(--text-muted);"><?php echo $revenue_budget > 0 ? fmt_dk($revenue_budget) : '—'; ?></td>
+            <td style="padding:15px; text-align:right; font-weight:bold; color:<?php echo $rev_diff >= 0 ? '#27ae60' : '#e74c3c'; ?>;"><?php echo ($rev_diff >= 0 ? '+' : '') . fmt_dk($rev_diff); ?></td>
             <?php endif; ?>
         </tr>
 
@@ -170,12 +160,12 @@ echo "<div style='max-width:900px; margin:0 auto;'>";
                         <?php echo htmlspecialchars($cost['acc_name']); ?>
                     </td>
                     <td style="padding:12px 15px; text-align:right; color:#e74c3c;">
-                        - <?php echo number_format($cost['cat_total'], 2, ',', '.'); ?>
+                        - <?php echo fmt_dk($cost['cat_total']); ?>
                     </td>
                     <?php if ($show_budget_cols): ?>
-                    <td style="padding:12px 15px; text-align:right; color:var(--text-muted);"><?php echo $cost_budget !== null ? number_format($cost_budget, 2, ',', '.') : '—'; ?></td>
+                    <td style="padding:12px 15px; text-align:right; color:var(--text-muted);"><?php echo $cost_budget !== null ? fmt_dk($cost_budget) : '—'; ?></td>
                     <td style="padding:12px 15px; text-align:right; font-weight:bold; color:<?php echo $cost_diff === null ? 'var(--text-muted)' : ($cost_diff >= 0 ? '#27ae60' : '#e74c3c'); ?>;">
-                        <?php echo $cost_diff !== null ? ($cost_diff >= 0 ? '+' : '') . number_format($cost_diff, 2, ',', '.') : '—'; ?>
+                        <?php echo $cost_diff !== null ? ($cost_diff >= 0 ? '+' : '') . fmt_dk($cost_diff) : '—'; ?>
                     </td>
                     <?php endif; ?>
                 </tr>
@@ -185,7 +175,7 @@ echo "<div style='max-width:900px; margin:0 auto;'>";
         <tr style="background:#2c3e50; color:white; font-weight:bold; font-size:1.2em;">
             <td style="padding:20px;"><?php echo lang('@ANNUAL RESULT'); ?></td>
             <td style="padding:20px; text-align:right; color:<?php echo ($revenue - $total_costs >= 0) ? '#2ecc71' : '#ff7675'; ?>;">
-                <?php echo number_format($revenue - $total_costs, 2, ',', '.') . " " . $currency; ?>
+                <?php echo fmt_dk($revenue - $total_costs) . " " . $currency; ?>
             </td>
             <?php if ($show_budget_cols): ?><td colspan="2"></td><?php endif; ?>
         </tr>
@@ -200,21 +190,21 @@ echo "<div style='max-width:900px; margin:0 auto;'>";
         <div style="display:flex; justify-content: space-between; margin-bottom:10px;">
             <span><?php echo lang('@Sales VAT Due (from invoices)'); ?>:</span>
             <span style="font-weight:bold; color:#e74c3c;">
-                <?php echo number_format($sales_vat, 2, ',', '.') . " " . $currency; ?>
+                <?php echo fmt_dk($sales_vat) . " " . $currency; ?>
             </span>
         </div>
 
         <div style="display:flex; justify-content: space-between; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid #eee;">
             <span><?php echo lang('@Deductible Purchase VAT (from bookkeeping)'); ?>:</span>
             <span style="font-weight:bold; color:#27ae60;">
-                - <?php echo number_format($purchase_vat, 2, ',', '.') . " " . $currency; ?>
+                - <?php echo fmt_dk($purchase_vat) . " " . $currency; ?>
             </span>
         </div>
 
         <div style="display:flex; justify-content: space-between; font-size:1.3em; font-weight:bold; background: #fdfdfd; padding: 10px; border-radius: 4px;">
             <span><?php echo ($vat_to_pay >= 0) ? lang('@VAT to pay:') : lang('@VAT to receive:'); ?></span>
             <span style="color:<?php echo ($vat_to_pay >= 0) ? '#e67e22' : '#27ae60'; ?>;">
-                <?php echo number_format(abs($vat_to_pay), 2, ',', '.') . " " . $currency; ?>
+                <?php echo fmt_dk(abs($vat_to_pay)) . " " . $currency; ?>
             </span>
         </div>
     </div>

@@ -1,6 +1,6 @@
 <?php # /inc/auto_backup.inc.php v:1.3.1 d:2026-09-15 i:evs
 # gendannelsesvejledning i backup-mailen nævner nu det indbyggede offline-dekrypteringsværktøj før openssl-kommandoen
-# Automatisk krypteret backup sendt til backup-mail
+# Automatisk krypteret backup: gemmes ALTID lokalt i backups/ (AUTO_BACKUP_*, nyeste 8 beholdes); mail er valgfri off-site-kopi
 # Bruger DB::dump_to_sql() og DB::is_sqlite() fra db_connect.inc.php
 # Udløses når: 7+ dage (mindst ugentligt, jf. bogføringsloven) siden sidste backup OG ændringer siden da
 # v1.3.0: PHPMailer's $mail->Timeout stod på sin egen standard (300 sek.) -
@@ -13,9 +13,7 @@ function auto_backup_check($conn) {
     if (!$conn) return;
 
     // ── 1. Tjek interval ──────────────────────────────────────────────────────
-    $res     = @DB::query($conn, "SELECT setting_value FROM settings WHERE setting_key = 'auto_backup_last'");
-    $row     = $res ? DB::fetch_assoc($res) : null;
-    $last_ts = $row ? (int)$row['setting_value'] : 0;
+    $last_ts = (int)(get_settings($conn)['auto_backup_last'] ?? 0);
 
     if ((time() - $last_ts) / 86400 < 7) return;
 
@@ -27,18 +25,10 @@ function auto_backup_check($conn) {
     $chk = @DB::query($conn, "SELECT COUNT(*) FROM audit_log WHERE log_date > '$last_db'");
     if ($chk) { $r = DB::fetch_row($chk); if ((int)$r[0] > 0) $changed = true; }
 
-    // RETTET (bruger-rapporteret følgefejl): loopet inkluderede FØR også
-    // 'invoices' og 'transactions'. 'invoices' har slet ingen created_at-
-    // kolonne, så den forespørgsel fejlede tavst (DB::query() returnerer
-    // false, sunket af @-operatoren) - en ny faktura oprettet uden om
-    // expenses/journal blev derfor aldrig opdaget som "ændring", MEDMINDRE
-    // den også blev logget til audit_log (nu rettet direkte ved kilden i
-    // invoice_edit.php, se CREATE_DRAFT_INVOICE). 'transactions' har heller
-    // ingen created_at-kolonne, men mere fundamentalt: en fuld gennemsøgning
-    // af kodebasen viser at INTET sted i hele appen nogensinde skriver til
-    // eller læser fra denne tabel - den er reelt død/legacy (bogføring sker
-    // via journal+ledger). Fjernet begge fra loopet i stedet for at lade dem
-    // stå som meningsløse, altid-fejlende forespørgsler.
+    // RETTET: loopet inkluderede FØR også 'invoices' og 'transactions'. 'invoices' har slet ingen
+    // created_at-kolonne, så den forespørgsel fejlede tavst (DB::query returnerer false, sunket af @-operatoren) -
+    // en ny faktura oprettet uden om expenses/journal blev derfor aldrig opdaget som "ændring", MEDMINDRE den også
+    // blev logget til audit_log (nu rettet direkte ved kilden i invoice_edit.php, se CREATE_DRAFT_INVOICE).
     if (!$changed) {
         foreach (['expenses', 'journal'] as $tbl) {
             $chk2 = @DB::query($conn, "SELECT COUNT(*) FROM $tbl WHERE created_at > '$last_db'");
@@ -56,12 +46,10 @@ function auto_backup_check($conn) {
     $set_res = @DB::query($conn, "SELECT setting_key, setting_value FROM settings");
     while ($row = DB::fetch_assoc($set_res)) { $s[$row['setting_key']] = $row['setting_value']; }
 
-    // RETTET (samme fund som fejlmeddelelsen nedenfor): backup-destinations-
-    // mailen konfigureres på backup.php ("🤖 Automatisk Backup"-sektionen),
-    // IKKE i Firmaindstillinger - denne kommentar sagde stadig det gamle,
-    // forkerte sted. Selve SMTP-afsenderen kommer fra appens centrale
-    // mail-konfiguration (inc/mail_config.inc.php -> MAIL_* fra env.ini), samme
-    // kilde som al anden udgående post i systemet.
+    // RETTET (samme fund som fejlmeddelelsen nedenfor): backup-destinations-mailen konfigureres på backup.php ("🤖
+    // Automatisk Backup"-sektionen), IKKE i Firmaindstillinger - denne kommentar sagde stadig det gamle, forkerte
+    // sted. Selve SMTP-afsenderen kommer fra appens centrale mail-konfiguration (inc/mail_config.inc.php -> MAIL_*
+    // fra env.ini), samme kilde som al anden udgående post i systemet.
     $backup_mail  = trim($s['auto_backup_mail'] ?? '');
     $company_name = trim($s['company_name']     ?? 'TinyCash');
 
@@ -76,35 +64,13 @@ function auto_backup_check($conn) {
 
     require_once __DIR__ . '/mail_config.inc.php';
 
-    // RETTET (bruger-rapporteret: langsom sidevisning ved sideskift på en
-    // installation): disse to grene glemte at gemme auto_backup_last, i
-    // modsætning til "ingen ændringer"-grenen ovenfor. Uden det tidsstempel
-    // rykker "gået 7 dage"-spærren i selve toppen af funktionen ALDRIG frem
-    // for en installation, der ikke har sat backup-mail op - så funktionen
-    // fortsætter forbi den lette tidsspærre på HVER ENESTE sidevisning
-    // (htm_Footer() kalder denne funktion for enhver logget ind bruger) og
-    // kører de 5 COUNT(*)-forespørgsler nedenfor (§2) igen og igen, for
-    // evigt. Ingen af de berørte tabeller har noget indeks på de filtrerede
-    // kolonner (se migrate_auto_backup_indexes.php) - fulde tabel-scanninger
-    // på hver sidevisning, værre jo mere bogføringshistorik der er.
-    if (empty($backup_mail)) {
-        // RETTET (bruger-rapporteret: "feltet findes ikke i
-        // Firmaindstillinger"): fejlmeddelelsen pegede på den forkerte
-        // side - auto_backup_mail-feltet blev flyttet fra
-        // company_settings.php til backup.php's egen "🤖 Automatisk
-        // Backup"-sektion for en rum tid siden (se render_auto_backup_
-        // settings() i inc/auto_backup_integration.php,
-        // [[backup-manual-vs-automatic-separation]]), men denne logtekst
-        // blev aldrig opdateret til at følge med flytningen.
-        _ab_log($conn, 'Auto backup: mangler auto_backup_mail - udfyld den under System -> Backup-administration');
-        _ab_save($conn, 'auto_backup_last', time());
-        return;
-    }
-    if (!defined('MAIL_HOST') || MAIL_HOST === '') {
-        _ab_log($conn, 'Auto backup: SMTP-afsender mangler (MAIL_HOST i env.ini/[mail_config])');
-        _ab_save($conn, 'auto_backup_last', time());
-        return;
-    }
+    // RETTET: disse to grene glemte at gemme auto_backup_last, i modsætning til "ingen ændringer"-grenen ovenfor.
+    // Ingen af de berørte tabeller har noget indeks på de filtrerede kolonner (se migrate_auto_backup_indexes.php)
+    // - fulde tabel-scanninger på hver sidevisning, værre jo mere bogføringshistorik der er.
+    // ÆNDRET: en manglende backup-mailadresse eller SMTP-opsætning må IKKE længere afbryde backuppen. Tidligere
+    // sprang funktionen helt fra uden mail, så en installation uden mail-opsætning havde slet ingen automatisk
+    // backup (netop den gap bogføringslovens ugentlige backup-krav skal lukke).
+    $can_mail = ($backup_mail !== '') && defined('MAIL_HOST') && MAIL_HOST !== '';
 
     // ── 4. Byg ZIP ───────────────────────────────────────────────────────────
     if (!class_exists('ZipArchive')) {
@@ -177,11 +143,9 @@ function auto_backup_check($conn) {
         }
     }
 
-    // JSON-data (sprogfiler, hjælpesystem, kontoplan-skabeloner, inkl.
-    // json-data/languages/'s AI-genererede hjælpesystem-oversættelser) -
-    // manglede FØR helt fra denne backup (§bugs-batch-17-review), i
-    // modsætning til full_project_backup.php/backup_system.php, som nu
-    // begge er rettet til at tage hele mappen med rekursivt.
+    // JSON-data (sprogfiler, hjælpesystem, kontoplan-skabeloner, inkl. json-data/languages/'s AI-genererede
+    // hjælpesystem-oversættelser) - manglede FØR helt fra denne backup, i modsætning til
+    // full_project_backup.php/backup_system.php, som nu begge er rettet til at tage hele mappen med rekursivt.
     $json_dir = __DIR__ . '/../json-data/';
     if (is_dir($json_dir)) {
         $items = new RecursiveIteratorIterator(
@@ -237,7 +201,40 @@ function auto_backup_check($conn) {
         }
     }
 
-    // ── 6. Send mail via PHPMailer ───────────────────────────────────────────
+    // ── 5b. Gem ALTID en lokal kopi i backups/ ────────────── Dette er nu backuppens primære resultat; mailen
+    // nedenfor er kun en valgfri off-site-kopi. backups/ er beskyttet mod web-adgang (backups/.htaccess "Deny from
+    // all"), så selv en ukrypteret fallback ikke kan hentes via HTTP.
+    $local_saved = false;
+    $backups_dir = __DIR__ . '/../backups/';
+    if (!is_dir($backups_dir)) { @mkdir($backups_dir, 0755, true); }
+    $local_ext   = $encrypted ? '.zip.enc' : '.zip';
+    // Flere regnskaber deler backups/: regnskabets id i navnet (det første regnskab som før), og oprydningen tæller
+    // kun regnskabets egne - før slettede ét regnskabs backups et andets, og ingen kunne se, hvilket regnskab de var
+    $ab_acct     = rtrim(tc_account_storage_subdir(), '/');
+    $local_path  = $backups_dir . 'AUTO_BACKUP_' . ($ab_acct !== '' ? $ab_acct . '_' : '') . $date_stamp . '_' . $engine . $local_ext;
+    if (is_dir($backups_dir) && @copy($send_file, $local_path)) {
+        $local_saved = true;
+        $now = time();
+        _ab_save($conn, 'auto_backup_last', $now);
+        _ab_save($conn, 'last_backup_time', $now);
+        // Ingen fejl når den lokale kopi er lavet - en manglende master-nøgle er
+        // dog værd at påpege, da fallback-kopien så ligger ukrypteret.
+        _ab_save($conn, 'auto_backup_error', $encrypted ? '' :
+            'Automatisk backup gemt lokalt UKRYPTERET - sæt et master-kodeord under System -> Vedligeholdelse -> Backup-administration -> Automatisk Backup for at kryptere den.');
+        // Behold kun de nyeste N automatiske lokale kopier (ikke manuelle backups).
+        _ab_prune_local($backups_dir, 8, $ab_acct);
+    } else {
+        _ab_log($conn, 'Auto backup: kunne ikke gemme lokal kopi i ' . $backups_dir);
+        _ab_save($conn, 'auto_backup_last', time());
+    }
+
+    // Uden mail-/SMTP-opsætning er vi færdige her - den lokale kopi er lavet.
+    if (!$can_mail) {
+        @unlink($send_file);
+        return;
+    }
+
+    // ── 6. Send mail via PHPMailer (valgfri off-site-kopi) ───────────────────
     // Samme PHPMailer-installation som resten af systemet (inc/phpmailer/).
     $mailer_path = null;
     foreach ([
@@ -249,8 +246,8 @@ function auto_backup_check($conn) {
     }
 
     if (!$mailer_path) {
-        _ab_log($conn, 'Auto backup: PHPMailer ikke fundet — backup ikke afsendt');
-        _ab_save($conn, 'auto_backup_last', time());
+        // Den lokale kopi er allerede gemt ovenfor; kun off-site-mailen springes over.
+        _ab_log($conn, 'Auto backup: PHPMailer ikke fundet — lokal kopi gemt, men ingen off-site-mail sendt');
         @unlink($send_file);
         return;
     }
@@ -265,12 +262,10 @@ function auto_backup_check($conn) {
     $enc_info = $encrypted
         ? "Kryptering:  AES-256-CBC (PBKDF2-SHA256, 10.000 iterationer)\n" .
           "Kodeord:     Dit MASTER-kodeord. Det sendes ALDRIG i denne mail - kun du kender det.\n"
-        // RETTET (samme oprydning som §backup-manual-vs-automatic-separation):
-        // pegede FØR på "Firmaindstillinger -> Automatisk backup" - den
-        // sektion er flyttet til backup.php, så denne henvisning (som står i
-        // selve gendannelses-mailen, afsendt under et rigtigt uheld) pegede
-        // stille på et sted, hvor indstillingen ikke længere findes.
-        : "Kryptering:  INGEN - sæt et master-kodeord i Backup-administration -> Automatisk Backup.\n";
+        // RETTET: pegede FØR på "Firmaindstillinger -> Automatisk backup" - den sektion er flyttet til backup.php,
+        // så denne henvisning (som står i selve gendannelses-mailen, afsendt under et rigtigt uheld) pegede stille
+        // på et sted, hvor indstillingen ikke længere findes.
+        : "Kryptering:  INGEN - sæt et master-kodeord i System -> Vedligeholdelse -> Backup-administration -> Automatisk Backup.\n";
 
     // Nemmeste metode nævnes først: det indbyggede offline-dekrypteringsværktøj
     // (backup_decrypt_offline.html) kører 100% i browseren, kræver ingen
@@ -328,12 +323,10 @@ function auto_backup_check($conn) {
         _ab_save($conn, 'auto_backup_error', '');
 
     } catch (Exception $e) {
-        _ab_log($conn, 'Auto backup mail-fejl: ' . $e->getMessage());
-        // Vigtigst af alle disse tidsstempel-rettelser: uden den ville en
-        // vedvarende SMTP-fejl (forkert login, uopnåelig server) genopbygge
-        // HELE ZIP'en (database-dump + uploads/ + storage/ + json-data/ +
-        // program-kildekode, se §4 ovenfor) på hver eneste sidevisning, ikke
-        // bare køre de lette COUNT(*)-tjek fra §2.
+        _ab_log($conn, 'Auto backup: lokal kopi gemt, men off-site-mail fejlede: ' . $e->getMessage());
+        // Vigtigst af alle disse tidsstempel-rettelser: uden den ville en vedvarende SMTP-fejl (forkert login,
+        // uopnåelig server) genopbygge HELE ZIP'en på hver eneste sidevisning, ikke bare køre de lette
+        // COUNT(*)-tjek fra
         _ab_save($conn, 'auto_backup_last', time());
     }
 
@@ -354,6 +347,20 @@ function _ab_save($conn, $key, $value) {
 function _ab_log($conn, $msg) {
     _ab_save($conn, 'auto_backup_error', $msg);
     error_log('[TinyCash Auto Backup] ' . $msg);
+}
+
+// Oprydning: behold kun de $keep nyeste AUTOMATISKE lokale backups i backups/.
+// Rører ALDRIG manuelle backups (FULL_BACKUP_*/TinyCash_Backup_* o.l.) - kun de
+// filer denne funktion selv lægger (AUTO_BACKUP_*). Filnavnets Y-m-d_His-stempel
+// sorterer kronologisk, så en almindelig sort() giver ældste først.
+function _ab_prune_local($dir, $keep, string $acct = '') {
+    $re = $acct === '' ? '/^AUTO_BACKUP_\d{4}-\d\d-\d\d_/' : '/^AUTO_BACKUP_' . preg_quote($acct, '/') . '_\d{4}-\d\d-\d\d_/';
+    $files = array_values(array_filter(glob(rtrim($dir, '/') . '/AUTO_BACKUP_*') ?: [], fn($f) => preg_match($re, basename($f))));
+    if (count($files) <= $keep) return;
+    sort($files);
+    foreach (array_slice($files, 0, count($files) - $keep) as $old) {
+        @unlink($old);
+    }
 }
 
 // Master-kodeordet til backup-kryptering hentes fra env.ini [backup_config],

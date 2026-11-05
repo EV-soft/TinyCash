@@ -27,9 +27,13 @@ function check_security_lock() {
     $host  = preg_replace('/[^A-Za-z0-9.:\-\[\]]/', '', (string)($_SERVER['HTTP_HOST'] ?? 'localhost'));
     $context = stream_context_create(['http' => ['ignore_errors' => true, 'timeout' => 1, 'header' => "Host: $host\r\n"],
                                       'ssl' => ['verify_peer' => false, 'verify_peer_name' => false]]);
+    // RETTET: kunne serveren ikke nås (fx kun IPv6 på loopback, eller en server med én tråd som php -S), blev det
+    // vist som "låst" - efter 2 x 1 sekunds ventetid. Nu: true = låst, false = åben, null = kunne ikke tjekkes.
+    $reached = false;
     foreach (['/inc/data/env.ini', '/inc/data/tinycash.sqlite'] as $f) {
         $headers = @get_headers($base . $f, 1, $context);
-        if ($headers === false) continue;                       // ikke til at nå: intet tegn på en åben fil
+        if ($headers === false) { if (!$reached) return null; continue; }      // (første kald fejlede: prøv ikke igen)
+        $reached = true;
         if (preg_match('/\s200\b/', (string)$headers[0])) return false;
     }
     return true;
@@ -129,21 +133,47 @@ htm_Card_(capt: '@TinyCash Accounting System', wdth: '500'); // fold: kun releva
             <li>✅
                 <?php 
                 $db_display = ($db_type === 'sqlite') ? 'SQLite (File-based)' : 'MySQL (Server-based)';
-                echo lang('@Database:') . ' ' . $db_display; 
+                echo lang('@Database:') . ' ' . $db_display;
                 ?>
             </li>
+            <?php
+            // NYT (bruger-anmodet: "på about er forældede info - angiv
+            // tilgængelige regnskaber"): siden viste FØR kun den aktuelt
+            // forbundne motor - forældet nu hvor der kan være flere regnskaber
+            // (multi-account) på hver sin motor. Lister de tilgængelige
+            // regnskaber med motor, samme kilde (account_list()) som
+            // login-vælgeren bruger.
+            $about_accounts = function_exists('account_list') ? account_list(false) : [];
+            if (!empty($about_accounts)):
+                $active_acc_id = (string)($_SESSION['account_id'] ?? '');
+            ?>
+            <li style="margin-top:4px;">
+                📒 <?php echo lang('@Available ledgers:'); ?>
+                <ul style="list-style:none; margin:4px 0 0; padding-left:22px;">
+                    <?php foreach ($about_accounts as $acc):
+                        $acc_eng = (($acc['engine'] ?? 'sqlite') === 'mysql') ? 'MySQL' : 'SQLite';
+                        $acc_on  = ($active_acc_id !== '' && (string)($acc['id'] ?? '') === $active_acc_id);
+                    ?>
+                    <li style="padding:1px 0;">
+                        <i class="fa fa-building" style="color:var(--color-primary); margin-right:6px;"></i>
+                        <?php echo htmlspecialchars($acc['name'] ?? ($acc['id'] ?? '')); ?>
+                        <span style="color:var(--text-muted); font-size:0.9em;">(<?php echo $acc_eng; ?>)</span>
+                        <?php if (!empty($acc['is_demo'])): ?><span style="color:var(--color-warning); font-size:0.85em;"> · <?php echo lang('@Demo'); ?></span><?php endif; ?>
+                        <?php if ($acc_on): ?><span style="color:var(--color-success); font-size:0.85em;"> · <?php echo lang('@Active'); ?></span><?php endif; ?>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+            </li>
+            <?php endif; ?>
             <li>
                 ✅ <?php echo lang('@Language:');
                 $current_l = $_SESSION['lang'] ?? 'da';
 
-                // RETTET (bruger-anmodet, flag-tabel-konsolidering): denne
-                // side havde sin EGEN, selvstændigt driftede kopi af
-                // inc/menu.inc.php's sprog->flag-tabel (kommentaren her
-                // hævdede fejlagtigt "nøjagtig kopi" - den var det ikke,
-                // manglede bl.a. 'nb'/'pt'/'es' og havde en forkert 'no'-
-                // nøgle i stedet for 'nb'). Læser nu 'flag'-feltet direkte
-                // fra languages.json (samme fælles kilde som inc/menu.inc.php
-                // nu bruger) i samme løkke der allerede slog 'native' op.
+                // RETTET: denne side havde sin EGEN, selvstændigt driftede kopi af inc/menu.inc.php's
+                // sprog->flag-tabel (kommentaren her hævdede fejlagtigt "nøjagtig kopi" - den var det ikke,
+                // manglede bl.a. 'nb'/'pt'/'es' og havde en forkert 'no'- nøgle i stedet for 'nb'). Læser nu
+                // 'flag'-feltet direkte fra languages.json (samme fælles kilde som inc/menu.inc.php nu bruger) i
+                // samme løkke der allerede slog 'native' op.
                 $lang_file = 'json-data/languages.json';
                 $display_name = strtoupper($current_l); // Fallback
                 $fCode = $current_l; // Fallback hvis sproget ikke findes i tabellen
@@ -168,7 +198,9 @@ htm_Card_(capt: '@TinyCash Accounting System', wdth: '500'); // fold: kun releva
             </li>
 
             <li>
-                <?php if ($security_ok): ?>
+                <?php if ($security_ok === null): ?>
+                    <span style="color: #f39c12;">❔ </span><?php echo lang('@Security: Could not check whether the core files are locked - the server could not reach itself. Check manually that inc/data/ cannot be opened in a browser.'); ?>
+                <?php elseif ($security_ok): ?>
                     <span style="color: #27ae60;">🛡️ </span><?php echo lang('@Security: Core files are locked (.htaccess)'); ?>
                 <?php else: ?>
                     <span style="color: #e74c3c;">⚠️ </span><?php echo lang('@Security: Core files are EXPOSED (.htaccess inactive)'); ?>

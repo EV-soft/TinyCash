@@ -49,10 +49,7 @@ const SHOP_PULL_PLATFORMS = ['prestashop'];
 const SHOP_SIGNED_PLATFORMS = ['woocommerce', 'shopify'];
 
 function shop_tbl_exists($conn, string $t, ?bool $is_sqlite = null): bool {
-    $is_sqlite = $is_sqlite ?? DB::is_sqlite();
-    $r = $is_sqlite ? DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='" . DB::escape($conn, $t) . "'")
-                    : DB::query($conn, "SHOW TABLES LIKE '" . DB::escape($conn, $t) . "'");
-    return $is_sqlite ? (bool)($r && DB::fetch_assoc($r)) : ($r && DB::num_rows($r) > 0);
+    return db_has_table($conn, $t);
 }
 
 function shop_ready($conn): bool {
@@ -134,7 +131,7 @@ function shop_account_options($conn, array $types, array $keep = []): array {
     return $opts;
 }
 function shop_account_exists($conn, int $acc_id): bool {
-    return $acc_id > 0 && (bool)DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = $acc_id"));
+    return $acc_id > 0 && (bool)tc_account_ok($conn, $acc_id);
 }
 // "Mellemregning webbutik" (balancekonto) - første ledige nummer 5850-5899
 function shop_create_clearing_account($conn, string $name): int {
@@ -369,7 +366,7 @@ function shop_process($conn, array $shop, array $order): array {
     $base = strtoupper($global_settings['currency'] ?? 'DKK');
     if (!empty($order['currency']) && strtoupper((string)$order['currency']) !== $base) throw new ShopError('Orders in ' . $order['currency'] . ' are not supported yet - only ' . $base . '.', 422);
     $date = (string)($order['date'] ?? '');
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !strtotime($date)) $date = date('Y-m-d');
+    if (!tc_is_date($date)) $date = date('Y-m-d');
     // RETTET: en dato i fremtiden fik den automatiske dagsbogføring til at bogføre dagens endnu ufærdige salg
     // (dage før ordrens dato) - og en dato i en låst periode gav en serverfejl (model A) eller en afvisning (B).
     if ($date > date('Y-m-d')) throw new ShopError("The order date $date is in the future.", 422);
@@ -524,19 +521,7 @@ function shop_make_credit($conn, array $shop, array $lines, string $date, bool $
 }
 
 function shop_col_exists($conn, string $table, string $col): bool {
-    static $cache = [];
-    $k = "$table.$col";
-    if (!isset($cache[$k])) {
-        if (DB::is_sqlite()) {
-            $cache[$k] = false;
-            $r = DB::query($conn, "PRAGMA table_info($table)");
-            if ($r) while ($c = DB::fetch_assoc($r)) if ($c['name'] === $col) { $cache[$k] = true;  break; }
-        } else {
-            $r = DB::query($conn, "SHOW COLUMNS FROM $table LIKE '" . DB::escape($conn, $col) . "'");
-            $cache[$k] = $r && DB::num_rows($r) > 0;
-        }
-    }
-    return $cache[$k];
+    return db_has_column($conn, $table, $col);
 }
 
 // En faktura bogført i hånden (invoice_post_action.php): hører den til en BETALT webordre, registreres betalingen nu

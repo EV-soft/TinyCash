@@ -125,15 +125,10 @@ function getAiSuggestion($key, $target_lang, $force_live_api = false) {
 
     $response = curl_exec($ch);
     if (curl_errno($ch)) {
-        // RETTET (bruger-rapport "oversættelsesforslag er stadig blankt"): denne
-        // gren faldt tidligere tavst tilbage til $clean (den urørte engelske
-        // nøgle) ved ENHVER curl-fejl - inkl. den konkrete, reelt ramte
-        // "SSL certificate ... unable to get local issuer certificate", se
-        // tc_curl_init() i inc/db_connect.inc.php. Resultatet lignede et
-        // gyldigt AI-forslag (success:true) uden nogensinde at være det.
-        // Viser nu den faktiske curl-fejl i stedet, så et resterende/nyt
-        // netværksproblem er synligt frem for at ligne en (ikke-eksisterende)
-        // oversættelse.
+        // RETTET (bruger-rapport "oversættelsesforslag er stadig blankt"): denne gren faldt tidligere tavst
+        // tilbage til $clean (den urørte engelske nøgle) ved ENHVER curl-fejl - inkl. den konkrete, reelt ramte
+        // "SSL certificate... Viser nu den faktiske curl-fejl i stedet, så et resterende/nyt netværksproblem er
+        // synligt frem for at ligne en (ikke-eksisterende) oversættelse.
         $err = curl_error($ch);
         curl_close($ch);
         return "[AI-kald fejlede: {$err}]";
@@ -162,18 +157,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_openai_suggestion') {
     exit;
 }
 
-// RETTET (fund 2026-08-23, se [[danish-translation-batch-fill]]): scannet
-// nedenfor har hidtil brugt den RÅ kildetekst mellem anførselstegnene direkte
-// som nøgle - uden at afkode PHP's egne escape-sekvenser først. Det betyder
-// enhver lang()-nøgle med et \n (dobbelt-anførte strenge) eller en \'
-// (enkelt-anførte strenge) ALDRIG kunne matche i praksis: PHP omdanner selv
-// "\n" til et rigtigt linjeskift og '\'' til et rigtigt anførselstegn, FØR
-// lang() nogensinde ser strengen - så den gemte (u-afkodede) nøgle og den
-// virkelige runtime-nøgle var to forskellige strenge. Ramte konkret bl.a.
-// reminder_action.php, year_end_close.php, project_edit.php, annual_report.php.
-// Afkoder nu strengen efter samme regler som PHP selv bruger, afhængigt af om
-// kildekoden brugde enkelt- eller dobbelt-anførselstegn (bevaret som gruppe 1
-// i begge regexer nedenfor).
+// RETTET: scannet nedenfor har hidtil brugt den RÅ kildetekst mellem anførselstegnene direkte som nøgle - uden at
+// afkode PHP's egne escape-sekvenser først. Afkoder nu strengen efter samme regler som PHP selv bruger, afhængigt
+// af om kildekoden brugde enkelt- eller dobbelt-anførselstegn (bevaret som gruppe 1 i begge regexer nedenfor).
 function tm_unescape_php_string(string $raw, string $quote): string {
     $len = strlen($raw);
     $out = '';
@@ -317,8 +303,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $tmp_file = $json_file . '.tmp_' . uniqid();
                 if (file_put_contents($tmp_file, $encoded) !== false && rename($tmp_file, $json_file)) {
-                    header("Location: translation_manager.php?msg=saved");
-                    exit;
+                    redirect('translation_manager.php', '@Phrase saved successfully!');
                 }
                 @unlink($tmp_file);
                 $save_error = '@Error: Could not write the translation file to disk.';
@@ -328,9 +313,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $msg = '';
-if (isset($_GET['msg'])) {
-    if ($_GET['msg'] === 'saved') $msg = "@Phrase saved successfully!";
-}
 $save_error = $save_error ?? null;
 
 $edit_key = $_GET['edit'] ?? null;
@@ -344,17 +326,11 @@ if ($save_error !== null && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $edit_value = $_POST['value'] ?? $edit_value;
 }
 
-// RETTET (§bugs-batch-25-review): denne linje kaldte FØR getAiSuggestion()
-// med $force_live_api=true ubetinget, hver eneste gang siden blev åbnet med
-// ?edit=X i URL'en - dvs. et ægte, betalt OpenAI-kald (op til 8 sekunders
-// curl-timeout) ved simpelthen at klikke blyant-ikonet på EN HVILKEN SOM
-// HELST sætning, uanset om man reelt ønskede et AI-forslag. Siden har
-// allerede en selvstændig, uafhængig AJAX-endpoint til netop dette formål
-// (?action=get_openai_suggestion, linje ~137) - men intet i klientens
-// JavaScript kaldte den nogensinde; den lå død/ubrugt. Erstattet den
-// ubetingede server-side visning med en rigtig "Hent AI-forslag"-knap, der
-// bruger den eksisterende AJAX-endpoint on-demand, i stedet for at brænde et
-// API-kald pr. sidevisning.
+// RETTET: denne linje kaldte FØR getAiSuggestion med $force_live_api=true ubetinget, hver eneste gang siden blev
+// åbnet med ?edit=X i URL'en - dvs. et ægte, betalt OpenAI-kald (op til 8 sekunders curl-timeout) ved simpelthen
+// at klikke blyant-ikonet på EN HVILKEN SOM HELST sætning, uanset om man reelt ønskede et AI-forslag. Erstattet
+// den ubetingede server-side visning med en rigtig "Hent AI-forslag"-knap, der bruger den eksisterende
+// AJAX-endpoint on-demand, i stedet for at brænde et API-kald pr. sidevisning.
 $ai_suggestion = '';
 
 // --- BEREGN STATISTIK / STATUS FOR SPROGET ---

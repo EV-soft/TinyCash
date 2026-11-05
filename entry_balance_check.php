@@ -57,13 +57,11 @@ showMenu();
 
 echo "<div style='max-width:1000px; margin:0 auto; padding:10px;'>";
 
-echo '<p style="color:var(--text-muted); margin-bottom:20px;">'
-    . lang('@Checks that every single journal entry balances to zero on its own (debit equals credit), not just the grand total across all entries. Two individually-broken entries can cancel each other out in the aggregate and slip past the trial balance\'s own integrity check unnoticed.')
-    . '</p>';
+htm_Note(lang('@Checks that every single journal entry balances to zero on its own (debit equals credit), not just the grand total across all entries. Two individually-broken entries can cancel each other out in the aggregate and slip past the trial balance\'s own integrity check unnoticed.'), 'margin-bottom:20px;');
 
 htm_Card_('@Journal Entry Balance Check', 1000);
 
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:0;">' . sprintf(lang('@%d journal entries checked in total.'), $total_entries) . '</p>';
+htm_Note(sprintf(lang('@%d journal entries checked in total.'), $total_entries), 'font-size:0.9em; margin-top:0;');
 
 if (empty($bad_entries)) {
     htm_Alert(lang('@All checked journal entries balance individually - debit equals credit on every single entry.'), 'success', 900, true);
@@ -83,15 +81,15 @@ if (empty($bad_entries)) {
         if ($is_orphan) {
             echo '<span style="color:var(--color-danger); font-weight:bold;">' . lang('@No ledger lines at all') . '</span>';
         } else {
-            echo '<span style="color:var(--color-danger); font-weight:bold;">' . lang('@Imbalance') . ': ' . number_format((float)$e['net'], 2, ',', '.') . '</span>';
+            echo '<span style="color:var(--color-danger); font-weight:bold;">' . lang('@Imbalance') . ': ' . fmt_dk((float)$e['net']) . '</span>';
         }
         echo '</div>';
 
         if (!$is_orphan) {
             $rows = [];
             foreach ($e['lines'] as $l) {
-                $debit  = ($l['amount'] > 0) ? number_format($l['amount'], 2, ',', '.') : '';
-                $credit = ($l['amount'] < 0) ? number_format(abs($l['amount']), 2, ',', '.') : '';
+                $debit  = ($l['amount'] > 0) ? fmt_dk($l['amount']) : '';
+                $credit = ($l['amount'] < 0) ? fmt_dk(abs($l['amount'])) : '';
                 $rows[] = [
                     $l['acc_id'] . ' - ' . htmlspecialchars($l['acc_name']),
                     '<div style="text-align:right; color:green;">' . $debit . '</div>',

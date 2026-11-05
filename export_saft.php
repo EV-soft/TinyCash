@@ -47,9 +47,7 @@ if (!$download) {
     showMenu();
     htm_Card_(capt: '@Export SAF-T', wdth: 700);
 
-    echo '<p style="color:var(--text-muted); font-size:0.9em;">' .
-        lang('@Exports the full chart of accounts, customers, suppliers and every posted general ledger entry for the selected year as an OECD SAF-T Financial (v2.0) style audit file.') .
-        '</p>';
+    htm_Note(lang('@Exports the full chart of accounts, customers, suppliers and every posted general ledger entry for the selected year as an OECD SAF-T Financial (v2.0) style audit file.'), 'font-size:0.9em;');
     echo '<p style="color:var(--color-warning); font-size:0.85em;"><i class="fa-solid fa-triangle-exclamation"></i> ' .
         lang('@This is a good-faith export of your real data, not formally validated against the official SAF-T XSD. Check with your accountant/SKAT whether a specific submission requires more than this.') .
         '</p>';
@@ -149,23 +147,18 @@ while ($res && ($c = DB::fetch_assoc($res))) {
 $x .= '    </Customers>' . "\n";
 
 // --- MASTERFILES: LEVERANDØRER ---
-// RETTET (§bugs-batch-24-review): denne kommentar (og hele nedenstående
-// syntetiske SupplierID-udledning) beskrev en virkelighed der ikke længere
-// er sand efter leverandørmodulet (se db-setup/migrate_suppliers.php) -
-// expenses HAR nu et rigtigt leverandør-stamdata-katalog (supplier_id ->
-// suppliers), med et ægte CVR-nummer og en stabil, permanent SupplierID på
-// tværs af eksporter (i modsætning til før, hvor ID'et blot var rækkefølgen
-// af unikke navne på selve eksporttidspunktet - kunne ændre sig fra én
-// eksport til den næste, hvis nye leverandørnavne dukkede op imellem dem).
-// De ægte leverandører eksporteres først (med CVR/adresse/email, samme
-// mønster som Customers ovenfor); udgifter der stadig kun har det gamle
-// frie tekstfelt (ingen supplier_id - enten et engangskøb uden en oprettet
-// leverandørpost, eller en installation uden leverandørmodulet kørt endnu)
-// falder tilbage til den oprindelige syntetiske liste, med NEGATIVE ID'er
-// så de aldrig kan kollidere med et ægte supplier_id.
+// RETTET: denne kommentar (og hele nedenstående syntetiske SupplierID-udledning) beskrev en virkelighed der ikke
+// længere er sand efter leverandørmodulet (se db-setup/migrate_suppliers.php) - expenses HAR nu et rigtigt
+// leverandør-stamdata-katalog (supplier_id -> suppliers), med et ægte CVR-nummer og en stabil, permanent
+// SupplierID på tværs af eksporter (i modsætning til før, hvor ID'et blot var rækkefølgen af unikke navne på selve
+// eksporttidspunktet - kunne ændre sig fra én eksport til den næste, hvis nye leverandørnavne dukkede op imellem
+// dem). De ægte leverandører eksporteres først (med CVR/adresse/email, samme mønster som Customers ovenfor);
+// udgifter der stadig kun har det gamle frie tekstfelt (ingen supplier_id - enten et engangskøb uden en oprettet
+// leverandørpost, eller en installation uden leverandørmodulet kørt endnu) falder tilbage til den oprindelige
+// syntetiske liste, med NEGATIVE ID'er så de aldrig kan kollidere med et ægte supplier_id.
 $x .= '    <Suppliers>' . "\n";
 $supplier_ids = []; // navn/id => SAF-T SupplierID, bruges til krydsreferencen nedenfor
-$has_supplier_table = @DB::query($conn, "SELECT 1 FROM suppliers LIMIT 1") !== false;
+$has_supplier_table = db_has_table($conn, 'suppliers');
 
 if ($has_supplier_table) {
     $res = DB::query($conn, "SELECT supplier_id, supplier_name, cvr, address, email FROM suppliers ORDER BY supplier_id ASC");
@@ -213,11 +206,9 @@ $sql = "SELECT j.jou_id, j.jou_date, j.jou_text, j.voucher_no, j.created_at, j.t
         ORDER BY j.jou_date ASC, j.jou_id ASC, l.led_id ASC";
 $res = DB::query($conn, $sql);
 
-// RETTET (§bugs-batch-18-review): $supplier_ids (bygget ovenfor til
-// MasterFiles/Suppliers) blev aldrig faktisk brugt til at knytte en
-// GeneralLedgerEntries-transaktion til sin leverandør - de to sektioner stod
-// helt urelaterede. En udgifts bilagsnummer (voucher_no) er den fælles nøgle
-// til dens journalpost, så et opslag herfra til leverandøren gør
+// RETTET: $supplier_ids (bygget ovenfor til MasterFiles/Suppliers) blev aldrig faktisk brugt til at knytte en
+// GeneralLedgerEntries-transaktion til sin leverandør - de to sektioner stod helt urelaterede. En udgifts
+// bilagsnummer (voucher_no) er den fælles nøgle til dens journalpost, så et opslag herfra til leverandøren gør
 // krydsreferencen reel, hvor den kan afgøres.
 $voucher_to_supplier = [];
 $exp_cols = "voucher_no, supplier" . ($has_supplier_table ? ", supplier_id" : "");

@@ -72,31 +72,17 @@ function account_ensure_current_connection_registered($conn, string $db_type, ar
 }
 account_ensure_current_connection_registered($conn, $db_type, $db_settings ?? []);
 
-// --- Foreslå gamle/glemte databaser til "Registrer en eksisterende
-// database" (bruger-anmodet: "kan den ikke selv foreslå gamle
-// placeringer") ---
-// SQLite: gennemsøger inc/data/ og inc/data/accounts/ for .sqlite-filer,
-// der ikke allerede har en post i registret - matcher lige præcis den
-// situation der udløste hele "usynligt regnskab"-gappet: inc/data/ har
-// længe rummet manuelt kopierede .sqlite-varianter fra tidligere sessioner
-// (.bak_*, -adv, -live osv., se installation-data-consolidation i
-// hukommelsen), som ingen af de eksisterende handlinger nogensinde kiggede
-// efter. For hver kandidat forsøges company_name læst ud (rent læse-kig,
-// ingen skrivning) til et bedre navneforslag end selve filnavnet - fejler
-// det (ikke en gyldig/opsat TinyCash-database), falder forslaget bare
-// tilbage til filnavnet.
-// RETTET (§find-fem-fejl, flere-regnskaber-sweep): scanningerne herunder
-// viste FØR ethvert fund uden at tjekke om det overhovedet lignede en
-// TinyCash-database - for SQLite enhver .sqlite-fil i inc/data(/accounts),
-// for MySQL enhver database på den delte server (kun systemdatabaser
-// udelukket, se account_scan_mysql_candidates()). På en delt MySQL-server
-// med andre applikationers databaser (eller en tilfældig fremmed .sqlite-
-// fil kopieret ind i inc/data/ af en anden grund) ville disse fremmede
-// databaser optræde som et-klik-"Registrer"-kandidater - et uheldigt klik
-// ville binde et regnskab til en helt urelateret database, som TinyCash
-// derefter ville forsøge at læse/skrive users/settings/invoices-tabeller i.
-// Kræver nu mindst users- OG settings-tabellerne til stede, før noget
-// overhovedet vises som en kandidat.
+// --- Foreslå gamle/glemte databaser til "Registrer en eksisterende database" --- SQLite: gennemsøger inc/data/ og
+// inc/data/accounts/ for.sqlite-filer, der ikke allerede har en post i registret - matcher lige præcis den
+// situation der udløste hele "usynligt regnskab"-gappet: inc/data/ har længe rummet manuelt
+// kopierede.sqlite-varianter fra tidligere sessioner (.bak_*, -adv, -live osv., se installation-data-consolidation
+// i hukommelsen), som ingen af de eksisterende handlinger nogensinde kiggede efter. For hver kandidat forsøges
+// company_name læst ud (rent læse-kig, ingen skrivning) til et bedre navneforslag end selve filnavnet - fejler det
+// (ikke en gyldig/opsat TinyCash-database), falder forslaget bare tilbage til filnavnet.
+// RETTET: scanningerne herunder viste FØR ethvert fund uden at tjekke om det overhovedet lignede en
+// TinyCash-database - for SQLite enhver.sqlite-fil i inc/data(/accounts), for MySQL enhver database på den delte
+// server (kun systemdatabaser udelukket, se account_scan_mysql_candidates). Kræver nu mindst users- OG
+// settings-tabellerne til stede, før noget overhovedet vises som en kandidat.
 function _account_looks_like_tinycash_sqlite(string $abs_path): bool {
     try {
         $peek = new PDO('sqlite:' . $abs_path);
@@ -247,8 +233,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_existing']))
 
     $ex_duplicate = ($ex_name !== '' && $ex_loc !== '') ? account_find_matching_account($ex_engine, $ex_loc) : null;
 
+    // RETTET: stien/navnet blev ikke kontrolleret - "abc" eller "-1" blev registreret som et regnskab på login-listen,
+    // og SQLite opretter stille en tom databasefil, når der forbindes til en sti der ikke findes. En SQLite-sti skal
+    // nu pege på en eksisterende fil under inc/data/ (relativ til inc/, som account_resolve_settings() læser den);
+    // et MySQL-databasenavn må kun indeholde bogstaver, tal og _.
+    $ex_real = ($ex_engine === 'sqlite' && $ex_loc !== '') ? realpath(__DIR__ . '/inc/' . $ex_loc) : false;
+    $ex_data = realpath(__DIR__ . '/inc/data');
+    $ex_loc_bad = $ex_loc !== '' && ($ex_engine === 'sqlite'
+        ? (!$ex_real || !is_file($ex_real) || !$ex_data || strpos($ex_real, $ex_data . DIRECTORY_SEPARATOR) !== 0)
+        : !preg_match('/^[A-Za-z0-9_]{1,64}$/', $ex_loc));
+
     if ($ex_name === '' || $ex_loc === '') {
         $msg = lang('@Please enter both a name and the database location.'); $msg_type = 'error';
+    } elseif ($ex_loc_bad) {
+        $msg = lang('@The database was not found - enter the path of an existing SQLite file under inc/data/ (e.g. data/tinycash.sqlite) or the name of an existing MySQL database.'); $msg_type = 'error';
     } elseif ($ex_duplicate) {
         // Fundet ved samme sweep som last-active-værnet nedenfor: uden dette
         // tjek kunne samme fysiske database ende registreret under 2
@@ -279,11 +277,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_existing']))
     }
 }
 
-// --- POST: omdøb et regnskab - bruger-anmodet ("hvor kan man omdøbe et
-// regnskab"). Rører kun 'name'-feltet i accounts.json (account_save() er et
-// dokumenteret delvist upsert, se dens egen kommentar - array_merge() bevarer
-// engine/db_path/is_demo/active uændret), aldrig selve databasen/filen,
-// samme "kun registret, aldrig dataene"-princip som (de)aktivering ovenfor.
+// --- POST: omdøb et regnskab - bruger-anmodet ("hvor kan man omdøbe et regnskab"). Rører kun 'name'-feltet i
+// accounts.json (account_save er et dokumenteret delvist upsert,.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['rename_account'])) {
     $rename_id  = (string)($_POST['rename_id'] ?? '');
     $new_name   = trim($_POST['new_name'] ?? '');
@@ -320,13 +315,11 @@ if (isset($_GET['deactivate'])) {
         // tilstand overhovedet kan opstås via UI'en.
         $other_active = array_filter(account_list(), fn($a) => ($a['id'] ?? null) !== $id);
         if (!empty($target['active']) && empty($other_active)) {
-            header('Location: account_manage.php?msg=last_active_blocked');
-            exit;
+            redirect('account_manage.php', '@You cannot deactivate the last active ledger - new logins would silently fall back to the raw default database instead of showing an error. Register or create at least one other ledger first.', 'error');
         }
         if (account_deactivate($id)) {
             log_action($conn, 'DEACTIVATE_ACCOUNT', 'accounts', 0, $target, ['active' => false]);
-            header('Location: account_manage.php?msg=deactivated');
-            exit;
+            redirect('account_manage.php', '@Ledger deactivated. It no longer appears in the login list, but its database is untouched.');
         }
     }
 }
@@ -335,22 +328,10 @@ if (isset($_GET['reactivate'])) {
     $target = account_get($id);
     if ($target && account_save(['id' => $id, 'active' => true])) {
         log_action($conn, 'REACTIVATE_ACCOUNT', 'accounts', 0, $target, ['active' => true]);
-        header('Location: account_manage.php?msg=reactivated');
-        exit;
+        redirect('account_manage.php', '@Ledger reactivated.');
     }
 }
 
-if (isset($_GET['msg'])) {
-    $known_msgs = [
-        'deactivated'          => ['@Ledger deactivated. It no longer appears in the login list, but its database is untouched.', 'success'],
-        'reactivated'          => ['@Ledger reactivated.', 'success'],
-        'last_active_blocked'  => ['@You cannot deactivate the last active ledger - new logins would silently fall back to the raw default database instead of showing an error. Register or create at least one other ledger first.', 'error'],
-    ];
-    if (isset($known_msgs[$_GET['msg']])) {
-        [$msg_key, $msg_type] = $known_msgs[$_GET['msg']];
-        $msg = lang($msg_key);
-    }
-}
 
 htm_Header(capt: '@Accounts', mwidth: 1000);
 showMenu();
@@ -377,7 +358,7 @@ if ($just_created_id) {
 
     // --- KORT 1: Opret nyt demo-regnskab ---
     htm_Card_(capt: '🆕 ' . lang('@Create new demo ledger'), wdth: 800, form: 'create_demo_form', fold: true);
-    echo '<p style="color:var(--text-muted); font-size:0.9em;">' . lang('@Creates a brand new, fully separate database seeded with demo data (H.C. Andersen fairy-tale theme) - completely isolated from your other ledgers.') . '</p>';
+    htm_Note(lang('@Creates a brand new, fully separate database seeded with demo data (H.C. Andersen fairy-tale theme) - completely isolated from your other ledgers.'), 'font-size:0.9em;');
     echo '<div style="margin-bottom:12px;"><label>' . lang('@Name') . '</label><br>
           <input type="text" name="name" required style="width:100%; padding:8px; box-sizing:border-box;"></div>';
     echo '<div style="margin-bottom:12px;"><label>' . lang('@Database engine') . '</label><br>';
@@ -403,14 +384,13 @@ if ($just_created_id) {
     $current_loc_hint = ($db_type === 'mysql') ? ($db_settings['DB_NAME'] ?? '') : ($db_settings['DB_PATH'] ?? 'data/tinycash.sqlite');
     $candidates = array_merge(account_scan_sqlite_candidates(), account_scan_mysql_candidates($config['mysql_config'] ?? []));
     htm_Card_(capt: '🔗 ' . lang('@Register an existing database'), wdth: 800, fold: 'closed');
-    echo '<p style="color:var(--text-muted); font-size:0.9em;">' . lang('@Adds an already set-up database - for example this installation\'s original ledger from before multiple ledgers existed - to the ledger list below, without touching its data. Use this if a ledger has become invisible in the login picker.') . '</p>';
+    htm_Note(lang('@Adds an already set-up database - for example this installation\'s original ledger from before multiple ledgers existed - to the ledger list below, without touching its data. Use this if a ledger has become invisible in the login picker.'), 'font-size:0.9em;');
 
     if (!empty($candidates)) {
-        // Fundne, endnu ikke registrerede databaser - bruger-anmodet
-        // ("kan den ikke selv foreslå gamle placeringer"): gennemsøgt af
-        // account_scan_sqlite_candidates()/account_scan_mysql_candidates()
-        // ovenfor. Navnet kan stadig rettes inden man trykker Registrer -
-        // kun sti/motor er faste (skjulte felter), taget direkte fra fundet.
+        // Fundne, endnu ikke registrerede databaser - bruger-anmodet ("kan den ikke selv foreslå gamle
+        // placeringer"): gennemsøgt af account_scan_sqlite_candidates/account_scan_mysql_candidates ovenfor.
+        // Navnet kan stadig rettes inden man trykker Registrer - kun sti/motor er faste (skjulte felter), taget
+        // direkte fra fundet.
         echo '<p style="font-size:0.85em; color:var(--text-muted); margin-bottom:6px;"><i class="fa fa-magnifying-glass"></i> ' . lang('@Found on this server, not yet registered:') . '</p>';
         foreach ($candidates as $c) {
             echo '<form method="post" style="display:flex; gap:6px; align-items:center; margin-bottom:8px;">';
@@ -446,14 +426,13 @@ if ($just_created_id) {
     $demo_accounts = array_values(array_filter(account_list(true), fn($a) => !empty($a['is_demo']) && !empty($a['active'])));
     htm_Card_(capt: '🔄 ' . lang('@Convert demo to active ledger'), wdth: 800, fold: true);
     if (empty($demo_accounts)) {
-        echo '<p style="color:var(--text-muted);">' . lang('@No demo ledgers to convert.') . '</p>';
+        htm_Note(lang('@No demo ledgers to convert.'));
     } else {
-        echo '<p style="color:var(--text-muted); font-size:0.9em;">' . lang('@Permanently deletes ALL demo data (customers, invoices, journal entries etc.) and resets the voucher/invoice/quote number counters to 1, so the ledger is ready for real bookkeeping. The accounts, VAT codes and admin user are kept.') . '</p>';
-        $confirm_convert = htmlspecialchars(addslashes(lang('@This permanently deletes all demo data in this ledger and cannot be undone. Continue?')), ENT_QUOTES);
+        htm_Note(lang('@Permanently deletes ALL demo data (customers, invoices, journal entries etc.) and resets the voucher/invoice/quote number counters to 1, so the ledger is ready for real bookkeeping. The accounts, VAT codes and admin user are kept.'), 'font-size:0.9em;');
         foreach ($demo_accounts as $acc) {
             echo '<div style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--border-subtle);">';
             echo '  <span><i class="fa fa-building"></i> ' . htmlspecialchars($acc['name'] ?? $acc['id']) . ' <span style="color:var(--text-muted); font-size:0.85em;">(' . htmlspecialchars(strtoupper($acc['engine'] ?? '')) . ')</span></span>';
-            echo '  <form method="post" action="db-setup/provision_account.php" style="margin:0;" onsubmit="return confirm(\'' . $confirm_convert . '\');">';
+            echo '  <form method="post" action="db-setup/provision_account.php" style="margin:0;" onsubmit="' . htm_confirm_js('@This permanently deletes all demo data in this ledger and cannot be undone. Continue?') . '">';
             csrf_field();
             echo '    <input type="hidden" name="do" value="convert">';
             echo '    <input type="hidden" name="account_id" value="' . htmlspecialchars($acc['id'], ENT_QUOTES) . '">';
@@ -468,7 +447,7 @@ if ($just_created_id) {
     htm_Card_(capt: '🗂️ ' . lang('@All ledgers'), wdth: 800, fold: true);
     $all_accounts = account_list(true);
     if (empty($all_accounts)) {
-        echo '<p style="color:var(--text-muted);">' . lang('@No ledgers registered yet - this installation runs on its single, original database (env.ini), exactly as before this feature existed.') . '</p>';
+        htm_Note(lang('@No ledgers registered yet - this installation runs on its single, original database (env.ini), exactly as before this feature existed.'));
     } else {
         $head = ['@Name', '@Engine', '@Type', '@Status', '@Created', '@Actions'];
         $data = [];
@@ -502,12 +481,10 @@ if ($just_created_id) {
                     type: 'success', styl: 'padding:4px 10px; font-size:12px;', attr: 'data-hint="' . lang('@Show the ledger in the login list again') . '"', echo: false
                 );
             }
-            // NYT (bruger-anmodet: "hvor kan man omdøbe et regnskab") - en
-            // lille blyant-knap forrest i Handlinger, uafhængig af aktiv-/
-            // låst-status ovenfor (omdøbning er harmløs uanset regnskabets
-            // tilstand). Slår kun det navn+knap-par, der allerede vises i
-            // Navn-kolonnen nedenfor, om til en lille inline-formular via
-            // toggleRenameForm() - se dens definition efter tabellen.
+            // NYT - en lille blyant-knap forrest i Handlinger, uafhængig af aktiv-/låst-status ovenfor (omdøbning
+            // er harmløs uanset regnskabets tilstand). Slår kun det navn+knap-par, der allerede vises i
+            // Navn-kolonnen nedenfor, om til en lille inline-formular via toggleRenameForm - se dens definition
+            // efter tabellen.
             $action = '<button type="button" onclick="toggleRenameForm(\'' . $js_id . '\')" data-hint="' . htmlspecialchars(lang('@Rename'), ENT_QUOTES) . '" style="background:none; border:none; cursor:pointer; color:var(--text-muted); padding:4px 6px; margin-right:2px;"><i class="fa-solid fa-pencil"></i></button>' . $action;
 
             $acc_name = $acc['name'] ?? $acc['id'];

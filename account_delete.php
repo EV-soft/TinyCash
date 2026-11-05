@@ -34,6 +34,7 @@ require_once 'inc/audit.inc.php';
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
+if ($id > 0 && !tc_account_ok($conn, $id)) redirect('chart_of_accounts.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: meldte "Kontoen er slettet" for en konto der ikke fandtes
 if ($id > 0) {
     // 1. SIKKERHEDSTJEK: Er kontoen i brug i din ledger (bogføring)?
     $check_ledger = DB::query($conn, "SELECT led_id FROM ledger WHERE acc_id = $id LIMIT 1");
@@ -71,11 +72,10 @@ if ($id > 0) {
         (int)($company_settings['conf_acc_sales']        ?? 1000),
         (int)($company_settings['conf_acc_vat']          ?? 6900),
         (int)($company_settings['conf_acc_purchase_vat'] ?? 6910),
-        // NYT (§reel-multi-valuta-bogforing): se db-setup/migrate_currency_
-        // gainloss.php - samme "glemt ved næste tilføjelse"-risiko som
-        // conf_acc_creditor blev fundet at have i §bugs-batch-24-review.
-        // Tilføjet fra dag ét denne gang i stedet for at vente på et fund.
+        // NYT: se db-setup/migrate_currency_gainloss.php - samme "glemt ved næste tilføjelse"-risiko som
+        // conf_acc_creditor blev fundet at have i Tilføjet fra dag ét denne gang i stedet for at vente på et fund.
         (int)($company_settings['conf_acc_fx']           ?? 7200),
+        (int)($company_settings['conf_acc_bad_debt']     ?? 7100),      // RETTET: manglede - uden den kan intet afskrives (invoice_writeoff.php)
     ]);
     $is_special_account = in_array($id, $special_accounts, true);
     // RETTET: listen ovenfor er fast - en konto som en ANDEN indstilling (fx conf_acc_bad_debt, tab på
@@ -90,14 +90,7 @@ if ($id > 0) {
     // migrate_fixed_assets.php er kørt - runtime-tjekket herunder holder
     // dette tjek ufarligt på en installation der endnu ikke har kørt den.
     $used_by_asset = false;
-    $fa_table_exists = false;
-    if (DB::is_sqlite()) {
-        $tcheck = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='fixed_assets'");
-        $fa_table_exists = $tcheck && DB::num_rows($tcheck) > 0;
-    } else {
-        $tcheck = DB::query($conn, "SHOW TABLES LIKE 'fixed_assets'");
-        $fa_table_exists = $tcheck && DB::num_rows($tcheck) > 0;
-    }
+    $fa_table_exists = db_has_table($conn, 'fixed_assets');
     if ($fa_table_exists) {
         $check_assets = DB::query($conn,
             "SELECT asset_id FROM fixed_assets WHERE status != 'cancelled' AND (asset_account_id = $id OR depreciation_account_id = $id) LIMIT 1");
@@ -109,7 +102,8 @@ if ($id > 0) {
     // kunde slettes. Bagefter fejlede bogføringen (kontoen findes ikke) eller foreslog en konto der ikke fandtes.
     if (!$used_by_asset) {
         foreach ([['vat_codes', 'vat_account'], ['bank_match_rules', 'acc_id'], ['recurring_expenses', 'account_id'], ['bank_connections', 'acc_id'],
-                  ['account_budgets', 'acc_id'], ['expenses', 'account_id'], ['expense_lines', 'account_id']] as [$rt, $rc]) {
+                  ['account_budgets', 'acc_id'], ['expenses', 'account_id'], ['expense_lines', 'account_id'],
+                  ['products', 'acc_id'], ['invoice_lines', 'acc_id']] as [$rt, $rc]) {      // RETTET: varens salgskonto - ellers bogføres varens salg stille på standard-salgskontoen i stedet
             $rr = @DB::query($conn, "SELECT 1 FROM $rt WHERE $rc = $id LIMIT 1");
             if ($rr && DB::fetch_assoc($rr)) { $used_by_asset = true;  $used_by_other = $rt;  break; }
         }
@@ -164,13 +158,10 @@ if ($id > 0) {
         $sql = "DELETE FROM accounts WHERE acc_id = $id";
         if (DB::query($conn, $sql)) {
             if ($old_row) log_action($conn, 'DELETE_ACCOUNT', 'accounts', $id, $old_row, null);
-            header("Location: chart_of_accounts.php?msg=deleted");
-            exit;
+            redirect('chart_of_accounts.php', '@Account deleted.');
         } else {
-            // RETTET (§find-fem-fejl runde 40): et råt die() med motor-
-            // fejlteksten, uden sidens skal - i modsætning til de fire andre
-            // fejlveje i denne fil ovenfor, som alle viser en ordentlig,
-            // chromet fejlside. Ensrettet til samme mønster.
+            // RETTET: et råt die med motor-fejlteksten, uden sidens skal - i modsætning til de fire andre fejlveje
+            // i denne fil ovenfor, som alle viser en ordentlig, chromet fejlside. Ensrettet til samme mønster.
             htm_Header('@Error');
             echo "<div style='max-width:600px; margin:50px auto;'>";
             htm_Alert(lang('@Error deleting account:') . ' ' . DB::error($conn), 'error');
@@ -181,7 +172,6 @@ if ($id > 0) {
         }
     }
 } else {
-    header("Location: chart_of_accounts.php");
-    exit;
+    redirect("chart_of_accounts.php");
 }
 ?>

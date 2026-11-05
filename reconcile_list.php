@@ -27,74 +27,20 @@ if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id']))
     // forsvinder sporløst. Bruger-anmodet.
     $old_res = DB::query($conn, "SELECT tmp_id, trans_date, text_val, amount, import_source FROM bank_statement_temp WHERE tmp_id = $id");
     $old_row = $old_res ? DB::fetch_assoc($old_res) : null;
+    if (!$old_row) redirect('reconcile_list.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: meldte succes, selv om intet fandtes (dobbeltklik, en anden fane)
     // RETTET: linjen blev SLETTET - så kendte bankhentningen (PSD2, de sidste 90 dage) og en ny import af samme
     // CSV-fil den ikke længere som "allerede importeret", og den kom igen og igen. Den markeres nu som afvist
     // (is_processed = 2): skjult i afstemningen, men stadig kendt af dublet-tjekket. Kun en uafstemt linje.
     if (DB::query($conn, "UPDATE bank_statement_temp SET is_processed = 2 WHERE tmp_id = $id AND is_processed = 0") && $old_row) {
         log_action($conn, 'DELETE_BANK_TRANSACTION', 'bank_statement_temp', $id, $old_row, null);
     }
-    header("Location: reconcile_list.php?msg=deleted");
-    exit;
+    redirect('reconcile_list.php', '@The bank line has been removed from the reconciliation.');
 }
 
 htm_Header('@Bank Reconciliation');
 showMenu();
 
-// Fejl fra en udbetaling fra en webbutik (reconcile_action.php -> reconcile_shop_payout()) - vises én gang
-if (!empty($_SESSION['flash_error'])) {
-    htm_Banner('<i class="fa fa-triangle-exclamation"></i> ' . htmlspecialchars((string)$_SESSION['flash_error']), 'error');
-    unset($_SESSION['flash_error']);
-}
-
-// --- VISNING AF SENESTE BOGFØRING ---
-if (isset($_GET['msg']) && $_GET['msg'] == 'success') {
-    $success_notice = "<h4 style='margin: 0 0 10px 0; color: var(--color-success);'><i class='fa fa-check-circle'></i> " . lang('@Transaction Processed Successfully') . "</h4>
-        <p style='font-size: 13px; margin: 5px 0;'><strong>" . lang('@What happened in the database:') . "</strong></p>
-        <ul style='font-size: 12px; color: var(--text-main); line-height: 1.6;'>
-            <li>✅ " . lang('@A new entry was created in the') . " <strong>journal</strong> table.</li>
-            <li>✅ " . lang('@Two or more balance lines were added to') . " <strong>ledger</strong> (Double-entry).</li>
-            <li>✅ " . lang('@The temporary bank entry was marked as') . " <strong>processed</strong>.</li>
-        </ul>";
-    htm_Banner($success_notice, 'success');
-}
-
-// RETTET (§bugs-batch-19-review): reconcile_action.php kan nu redirecte hertil
-// med msg=already_processed, når et kapløbsforsøg (dobbeltklik/genindsendt
-// formular) opdager at banklinjen allerede blev bogført af en anden,
-// samtidig forespørgsel - vis en tydelig, ikke-alarmerende besked i stedet
-// for at lade brugeren stå uden nogen forklaring på hvorfor intet nyt skete.
-if (isset($_GET['msg']) && $_GET['msg'] == 'already_processed') {
-    htm_Banner("<i class='fa fa-info-circle'></i> " . lang('@This transaction was already processed (possibly by a duplicate click) - nothing was posted twice.'), 'info');
-}
-
-// --- VISNING AF BULK-BEKRÆFTELSE-RESULTAT (bruger-anmodet) ---
-if (isset($_GET['msg']) && $_GET['msg'] == 'bulk') {
-    $b_sent   = (int)($_GET['sent'] ?? 0);
-    $b_failed = (int)($_GET['failed'] ?? 0);
-    if ($b_failed > 0) {
-        htm_Banner("<i class='fa fa-exclamation-triangle'></i> " . sprintf(lang('@%d transaction(s) matched and posted. %d could not be posted (already processed in the meantime, or a posting error) - please check them individually.'), $b_sent, $b_failed), 'warning');
-    } else {
-        htm_Banner("<i class='fa fa-check-circle'></i> " . sprintf(lang('@%d transaction(s) matched and posted successfully.'), $b_sent), 'success');
-    }
-}
-
-// --- VISNING AF IMPORT-RESULTAT (inkl. advarsel om uparsbare datoer) ---
-if (isset($_GET['msg']) && $_GET['msg'] == 'imported') {
-    $imp_count = (int)($_GET['count'] ?? 0);
-    $date_warn = (int)($_GET['date_warnings'] ?? 0);
-    $dup_count = (int)($_GET['duplicates'] ?? 0);
-    htm_Banner("<i class='fa fa-check-circle'></i> " . sprintf(lang('@%d transaction(s) imported.'), $imp_count), 'success');
-    if ($date_warn > 0) {
-        htm_Banner("<i class='fa fa-exclamation-triangle'></i> " . sprintf(lang('@%d row(s) had a date that could not be read and were set to today\'s date instead - marked in the text field below, please correct manually.'), $date_warn), 'warning');
-    }
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): dublet-tjekket i
-    // bank_import_process.php var allerede stumt - se dens egen kommentar for
-    // baggrunden. Gør nu tydeligt hvorfor et lavere antal end forventet blev
-    // importeret, i stedet for at det ligner en fejl.
-    if ($dup_count > 0) {
-        htm_Banner("<i class='fa fa-circle-info'></i> " . sprintf(lang('@%d row(s) were skipped because a transaction with the same date, text and amount was already imported previously.'), $dup_count), 'info');
-    }
-}
+flash_render();
 
 // 1. Get rules from settings
 $rules_res = DB::query($conn, "SELECT * FROM settings WHERE setting_key LIKE 'fee_rule_%'");
@@ -113,7 +59,9 @@ const feeRules = <?php echo json_encode($fee_rules); ?>;
 // htm_Select() bygger selv "id" ud fra feltnavnet ('target_id'), som derfor
 // er IDENTISK (og dermed ugyldigt/upålideligt til getElementById) på tværs
 // af hver banklinjes egen formular på denne side.
-const fxInvoiceMap = <?php echo json_encode($fx_invoice_map); ?>;
+// RETTET: $fx_invoice_map bygges først længere nede (efter fakturaforslagene) - her blev den null, og ved valg af
+// en faktura fejlede toggleFxCheckbox() med en JS-fejl, så kursforskel-feltet aldrig kom frem. Fyldes nu derfra.
+var fxInvoiceMap = {};
 function toggleFxCheckbox(selectEl) {
     const form = selectEl.closest('form');
     const wrap = form ? form.querySelector('.fx-wrap') : null;
@@ -152,41 +100,29 @@ function applyFeeRule(tmpId, amount) {
 </script>
 
 <?php 
-// Get unpaid, ALLEREDE BOGFØRTE fakturaer - kladder skal ikke kunne vælges
-// her, da de aldrig er bogført (intet fakturanummer, ingen posteringer);
-// reconcile_action.php afviser dem nu også server-side, men de skal ikke
-// engang kunne vælges i første omgang. Fundet ved en faktura-/fakturaflow-
-// gennemgang.
-// RETTET 2026-08-20: valuta-suffiks på fakturabeløb var hårdkodet " kr" i
-// stedet for at følge den konfigurerede valuta - get_settings() flyttet
-// herop (var før først hentet nede ved projekt-options).
+// Get unpaid, ALLEREDE BOGFØRTE fakturaer - kladder skal ikke kunne vælges her, da de aldrig er bogført (intet
+// fakturanummer, ingen posteringer); reconcile_action.php afviser dem nu også server-side, men de skal ikke engang
+// kunne vælges i første omgang. Fundet ved en faktura-/fakturaflow-gennemgang.
+// RETTET 2026-08-20: valuta-suffiks på fakturabeløb var hårdkodet " kr" i stedet for at følge den konfigurerede
+// valuta - get_settings flyttet herop (var før først hentet nede ved projekt-options).
 $s   = get_settings($conn);
 $cur = $s['currency'] ?? 'DKK';
 
 $inv_options = ['' => '-- ' . lang('@Select Invoice') . ' --'];
-// RETTET 2026-08-20: ALVORLIGT FUND - "(1 + rate/100)" udregner rate/100 som
-// heltalsdivision på SQLite FØR additionen (25/100 = 0), så "1+0=1" betød
-// momsen aldrig blev lagt til - fakturabeløbet i denne dropdown ekskluderede
-// momsen helt. Rettet til "(100+rate)/100", hvor divisionen sker sidst på
-// hele udtrykket i stedet.
-// NYT 2026-08-20 (delvis betaling): "total" er nu RESTBELØBET (fuld
-// fakturasum minus allerede registrerede indbetalinger via
-// invoice_payments), ikke den oprindelige fakturasum - ellers ville en
-// bankindbetaling der dækker resten af en delvist betalt faktura aldrig
-// blive foreslået som match, og en allerede delvist betalt faktura ville
-// stadig vise sit fulde, vildledende oprindelige beløb i dropdownen.
-// RETTET (§bugs-batch-32-review): denne kommentar (fra selve FX-
-// funktionens egen første version) antog fejlagtigt at "total" i fakturaens
-// EGEN valuta var uden betydning her, fordi feltet "kun" bruges til
-// visning - men det bruges OGSÅ til selve auto-match-forslaget nedenfor
-// ("abs($inv['total'] - $b['amount']) < 0.01"), som sammenligner DIREKTE
-// mod banktransaktionens beløb (altid DKK). En udenlandsk fakturas rest
-// blev derfor aldrig korrekt kunnet auto-foreslås (ufarlig fejlretning i
-// sig selv - intet forkert gæt - men stadig en reel fejl i selve tallet),
-// og selve visningen i dropdown'en ($cur er allerede firmaets DKK-baserede
-// indstilling, ikke fakturaens egen valuta) viste et vildledende blandet
-// tal. Ganger nu med exch_rate, samme rettelse som reminders.php/aging_
-// report.php/sales_hub.php/invoice_view.php samme runde.
+// RETTET 2026-08-20: ALVORLIGT FUND - "(1 + rate/100)" udregner rate/100 som heltalsdivision på SQLite FØR
+// additionen (25/100 = 0), så "1+0=1" betød momsen aldrig blev lagt til - fakturabeløbet i denne dropdown
+// ekskluderede momsen helt. Rettet til "(100+rate)/100", hvor divisionen sker sidst på hele udtrykket i stedet.
+// NYT 2026-08-20 (delvis betaling): "total" er nu RESTBELØBET (fuld fakturasum minus allerede registrerede
+// indbetalinger via invoice_payments), ikke den oprindelige fakturasum - ellers ville en bankindbetaling der
+// dækker resten af en delvist betalt faktura aldrig blive foreslået som match, og en allerede delvist betalt
+// faktura ville stadig vise sit fulde, vildledende oprindelige beløb i dropdownen.
+// RETTET: denne kommentar (fra selve FX-funktionens egen første version) antog fejlagtigt at "total" i fakturaens
+// EGEN valuta var uden betydning her, fordi feltet "kun" bruges til visning - men det bruges OGSÅ til selve
+// auto-match-forslaget nedenfor ("abs($inv['total'] - $b['amount']) < 0.01"), som sammenligner DIREKTE mod
+// banktransaktionens beløb (altid DKK). En udenlandsk fakturas rest blev derfor aldrig korrekt kunnet
+// auto-foreslås (ufarlig fejlretning i sig selv - intet forkert gæt - men stadig en reel fejl i selve tallet), og
+// selve visningen i dropdown'en ($cur er allerede firmaets DKK-baserede indstilling, ikke fakturaens egen valuta)
+// viste et vildledende blandet tal.
 $rl_disc = invoice_discount_sql($conn);
 $res_inv = DB::query($conn, "SELECT i.inv_id, i.invoice_no, i.exch_rate, c.cust_name,
     (SELECT SUM(quantity * price_each $rl_disc * (100 + line_vat_rate) / 100.0) FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1) + " . invoice_credited_sql($conn) . "
@@ -199,9 +135,10 @@ $invoices = [];
 $fx_invoice_map = [];
 while($row = DB::fetch_assoc($res_inv)) {
     $invoices[] = $row;
-    $inv_options[$row['inv_id']] = "#{$row['invoice_no']} - {$row['cust_name']} (" . number_format($row['total'] ?? 0, 2, ',', '.') . " $cur)";
+    $inv_options[$row['inv_id']] = "#{$row['invoice_no']} - {$row['cust_name']} (" . fmt_dk($row['total'] ?? 0) . " $cur)";
     $fx_invoice_map[$row['inv_id']] = ((float)($row['exch_rate'] ?? 0) > 0);
 }
+echo '<script>fxInvoiceMap = ' . json_encode((object)$fx_invoice_map) . ';</script>';
 // NYT (webbutik): en udbetaling fra butikkens betalingsudbyder (Bambora, Stripe, Shopify Payments ...) afstemmes mod
 // butikkens mellemregningskonto - gebyret i gebyrfeltet bogføres samtidig (reconcile_shop_payout()). Vises for
 // butikker med en mellemregningskonto der har en saldo; foreslås når banklinjens tekst nævner butikkens navn.
@@ -215,7 +152,7 @@ if (shop_ready($conn)) {
         $ps_bal = shop_clearing_balance($conn, $ps_clear);
         if ($ps_bal < 0.01) continue;
         $payout_shops[$ps_id] = ['name' => (string)$ps['name'], 'balance' => $ps_bal];
-        $inv_options['shop:' . $ps_id] = '💳 ' . sprintf(lang('@Payout from web shop %s'), $ps['name']) . ' (' . lang('@clearing') . ' ' . number_format($ps_bal, 2, ',', '.') . " $cur)";
+        $inv_options['shop:' . $ps_id] = '💳 ' . sprintf(lang('@Payout from web shop %s'), $ps['name']) . ' (' . lang('@clearing') . ' ' . fmt_dk($ps_bal) . " $cur)";
     }
 }
 
@@ -236,20 +173,11 @@ require_once __DIR__ . '/inc/accounts.inc.php';     // valglisten: slukkede kont
 $res_acc = DB::query($conn, "SELECT acc_id, acc_name" . acc_status_col($conn) . " FROM accounts WHERE " . acc_visible_sql($conn) . " ORDER BY " . acc_order_sql($conn) . "acc_id");
 while($row = DB::fetch_assoc($res_acc)) { $acc_options[$row['acc_id']] = $row['acc_id'] . ' - ' . acc_label($row['acc_name'], $row['acc_status'] ?? null); }
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 33): gemte
-// "hvis beskrivelse indeholder X -> konto Y"-regler (bank_match_rules, se
-// db-setup/migrate_bank_match_rules.php) - slås op nedenfor pr. banklinje,
-// længste mønster først, så en mere specifik regel vinder over en generel.
-// Stille degradering hvis migrationen ikke er kørt endnu.
+// NYT: gemte "hvis beskrivelse indeholder X -> konto Y"-regler (bank_match_rules, se
+// db-setup/migrate_bank_match_rules.php) - slås op nedenfor pr. banklinje, længste mønster først, så en mere
+// specifik regel vinder over en generel. Stille degradering hvis migrationen ikke er kørt endnu.
 $bank_rules = [];
-$has_rules_table = false;
-if (DB::is_sqlite()) {
-    $brt = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='bank_match_rules'");
-    $has_rules_table = ($brt && DB::fetch_assoc($brt));
-} else {
-    $brt = DB::query($conn, "SHOW TABLES LIKE 'bank_match_rules'");
-    $has_rules_table = ($brt && DB::num_rows($brt) > 0);
-}
+$has_rules_table = db_has_table($conn, 'bank_match_rules');
 if ($has_rules_table) {
     $res_rules = DB::query($conn, "SELECT * FROM bank_match_rules ORDER BY LENGTH(pattern) DESC");
     if ($res_rules) { while ($rr = DB::fetch_assoc($res_rules)) { $bank_rules[] = $rr; } }
@@ -336,15 +264,12 @@ function submitBulkReconcile() {
 
     <?php while($b = DB::fetch_assoc($res_bank)):
         $is_inc = ($b['amount'] > 0);
-        // RETTET (§bugs-batch-18-review): løkken overskrev $match_id ved HVERT
-        // fund uden break - fandtes to eller flere åbne fakturaer med præcis
-        // samme resterende beløb (fx to forskellige kunder der begge skylder
-        // 1.250,00 kr), endte forslaget altid på den SIDSTE i forespørgslens
-        // (udefinerede, motor-afhængige) rækkefølge, ikke nødvendigvis den
-        // rigtige - og brugerfladen viste den med nøjagtig samme selvsikre,
-        // grønne markering som et reelt entydigt match. Foreslår nu kun en
-        // faktura, hvis PRÆCIS én matcher beløbet - er der flere kandidater,
-        // er det tryggere slet ikke at gætte end at gætte forkert med skråsikkert udseende.
+        // RETTET: løkken overskrev $match_id ved HVERT fund uden break - fandtes to eller flere åbne fakturaer med
+        // præcis samme resterende beløb (fx to forskellige kunder der begge skylder 1.250,00 kr), endte forslaget
+        // altid på den SIDSTE i forespørgslens (udefinerede, motor-afhængige) rækkefølge, ikke nødvendigvis den
+        // rigtige - og brugerfladen viste den med nøjagtig samme selvsikre, grønne markering som et reelt entydigt
+        // match. Foreslår nu kun en faktura, hvis PRÆCIS én matcher beløbet - er der flere kandidater, er det
+        // tryggere slet ikke at gætte end at gætte forkert med skråsikkert udseende.
         $match_candidates = [];
         foreach($invoices as $inv) { if(abs($inv['total'] - $b['amount']) < 0.01) $match_candidates[] = $inv['inv_id']; }
         $match_id = (count($match_candidates) === 1) ? $match_candidates[0] : 0;
@@ -366,7 +291,7 @@ function submitBulkReconcile() {
         <td style="padding:10px;"><?php echo date(CONF_DATE_FORMAT, strtotime($b['trans_date'])); ?></td>
         <td style="padding:10px;"><?php echo htmlspecialchars($b['text_val']); ?></td>
         <td style="padding:10px; text-align:right; font-weight:bold; color:<?php echo $is_inc?'green':'red';?>">
-            <?php echo number_format($b['amount'], 2, ',', '.'); ?>
+            <?php echo fmt_dk($b['amount']); ?>
         </td>
         <td style="padding:10px;">
             <form action="reconcile_action.php" method="post" style="display:flex; gap:10px; align-items:stretch; margin:0; flex-wrap:wrap;">
@@ -390,10 +315,9 @@ function submitBulkReconcile() {
                             <label style="font-size: 10px; color: var(--text-muted);">&nbsp;</label>
                             <?php
                                 $target_style = 'width:100%; height:28px;' . ($target_sel ? ' border:2px solid #2ecc71;' : '');
-                                // NYT (§reel-multi-valuta-bogforing): onchange kalder
-                                // toggleFxCheckbox(this) - viser/skjuler "afslut trods
-                                // kursforskel" nedenfor, alt efter om den VALGTE faktura
-                                // reelt er i fremmed valuta (fxInvoiceMap).
+                                // NYT: onchange kalder toggleFxCheckbox(this) - viser/skjuler "afslut trods
+                                // kursforskel" nedenfor, alt efter om den VALGTE faktura reelt er i fremmed valuta
+                                // (fxInvoiceMap).
                                 htm_Select('target_id', $inv_options, $target_sel, $target_style, 'onchange="toggleFxCheckbox(this)" data-hint="' . htmlspecialchars(lang('@Choose the invoice the payment is for - or a payout from a web shop (the fee field is the payment provider fee)')) . '"');
                             ?>
                         </div>

@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['post_entry'])) {
     }
     $raw_lines = $je_grouped;
 
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $jou_date)) {
+    if (!tc_is_date($jou_date)) {
         $err = lang('@Please enter a valid date.');
     } elseif ($jou_text === '') {
         $err = lang('@Please enter a description for this entry.');
@@ -56,8 +56,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['post_entry'])) {
         $total = 0.0;
         foreach ($raw_lines as $l) {
             $acc_id = (int)($l['acc_id'] ?? 0);
-            $debit  = (float)str_replace(',', '.', (string)($l['debit'] ?? '0'));
-            $credit = (float)str_replace(',', '.', (string)($l['credit'] ?? '0'));
+            // RETTET (KRITISK): (float)str_replace(',', '.') gjorde "1.500,00" til 1,50 - begge sider ens, så posteringen
+            // gik i nul og blev bogført med et tusindedel af beløbet. Dansk talformat læses nu korrekt.
+            $debit  = parse_dk_number($l['debit'] ?? '0');
+            $credit = parse_dk_number($l['credit'] ?? '0');
 
             if ($acc_id <= 0 && $debit == 0.0 && $credit == 0.0) continue; // ubrugt skabelon-række
 
@@ -80,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['post_entry'])) {
         if ($err === '' && count($clean_lines) < 2) {
             $err = lang('@A journal entry needs at least two lines (double-entry bookkeeping).');
         } elseif ($err === '' && abs($total) > 0.01) {
-            $err = sprintf(lang('@The entry does not balance: debit and credit differ by %s. Debit must equal credit.'), number_format(abs($total), 2, ',', '.'));
+            $err = sprintf(lang('@The entry does not balance: debit and credit differ by %s. Debit must equal credit.'), fmt_dk(abs($total)));
         }
 
         if ($err === '') {
@@ -104,8 +106,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['post_entry'])) {
                     ['jou_date' => $jou_date, 'jou_text' => $jou_text, 'voucher_no' => $voucher_no, 'lines' => $clean_lines]);
 
                 DB::commit($conn);
-                header("Location: journal_entry.php?msg=posted&voucher=" . $voucher_no);
-                exit;
+                redirect('journal_entry.php', sprintf(lang('@Journal entry posted successfully (voucher no. %d).'), (int)$voucher_no)
+                    . ' <a href="ledger_view.php">' . lang('@View in General Ledger') . '</a>');
             } catch (Exception $e) {
                 DB::rollback($conn);
                 $err = lang('@Error saving entry') . ': ' . $e->getMessage();
@@ -116,11 +118,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['post_entry'])) {
 
 // Kontoplan til dropdowns
 $acc_options = [];
-// NYT (BEK 811/2026-gennemgang, Bilag 3 "bogføringsguide/konterings-
-// vejledning", se [[digital-standard-bookkeeping-registration-goal]]):
-// kontoens frie konteringsvejledning (account_edit.php) sendes med til
-// JS'en nedenfor, så den kan vises direkte når brugeren vælger kontoen -
-// det mest håndgribelige sted at vise en konteringsvejledning, da dette er
+// NYT: kontoens frie konteringsvejledning (account_edit.php) sendes med til JS'en nedenfor, så den kan vises
+// direkte når brugeren vælger kontoen - det mest håndgribelige sted at vise en konteringsvejledning, da dette er
 // den eneste frie, manuelle posteringsside i systemet.
 $acc_guidance = [];
 require_once __DIR__ . '/inc/accounts.inc.php';     // valglisten: slukkede konti udeladt, dæmpede nederst
@@ -138,11 +137,7 @@ showMenu();
 
 echo "<div style='max-width:900px; margin:0 auto; padding:10px;'>";
 
-if (isset($_GET['msg']) && $_GET['msg'] === 'posted') {
-    $v = (int)($_GET['voucher'] ?? 0);
-    htm_Alert(sprintf(lang('@Journal entry posted successfully (voucher no. %d).'), $v)
-        . ' <a href="ledger_view.php">' . lang('@View in General Ledger') . '</a>', 'success', 700);
-}
+flash_render();
 if ($err !== '') {
     htm_Alert($err, 'error', 700);
 }
@@ -221,7 +216,7 @@ function removeLine(btn) {
     updateBalance();
 }
 function parseAmt(v) {
-    return parseFloat((v || '0').toString().replace(',', '.')) || 0;
+    return tcNum(v);      // ("1.500,00" blev til 1,5 i balance-kontrollen)
 }
 function updateBalance() {
     var debit = 0, credit = 0;

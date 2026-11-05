@@ -42,7 +42,7 @@ echo '<div style="margin-bottom:16px; padding:10px 14px; background:#fbeaea; bor
    . '</div>';
 
 if (abs($bs['diff']) > 0.01) {
-    htm_Alert(sprintf(lang('@Balance does not match: Assets and Liabilities+Equity differ by %s %s. This may indicate a posting outside the normal flows.'), number_format($bs['diff'], 2, ',', '.'), $currency), 'error');
+    htm_Alert(sprintf(lang('@Balance does not match: Assets and Liabilities+Equity differ by %s %s. This may indicate a posting outside the normal flows.'), fmt_dk($bs['diff']), $currency), 'error');
 } else {
     htm_Alert(lang('@Assets equal Liabilities + Equity. The balance is correct.'), 'success');
 }
@@ -53,18 +53,18 @@ echo "<div style='display:grid; grid-template-columns: 1fr 1fr; gap:20px;'>";
     htm_Card_(lang('@Assets'), '480');
     $rows = [];
     foreach ($bs['asset_rows'] as $r) {
-        $rows[] = [$r['acc_id'] . ' - ' . htmlspecialchars($r['acc_name']), '<div style="text-align:right;">' . number_format($r['balance'], 2, ',', '.') . '</div>'];
+        $rows[] = [$r['acc_id'] . ' - ' . htmlspecialchars($r['acc_name']), '<div style="text-align:right;">' . fmt_dk($r['balance']) . '</div>'];
     }
     if ($bs['vat_is_asset'] && $bs['vat_net'] != 0) {
-        $rows[] = [lang('@VAT receivable'), '<div style="text-align:right;">' . number_format($bs['vat_net'], 2, ',', '.') . '</div>'];
+        $rows[] = [lang('@VAT receivable'), '<div style="text-align:right;">' . fmt_dk($bs['vat_net']) . '</div>'];
     }
     if (empty($rows)) {
-        echo '<p style="color:var(--text-muted); font-style:italic;">' . lang('@No asset postings found.') . '</p>';
+        htm_Note(lang('@No asset postings found.'), 'font-style:italic;');
     } else {
         htm_Table(['@Account', '@Balance'], $rows, 'assets_tbl', 100, '', true, [], '500px', 'aktiver.csv');
     }
     echo '<div style="display:flex; justify-content:space-between; padding:14px 0; margin-top:8px; border-top:2px solid var(--color-primary); font-weight:bold;">';
-    echo '<span>' . lang('@Total Assets') . '</span><span>' . number_format($bs['assets_total'], 2, ',', '.') . ' ' . $currency . '</span>';
+    echo '<span>' . lang('@Total Assets') . '</span><span>' . fmt_dk($bs['assets_total']) . ' ' . $currency . '</span>';
     echo '</div>';
     htm_Card_end();
 
@@ -74,42 +74,37 @@ echo "<div style='display:grid; grid-template-columns: 1fr 1fr; gap:20px;'>";
     echo '<h4 style="margin:0 0 8px; font-size:0.95em; color:var(--text-muted);">' . lang('@Equity') . '</h4>';
     $rows = [];
     foreach ($bs['equity_rows'] as $r) {
-        $rows[] = [$r['acc_id'] . ' - ' . htmlspecialchars($r['acc_name']), '<div style="text-align:right;">' . number_format(-$r['balance'], 2, ',', '.') . '</div>'];
+        $rows[] = [$r['acc_id'] . ' - ' . htmlspecialchars($r['acc_name']), '<div style="text-align:right;">' . fmt_dk(-$r['balance']) . '</div>'];
     }
-    $rows[] = ['<em>' . lang('@Result for the year (not yet closed)') . '</em>', '<div style="text-align:right;">' . number_format($bs['unclosed_result'], 2, ',', '.') . '</div>'];
+    $rows[] = ['<em>' . lang('@Result for the year (not yet closed)') . '</em>', '<div style="text-align:right;">' . fmt_dk($bs['unclosed_result']) . '</div>'];
     htm_Table(['@Account', '@Balance'], $rows, 'equity_tbl', 100, '', true, [], '500px', 'egenkapital.csv');
 
     echo '<h4 style="margin:16px 0 8px; font-size:0.95em; color:var(--text-muted);">' . lang('@Liabilities') . '</h4>';
     $rows = [];
     foreach ($bs['liability_rows'] as $r) {
-        $rows[] = [$r['acc_id'] . ' - ' . htmlspecialchars($r['acc_name']), '<div style="text-align:right;">' . number_format(-$r['balance'], 2, ',', '.') . '</div>'];
+        $rows[] = [$r['acc_id'] . ' - ' . htmlspecialchars($r['acc_name']), '<div style="text-align:right;">' . fmt_dk(-$r['balance']) . '</div>'];
     }
     if (!$bs['vat_is_asset'] && $bs['vat_net'] != 0) {
-        $rows[] = [lang('@VAT payable'), '<div style="text-align:right;">' . number_format(-$bs['vat_net'], 2, ',', '.') . '</div>'];
+        $rows[] = [lang('@VAT payable'), '<div style="text-align:right;">' . fmt_dk(-$bs['vat_net']) . '</div>'];
     }
     if (empty($rows)) {
-        echo '<p style="color:var(--text-muted); font-style:italic;">' . lang('@No liability postings found.') . '</p>';
+        htm_Note(lang('@No liability postings found.'), 'font-style:italic;');
     } else {
         htm_Table(['@Account', '@Balance'], $rows, 'liab_tbl', 100, '', true, [], '500px', 'passiver.csv');
     }
 
     echo '<div style="display:flex; justify-content:space-between; padding:14px 0; margin-top:8px; border-top:2px solid var(--color-primary); font-weight:bold;">';
-    echo '<span>' . lang('@Total Liabilities and Equity') . '</span><span>' . number_format($bs['passives_total'], 2, ',', '.') . ' ' . $currency . '</span>';
+    echo '<span>' . lang('@Total Liabilities and Equity') . '</span><span>' . fmt_dk($bs['passives_total']) . ' ' . $currency . '</span>';
     echo '</div>';
     htm_Card_end();
 
 echo "</div>"; // grid
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 30): ingen
-// side beregnede de klassiske regnskabsnøgletal. Soliditetsgrad genbruger
-// PRÆCIS $bs['equity_total']/$bs['assets_total'] (samme tal som allerede
-// vises ovenfor - "to steder må ikke kunne regne forskelligt"-princip).
-// Likviditetsgrad kan IKKE beregnes fuldt korrekt her - kontoplanen har
-// ingen "kortfristet vs. langfristet"-opdeling af aktiver/passiver (kun
-// flade acc_type-kategorier) - i stedet en BEVIDST forenklet, tydeligt
-// mærket udgave: (bank + debitorer) / kreditorer, de tre konti systemet
-// allerede selv bruger til netop disse formål (conf_acc_bank/debitor/
-// creditor, samme som subledger_reconciliation.php/aging_report.php).
+// NYT: ingen side beregnede de klassiske regnskabsnøgletal. Likviditetsgrad kan IKKE beregnes fuldt korrekt her -
+// kontoplanen har ingen "kortfristet vs. langfristet"-opdeling af aktiver/passiver (kun flade acc_type-kategorier)
+// - i stedet en BEVIDST forenklet, tydeligt mærket udgave: (bank + debitorer) / kreditorer, de tre konti systemet
+// allerede selv bruger til netop disse formål (conf_acc_bank/debitor/creditor, samme som
+// subledger_reconciliation.php/aging_report.php).
 $soliditetsgrad = $bs['assets_total'] > 0 ? ($bs['equity_total'] / $bs['assets_total'] * 100) : null;
 
 $as_of_esc = DB::escape($conn, $as_of);
@@ -120,19 +115,25 @@ function bs_acc_balance($conn, int $acc_id, string $as_of_esc): float {
     $row = DB::fetch_assoc(DB::query($conn, "SELECT SUM(l.amount) AS bal FROM ledger l JOIN journal j ON l.jou_id = j.jou_id WHERE l.acc_id = $acc_id AND j.jou_date <= '$as_of_esc'"));
     return (float)($row['bal'] ?? 0);
 }
-$bank_bal     = bs_acc_balance($conn, $acc_bank_bs, $as_of_esc);
+// RETTET: kun conf_acc_bank talte med - kasse, opsparing og andre konti af typen 'bank' blev ignoreret, så
+// likviditetsgraden var for lav. Nu samme kontoudvalg som forsidens saldograf (index.php).
+$bank_ids_bs = [$acc_bank_bs];
+$bres_bs = DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_type = 'bank'");
+while ($bres_bs && ($br = DB::fetch_assoc($bres_bs))) $bank_ids_bs[] = (int)$br['acc_id'];
+$bank_bal = 0.0;
+foreach (array_unique($bank_ids_bs) as $bid) $bank_bal += bs_acc_balance($conn, $bid, $as_of_esc);
 $debitor_bal  = bs_acc_balance($conn, $acc_debitor_bs, $as_of_esc);
 $creditor_bal = -bs_acc_balance($conn, $acc_creditor_bs, $as_of_esc); // kreditkonto er negativ i hovedbogen
 $likviditetsgrad = $creditor_bal > 0.01 ? (($bank_bal + $debitor_bal) / $creditor_bal * 100) : null;
 
 echo "<div style='margin-top:20px;'>";
 htm_Card_(lang('@Key Financial Ratios'), '1000');
-echo '<p style="color:var(--text-muted); font-size:0.85em; margin-top:-5px;">' . lang('@Reference figures only - not part of the official balance sheet above.') . '</p>';
+htm_Note(lang('@Reference figures only - not part of the official balance sheet above.'), 'font-size:0.85em; margin-top:-5px;');
 echo '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">';
-echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Solvency Ratio (Equity / Total Assets)') . '</div><div style="font-weight:bold; font-size:1.3em;">' . ($soliditetsgrad !== null ? number_format($soliditetsgrad, 1, ',', '.') . ' %' : '—') . '</div></div>';
-echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Simplified Liquidity Ratio ((Bank + Receivables) / Payables)') . '</div><div style="font-weight:bold; font-size:1.3em;">' . ($likviditetsgrad !== null ? number_format($likviditetsgrad, 1, ',', '.') . ' %' : '—') . '</div></div>';
+echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Solvency Ratio (Equity / Total Assets)') . '</div><div style="font-weight:bold; font-size:1.3em;">' . ($soliditetsgrad !== null ? fmt_dk($soliditetsgrad, 1) . ' %' : '—') . '</div></div>';
+echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Simplified Liquidity Ratio ((Bank + Receivables) / Payables)') . '</div><div style="font-weight:bold; font-size:1.3em;">' . ($likviditetsgrad !== null ? fmt_dk($likviditetsgrad, 1) . ' %' : '—') . '</div></div>';
 echo '</div>';
-echo '<p style="color:var(--text-muted); font-size:0.8em; margin-top:12px; margin-bottom:0;">' . lang('@The liquidity ratio is a simplification using only the configured bank/receivables/payables control accounts - the chart of accounts does not distinguish current from long-term assets/liabilities, so a full current ratio cannot be calculated reliably.') . '</p>';
+htm_Note(lang('@The liquidity ratio is a simplification using only the configured bank/receivables/payables control accounts - the chart of accounts does not distinguish current from long-term assets/liabilities, so a full current ratio cannot be calculated reliably.'), 'font-size:0.8em; margin-top:12px; margin-bottom:0;');
 htm_Card_end();
 echo "</div>";
 

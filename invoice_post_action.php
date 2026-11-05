@@ -36,6 +36,14 @@ require_once 'inc/audit.inc.php';   // definerer log_action() (revisionsspor) - 
 
 header('Content-Type: application/json; charset=utf-8');
 
+// RETTET: bogføringen (uigenkaldelig - tildeler fakturanummer, poster i hovedbogen, trækker lager) kunne
+// udløses af et almindeligt GET-link uden CSRF-nøgle, fx et link i en mail til en indlogget bruger. Nu kun
+// POST, som inc/auth.inc.php CSRF-tjekker centralt (sales_hub.php sender nøglen med).
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    echo json_encode(['success' => false, 'error' => 'POST required']);
+    exit;
+}
+
 $inv_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($inv_id <= 0) {

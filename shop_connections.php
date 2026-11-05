@@ -17,11 +17,9 @@ require_once 'inc/shop.inc.php';
 
 $msg = '';  $msg_type = 'success';  $new_key = null;  $new_key_shop = null;  $setup_shop = 0;
 $ready = shop_ready($conn);
-// Ældre tabel uden platform-kolonnerne: opgraderes stille her (siden kræver niveau 3) - samme shop_ensure_schema()
-if ($ready && !shop_platform_ready($conn)) {
-    foreach (shop_ensure_schema($conn, DB::is_sqlite()) as $sh_l) if (strpos($sh_l, '[FEJL]') === 0) error_log('[shop] ' . $sh_l);
-}
 $plat_ready = $ready && shop_platform_ready($conn);
+// Ældre tabel uden platform-kolonnerne: skemaet ændres ikke længere her, men af migrationen (db-setup/migrate_shop_connections.php)
+if ($ready && !$plat_ready && $_SERVER['REQUEST_METHOD'] !== 'POST') flash('@The web shop tables are from an older version - run "Webbutikker" under System -> Maintenance -> Database migration to enable the platform features.', 'warning');
 // Adressen butikken / cron-jobbet kalder (webhook_shop.php) - med regnskabet, hvis der er flere
 function shop_page_url(array $shop, string $extra = ''): string {
     $base = rtrim((!empty($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'dit-domæne') . str_replace(chr(92), '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
@@ -55,7 +53,7 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
               'auto_post' => !empty($_POST['auto_post']) ? 1 : 0, 'paid_default' => $paid_def,
               'prices_incl_vat' => !empty($_POST['prices_incl_vat']) ? 1 : 0, 'track_stock' => !empty($_POST['track_stock']) ? 1 : 0,
               'clearing_acc' => $clearing, 'sales_acc' => (int)($_POST['sales_acc'] ?? 0), 'shipping_acc' => (int)($_POST['shipping_acc'] ?? 0),
-              'shipping_vat' => (float)str_replace(',', '.', (string)($_POST['shipping_vat'] ?? '25')), 'active' => !empty($_POST['active']) ? 1 : 0,
+              'shipping_vat' => tc_pct($_POST['shipping_vat'] ?? '25') ?? 25.0, 'active' => !empty($_POST['active']) ? 1 : 0,
               'updated_at' => date('Y-m-d H:i:s')];
         if ($plat_ready) {
             $old_p = $sid > 0 ? shop_get($conn, $sid) : null;
@@ -193,7 +191,7 @@ if (isset($_GET['edit'])) {
         '@The account the payment provider owes you on - the paid orders go here, the payouts to the bank are reconciled against it (and the fee as a cost).');
     htm_Field('fa-sack-dollar', '@Sales account (model B)', 'sales_acc', (string)(int)$e['sales_acc'], 'sele', $accounts_income, '', '48%', '@The goods of the daily sales.');
     htm_Field('fa-truck', '@Shipping account (model B)', 'shipping_acc', (string)(int)$e['shipping_acc'], 'sele', $accounts_income, '', '48%', '@Shipping of the daily sales - empty: the sales account.');
-    htm_Field('fa-percent', '@VAT on shipping (%)', 'shipping_vat', number_format((float)$e['shipping_vat'], 2, ',', ''), 'text', null, '', '48%', '@When the shop does not send it.');
+    htm_Field('fa-percent', '@VAT on shipping (%)', 'shipping_vat', fmt_dk_input((float)$e['shipping_vat']), 'text', null, '', '48%', '@When the shop does not send it.');
     htm_Field('fa-power-off', '@Active', 'active', (string)(int)$e['active'], 'sele', $yes_no, '', '48%', '@No: the orders of the shop are refused.');
     echo '<div style="margin-top:15px; display:flex; gap:10px; flex-wrap:wrap;">';
     htm_Button(icon: 'fa-save', labl: '@Save', type: 'success', attr: 'name="save_shop" value="1"');
@@ -235,7 +233,7 @@ if ($plat_ready && $setup && $setup['platform'] !== 'native') {
     if ($setup['platform'] !== 'shopify') {
         echo '<form method="post" style="margin-top:6px;">' . csrf_field(false) . '<input type="hidden" name="shop_id" value="' . (int)$setup['shop_id'] . '">';
         htm_Button(icon: 'fa-rotate', labl: '@New secret', type: 'warning', styl: 'padding:5px 12px; font-size:12px;',
-            attr: 'name="new_secret" value="1" data-hint="' . lang('@Make a new secret - the shop (or the cron job) must get the new one') . '" onclick="return confirm(' . htmlspecialchars(json_encode(lang('@The old secret stops working at once. Continue?')), ENT_QUOTES) . ')"');
+            attr: 'name="new_secret" value="1" data-hint="' . lang('@Make a new secret - the shop (or the cron job) must get the new one') . '" onclick="' . htm_confirm_js('@The old secret stops working at once. Continue?') . '"');
         echo '</form>';
     }
     echo '<p style="font-size:0.9em; color:var(--text-muted); margin-top:10px;"><i class="fa fa-circle-info"></i> ' . lang('@The payouts from the payment provider are reconciled in Bank Reconciliation: choose "Payout from web shop" on the bank line and put the fee of the provider in the fee field.') . '</p>';
@@ -248,7 +246,7 @@ $keys = [];
 foreach (webhook_key_list() as $k) $keys[(string)$k['id']] = $k;
 htm_Card_('🛒 ' . lang('@Connected web shops'), 1000, '', false, true, htm_Button('fa-plus', '@Connect a web shop', 'primary', 'shop_connections.php?edit=0', 'padding:6px 12px; font-size:13px;', 'data-hint="' . lang('@Set up a new web shop connection (accounts, payment provider and key)') . '"', '', false));
 if (!$shops) {
-    echo '<p style="color:var(--text-muted);">' . lang('@No web shops connected yet.') . '</p>';
+    htm_Note(lang('@No web shops connected yet.'));
 } else {
     $data = [];
     foreach ($shops as $sid => $s) {
@@ -269,7 +267,7 @@ if (!$shops) {
                  . ($plat_ready && in_array($s['platform'], SHOP_PULL_PLATFORMS, true)
                     ? htm_Button('fa-download', '@Fetch new orders', 'success', '', 'padding:4px 10px; font-size:12px;', 'name="fetch_orders" value="1" data-hint="' . lang('@Fetch the new paid orders from the shop now') . '"', '', false) . ' ' : '')
                  . ($s['platform'] === 'native' || !$plat_ready
-                    ? htm_Button('fa-key', '@New key', 'warning', '', 'padding:4px 10px; font-size:12px;', 'name="new_key" value="1" onclick="return confirm(' . htmlspecialchars(json_encode(lang('@The old key stops working at once - the shop must get the new one. Continue?')), ENT_QUOTES) . ')"', '', false)
+                    ? htm_Button('fa-key', '@New key', 'warning', '', 'padding:4px 10px; font-size:12px;', 'name="new_key" value="1" onclick="' . htm_confirm_js('@The old key stops working at once - the shop must get the new one. Continue?') . '"', '', false)
                     : htm_Button('fa-plug-circle-check', '@Setup', 'secondary', 'shop_connections.php?setup=' . $sid, 'padding:4px 10px; font-size:12px;', 'data-hint="' . lang('@Show how the shop is set up (address and secret)') . '"', '', false))
                  . '</form>';
         $data[] = [
@@ -278,7 +276,7 @@ if (!$shops) {
             ($s['mode'] === 'daily' ? lang('@Daily sales (B)') : lang('@Invoice per order (A)')) . ' ' . (!empty($s['auto_post']) ? htm_Badge('@automatic', 'success', false) : ''),
             (int)$cnt['n'] . ((int)$cnt['pend'] > 0 ? ' (' . (int)$cnt['pend'] . ' ' . lang('@not booked') . ')' : ''),
             $cnt['last'] ? htmlspecialchars(substr((string)$cnt['last'], 0, 16)) : '-',
-            $clear_bal === null ? '-' : '<span style="float:right;" data-hint="' . htmlspecialchars(lang('@What the payment provider owes you - reconciled when the payout reaches the bank')) . '">' . number_format($clear_bal, 2, ',', '.') . '</span>',
+            $clear_bal === null ? '-' : '<span style="float:right;" data-hint="' . htmlspecialchars(lang('@What the payment provider owes you - reconciled when the payout reaches the bank')) . '">' . fmt_dk($clear_bal) . '</span>',
             $key_txt,
             $actions,
         ];
@@ -303,14 +301,14 @@ if (isset($_GET['orders']) && ($s = shop_get($conn, (int)$_GET['orders']))) {
             htmlspecialchars($o['order_date']),
             htmlspecialchars($o['external_id']) . ($o['kind'] === 'refund' ? ' ' . htm_Badge('@Refund', 'warning', false) . ' ← ' . htmlspecialchars((string)$o['order_ref']) : ''),
             htmlspecialchars((string)$o['customer_name']),
-            '<span style="float:right;">' . number_format((float)$o['gross'], 2, ',', '.') . '</span>',
+            '<span style="float:right;">' . fmt_dk((float)$o['gross']) . '</span>',
             ($status_txt[$o['status']] ?? htmlspecialchars((string)$o['status'])) . (!empty($o['paid']) ? ' · ' . lang('@paid at checkout') : ''),
             $doc,
             $o['message'] ? '<span style="color:var(--color-warning); font-size:0.85em;">' . nl2br(htmlspecialchars((string)$o['message'])) . '</span>' : '',
         ];
     }
     if ($data) htm_Table(['@Date', '@Order', '@Customer', '@Amount incl. VAT', '@Status', '@Document', '@Note'], $data, 'shopOrdTbl', 300, '', true, [], '500px');
-    else echo '<p style="color:var(--text-muted);">' . lang('@No orders received yet.') . '</p>';
+    else htm_Note(lang('@No orders received yet.'));
     htm_Card_end();
 }
 

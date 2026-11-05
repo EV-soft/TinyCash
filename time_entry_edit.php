@@ -14,27 +14,27 @@ require_once 'inc/audit.inc.php';
 
 $s = get_settings($conn);
 $module_projects = !empty($s['module_projects']) && $s['module_projects'] == '1';
-if (!$module_projects) { header("Location: time_list.php"); exit; }
+if (!$module_projects) { redirect("time_list.php"); }
 
-$table_exists = @DB::query($conn, "SELECT 1 FROM time_entries LIMIT 1") !== false;
-if (!$table_exists) { header("Location: time_list.php"); exit; }
+$table_exists = db_has_table($conn, 'time_entries');
+if (!$table_exists) { redirect("time_list.php"); }
 
 $id = (int)($_GET['id'] ?? 0);
 
 // --- SLET (kun ikke-fakturerede) ---
 if (isset($_GET['del']) && $_GET['del'] == 1) {
     $del_row = DB::fetch_assoc(DB::query($conn, "SELECT * FROM time_entries WHERE entry_id = $id"));
-    // RETTET (selv-fundet ved live-test): redirectede FØR altid til
-    // "msg=deleted", uanset om rækken reelt blev slettet - en allerede
-    // faktureret time blev korrekt IKKE slettet af tjekket nedenfor, men
-    // brugeren fik alligevel at vide "Slettet" som om intet var galt.
-    if ($del_row && (int)$del_row['is_invoiced'] === 0) {
+    // RETTET: redirectede FØR altid til "msg=deleted", uanset om rækken reelt blev slettet - en allerede
+    // faktureret time blev korrekt IKKE slettet af tjekket nedenfor, men brugeren fik alligevel at vide "Slettet"
+    // som om intet var galt.
+    if (!$del_row) redirect('time_list.php', '@Not found - it may already have been deleted.', 'error');      // (fik før beskeden "allerede faktureret")
+    if ((int)$del_row['is_invoiced'] === 0) {
         if (DB::query($conn, "DELETE FROM time_entries WHERE entry_id = $id")) {
             log_action($conn, 'DELETE_TIME_ENTRY', 'time_entries', $id, $del_row, null);
         }
-        header("Location: time_list.php?msg=deleted"); exit;
+        redirect('time_list.php', '@Deleted successfully');
     }
-    header("Location: time_list.php?msg=cannot_delete"); exit;
+    redirect('time_list.php', '@This time entry has already been invoiced and cannot be deleted.', 'error');
 }
 
 $err = '';
@@ -42,7 +42,7 @@ $err = '';
 // --- GEM ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_entry'])) {
     if ($id > 0) {
-        $existing = DB::fetch_assoc(DB::query($conn, "SELECT is_invoiced FROM time_entries WHERE entry_id = $id"));
+        $existing = DB::fetch_assoc(DB::query($conn, "SELECT is_invoiced, proj_id FROM time_entries WHERE entry_id = $id"));
         if ($existing && (int)$existing['is_invoiced'] === 1) {
             die(lang('@This time entry has already been invoiced and can no longer be edited.'));
         }
@@ -58,10 +58,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_entry'])) {
     // fakturere til uden et projekt, så "fakturerbar" ville være meningsløst.
     $is_billable  = ($proj_id > 0 && isset($_POST['is_billable'])) ? 1 : 0;
 
-    if ($description === '') {
+    // RETTET: projektet blev ikke kontrolleret på serveren - listen viser kun aktive projekter (+ registreringens
+    // eget), men et afsluttet eller slettet projekt-id blev gemt uden videre og gav timer der pegede på et projekt
+    // der ikke findes / er lukket. Samme regel som valglisten.
+    $te_keep_proj = (int)($existing['proj_id'] ?? 0);
+    $te_proj_ok = tc_project_ok($conn, $proj_id, $te_keep_proj);
+    if (!$te_proj_ok) {
+        $err = lang('@Please choose an active project.');
+    } elseif ($description === '') {
         $err = lang('@Please enter a description.');
-    } elseif ($hours <= 0) {
+    } elseif ($hours <= 0 || $hours > 24) {      // RETTET: 80 i stedet for 8,0 blev gemt og faktureret (én registrering = højst ét døgn)
         $err = lang('@Please enter a valid number of hours.');
+    // RETTET: dato, timesats og momssats blev gemt uden kontrol - en tom/ugyldig dato blev til "01-01-1970" på
+    // fakturalinjen, og fx moms 250 % eller en negativ timesats gik direkte videre til fakturakladden
+    } elseif (!tc_is_date($entry_date)) {
+        $err = lang('@Please enter a valid date.');
+    } elseif ($hourly_rate < 0 || $vat_rate < 0 || $vat_rate > 100) {
+        $err = lang('@Please enter a valid amount.');
     } else {
         $proj_sql = $proj_id > 0 ? $proj_id : 'NULL';
         if ($id > 0) {
@@ -75,15 +88,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_entry'])) {
                 VALUES ($proj_sql, " . (int)($_SESSION['user_id'] ?? 0) . ", '$entry_date', '$description', $hours, $hourly_rate, $vat_rate, $is_billable)");
             $id = DB::insert_id($conn);
         }
-        header("Location: time_list.php" . ($proj_id ? "?proj_id=$proj_id" : ""));
-        exit;
+        redirect("time_list.php" . ($proj_id ? "?proj_id=$proj_id" : ""));
     }
 }
 
 // --- HENT ---
 if ($id > 0) {
     $t = DB::fetch_assoc(DB::query($conn, "SELECT * FROM time_entries WHERE entry_id = $id"));
-    if (!$t) { header("Location: time_list.php"); exit; }
+    if (!$t) { redirect("time_list.php"); }
 } else {
     $t = [
         'entry_id' => 0, 'proj_id' => (int)($_GET['proj_id'] ?? 0), 'entry_date' => date('Y-m-d'),
@@ -96,7 +108,9 @@ $is_locked = !empty($t['is_invoiced']);
 // Projekternes standard-timesats, til JS-forvalg ved projektvalg.
 $proj_opts = ['0' => lang('@No project (internal, non-billable)')];
 $proj_rate_map = ['0' => 0];
-$pres = DB::query($conn, "SELECT proj_id, proj_no, default_hourly_rate FROM projects WHERE is_active = 1 ORDER BY proj_no ASC");
+// RETTET: en registrering på et siden afsluttet (inaktivt) projekt manglede projektet i listen - et gem flyttede
+// timerne stille til "intet projekt" og gjorde dem ikke-fakturerbare. Registreringens eget projekt beholdes nu.
+$pres = DB::query($conn, "SELECT proj_id, proj_no, default_hourly_rate FROM projects WHERE is_active = 1 OR proj_id = " . (int)($t['proj_id'] ?? 0) . " ORDER BY proj_no ASC");
 while ($p = DB::fetch_assoc($pres)) {
     $proj_opts[$p['proj_id']] = $p['proj_no'];
     $proj_rate_map[$p['proj_id']] = (float)($p['default_hourly_rate'] ?? 0);

@@ -30,7 +30,7 @@ if (!$module_projects) {
     exit;
 }
 
-$table_exists = @DB::query($conn, "SELECT 1 FROM time_entries LIMIT 1") !== false;
+$table_exists = db_has_table($conn, 'time_entries');
 if (!$table_exists) {
     echo "<div style='max-width:700px; margin:20px auto;'>";
     htm_Card_(capt: '@Time Tracking');
@@ -42,43 +42,32 @@ if (!$table_exists) {
     exit;
 }
 
-if (isset($_GET['msg'])) {
-    $m = $_GET['msg'];
-    if ($m === 'deleted')   htm_Alert(lang('@Deleted successfully'), 'success');
-    elseif ($m === 'cannot_delete') htm_Alert(lang('@This time entry has already been invoiced and cannot be deleted.'), 'error');
-    elseif ($m === 'invoiced') htm_Alert(lang('@Invoice created from the selected hours. Review and post it from the Sales Hub.'), 'success');
-    elseif ($m === 'nothing_to_invoice') htm_Alert(lang('@No unbilled, billable hours found for this project.'), 'error');
-}
 
 // --- Filter (projekt) ---
 $filter_proj = (int)($_GET['proj_id'] ?? 0);
 $proj_opts = ['0' => lang('@All projects')];
-$pres = DB::query($conn, "SELECT proj_id, proj_no FROM projects WHERE is_active = 1 ORDER BY proj_no ASC");
+// RETTET: "ufakturerede timer"-listen herunder linker også til AFSLUTTEDE projekter (typisk: projektet lukkes, så
+// faktureres timerne) - filteret manglede så projektet og viste "Alle projekter", mens listen var filtreret.
+$pres = DB::query($conn, "SELECT proj_id, proj_no FROM projects WHERE is_active = 1 OR proj_id = $filter_proj ORDER BY proj_no ASC");
 while ($p = DB::fetch_assoc($pres)) { $proj_opts[$p['proj_id']] = $p['proj_no']; }
 
 $tools = htm_Button(icon: 'fa-plus', labl: '@Log Time', type: 'success', link: 'time_entry_edit.php?id=0'.($filter_proj ? '&proj_id='.$filter_proj : ''), attr: 'data-hint="'.lang('@Log a new time entry').'"', echo: false);
 htm_Card_(capt: '@Time Tracking', wdth: 1300, tool: $tools);
 
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">' .
-    lang('@Logged hours per project. A time entry never affects the ledger or VAT return - only "Create Invoice from Hours" below does, by generating a normal draft invoice.') .
-    '</p>';
+htm_Note(lang('@Logged hours per project. A time entry never affects the ledger or VAT return - only "Create Invoice from Hours" below does, by generating a normal draft invoice.'), 'font-size:0.9em; margin-top:-5px;');
 
 echo '<form method="get" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:15px;">';
 htm_Field(icon: 'fa-folder-open', labl: '@Project', name: 'proj_id', valu: $filter_proj, type: 'sele', opti: $proj_opts, extr: 'onchange="this.form.submit()" bare', wdth: '260px');
 echo '</form>';
 
 // --- "Opret faktura af timer" ---
-// RETTET (bruger-anmodet, "kan bogholderen ønske sig mere"): den oprindelige
-// ufaktureret-tid-boks nedenfor viste KUN noget når ét bestemt projekt var
-// valgt i filteret - ved "Alle projekter" (eller ved første besøg på siden)
-// var der intet der samlede det på tværs, så glemt tid på et projekt man
-// ikke lige havde valgt kunne stå usynligt i årevis. Ny boks her, kun vist
-// ved "Alle projekter" (viser ellers samme information dobbelt), grupperer
-// ufaktureret tid PR. projekt (ikke summeret til ét tal - en faktura
-// oprettes altid pr. projekt/kunde, aldrig på tværs af flere), med sin egen
-// "Opret faktura"-knap pr. række, så en glemt post et hvilket som helst sted
-// bliver synlig med det samme uden at skulle klikke sig igennem hvert
-// projekt manuelt.
+// RETTET: den oprindelige ufaktureret-tid-boks nedenfor viste KUN noget når ét bestemt projekt var valgt i
+// filteret - ved "Alle projekter" (eller ved første besøg på siden) var der intet der samlede det på tværs, så
+// glemt tid på et projekt man ikke lige havde valgt kunne stå usynligt i årevis. Ny boks her, kun vist ved "Alle
+// projekter" (viser ellers samme information dobbelt), grupperer ufaktureret tid PR. projekt (ikke summeret til ét
+// tal - en faktura oprettes altid pr. projekt/kunde, aldrig på tværs af flere), med sin egen "Opret faktura"-knap
+// pr. række, så en glemt post et hvilket som helst sted bliver synlig med det samme uden at skulle klikke sig
+// igennem hvert projekt manuelt.
 if ($filter_proj === 0) {
     $all_unbilled_res = DB::query($conn, "SELECT p.proj_id, p.proj_no,
             COUNT(*) AS cnt, COALESCE(SUM(t.hours * t.hourly_rate),0) AS total
@@ -94,15 +83,15 @@ if ($filter_proj === 0) {
         $grand_unbilled_total = array_sum(array_column($all_unbilled, 'total'));
         echo '<div style="margin-bottom:15px; padding:12px 15px; background:var(--bg-panel); border-radius:8px;">';
         echo '<div style="font-weight:bold; margin-bottom:8px;"><i class="fa-solid fa-triangle-exclamation" style="color:var(--color-warning);"></i> '
-            . sprintf(lang('@%d unbilled, billable hour entries across %d project(s), totaling %s.'), $grand_unbilled_cnt, count($all_unbilled), number_format($grand_unbilled_total, 2, ',', '.') . ' ' . $cur)
+            . sprintf(lang('@%d unbilled, billable hour entries across %d project(s), totaling %s.'), $grand_unbilled_cnt, count($all_unbilled), fmt_dk($grand_unbilled_total) . ' ' . $cur)
             . '</div>';
         foreach ($all_unbilled as $u) {
             echo '<div style="display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-top:1px solid var(--border-subtle);">';
             echo '<span><a href="time_list.php?proj_id='.(int)$u['proj_id'].'">'.htmlspecialchars($u['proj_no']).'</a> - '
-                . sprintf(lang('@%d entries, %s'), (int)$u['cnt'], number_format((float)$u['total'], 2, ',', '.') . ' ' . $cur) . '</span>';
+                . sprintf(lang('@%d entries, %s'), (int)$u['cnt'], fmt_dk((float)$u['total']) . ' ' . $cur) . '</span>';
             htm_Button(icon: 'fa-file-invoice', labl: '@Create Invoice from Hours', type: 'success',
                 link: 'time_actions.php?action=invoice&proj_id='.(int)$u['proj_id'],
-                attr: 'data-hint="' . lang('@Creates a draft invoice from the unbilled hours and opens it') . '" onclick="return confirm(\''.addslashes(lang('@Create a draft invoice with one line per unbilled hour entry for this project?')).'\');" style="padding:4px 10px; font-size:0.85em;"');
+                attr: 'data-hint="' . lang('@Creates a draft invoice from the unbilled hours and opens it') . '" onclick="' . htm_confirm_js('@Create a draft invoice with one line per unbilled hour entry for this project?') . '" style="padding:4px 10px; font-size:0.85em;"');
             echo '</div>';
         }
         echo '</div>';
@@ -118,17 +107,16 @@ if ($filter_proj > 0) {
 
     if ($unbilled_cnt > 0) {
         echo '<div style="margin-bottom:15px; padding:12px 15px; background:var(--bg-panel); border-radius:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">';
-        echo '<div>' . sprintf(lang('@%d unbilled, billable hour entries for this project, totaling %s.'), $unbilled_cnt, number_format($unbilled_total, 2, ',', '.') . ' ' . $cur) . '</div>';
+        echo '<div>' . sprintf(lang('@%d unbilled, billable hour entries for this project, totaling %s.'), $unbilled_cnt, fmt_dk($unbilled_total) . ' ' . $cur) . '</div>';
         htm_Button(icon: 'fa-file-invoice', labl: '@Create Invoice from Hours', type: 'success',
             link: 'time_actions.php?action=invoice&proj_id='.$filter_proj,
-            attr: 'onclick="return confirm(\''.addslashes(lang('@Create a draft invoice with one line per unbilled hour entry for this project?')).'\');" data-hint="'.lang('@Generate a draft invoice from all unbilled hours on this project').'"');
+            attr: 'onclick="' . htm_confirm_js('@Create a draft invoice with one line per unbilled hour entry for this project?') . '" data-hint="'.lang('@Generate a draft invoice from all unbilled hours on this project').'"');
         echo '</div>';
-        // NYT: fakturaers redigeringsformular understøtter kun 5 linjer i alt
-        // (samme grænse som recurring_invoice_edit.php/quote_edit.php) - alle
-        // linjer oprettes og vises korrekt på selve fakturaen/PDF'en uanset
-        // antal, men et EFTERFØLGENDE "Gem" i redigeringsformularen ville kun
-        // beholde de første 5. Advarer proaktivt i stedet for at brugeren
-        // opdager det ved en stille datamistet efter et helt normalt gem.
+        // NYT: fakturaers redigeringsformular understøtter kun 5 linjer i alt (samme grænse som
+        // recurring_invoice_edit.php/quote_edit.php) - alle linjer oprettes og vises korrekt på selve
+        // fakturaen/PDF'en uanset antal, men et EFTERFØLGENDE "Gem" i redigeringsformularen ville kun beholde de
+        // første 5. Advarer proaktivt i stedet for at brugeren opdager det ved en stille datamistet efter et helt
+        // normalt gem.
         if ($unbilled_cnt > 5) {
             htm_Banner('<i class="fa fa-triangle-exclamation"></i> ' . sprintf(lang('@This will create %d invoice lines, but the invoice editing form only supports editing up to 5 lines. All %d lines will be correctly created and shown on the invoice/PDF - but if you open and re-save the draft in the edit form afterwards, only the first 5 will be kept. Consider invoicing more often (e.g. weekly) to stay under this limit, or review the invoice without re-saving it.'), $unbilled_cnt, $unbilled_cnt), 'warning');
         }
@@ -177,9 +165,9 @@ if ($res) {
             $row['proj_no'] ? htmlspecialchars($row['proj_no']) : '<span style="color:var(--text-muted);">—</span>',
             htmlspecialchars($row['description'] ?? ''),
             htmlspecialchars($row['username'] ?? '—'),
-            number_format((float)$row['hours'], 2, ',', '.'),
-            number_format((float)$row['hourly_rate'], 2, ',', '.') . ' ' . $cur,
-            number_format($amount, 2, ',', '.') . ' ' . $cur,
+            fmt_dk((float)$row['hours']),
+            fmt_dk((float)$row['hourly_rate']) . ' ' . $cur,
+            fmt_dk($amount) . ' ' . $cur,
             $row['is_billable'] ? lang('@Yes') : lang('@No'),
             $status_html,
             $actions,
@@ -193,7 +181,7 @@ if (empty($data)) {
     htm_Table($headers, $data, 'timeTbl', 100, '', true,
         ['width:100px;', 'width:100px;', '', 'width:110px;', 'width:80px; text-align:right;', 'width:110px; text-align:right;', 'width:120px; text-align:right;', 'width:80px;', 'width:120px;', 'width:90px;'],
         '500px', 'time_entries.csv');
-    echo '<div style="text-align:right; font-weight:bold; padding:10px 0;">' . lang('@Total Hours') . ': ' . number_format($grand_total_hours, 2, ',', '.') . '</div>';
+    echo '<div style="text-align:right; font-weight:bold; padding:10px 0;">' . lang('@Total Hours') . ': ' . fmt_dk($grand_total_hours) . '</div>';
 }
 
 htm_Card_end();

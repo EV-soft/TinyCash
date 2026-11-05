@@ -54,15 +54,11 @@ $co_addr = $settings['company_address'] ?? '';
 $co_city = $settings['company_city']    ?? '';
 $co_zip  = preg_replace('/\D/', '', $settings['company_zip'] ?? '');
 
-// RETTET (bruger-anmodet, ALVORLIGT FUND): $co_cvr blev tidligere skrevet
-// ind i selve XML'en som '00000000' hvis firmaets CVR ikke var udfyldt i
-// Firmaindstillinger - en OIOUBL-fil er et formelt juridisk dokument
-// (indsendes til NemHandel/PEPPOL), og "00000000" ligner et ægte, gyldigt
-// felt uden at være det. Blokerer nu genereringen helt, samme princip som
-// kladde-tjekket ovenfor (en formelt ugyldig e-faktura må aldrig kunne
-// downloades/arkiveres som om den var gyldig). Adressen/byen tillades
-// stadig tom (renderes blot som tomme XML-felter, ikke et fabrikeret navn/
-// CVR nogen kunne forveksle med et ægte).
+// RETTET: $co_cvr blev tidligere skrevet ind i selve XML'en som '00000000' hvis firmaets CVR ikke var udfyldt i
+// Firmaindstillinger - en OIOUBL-fil er et formelt juridisk dokument (indsendes til NemHandel/PEPPOL), og
+// "00000000" ligner et ægte, gyldigt felt uden at være det. Blokerer nu genereringen helt, samme princip som
+// kladde-tjekket ovenfor (en formelt ugyldig e-faktura må aldrig kunne downloades/arkiveres som om den var
+// gyldig).
 if (empty($co_name) || empty($co_cvr)) {
     ob_end_clean(); http_response_code(409);
     die(lang('@Your company name and CVR number must be filled in under Company Settings before an OIOUBL e-invoice can be generated.'));
@@ -105,14 +101,11 @@ $vat_groups = [];    // grupperet pr. momssats: ['25.00' => ['taxable'=>, 'tax'=
 while ($res_l && ($l = DB::fetch_assoc($res_l))) {
     $qty   = (float)$l['quantity'];
     $price = (float)$l['price_each'];
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): valgfri rabat
-    // pr. linje - eksporteres her som en allerede NEDSAT enhedspris (ikke
-    // som et separat UBL AllowanceCharge-element), så "qty × PriceAmount"
-    // fortsat er PRÆCIS lig LineExtensionAmount uden at skulle udvide selve
-    // XML-strukturen - samme talmæssige resultat som fakturaen reelt bliver
-    // bogført til (invoice_dkk_totals(), inc/db_connect.inc.php), blot uden
-    // en synlig "10% rabat"-linje i selve e-faktura-XML'en (den vises i
-    // stedet tydeligt på den printede/mailede faktura, invoice_view.php).
+    // NYT: valgfri rabat pr. linje - eksporteres her som en allerede NEDSAT enhedspris (ikke som et separat UBL
+    // AllowanceCharge-element), så "qty × PriceAmount" fortsat er PRÆCIS lig LineExtensionAmount uden at skulle
+    // udvide selve XML-strukturen - samme talmæssige resultat som fakturaen reelt bliver bogført til
+    // (invoice_dkk_totals, inc/db_connect.inc.php), blot uden en synlig "10% rabat"-linje i selve e-faktura-XML'en
+    // (den vises i stedet tydeligt på den printede/mailede faktura, invoice_view.php).
     $disc = (float)($l['discount_pct'] ?? 0);
     if ($disc > 0) $price = round($price * (100 - $disc) / 100, 4);
     $rate  = (float)($l['line_vat_rate'] ?? $l['vat_rate'] ?? 25);
@@ -188,14 +181,10 @@ if ($cust_cvr) $x .= '        <cbc:CompanyID schemeID="DK:CVR">' . esc($cust_cvr
 $x .= '      </cac:PartyLegalEntity>' . "\n";
 $x .= '    </cac:Party>' . "\n" . '  </cac:AccountingCustomerParty>' . "\n";
 
-// Leveringsadresse (valgfri cac:Delivery - samme placering i sekvensen som
-// UBL 2.0/OIOUBL's egen XSD kræver: lige efter AccountingCustomerParty, før
-// PaymentMeans/PaymentTerms). Kun med når fakturaen faktisk har en
-// leveringsadresse, der afviger fra faktureringsadressen - samme betingelse
-// og datakilde som invoice_view.php's block-delivery, se [[bugs-batch-21-review]].
-// Adressen er ligesom køberens et fritekstfelt uden strukturerede
-// vej/by/postnr-dele - lægges derfor i StreetName, samme forenkling som
-// AccountingCustomerParty's egen adresse allerede bruger ovenfor.
+// Leveringsadresse (valgfri cac:Delivery - samme placering i sekvensen som UBL 2.0/OIOUBL's egen XSD kræver: lige
+// efter AccountingCustomerParty, før PaymentMeans/PaymentTerms). Adressen er ligesom køberens et fritekstfelt uden
+// strukturerede vej/by/postnr-dele - lægges derfor i StreetName, samme forenkling som AccountingCustomerParty's
+// egen adresse allerede bruger ovenfor.
 $deliv_addr = trim($inv['delivery_address'] ?? '');
 $bill_addr  = trim($inv['cust_address'] ?? '');
 if ($deliv_addr !== '' && $deliv_addr !== $bill_addr) {
@@ -218,12 +207,10 @@ $x .= '  <cac:PaymentMeans>' . "\n";
 $x .= '    <cbc:PaymentMeansCode>31</cbc:PaymentMeansCode>' . "\n";
 $x .= '    <cbc:PaymentDueDate>' . esc($due) . '</cbc:PaymentDueDate>' . "\n";
 $x .= '    <cac:PayeeFinancialAccount>' . "\n";
-// RETTET (bruger-anmodet, ALVORLIGT FUND - samme runde som CVR-fundet
-// ovenfor): faldt tilbage til opdigtede reg./kontonumre ('0000'/
-// '0000000000') hvis bankoplysningerne ikke var udfyldt - ikke lige så
-// juridisk kritisk som selve CVR-nummeret (blokerer derfor ikke hele
-// eksporten), men stadig fabrikeret finansiel data i et formelt dokument.
-// Tomme felter er ærlige ("intet oplyst"); falske tal er det ikke.
+// RETTET: faldt tilbage til opdigtede reg./kontonumre ('0000'/'0000000000') hvis bankoplysningerne ikke var
+// udfyldt - ikke lige så juridisk kritisk som selve CVR-nummeret (blokerer derfor ikke hele eksporten), men stadig
+// fabrikeret finansiel data i et formelt dokument. Tomme felter er ærlige ("intet oplyst"); falske tal er det
+// ikke.
 $x .= '      <cbc:ID>' . esc($bank_acc) . '</cbc:ID>' . "\n";
 $x .= '      <cac:FinancialInstitutionBranch><cbc:ID>' . esc($bank_reg) . '</cbc:ID></cac:FinancialInstitutionBranch>' . "\n";
 $x .= '    </cac:PayeeFinancialAccount>' . "\n";

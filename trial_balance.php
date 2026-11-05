@@ -35,7 +35,7 @@ $currency = $s['currency'] ?? 'DKK';
 // Periode - default hele indeværende kalenderår til dags dato, samme
 // simple standard som resten af systemets ad-hoc-rapporter (report_income.php
 // viser fx "hele bogføringen" som sin egen standard).
-$default_from = date('Y-01-01');
+$default_from = tc_fiscal_year_bounds($conn)[0];      // (regnskabsårets start - ikke altid 1. januar)
 $default_to   = date('Y-m-d');
 $from = $_GET['from'] ?? $default_from;
 $to   = $_GET['to']   ?? $default_to;
@@ -112,19 +112,19 @@ if (empty($rows)) {
         $data[] = [
             $r['acc_id'],
             '<a href="' . htmlspecialchars($card_link) . '" data-hint="' . htmlspecialchars(lang('@View Account Card')) . '">' . htmlspecialchars($r['acc_name']) . '</a>',
-            '<div style="text-align:right;">' . number_format((float)$r['primo'], 2, ',', '.') . '</div>',
-            '<div style="text-align:right; color:green;">' . number_format((float)$r['debit'], 2, ',', '.') . '</div>',
-            '<div style="text-align:right; color:red;">' . number_format((float)$r['credit'], 2, ',', '.') . '</div>',
-            '<div style="text-align:right; font-weight:bold;">' . number_format((float)$r['ultimo'], 2, ',', '.') . '</div>',
+            '<div style="text-align:right;">' . fmt_dk((float)$r['primo']) . '</div>',
+            '<div style="text-align:right; color:green;">' . fmt_dk((float)$r['debit']) . '</div>',
+            '<div style="text-align:right; color:red;">' . fmt_dk((float)$r['credit']) . '</div>',
+            '<div style="text-align:right; font-weight:bold;">' . fmt_dk((float)$r['ultimo']) . '</div>',
         ];
     }
     htm_Table($headers, $data, 'trial_balance_tbl', 200, '', true, [], '600px', 'saldobalance.csv');
 
     echo '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-top:15px; padding-top:12px; border-top:2px solid var(--color-primary); font-weight:bold;">';
-    echo '<div>' . lang('@Total') . ' ' . lang('@Opening Balance') . '<br>' . number_format($tot_primo, 2, ',', '.') . ' ' . $currency . '</div>';
-    echo '<div>' . lang('@Total') . ' ' . lang('@Debit') . '<br><span style="color:green;">' . number_format($tot_debit, 2, ',', '.') . ' ' . $currency . '</span></div>';
-    echo '<div>' . lang('@Total') . ' ' . lang('@Credit') . '<br><span style="color:red;">' . number_format($tot_credit, 2, ',', '.') . ' ' . $currency . '</span></div>';
-    echo '<div>' . lang('@Total') . ' ' . lang('@Closing Balance') . '<br>' . number_format($tot_ultimo, 2, ',', '.') . ' ' . $currency . '</div>';
+    echo '<div>' . lang('@Total') . ' ' . lang('@Opening Balance') . '<br>' . fmt_dk($tot_primo) . ' ' . $currency . '</div>';
+    echo '<div>' . lang('@Total') . ' ' . lang('@Debit') . '<br><span style="color:green;">' . fmt_dk($tot_debit) . ' ' . $currency . '</span></div>';
+    echo '<div>' . lang('@Total') . ' ' . lang('@Credit') . '<br><span style="color:red;">' . fmt_dk($tot_credit) . ' ' . $currency . '</span></div>';
+    echo '<div>' . lang('@Total') . ' ' . lang('@Closing Balance') . '<br>' . fmt_dk($tot_ultimo) . ' ' . $currency . '</div>';
     echo '</div>';
 }
 

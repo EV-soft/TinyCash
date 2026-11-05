@@ -18,7 +18,7 @@ $conn_id = (int)($_GET['conn_id'] ?? 0);
 $bc = $conn_id > 0 ? DB::fetch_assoc(DB::query($conn, "SELECT * FROM bank_connections WHERE conn_id = $conn_id")) : null;
 
 if (!$bc || $bc['status'] !== 'LN' || empty($bc['gc_account_id'])) {
-    header("Location: bank_integration.php?msg=error"); exit;
+    redirect('bank_integration.php', '@Could not connect to the bank. Please try again.', 'error');
 }
 
 // Banker udleverer typisk kun et begrænset antal dage tilbage - 90 dage er
@@ -70,6 +70,5 @@ log_action($conn, 'SYNC_BANK_TRANSACTIONS', 'bank_connections', $conn_id, null, 
 // Samme redirect-mål som CSV-importen (bank_import_process.php) - de
 // hentede transaktioner er nu klar til afstemning, ikke noget der skal
 // gennemgås her på siden.
-header("Location: reconcile_list.php?msg=imported&count=$imported&date_warnings=0");
-exit;
+redirect('reconcile_list.php', sprintf(lang('@%d transaction(s) imported.'), $imported));
 ?>

@@ -68,9 +68,9 @@ function get_folder_stats($path) {
         }
     }
     if ($stats['size'] >= 1048576) {
-        $stats['formatted_size'] = number_format($stats['size'] / 1048576, 2, ',', '.') . ' MB';
+        $stats['formatted_size'] = fmt_dk($stats['size'] / 1048576) . ' MB';
     } elseif ($stats['size'] > 0) {
-        $stats['formatted_size'] = number_format($stats['size'] / 1024, 2, ',', '.') . ' KB';
+        $stats['formatted_size'] = fmt_dk($stats['size'] / 1024) . ' KB';
     }
     return $stats;
 }
@@ -352,7 +352,7 @@ htm_Card_(capt: '@System Storage Browser', wdth: '');
             if (file_exists($path)) {
                 $size_bytes = @filesize($path);
                 if ($size_bytes !== false) {
-                    $size = ($size_bytes >= 1048576) ? number_format($size_bytes / 1048576, 2, ',', '.') . ' MB' : number_format($size_bytes / 1024, 2, ',', '.') . ' KB';
+                    $size = ($size_bytes >= 1048576) ? fmt_dk($size_bytes / 1048576) . ' MB' : fmt_dk($size_bytes / 1024) . ' KB';
                 }
             }
             

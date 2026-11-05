@@ -21,7 +21,16 @@ færdig** - ingen af scripterne er beregnet til at ligge tilgængelige permanent
    del af `init_demo_data.php`s minimale sæt. Kør denne, hvis du støder på
    "no such table"-fejl, mens du klikker rundt i systemet.
 
-Disse to trin alene giver nu en fuldt køreklar installation - alle kolonner
+3. **`demo_data_extended.php`** (valgfri, kun på et demo-/testregnskab)
+   Udvidede demodata, så alt kan afprøves: fakturaer i alle tilstande (betalt via bankafstemning, delvist betalt,
+   forfalden, 1. rykker sendt, kunde uden rykkere, EUR til engelsk kunde, linjerabat, kreditnota, afskrevet, kontant),
+   uafstemte banklinjer + bankregler, tilbud i alle statusser, leverandører (med/uden bankoplysninger), udgifter
+   (betalt, skyldig, forfalden, splittet, indtægt, kladde), faste fakturaer/udgifter, projekt med timer, budgetter og
+   en linjeskabelon. Bogføres gennem appens egne funktioner, datoer relativt til i dag. Køres automatisk af
+   ét-klik-opsætningen. Scenarier hvis tabel kun findes efter en migration, springes over - kør migrationen og
+   derefter scriptet igen, så tages kun de manglende. Selve logikken: `demo_data_extended.core.php`.
+
+Disse trin giver nu en fuldt køreklar installation - alle kolonner
 tilføjet af nedenstående migrationer over tid (projekt-modul, valuta,
 kreditnota, bilagsopfølgning, hulfrit bilagsnummer) er allerede en del af
 basis-skemaet i begge scripts. **Verificeret 2026-08-17**: kørt mod en helt

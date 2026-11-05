@@ -34,20 +34,13 @@ function _account_read_all(): array {
     return is_array($data) ? $data : [];
 }
 
-// RETTET (§find-fem-fejl, flere-regnskaber-sweep): den oprindelige
-// _account_write_all() tog kun en flock() om selve SKRIVningen - men
-// kalderen (account_save()) havde allerede LÆST den daværende tilstand
-// FØR låsen blev taget (via en helt separat _account_read_all()). To
-// samtidige skriv-forsøg (fx to admin-faner der opretter hvert sit nye
-// regnskab omtrent samtidig) kunne derfor begge læse den samme
-// udgangstilstand, hver tilføje deres egen post til deres EGEN kopi i
-// hukommelsen, og den sidste af de to skriv-låse ville overskrive den
-// først skrevne ændring fuldstændigt (klassisk tabt-opdatering-kapløb) -
-// den tabte regnskabspost ville derefter være lige så usynlig/utilgængelig
-// som det oprindelige "regnskabet forsvandt fra login-vælgeren"-gap.
-// Løsning: læs OG skriv nu inde i ÉN samlet, låst kritisk sektion (samme
-// filhåndtag genbruges til begge dele), styret af en $mutator-callback der
-// modtager den FRISKE, låste tilstand og returnerer den nye.
+// RETTET: den oprindelige _account_write_all tog kun en flock om selve SKRIVningen - men kalderen (account_save)
+// havde allerede LÆST den daværende tilstand FØR låsen blev taget (via en helt separat _account_read_all). To
+// samtidige skriv-forsøg (fx to admin-faner der opretter hvert sit nye regnskab omtrent samtidig) kunne derfor
+// begge læse den samme udgangstilstand, hver tilføje deres egen post til deres EGEN kopi i hukommelsen, og den
+// sidste af de to skriv-låse ville overskrive den først skrevne ændring fuldstændigt (klassisk
+// tabt-opdatering-kapløb) - den tabte regnskabspost ville derefter være lige så usynlig/utilgængelig som det
+// oprindelige "regnskabet forsvandt fra login-vælgeren"-gap.
 function _account_update_all(callable $mutator): bool {
     $dir = dirname(ACCOUNTS_REGISTRY_FILE);
     if (!is_dir($dir)) @mkdir($dir, 0755, true);

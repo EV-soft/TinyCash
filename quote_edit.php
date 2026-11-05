@@ -19,7 +19,7 @@ require_once 'inc/php2htm.lib.php';
 require_once 'inc/menu.inc.php';
 require_once 'inc/audit.inc.php';
 
-$table_exists = @DB::query($conn, "SELECT 1 FROM quotes LIMIT 1") !== false;
+$table_exists = db_has_table($conn, 'quotes');
 if (!$table_exists) {
     htm_Header('@Quotes');
     showMenu();
@@ -41,41 +41,53 @@ if (isset($_GET['del']) && $_GET['del'] == 1) {
     $quote_id = (int)$_GET['id'];
     $del_row = DB::fetch_assoc(DB::query($conn, "SELECT status, cust_id, quote_date FROM quotes WHERE quote_id = $quote_id"));
     if ($del_row && $del_row['status'] !== 'draft') {
-        header("Location: quote_edit.php?id=$quote_id&err=posted_no_delete"); exit;
+        redirect("quote_edit.php?id=$quote_id", '@This quote has already been sent and cannot be deleted. Reopen it to draft first if you need to remove it.', 'error');
     }
     DB::query($conn, "DELETE FROM quote_lines WHERE quote_id=$quote_id");
     if (DB::query($conn, "DELETE FROM quotes WHERE quote_id=$quote_id") && $del_row) {
         log_action($conn, 'DELETE_DRAFT_QUOTE', 'quotes', $quote_id, $del_row, null);
     }
-    header("Location: quote_list.php?msg=deleted"); exit;
+    redirect('quote_list.php', '@Deleted successfully');
 }
 
 // 2. HÅNDTER GEM / OPDATER
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_quote'])) {
+    // Linjens momssats er et frit talfelt - en tastefejl som 250 eller -25 må ikke bogføres (tom linje = 0 %)
+    foreach ((array)($_POST['line_vat'] ?? []) as $vchk) {
+        if (trim((string)$vchk) !== '' && tc_pct($vchk) === null) redirect("quote_edit.php?id=" . (int)($_POST['quote_id'] ?? 0), '@The VAT rate must be between 0 and 100 %.', 'error');
+    }
     $quote_id = (int)$_POST['quote_id'];
 
     if ($quote_id > 0) {
         $existing = DB::fetch_assoc(DB::query($conn, "SELECT status FROM quotes WHERE quote_id = $quote_id"));
         if ($existing && $existing['status'] !== 'draft') {
-            die(lang('@This quote has already been sent and can no longer be edited here. Reopen it to draft first, or create a new quote.'));
+            redirect("quote_edit.php?id=" . (int)($_POST['quote_id'] ?? 0), '@This quote has already been sent and can no longer be edited here. Reopen it to draft first, or create a new quote.', 'error');
         }
     }
 
     $cust_id      = (int)$_POST['cust_id'];
+    $qe_keep_cust = $quote_id > 0 ? (int)(DB::fetch_row(DB::query($conn, "SELECT cust_id FROM quotes WHERE quote_id = $quote_id"))[0] ?? 0) : 0;
+    if (!tc_customer_ok($conn, $cust_id, $qe_keep_cust)) redirect("quote_edit.php?id=$quote_id", '@Please choose a customer from the list.', 'error');      // RETTET: en kunde der ikke findes (eller ligger i papirkurven) blev godtaget - en bogført faktura stod da på debitorkontoen uden kunde
     $quote_date   = DB::escape($conn, $_POST['quote_date']);
     $valid_until  = DB::escape($conn, $_POST['valid_until']);
+    if (!tc_is_date($quote_date) || ($valid_until !== '' && !tc_is_date($valid_until))) {      // RETTET: datoerne blev ikke kontrolleret
+        redirect("quote_edit.php?id=" . (int)($_POST['quote_id'] ?? 0), '@Please enter a valid date.', 'error');
+    }
     if ($valid_until !== '' && $valid_until < (string)($_POST['quote_date'] ?? '')) {      // RETTET: et tilbud der udløb før det blev givet
-        die(lang('@The validity date cannot be before the quote date.'));
+        redirect("quote_edit.php?id=" . (int)($_POST['quote_id'] ?? 0), '@The validity date cannot be before the quote date.', 'error');
     }
     $cust_ref     = DB::escape($conn, $_POST['cust_reference'] ?? '');
     $quote_note   = DB::escape($conn, $_POST['quote_note'] ?? '');
     $deliv_addr   = DB::escape($conn, $_POST['delivery_address'] ?? '');
     $proj_id      = (int)($_POST['proj_id'] ?? 0);
+    if (!tc_project_ok($conn, $proj_id, $proj_id)) $proj_id = 0;      // RETTET: et projekt-id der ikke findes, blev gemt (løs henvisning i projektregnskabet)
     $proj_sql     = ($proj_id > 0) ? $proj_id : 'NULL';
+    // Ingen udløbsdato = NULL. '' blev gemt og talte i opfølgningslisten og på oversigten som udløbet 01-01-1970
+    $vu_sql       = $valid_until !== '' ? "'$valid_until'" : 'NULL';
 
     if ($quote_id > 0) {
         $save_ok = DB::query($conn, "UPDATE quotes SET
-            cust_id=$cust_id, quote_date='$quote_date', valid_until='$valid_until',
+            cust_id=$cust_id, quote_date='$quote_date', valid_until=$vu_sql,
             cust_reference='$cust_ref', quote_note='$quote_note', delivery_address='$deliv_addr',
             proj_id=$proj_sql
             WHERE quote_id=$quote_id");
@@ -84,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_quote'])) {
         $save_ok = DB::query($conn, "INSERT INTO quotes
             (quote_no, cust_id, quote_date, valid_until, status, cust_reference, quote_note,
              delivery_address, proj_id, created_by)
-            VALUES ($quote_no, $cust_id, '$quote_date', '$valid_until', 'draft', '$cust_ref', '$quote_note',
+            VALUES ($quote_no, $cust_id, '$quote_date', $vu_sql, 'draft', '$cust_ref', '$quote_note',
              '$deliv_addr', $proj_sql, " . (int)($_SESSION['user_id'] ?? 0) . ")");
         if ($save_ok) { $quote_id = DB::insert_id($conn); }
     }
@@ -94,16 +106,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_quote'])) {
     }
 
     // Linjer - ryd og genskriv, samme mønster som invoice_edit.php
-    // RETTET (bruger-anmodet: "fritekst-fallback ligesom fakturaer" - se
-    // [[invoice-line-add-row-fix]]): denne løkke krævede FØR altid et gyldigt
-    // prod_id ("if ($pid <= 0 || $qty <= 0) continue;") - en fritekst-linje
-    // (intet tilknyttet produkt, fx fra en fremtidig batch-oprettelse svarende
-    // til time_actions.php's "Opret faktura af timer") ville blive sprunget
-    // helt over, og linjens EGEN tekst ville aldrig kunne bevares ved et
-    // almindeligt Gem her, selvom den findes i databasen. line_desc[] (et
-    // skjult felt uafhængigt af select'ens værdi, se build_quote_line_row()
-    // nedenfor) bærer nu linjens faktisk gemte tekst, så en fritekst-linje
-    // hverken mistes eller ombyttes til selve select-værdien ved gem.
+    // RETTET: denne løkke krævede FØR altid et gyldigt prod_id ("if ($pid <= 0 || $qty <= 0) continue;") - en
+    // fritekst-linje (intet tilknyttet produkt, fx fra en fremtidig batch-oprettelse svarende til
+    // time_actions.php's "Opret faktura af timer") ville blive sprunget helt over, og linjens EGEN tekst ville
+    // aldrig kunne bevares ved et almindeligt Gem her, selvom den findes i databasen. line_desc[] (et skjult felt
+    // uafhængigt af select'ens værdi, se build_quote_line_row nedenfor) bærer nu linjens faktisk gemte tekst, så
+    // en fritekst-linje hverken mistes eller ombyttes til selve select-værdien ved gem.
     DB::query($conn, "DELETE FROM quote_lines WHERE quote_id=$quote_id");
     if (isset($_POST['line_text']) && is_array($_POST['line_text'])) {
         foreach ($_POST['line_text'] as $k => $v) {
@@ -120,28 +128,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_quote'])) {
             } else {
                 $txt = DB::escape($conn, $_POST['line_text'][$k]);
             }
+            if ($qty <= 0 && ($pid > 0 || $existing_desc !== '')) $GLOBALS['tc_dropped_lines'] = ($GLOBALS['tc_dropped_lines'] ?? 0) + 1;      // RETTET: en udfyldt linje med antal 0 eller negativt forsvandt stille - nu en advarsel efter gem
             if ($qty <= 0 || ($pid <= 0 && $existing_desc === '')) continue;
             DB::query($conn, "INSERT INTO quote_lines
                 (quote_id, line_text, quantity, price_each, line_vat_rate, prod_id, proj_id)
                 VALUES ($quote_id, '$txt', $qty, $prc, $vat, $pid, $proj_sql)");
         }
     }
-    header("Location: quote_edit.php?id=$quote_id&msg=saved"); exit;
+    if (!empty($GLOBALS['tc_dropped_lines'])) flash(sprintf(lang('@%d line(s) with a quantity of 0 or less were not saved - use a credit note to reduce an invoice.'), $GLOBALS['tc_dropped_lines']), 'warning');
+    redirect("quote_edit.php?id=$quote_id", '@Changes saved successfully');
 }
 
 // 3. HENT DATA
 $quote_id = (int)($_GET['id'] ?? 0);
 $s = get_settings($conn);
 $module_projects = !empty($s['module_projects']) && $s['module_projects'] == '1';
-// RETTET (§currency-setting-is-cosmetic-label): totalerne herunder viste
-// altid en hardkodet "DKK"-etiket, uanset firmaets faktisk konfigurerede
-// bogføringsvaluta (tilbud understøtter ikke fremmed valuta, men SKAL vise
-// den rigtige base-valuta, ikke altid dansk).
+// RETTET: totalerne herunder viste altid en hardkodet "DKK"-etiket, uanset firmaets faktisk konfigurerede
+// bogføringsvaluta (tilbud understøtter ikke fremmed valuta, men SKAL vise den rigtige base-valuta, ikke altid
+// dansk).
 $default_currency = $s['currency'] ?? 'DKK';
 
 if ($quote_id > 0) {
     $q = DB::fetch_assoc(DB::query($conn, "SELECT * FROM quotes WHERE quote_id=$quote_id"));
-    if (!$q) die(lang('@Invoice not found')); // delt nøgle med invoice_edit.php ("Faktura ikke fundet" - dækker begge her)
+    if (!$q) redirect("quote_edit.php?id=" . (int)($_POST['quote_id'] ?? 0), '@Invoice not found', 'error'); // delt nøgle med invoice_edit.php ("Faktura ikke fundet" - dækker begge her)
     $quote_lines = [];
     $lines_res = DB::query($conn, "SELECT * FROM quote_lines WHERE quote_id=$quote_id ORDER BY line_id");
     while ($l = DB::fetch_assoc($lines_res)) { $quote_lines[] = $l; }
@@ -152,12 +161,10 @@ if ($quote_id > 0) {
         'status' => 'draft', 'delivery_address' => '', 'cust_reference' => '',
         'quote_note' => '', 'proj_id' => (int)($_GET['proj_id'] ?? 0),
     ];
-    // RETTET (samme fund som invoice_edit.php, se [[invoice-line-add-row-fix]]):
-    // $quote_lines blev aldrig sat for et NYT tilbud (kun i grenen ovenfor) -
-    // virkede tidligere kun ved en tilfældighed, fordi den hårdkodede
-    // 5-linjers-løkke udelukkende læste den via isset(), som tåler en helt
-    // udefineret variabel. Et direkte count($quote_lines) (se
-    // $line_render_count nedenfor) gør ikke det samme.
+    // RETTET (samme fund som invoice_edit.php, se): $quote_lines blev aldrig sat for et NYT tilbud (kun i grenen
+    // ovenfor) - virkede tidligere kun ved en tilfældighed, fordi den hårdkodede 5-linjers-løkke udelukkende læste
+    // den via isset, som tåler en helt udefineret variabel. Et direkte count($quote_lines) (se $line_render_count
+    // nedenfor) gør ikke det samme.
     $quote_lines = [];
 }
 $is_locked = ($q['status'] !== 'draft');
@@ -168,20 +175,7 @@ htm_Header($quote_id > 0 ? lang('@Edit Quote')." #$quote_id" : lang('@Create New
 showMenu();
 
 $tools = htm_Button('fa-list', '@Back', 'secondary', 'quote_list.php', '', 'data-hint="'.lang('@Return to the quote list without saving').'"', '', false);
-$card_msg = '';
-// RETTET (bruger-anmodet, samme fund som invoice_edit.php fik samme
-// session): specifikt tjek for 'duplicated' skal stå FØR det generiske
-// isset($_GET['msg'])-tjek nedenfor, som ellers matcher enhver værdi af
-// msg (inkl. denne) og ville vise den forkerte "Ændringer gemt"-besked på
-// en helt frisk kladde der aldrig er blevet gemt endnu.
-if (isset($_GET['msg']) && $_GET['msg'] === 'duplicated') {
-    $card_msg = htm_Alert(sprintf(lang('@New draft created as a duplicate of quote #%d - review and adjust before sending.'), (int)($_GET['src'] ?? 0)), 'info', 700, false);
-} elseif (isset($_GET['msg'])) {
-    $card_msg = htm_Alert(lang('@Changes saved successfully'), 'success', 700, false);
-} elseif (isset($_GET['err']) && $_GET['err'] === 'posted_no_delete') {
-    $card_msg = htm_Alert(lang('@This quote has already been sent and cannot be deleted. Reopen it to draft first if you need to remove it.'), 'error', 700, false);
-}
-htm_Card_($quote_id > 0 ? '@Edit Quote' : '@New Quote', 1000, $card_msg, 'edit_form', true, $tools);
+htm_Card_($quote_id > 0 ? '@Edit Quote' : '@New Quote', 1000, '', 'edit_form', true, $tools);
 
 echo '<input type="hidden" name="quote_id" value="'.$quote_id.'">';
 
@@ -190,11 +184,10 @@ if ($is_locked) {
 }
 
 // Kunde + projekt
-// NYT (runde 31, papirkurv): en blødslettet kunde udelades af listen for NYE
-// valg, men skal stadig kunne VÆLGES/blive stående her, hvis det allerede er
-// DENNE konkrete kundes tilbud - ellers ville en genindsendelse af en helt
-// almindelig (ikke-låst) formular kunne skifte kunden til den forkerte, uden
-// nogen advarsel. Samme "(slettet)"-mærkning gør det tydeligt for brugeren.
+// NYT: en blødslettet kunde udelades af listen for NYE valg, men skal stadig kunne VÆLGES/blive stående her, hvis
+// det allerede er DENNE konkrete kundes tilbud - ellers ville en genindsendelse af en helt almindelig (ikke-låst)
+// formular kunne skifte kunden til den forkerte, uden nogen advarsel. Samme "(slettet)"-mærkning gør det tydeligt
+// for brugeren.
 $cust_res = DB::query($conn, "SELECT cust_id, cust_name FROM customers WHERE " . customers_active_filter($conn) . " ORDER BY cust_name");
 $cust_opt = [];
 while ($c = DB::fetch_assoc($cust_res)) { $cust_opt[$c['cust_id']] = $c['cust_name']; }
@@ -227,26 +220,14 @@ while ($p = DB::fetch_assoc($prod_res)) {
     $prod_price_map[$p['prod_id']] = ($p['prod_price'] !== null) ? (float)$p['prod_price'] : 0.00;
 }
 
-// RETTET (bruger-anmodet, samme fund/rettelse som invoice_edit.php - se
-// [[invoice-line-add-row-fix]]): tabellen var hårdkodet til NØJAGTIGT 5
-// linjer, uden nogen "Tilføj linje"-knap OG uden at vise en 6. linje, hvis
-// tilbuddet af en anden vej allerede havde fået flere. Gem-håndteringen
-// sletter altid alle linjer og genopretter dem udelukkende fra det,
-// formularen indsender - et tilbud med 6+ linjer kunne derfor miste linje
-// 6+ permanent ved et helt almindeligt Gem. Rettet på samme måde: vis altid
-// MINDST lige så mange rækker som der reelt er linjer, og en JS-baseret
-// "Tilføj linje"-knap til at tilføje flere. Gem-logikken krævede ingen
-// ændring - den itererer allerede generisk over hele $_POST['line_text'].
+// RETTET: tabellen var hårdkodet til NØJAGTIGT 5 linjer, uden nogen "Tilføj linje"-knap OG uden at vise en 6.
+// Gem-håndteringen sletter altid alle linjer og genopretter dem udelukkende fra det, formularen indsender - et
+// tilbud med 6+ linjer kunne derfor miste linje 6+ permanent ved et helt almindeligt Gem.
 $row_extr = $is_locked ? 'disabled' : '';
-// RETTET (bruger-anmodet: "fritekst-fallback ligesom fakturaer" - se
-// [[invoice-line-add-row-fix]]): line_text[] er reelt en produkt-<select>,
-// ikke et frit tekstfelt - dens indsendte værdi er altid et prod_id. Et
-// separat, skjult line_desc[]-felt bærer nu linjens EGEN, faktisk gemte
-// tekst uafhængigt heraf, så en fritekst-linje (intet prod_id) hverken
-// mistes eller ombyttes til "0" ved et almindeligt Gem - se save-
-// håndteringen ovenfor. Vist som en lille note under feltet, når linjen
-// reelt er fritekst, så brugeren kan se hvad der faktisk står der, selv om
-// selve dropdown'en nødvendigvis viser "-- Vælg produkt --".
+// RETTET: line_text[] er reelt en produkt-<select>, ikke et frit tekstfelt - dens indsendte værdi er altid et
+// prod_id. Et separat, skjult line_desc[]-felt bærer nu linjens EGEN, faktisk gemte tekst uafhængigt heraf, så en
+// fritekst-linje (intet prod_id) hverken mistes eller ombyttes til "0" ved et almindeligt Gem - se
+// save-håndteringen ovenfor.
 function build_quote_line_row($i, $prod_id, $line_qty, $line_price, $line_vat, $existing_line_text, $prod_opt, $row_extr) {
     $f_prod  = '<input type="hidden" name="prod_id[]" value="'.$prod_id.'">'
              . '<input type="hidden" name="line_desc[]" value="'.htmlspecialchars($existing_line_text, ENT_QUOTES).'">';
@@ -333,9 +314,9 @@ function calculateQuoteTotals() {
     const vatF = document.getElementsByName('line_vat[]');
     let sub = 0, vat = 0;
     for (let i = 0; i < qtyF.length; i++) {
-        let q = parseFloat(qtyF[i].value.toString().replace(',','.')) || 0;
-        let p = parseFloat(priF[i].value.toString().replace(',','.')) || 0;
-        let v = parseFloat(vatF[i].value.toString().replace(',','.')) || 0;
+        let q = tcNum(qtyF[i].value);      // ("1.500,00" blev til 1,5 i totalerne)
+        let p = tcNum(priF[i].value);
+        let v = tcNum(vatF[i].value);
         sub += q * p;
         vat += q * p * (v / 100);
     }

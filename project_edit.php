@@ -18,7 +18,7 @@ $err = $_GET['err'] ?? '';
 if ($id > 0) {
     $res  = DB::query($conn, "SELECT * FROM projects WHERE proj_id = $id");
     $item = DB::fetch_assoc($res);
-    if (!$item) die(lang('@Project not found'));
+    if (!$item) redirect('project_view.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: hvid side uden menu
     $pageTitle = lang('@Edit Project');
 } else {
     $item = [
@@ -37,9 +37,7 @@ if ($id > 0) {
 htm_Header($pageTitle);
 showMenu();
 
-if ($err === 'missing_code') htm_Alert(lang('@Project Code is required'), 'error');
-if ($err === 'duplicate_code') htm_Alert(lang('@This project code is already in use by another project.'), 'error');
-if ($err === 'in_use') htm_Alert(lang('@This project has posted invoices, expenses or entries, or hours not yet invoiced, and cannot be deleted - set it to inactive instead.'), 'error');
+flash_render();
 
 $cust_opts = ['' => '-- ' . lang('@Select Customer') . ' --'];
 // RETTET: kunder i papirkurven (customer_edit.php "Slet") stod i listen - et nyt projekt (og dets timefaktura) kunne
@@ -157,7 +155,7 @@ htm_Card_($pageTitle, 700);
         </a>
         <?php if ($id > 0): ?>
         <a href="project_actions.php?action=delete_project&id=<?php echo $id; ?>"
-           onclick="return confirm('<?php echo addslashes(lang('@Are you sure? This cannot be undone.')); ?>')"
+           onclick="<?php echo htm_confirm_js('@Are you sure? This cannot be undone.'); ?>"
            style="text-decoration:none; flex:1;">
             <?php htm_Button(icon: 'fa-trash', labl: '@Delete', type: 'danger', styl: 'width:100%; padding:12px;', attr: 'data-hint="'.lang('@Delete this project').'"'); ?>
         </a>

@@ -18,7 +18,7 @@ require_once 'inc/invoice_post.inc.php';
 $credit_ref = (int)($_GET['credit_ref'] ?? 0);
 
 if ($credit_ref <= 0) {
-    header("Location: sales_hub.php?err=invalid_credit_ref"); exit;
+    redirect('sales_hub.php', '@Invoice or customer not found', 'error');
 }
 
 // Hent original faktura
@@ -28,28 +28,29 @@ $orig = DB::fetch_assoc(DB::query($conn,
      WHERE i.inv_id = $credit_ref"));
 
 if (!$orig) {
-    header("Location: sales_hub.php?err=not_found"); exit;
+    redirect('sales_hub.php', '@Invoice or customer not found', 'error');
 }
 
 // Kun bogførte fakturaer kan krediteres
 if (strtolower($orig['inv_status']) === 'draft') {
-    header("Location: invoice_edit.php?id=$credit_ref&err=draft_no_credit"); exit;
+    redirect("invoice_edit.php?id=$credit_ref", '@A draft cannot be credited - edit or delete it instead.', 'error');
 }
 
-// RETTET (se [[bugs-batch-10-review]]): manglede et tjek for at "originalen"
-// der skal krediteres ikke selv ER en kreditnota - sales_hub.php viste
-// "Kreditér denne faktura"-knappen på alle ikke-kladde-fakturaer inkl.
-// kreditnota-rækkerne selv, og intet her stoppede det. En kreditnota af en
-// kreditnota giver ingen mening bogføringsmæssigt.
+// RETTET: manglede et tjek for at "originalen" der skal krediteres ikke selv ER en kreditnota - sales_hub.php
+// viste "Kreditér denne faktura"-knappen på alle ikke-kladde-fakturaer inkl. kreditnota-rækkerne selv, og intet
+// her stoppede det. En kreditnota af en kreditnota giver ingen mening bogføringsmæssigt.
 if (!empty($orig['credit_ref'])) {
-    header("Location: sales_hub.php?err=cannot_credit_a_credit_note"); exit;
+    redirect('sales_hub.php', '@A credit note cannot itself be credited.', 'error');
 }
 
 // Allerede krediteret?
 $existing_credit = DB::fetch_assoc(DB::query($conn,
     "SELECT inv_id FROM invoices WHERE credit_ref = $credit_ref LIMIT 1"));
 if ($existing_credit) {
-    header("Location: sales_hub.php?err=already_credited&existing=" . $existing_credit['inv_id']); exit;
+    redirect('sales_hub.php', '@This invoice has already been credited.', 'error');
+}
+if (invoice_is_written_off($conn, $credit_ref)) {      // (se invoice_is_written_off() i inc/invoice_post.inc.php)
+    redirect('sales_hub.php', '@This invoice has been written off as bad debt and cannot be credited - the receivable is already closed.', 'error');
 }
 
 // RETTET: en faktura hvis EGEN dato ligger i en låst periode, kunne slet ikke krediteres - men en kreditnota
@@ -74,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_credit'])) {
             // Selve kreditnotaen: invoice_create_credit() (inc/invoice_post.inc.php) - samme kode som returneringer fra en webbutik
             $new_inv_id = invoice_create_credit($conn, $credit_ref, (array)($_POST['credit_qty'] ?? []), $credit_date, (string)($_POST['credit_note'] ?? ''));
             DB::commit($conn);
-            header("Location: invoice_view.php?id=$new_inv_id&msg=credit_created"); exit;
+            redirect("invoice_view.php?id=$new_inv_id", '@Credit note created and posted.');
 
         } catch (Exception $e) {
             DB::rollback($conn);
@@ -96,7 +97,8 @@ foreach ($orig_lines as $l) {
 }
 
 $tools = htm_Button('fa-times', '@Cancel', 'secondary', 'sales_hub.php', '', 'data-hint="'.lang('@Discard the credit note and return to the sales hub').'"', '<div></div>', false);
-htm_Card_(lang('@Create Credit Note') . ' — ' . lang('@Invoice') . ' #' . $credit_ref, 900, '', '', true, $tools);
+// RETTET: overskriften viste fakturaens interne id (#1000036) i stedet for dens fakturanummer (#1010)
+htm_Card_(lang('@Create Credit Note') . ' — ' . lang('@Invoice') . ' #' . htmlspecialchars((string)($orig['invoice_no'] ?: $credit_ref)), 900, '', '', true, $tools);
 
 if (isset($err)) htm_Alert($err, 'error');
 
@@ -111,24 +113,19 @@ $credit_notice = '<strong><i class="fa fa-info-circle"></i> ' . lang('@What happ
 htm_Banner($credit_notice, 'warning');
 
 // Formular
-// RETTET (runde 32, delvis kreditnota): formularen skal starte FØR selve
-// linje-oversigten nedenfor, da "Antal at kreditere"-felterne (indsat i
-// selve tabellen) ellers ville ligge UDENFOR <form> og aldrig blive
-// indsendt - oversigten var oprindeligt rent informativ og lå bevidst uden
-// for formularen, men er nu selv en del af den.
+// RETTET: formularen skal starte FØR selve linje-oversigten nedenfor, da "Antal at kreditere"-felterne (indsat i
+// selve tabellen) ellers ville ligge UDENFOR <form> og aldrig blive indsendt - oversigten var oprindeligt rent
+// informativ og lå bevidst uden for formularen, men er nu selv en del af den.
 echo '<form method="POST">';
 csrf_field();
 
 // Original faktura — oversigt
 echo '<div style="margin-bottom:20px; padding:14px; background:var(--bg-panel); border-radius:6px; border:1px solid var(--border-color);">';
 echo '<strong>' . lang('@Original invoice') . ':</strong><br>';
-// RETTET (§bugs-batch-22-review, del b): erstattet den håndrullede <table>
-// med htm_Table() (se csrf-protection-added.md/htm-alert-banner-refactor.md
-// for baggrunden).
-// RETTET (runde 32, delvis kreditnota): "Antal"-kolonnen er nu et redigerbart
-// felt (forudfyldt til hele den oprindelige mængde, uændret standardopførsel
-// hvis intet ændres) i stedet for ren visningstekst - lader brugeren
-// kreditere en delmængde, eller nulstille en linje helt (0 = udelades).
+// RETTET: erstattet den håndrullede <table> med htm_Table.
+// RETTET: "Antal"-kolonnen er nu et redigerbart felt (forudfyldt til hele den oprindelige mængde, uændret
+// standardopførsel hvis intet ændres) i stedet for ren visningstekst - lader brugeren kreditere en delmængde,
+// eller nulstille en linje helt (0 = udelades).
 $credit_line_rows = [];
 $credit_has_discount = false;
 foreach ($orig_lines as $l) { if (!empty($l['discount_pct'])) $credit_has_discount = true; }
@@ -139,12 +136,12 @@ foreach ($orig_lines as $l) {
     $line_id = (int)$l['line_id'];
     $row = [
         htmlspecialchars($l['line_text']),
-        '<input type="text" class="credit-qty-input" data-price="' . (float)$l['price_each'] . '" data-vat="' . (float)$l['line_vat_rate'] . '" data-disc="' . $disc . '" name="credit_qty[' . $line_id . ']" value="' . number_format($qty_abs, 2, ',', '') . '" style="width:80px; text-align:right;" oninput="recalcCreditTotals()" data-hint="' . htmlspecialchars(lang('@Max') . ': ' . number_format($qty_abs, 2, ',', '.')) . '">',
-        number_format($l['price_each'], 2, ',', '.'),
+        '<input type="text" class="credit-qty-input" data-price="' . (float)$l['price_each'] . '" data-vat="' . (float)$l['line_vat_rate'] . '" data-disc="' . $disc . '" name="credit_qty[' . $line_id . ']" value="' . fmt_dk_input($qty_abs) . '" style="width:80px; text-align:right;" oninput="recalcCreditTotals()" data-hint="' . htmlspecialchars(lang('@Max') . ': ' . fmt_dk($qty_abs)) . '">',
+        fmt_dk($l['price_each']),
         $l['line_vat_rate'] . '%',
     ];
-    if ($credit_has_discount) $row[] = ($disc > 0 ? number_format($disc, 2, ',', '.') . '%' : '—');
-    $row[] = '<div class="credit-line-total" style="text-align:right; font-weight:500;">' . number_format($lt, 2, ',', '.') . '</div>';
+    if ($credit_has_discount) $row[] = ($disc > 0 ? fmt_dk($disc) . '%' : '—');
+    $row[] = '<div class="credit-line-total" style="text-align:right; font-weight:500;">' . fmt_dk($lt) . '</div>';
     $credit_line_rows[] = $row;
 }
 $credit_headers = ['@Description', '@Qty to Credit', '@Price', '@VAT%'];
@@ -152,10 +149,10 @@ if ($credit_has_discount) $credit_headers[] = '@Discount %';
 $credit_headers[] = '@Line total';
 htm_Table($credit_headers, $credit_line_rows, 'credit_line_tbl', 100);
 echo '<div style="text-align:right; margin-top:10px; font-size:13px;">';
-echo lang('@Subtotal') . ': <strong id="credit_sub_display">' . number_format($sub, 2, ',', '.') . '</strong> | ';
-echo lang('@VAT') . ': <strong id="credit_vat_display">' . number_format($vat, 2, ',', '.') . '</strong> | ';
+echo lang('@Subtotal') . ': <strong id="credit_sub_display">' . fmt_dk($sub) . '</strong> | ';
+echo lang('@VAT') . ': <strong id="credit_vat_display">' . fmt_dk($vat) . '</strong> | ';
 echo lang('@Total') . ': <strong id="credit_total_display" style="font-size:1.1em; color:var(--color-danger);">'
-    . number_format($sub + $vat, 2, ',', '.') . ' ' . $orig['currency'] . '</strong>';
+    . fmt_dk($sub + $vat) . ' ' . $orig['currency'] . '</strong>';
 echo '</div></div>';
 
 echo '<div style="display:flex; gap:15px; margin-bottom:15px;">';
@@ -184,8 +181,7 @@ echo '</form>';
 // tal-parsing-konvention (komma som decimaltegn) som resten af sitets
 // danske talfelter.
 function parseDkNum(v) {
-    var n = parseFloat(String(v || '0').replace(/\./g, '').replace(',', '.'));
-    return isNaN(n) ? 0 : n;
+    return tcNum(v);      // ("12.50" blev til 1250 - alle punktummer blev fjernet)
 }
 function recalcCreditTotals() {
     var sub = 0, vat = 0;

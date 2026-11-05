@@ -16,7 +16,7 @@ $recur_id = (int)($_GET['id'] ?? 0);
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recur'])) {
     $supplier      = DB::escape($conn, trim($_POST['supplier'] ?? ''));
     $account_id    = (int)$_POST['account_id'];
-    $amount        = (float)str_replace(',', '.', $_POST['amount'] ?? '0');
+    $amount        = parse_dk_number($_POST['amount'] ?? '0');      // RETTET: (float)str_replace(',', '.') gjorde "1.500,00" til 1,50
     $description   = DB::escape($conn, trim($_POST['description'] ?? ''));
     $exp_type      = in_array($_POST['exp_type'] ?? '', ['expense', 'income'], true) ? $_POST['exp_type'] : 'expense';
     $interval_type = in_array($_POST['interval_type'] ?? '', ['monthly', 'quarterly', 'yearly'], true) ? $_POST['interval_type'] : 'monthly';
@@ -24,13 +24,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recur'])) {
     // RETTET (ALVORLIGT): datoen blev ikke kontrolleret - et tomt felt gemte '' som næste kørsel. '' er "før" enhver
     // dato, så det automatiske tjek dannede en kladde ved HVER sidevisning og regnede videre fra 1970 (strtotime('')):
     // hundredvis af kladder. Nu skal datoen være gyldig.
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($_POST['next_run_date'] ?? '')) || !strtotime((string)$_POST['next_run_date'])) {
-        die(lang('@Please enter a valid next run date.'));
+    if (!tc_is_date($_POST['next_run_date'] ?? '')) {
+        redirect('recurring_expense_edit.php?id=' . (int)($_GET['id'] ?? 0), '@Please enter a valid next run date.', 'error');
     }
     $is_active     = isset($_POST['is_active']) ? 1 : 0;
     $proj_id       = (int)($_POST['proj_id'] ?? 0);
+    if (!tc_project_ok($conn, $proj_id, $proj_id)) $proj_id = 0;      // RETTET: et projekt-id der ikke findes, blev gemt (løs henvisning i projektregnskabet)
     $proj_sql      = ($proj_id > 0) ? $proj_id : 'NULL';
+    // RETTET: konto, beløb og leverandør blev ikke kontrolleret - en konto der ikke findes gjorde at HVER dannet udgift
+    // ikke kunne bogføres, og "abc" som beløb gav en fast udgift på 0 kr hver gang
+    if (!tc_account_ok($conn, $account_id) || tc_num($_POST['amount'] ?? '', 0.01) === null) {
+        redirect('recurring_expense_edit.php?id=' . (int)($_GET['id'] ?? 0), '@Please choose an account and enter an amount greater than 0.', 'error');
+    }
     $supplier_id   = (int)($_POST['supplier_id'] ?? 0);
+    if ($supplier_id > 0 && !DB::fetch_assoc(DB::query($conn, "SELECT supplier_id FROM suppliers WHERE supplier_id = $supplier_id"))) $supplier_id = 0;
     $supplier_id_sql = ($supplier_id > 0) ? $supplier_id : 'NULL';
 
     if ($recur_id > 0) {
@@ -50,13 +57,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recur'])) {
     if (!$save_ok) {
         die(lang('@Error saving expense: ') . DB::error($conn));
     }
-    header("Location: recurring_expense_edit.php?id=$recur_id&msg=saved"); exit;
+    redirect("recurring_expense_edit.php?id=$recur_id", '@Changes saved successfully');
 }
 
 // --- HENT DATA ---
 if ($recur_id > 0) {
     $tmpl = DB::fetch_assoc(DB::query($conn, "SELECT * FROM recurring_expenses WHERE recur_id=$recur_id"));
-    if (!$tmpl) die(lang('@Expense not found'));
+    if (!$tmpl) redirect('recurring_expenses.php', '@Not found - it may already have been deleted.', 'error');      // (var en hvid side)
 } else {
     $tmpl = [
         'recur_id' => 0, 'supplier' => '', 'supplier_id' => 0, 'account_id' => 0, 'amount' => '',
@@ -69,12 +76,9 @@ htm_Header($recur_id > 0 ? lang('@Edit Recurring Expense') : lang('@New Recurrin
 showMenu();
 
 $tools = htm_Button('fa-list', '@Back to List', 'secondary', 'recurring_expenses.php', '', 'data-hint="'.lang('@Return to the recurring expenses list').'"', '', false);
-$card_msg = isset($_GET['msg']) ? htm_Alert(lang('@Changes saved successfully'), 'success', 700, false) : '';
-htm_Card_($recur_id > 0 ? '@Edit Recurring Expense' : '@New Recurring Expense', 700, $card_msg, 'edit_form', true, $tools);
+htm_Card_($recur_id > 0 ? '@Edit Recurring Expense' : '@New Recurring Expense', 700, '', 'edit_form', true, $tools);
 
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">' .
-    lang('@Every scheduled run creates an unposted draft expense - it never posts itself. Open it in the expense list and save it (like any other draft) once you have confirmed the amount and attached a receipt if required.') .
-    '</p>';
+htm_Note(lang('@Every scheduled run creates an unposted draft expense - it never posts itself. Open it in the expense list and save it (like any other draft) once you have confirmed the amount and attached a receipt if required.'), 'font-size:0.9em; margin-top:-5px;');
 
 echo '<input type="hidden" name="recur_id" value="'.$recur_id.'">';
 

@@ -9,25 +9,18 @@ require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
 
-$has_rules_table = false;
-if (DB::is_sqlite()) {
-    $brt = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='bank_match_rules'");
-    $has_rules_table = ($brt && DB::fetch_assoc($brt));
-} else {
-    $brt = DB::query($conn, "SHOW TABLES LIKE 'bank_match_rules'");
-    $has_rules_table = ($brt && DB::num_rows($brt) > 0);
-}
+$has_rules_table = db_has_table($conn, 'bank_match_rules');
 
 // --- HANDLINGER (skal køre FØR htm_Header() - header("Location: ...") kan
 // ikke sendes efter der allerede er skrevet HTML-output). ---
 if ($has_rules_table && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if (!csrf_verify()) {
-        header("Location: bank_rules.php?msg=csrf_error"); exit;
+        redirect('bank_rules.php', '@Security check failed (CSRF). Please reload the page and try again.', 'error');
     }
     if ($_POST['action'] === 'add') {
         $pattern = trim($_POST['pattern'] ?? '');
         $acc_id  = (int)($_POST['acc_id'] ?? 0);
-        if ($pattern !== '' && $acc_id > 0) {
+        if ($pattern !== '' && $acc_id > 0 && tc_account_ok($conn, $acc_id)) {      // (en konto der ikke findes, gav et forslag der ikke kunne bogføres)
             $dup = DB::fetch_assoc(DB::query($conn, "SELECT rule_id FROM bank_match_rules WHERE pattern = '" . DB::escape($conn, $pattern) . "' AND acc_id = $acc_id"));
             if (!$dup) {
                 DB::insert($conn, 'bank_match_rules', [
@@ -37,14 +30,14 @@ if ($has_rules_table && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['a
                     'created_at' => date('Y-m-d H:i:s'),
                 ]);
             }
-            header("Location: bank_rules.php?msg=added"); exit;
+            redirect('bank_rules.php', '@Rule added.');
         }
-        header("Location: bank_rules.php?msg=invalid"); exit;
+        redirect('bank_rules.php', '@Please fill in both a pattern and an account.', 'error');
     }
     if ($_POST['action'] === 'delete') {
         $rule_id = (int)($_POST['rule_id'] ?? 0);
         if ($rule_id > 0) DB::query($conn, "DELETE FROM bank_match_rules WHERE rule_id = $rule_id");
-        header("Location: bank_rules.php?msg=deleted"); exit;
+        redirect('bank_rules.php', '@Rule deleted.');
     }
 }
 
@@ -59,20 +52,10 @@ if (!$has_rules_table) {
     exit;
 }
 
-if (isset($_GET['msg'])) {
-    $msg_map = [
-        'added'   => ['@Rule added.', 'success'],
-        'deleted' => ['@Rule deleted.', 'success'],
-        'invalid' => ['@Please fill in both a pattern and an account.', 'error'],
-    ];
-    if (isset($msg_map[$_GET['msg']])) {
-        htm_Alert(lang($msg_map[$_GET['msg']][0]), $msg_map[$_GET['msg']][1]);
-    }
-}
 
 htm_Card_(capt: '@Bank Matching Rules', wdth: 900);
 
-echo '<p style="color:var(--text-muted); font-size:13px; margin-top:0;">' . lang('@When a bank line\'s description contains the pattern below, the account is suggested automatically during reconciliation. The bookkeeper can still change it before confirming.') . '</p>';
+htm_Note(lang('@When a bank line\'s description contains the pattern below, the account is suggested automatically during reconciliation. The bookkeeper can still change it before confirming.'), 'font-size:13px; margin-top:0;');
 
 $acc_options = ['' => '-- ' . lang('@Select Account') . ' --'];
 require_once __DIR__ . '/inc/accounts.inc.php';     // valglisten: slukkede konti udeladt, dæmpede nederst
@@ -95,7 +78,7 @@ $headers = ['@Pattern', '@Account', '@Created', '@Actions'];
 $rows = [];
 if ($res_rules) {
     while ($r = DB::fetch_assoc($res_rules)) {
-        $del_form = '<form method="post" style="display:inline;" onsubmit="return confirm(' . json_encode(lang('@Are you sure?')) . ');">'
+        $del_form = '<form method="post" style="display:inline;" onsubmit="' . htm_confirm_js('@Are you sure?') . '">'
             . csrf_field(false) . '<input type="hidden" name="action" value="delete">'
             . '<input type="hidden" name="rule_id" value="' . (int)$r['rule_id'] . '">'
             . '<button type="submit" style="background:transparent; border:none; color:var(--color-danger); cursor:pointer; font-size:16px;" data-hint="' . htmlspecialchars(lang('@Delete this rule')) . '"><i class="fa fa-trash"></i></button></form>';
@@ -108,7 +91,7 @@ if ($res_rules) {
     }
 }
 if (empty($rows)) {
-    echo '<p style="color:var(--text-muted);">' . lang('@No rules saved yet.') . '</p>';
+    htm_Note(lang('@No rules saved yet.'));
 } else {
     htm_Table($headers, $rows, 'bank_rules_tbl');
 }

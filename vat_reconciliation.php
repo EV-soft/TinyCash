@@ -40,7 +40,7 @@ switch ($period_type) {
         $period_num   = max(1, min(12, $period_num));
         $period_start = sprintf('%04d-%02d-01', $year, $period_num);
         $period_end   = date('Y-m-t', strtotime($period_start));
-        $period_label = date('F', mktime(0, 0, 0, $period_num, 1)) . ' ' . $year;
+        $period_label = tc_month_name($period_num) . ' ' . $year;      // RETTET: date('F') var altid engelsk
         break;
     case 'quarter':
         $period_num   = max(1, min(4, $period_num));
@@ -78,24 +78,12 @@ $pv_row = DB::fetch_assoc(DB::query($conn,
      WHERE l.acc_id IN (" . tc_vat_acc_list($conn, $acc_vat_in) . ") AND j.jou_date BETWEEN '$ps' AND '$pe'"));
 $gl_purchase_vat = (float)($pv_row['total'] ?? 0);
 
-// --- 2. BOTTOM-UP GENBEREGNET MOMS - udgående: samme formel som
-// invoice_dkk_totals() (inc/db_connect.inc.php), for FAKTISK bogførte
-// fakturaer (alt der ikke længere er en kladde).
-//
-// SELV-FANGET UNDER LIVE-TEST: forsøgte oprindeligt at JOIN'e via
-// invoices.jou_id = journal.jou_id for at bruge PRÆCIS samme periode-
-// grundlag (journalens jou_date) som momskontoens saldo ovenfor - men
-// invoices.jou_id viste sig at være NULL for samtlige fakturaer i den
-// virkelige database. invoice_post_action.php opretter journal-rækken og
-// bruger dens $jou_id til selve hovedbogsposteringen, men skriver den
-// ALDRIG tilbage på invoices.jou_id - kolonnen findes i skemaet, men bruges
-// reelt ingen steder. Et join herpå ville derfor ALTID give 0 rækker og
-// en falsk "afvigelse" på hele det bogførte beløb, uanset om noget reelt er
-// galt. Filtrerer i stedet på fakturaens EGEN inv_date, samme princip som
-// subledger_reconciliation.php's debitor-forespørgsel (som slet ikke joiner
-// til journalen) - en lille, accepteret upræcision hvis en faktura undtagelsesvist
-// bogføres på en anden dato end den selv viser, men langt at foretrække frem
-// for et join der aldrig kan matche noget som helst.
+// --- 2. BOTTOM-UP GENBEREGNET MOMS - udgående: samme formel som invoice_dkk_totals (inc/db_connect.inc.php), for
+// FAKTISK bogførte fakturaer (alt der ikke længere er en kladde).
+// SELV-FANGET UNDER LIVE-TEST: forsøgte oprindeligt at JOIN'e via invoices.jou_id = journal.jou_id for at bruge
+// PRÆCIS samme periode-grundlag (journalens jou_date) som momskontoens saldo ovenfor - men invoices.jou_id viste
+// sig at være NULL for samtlige fakturaer i den virkelige database. Et join herpå ville derfor ALTID give 0 rækker
+// og en falsk "afvigelse" på hele det bogførte beløb, uanset om noget reelt er galt.
 // RETTET: (1) linjens rabat (discount_pct) var ikke med - hver rabatlinje gav en falsk afvigelse; (2) moms der
 // bogføres på salgsmomskontoen UDEN en faktura manglede: et indtægtsbilag (udgift af typen "income") og
 // webbutikkens samlede dagsbilag (model B); (3) udgifts-siden talte ubogførte kladder med.
@@ -113,12 +101,10 @@ if ($inc_res) while ($r = DB::fetch_assoc($inc_res)) foreach (expense_get_lines(
 $shop_vat = @DB::query($conn, "SELECT COALESCE(SUM(vat), 0) AS v FROM shop_orders WHERE status = 'booked' AND order_date BETWEEN '$ps' AND '$pe'");
 if ($shop_vat && ($sv = DB::fetch_assoc($shop_vat))) $sub_sales_vat += (float)$sv['v'];
 
-// --- indgående: genbruger nu expense_get_lines() (inc/db_connect.inc.php) -
-// den ENESTE autoritative kilde til beløb/momssats pr. udgift, siden en
-// udgift blev splitbar på flere konti (runde 30, expense_lines) - en udgift
-// UDEN linjer giver samme "gross - net"-tal som før (én syntetisk linje),
-// så denne rettelse er bagudkompatibel. Periode filtreres stadig på
-// udgiftens EGEN dato, samme mønster som supplier_list.php/aging_report.php.
+// --- indgående: genbruger nu expense_get_lines (inc/db_connect.inc.php) - den ENESTE autoritative kilde til
+// beløb/momssats pr. udgift, siden en udgift blev splitbar på flere konti - en udgift UDEN linjer giver samme
+// "gross - net"-tal som før (én syntetisk linje), så denne rettelse er bagudkompatibel. Periode filtreres stadig
+// på udgiftens EGEN dato, samme mønster som supplier_list.php/aging_report.php.
 $exp_res = @DB::query($conn,
     "SELECT exp_id FROM expenses
      WHERE is_cancelled = 0 AND voucher_no IS NOT NULL AND exp_date BETWEEN '$ps' AND '$pe' AND (exp_type IS NULL OR exp_type != 'income')");
@@ -137,15 +123,15 @@ $diff_purchase = round($sub_purchase_vat - $gl_purchase_vat, 2);
 function vat_reconciliation_render_section($capt, $sub_total, $gl_total, $diff, $acc_id, $cur) {
     htm_Card_($capt, 900);
     echo '<div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:15px;">';
-    echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Recalculated from source documents') . '</div><div style="font-weight:bold; font-size:1.2em;">' . number_format($sub_total, 2, ',', '.') . ' ' . $cur . '</div></div>';
-    echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Posted General Ledger Balance') . ' (' . lang('@Account') . ' ' . $acc_id . ')</div><div style="font-weight:bold; font-size:1.2em;"><a href="account_card.php?acc_id=' . $acc_id . '">' . number_format($gl_total, 2, ',', '.') . ' ' . $cur . '</a></div></div>';
-    echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Difference') . '</div><div style="font-weight:bold; font-size:1.2em; color:' . (abs($diff) > 0.01 ? 'var(--color-danger)' : 'inherit') . ';">' . number_format($diff, 2, ',', '.') . ' ' . $cur . '</div></div>';
+    echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Recalculated from source documents') . '</div><div style="font-weight:bold; font-size:1.2em;">' . fmt_dk($sub_total) . ' ' . $cur . '</div></div>';
+    echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Posted General Ledger Balance') . ' (' . lang('@Account') . ' ' . $acc_id . ')</div><div style="font-weight:bold; font-size:1.2em;"><a href="account_card.php?acc_id=' . $acc_id . '">' . fmt_dk($gl_total) . ' ' . $cur . '</a></div></div>';
+    echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Difference') . '</div><div style="font-weight:bold; font-size:1.2em; color:' . (abs($diff) > 0.01 ? 'var(--color-danger)' : 'inherit') . ';">' . fmt_dk($diff) . ' ' . $cur . '</div></div>';
     echo '</div>';
 
     if (abs($diff) <= 0.01) {
         htm_Alert(lang('@Reconciled - the recalculated VAT matches the posted general ledger account.'), 'success', 900, true);
     } else {
-        htm_Alert(sprintf(lang('@NOT reconciled - the recalculated VAT and the posted general ledger account differ by %s. This may indicate a manual posting outside the normal invoicing/expense flow, or a mixed VAT rate on this account.'), number_format(abs($diff), 2, ',', '.') . ' ' . $cur), 'error', 900, true);
+        htm_Alert(sprintf(lang('@NOT reconciled - the recalculated VAT and the posted general ledger account differ by %s. This may indicate a manual posting outside the normal invoicing/expense flow, or a mixed VAT rate on this account.'), fmt_dk(abs($diff)) . ' ' . $cur), 'error', 900, true);
     }
     echo '<p><a href="vat_report.php">' . lang('@View VAT Report') . '</a> · <a href="account_card.php?acc_id=' . $acc_id . '">' . lang('@View Account Card') . '</a></p>';
     htm_Card_end();
@@ -156,9 +142,7 @@ showMenu();
 
 echo "<div style='max-width:1000px; margin:0 auto; padding:10px;'>";
 
-echo '<p style="color:var(--text-muted); margin-bottom:10px;">'
-    . lang('@Compares VAT recalculated from source invoices/expenses against the actually posted VAT account balances - a mismatch may indicate a manual journal entry that bypassed the normal invoicing/expense flow.')
-    . '</p>';
+htm_Note(lang('@Compares VAT recalculated from source invoices/expenses against the actually posted VAT account balances - a mismatch may indicate a manual journal entry that bypassed the normal invoicing/expense flow.'), 'margin-bottom:10px;');
 
 echo '<form method="get" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:20px; flex-wrap:wrap;">';
 echo '<div><label style="font-size:0.85em; font-weight:bold; display:block;">' . lang('@Year') . '</label>';

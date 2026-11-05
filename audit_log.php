@@ -20,13 +20,11 @@ $f_table  = trim($_GET['table_name'] ?? '');
 $f_user   = (int)($_GET['user_id'] ?? 0);
 $f_from   = trim($_GET['date_from'] ?? '');
 $f_to     = trim($_GET['date_to'] ?? '');
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 28): kunne
-// hidtil kun filtrere på tabel, ikke på ÉN bestemt post - for at se hvem
-// der har rørt fx faktura #1234 skulle man filtrere på "invoices" og lede
-// manuelt gennem ALLE fakturaers historik. Bruges af de nye "Se historik"-
-// links fra invoice_view.php/expense_edit.php/customer_edit.php/
-// supplier_edit.php (row_id=0 betyder "ikke sat", udelades bevidst - en del
-// af posteringsflowsne bruger row_id=0 som en reel værdi ved fx logo-upload).
+// NYT: kunne hidtil kun filtrere på tabel, ikke på ÉN bestemt post - for at se hvem der har rørt fx faktura #1234
+// skulle man filtrere på "invoices" og lede manuelt gennem ALLE fakturaers historik. Bruges af de nye "Se
+// historik"- links fra invoice_view.php/expense_edit.php/customer_edit.php/supplier_edit.php (row_id=0 betyder
+// "ikke sat", udelades bevidst - en del af posteringsflowsne bruger row_id=0 som en reel værdi ved fx
+// logo-upload).
 $f_row_id = isset($_GET['row_id']) ? (int)$_GET['row_id'] : 0;
 
 $where = [];
@@ -53,9 +51,7 @@ if ($res) while ($r = DB::fetch_assoc($res)) { $user_options[$r['user_id']] = $r
 
 htm_Card_(capt: '@Audit Log', wdth: 1100);
 
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">' .
-    lang('@A read-only record of cancellations, deletions, and postings — who did what, and when.') .
-    '</p>';
+htm_Note(lang('@A read-only record of cancellations, deletions, and postings — who did what, and when.'), 'font-size:0.9em; margin-top:-5px;');
 
 // --- FILTERFORM ---
 echo '<form method="get" style="display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-bottom:20px; padding:12px; background:var(--bg-panel); border-radius:6px;">';
@@ -89,7 +85,7 @@ $headers = ['@Date', '@User', '@Action', '@Table', '@Row ID', '@Details'];
 $data = [];
 
 if (!$res) {
-    echo htm_Alert("SQL Error: " . DB::error($conn), "error");
+    echo htm_Alert(lang('@Error:') . ' ' . htmlspecialchars((string)DB::error($conn)), "error");
 } else {
     while ($row = DB::fetch_assoc($res)) {
         $when = date(CONF_DATE_FORMAT . ' H:i', strtotime(db_ts_local($row['log_date'])));
@@ -107,9 +103,9 @@ if (!$res) {
                 $ov = $old[$k] ?? null;
                 $nv = $new[$k] ?? null;
                 if ($ov === $nv) continue;
-                $diff_parts[] = htmlspecialchars($k) . ': ' .
-                    htmlspecialchars($ov === null ? '—' : (string)$ov) . ' → ' .
-                    htmlspecialchars($nv === null ? '—' : (string)$nv);
+                // RETTET: en indlejret værdi (fx en slettet kundes kontaktpersoner) blev vist som "Array" - nu som JSON
+                $fmt = fn($v) => $v === null ? '—' : (is_scalar($v) ? (string)$v : json_encode($v, JSON_UNESCAPED_UNICODE));
+                $diff_parts[] = htmlspecialchars((string)$k) . ': ' . htmlspecialchars($fmt($ov)) . ' → ' . htmlspecialchars($fmt($nv));
             }
         }
         $diff_text = empty($diff_parts) ? '<span style="color:var(--text-muted);">—</span>' : implode('<br>', $diff_parts);
@@ -135,7 +131,7 @@ if (empty($data) && $res) {
     echo "<p style='padding:30px; text-align:center; color:var(--text-muted);'>" . lang('@No audit log entries found for the selected filters.') . "</p>";
 } elseif (!empty($data)) {
     htm_Table($headers, $data, 'auditTbl', 300, '', true, [], '600px', 'audit_log_export.csv');
-    echo '<p style="color:var(--text-muted); font-size:0.8em; margin-top:10px;">' . lang('@Showing the 300 most recent matching entries.') . '</p>';
+    htm_Note(lang('@Showing the 300 most recent matching entries.'), 'font-size:0.8em; margin-top:10px;');
 }
 
 htm_Card_end();

@@ -84,7 +84,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ids']) && is_array($_
         $status = mark_expense_paid($conn, $s, (int)$raw_id);
         if ($status === 'paid') { $paid++; } else { $failed++; }
     }
-    header("Location: expense_list.php?msg=bulk_paid&paid=$paid&failed=$failed");
+    redirect('expense_list.php', $failed > 0
+        ? sprintf(lang('@%d expense(s) marked paid. %d could not be paid (already paid, not posted, cancelled, or the accounting period is locked) - please check them individually.'), $paid, $failed)
+        : sprintf(lang('@%d expense(s) marked paid successfully.'), $paid), $failed > 0 ? 'warning' : 'success');
     ob_end_flush();
     exit;
 }
@@ -94,8 +96,7 @@ $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 // Tving scriptet til KUN at køre, hvis parametrene er 100% korrekte
 if (!in_array($action, ['delete', 'mark_paid'], true) || $id <= 0) {
-    header("Location: expense_list.php");
-    exit;
+    redirect("expense_list.php");
 }
 
 // --- ENKELT-FLOW "Betal nu" (uændret ekstern adfærd) ---
@@ -103,15 +104,15 @@ if ($action === 'mark_paid') {
     $s = get_settings($conn);
     $status = mark_expense_paid($conn, $s, $id);
     if ($status === 'paid') {
-        header("Location: expense_list.php?msg=paid");
+        redirect('expense_list.php', '@Payment registered successfully.');
     } elseif ($status === 'locked') {
-        die(lang('@This transaction date is in a locked accounting period and cannot be posted.'));
+        redirect('expense_list.php', '@This transaction date is in a locked accounting period and cannot be posted.', 'error');
     } elseif ($status === 'missing_account') {
-        die(sprintf(lang('@The account %d does not exist in the chart of accounts - check Company Settings (posting accounts) or the chart of accounts. Nothing was posted.'), ledger_accounts_missing($conn, [(int)($s['conf_acc_bank'] ?? 5000), (int)($s['conf_acc_creditor'] ?? 4000)])[0] ?? 0));
+        redirect('expense_list.php', sprintf(lang('@The account %d does not exist in the chart of accounts - check Company Settings (posting accounts) or the chart of accounts. Nothing was posted.'), ledger_accounts_missing($conn, [(int)($s['conf_acc_bank'] ?? 5000), (int)($s['conf_acc_creditor'] ?? 4000)])[0] ?? 0), 'error');
     } elseif ($status === 'already_paid') {
-        header("Location: expense_list.php?msg=already_paid");
+        redirect('expense_list.php', '@This expense was already marked paid (possibly by a duplicate click).', 'info');
     } else {
-        header("Location: expense_list.php");
+        redirect('expense_list.php');
     }
     exit;
 }
@@ -128,6 +129,7 @@ $is_already_cancelled = 0;
 $stmt = DB::prepare_and_execute($conn, "SELECT voucher_no, attachment, is_cancelled FROM expenses WHERE exp_id = ?", [$id]);
 if ($stmt) {
     $expense = DB::fetch_assoc($stmt);
+    if (!$expense) { DB::rollback($conn); redirect('expense_list.php', '@Not found - it may already have been deleted.', 'error'); }      // RETTET: meldte succes, selv om intet fandtes (dobbeltklik, en anden fane)
     if ($expense) {
         $voucher_no = !empty($expense['voucher_no']) ? $expense['voucher_no'] : null;
         $filename = $expense['attachment'];
@@ -138,51 +140,36 @@ if ($stmt) {
 // Hvis posten ikke findes, eller den allerede ER annulleret, afbryd
 if ($is_already_cancelled === 1) {
     DB::rollback($conn);
-    header("Location: expense_list.php");
-    exit;
+    redirect("expense_list.php");
 }
 
 // 2. SCENARIEOPDELING BASERET PÅ BOGFØRINGSSTATUS
 if ($voucher_no !== null) {
-    // RETTET (§bugs-batch-21-review): denne annullering poster en rigtig,
-    // dags-daterede modpostering (linje ~107 nedenfor) til hovedbogen, men
-    // var det ENESTE af appens posteringsflow (invoice_post_action.php,
-    // invoice_credit.php, reconcile_action.php, expense_edit.php's egen
-    // oprettelse har alle tjekket) der aldrig kaldte is_date_locked(). Er
-    // periodespærringen sat til og med i dag (fx en streng afslutning midt i
-    // måneden), kunne en annullering alligevel poste ind i den låste
-    // periode. Tjekkes nu FØR noget som helst skrives.
+    // RETTET: denne annullering poster en rigtig, dags-daterede modpostering (linje ~107 nedenfor) til hovedbogen,
+    // men var det ENESTE af appens posteringsflow (invoice_post_action.php, invoice_credit.php,
+    // reconcile_action.php, expense_edit.php's egen oprettelse har alle tjekket) der aldrig kaldte is_date_locked.
+    // Tjekkes nu FØR noget som helst skrives.
     if (is_date_locked($conn, date('Y-m-d'))) {
         DB::rollback($conn);
-        die(lang('@This transaction date is in a locked accounting period and cannot be posted.'));
+        redirect('expense_list.php', '@This transaction date is in a locked accounting period and cannot be posted.', 'error');
     }
 
     // SCENARIE A: Posten ER bogført -> Lav Soft-delete (Bevar fil og revisionsspor)
-    // RETTET (§bugs-batch-19-review): tjekket for "allerede annulleret" ovenfor
-    // (linje 45) kører kun ÉN gang tidligt i denne sidevisning - to næsten-
-    // samtidige annulleringsforsøg for samme udgift kunne begge bestå det,
-    // FØR nogen af dem nåede at skrive, og dermed begge poste en fuld
-    // modpostering (dobbelt reversering af samme originale beløb). WHERE-
-    // klausulen tjekker nu atomisk is_cancelled=0 ved selve skrivningen, og
-    // et 0-rækker-resultat (nogen nåede allerede at annullere) afbryder
-    // resten af flowet, i stedet for at lade en dublet-modpostering ske.
+    // RETTET: tjekket for "allerede annulleret" ovenfor (linje 45) kører kun ÉN gang tidligt i denne sidevisning -
+    // to næsten-samtidige annulleringsforsøg for samme udgift kunne begge bestå det, FØR nogen af dem nåede at
+    // skrive, og dermed begge poste en fuld modpostering (dobbelt reversering af samme originale beløb).
+    // WHERE-klausulen tjekker nu atomisk is_cancelled=0 ved selve skrivningen, og et 0-rækker-resultat (nogen
+    // nåede allerede at annullere) afbryder resten af flowet, i stedet for at lade en dublet-modpostering ske.
     $upd_stmt = DB::prepare_and_execute($conn, "UPDATE expenses SET is_cancelled = 1, cancelled_by = ? WHERE exp_id = ? AND is_cancelled = 0", [$current_user_id, $id]);
     $success  = $upd_stmt && DB::affected_rows($conn, $upd_stmt) > 0;
     if (!$success) {
-        // RETTET (§bugs-batch-19-review, opfølgning): den oprindelige udgave
-        // af denne rettelse tjekkede kun, OM is_cancelled=1 ved en SELECT
-        // bagefter - men det viser blot om SLUTTILSTANDEN er korrekt, ikke om
-        // DENNE forespørgsel selv var den, der satte den. To næsten-samtidige
-        // forsøg kunne begge se "is_cancelled=1" efter en anden, hurtigere
-        // forespørgsels commit, og tabervalgets forsøg ville derfor fejlagtigt
-        // tro sin egen annullering lykkedes - og fortsætte til modposteringen
-        // nedenfor alligevel (kapløbet var reelt IKKE lukket). Rettet til at
-        // måle antal reelt berørte rækker fra selve UPDATE'en (se
-        // DB::affected_rows()) - kun den forespørgsel, der faktisk ændrede
-        // rækken fra 0 til 1, må fortsætte til modposteringen.
+        // RETTET: den oprindelige udgave af denne rettelse tjekkede kun, OM is_cancelled=1 ved en SELECT bagefter
+        // - men det viser blot om SLUTTILSTANDEN er korrekt, ikke om DENNE forespørgsel selv var den, der satte
+        // den. To næsten-samtidige forsøg kunne begge se "is_cancelled=1" efter en anden, hurtigere forespørgsels
+        // commit, og tabervalgets forsøg ville derfor fejlagtigt tro sin egen annullering lykkedes - og fortsætte
+        // til modposteringen nedenfor alligevel (kapløbet var reelt IKKE lukket).
         DB::rollback($conn);
-        header("Location: expense_list.php?msg=already_cancelled");
-        exit;
+        redirect('expense_list.php', '@This expense was already cancelled (possibly by a duplicate click) - nothing was posted twice.', 'info');
     }
 
     if ($success) {
@@ -192,16 +179,11 @@ if ($voucher_no !== null) {
         // Synkroniser finansjournalen
         DB::prepare_and_execute($conn, "UPDATE journal SET is_cancelled = 1 WHERE voucher_no = ?", [$voucher_no]);
 
-        // RETTET (ALVORLIGT FUND, se [[bugs-batch-10-review]]): dette var HELE
-        // annulleringen - is_cancelled=1 blev sat, men der blev ALDRIG postet
-        // en modpostering. Rapporter/årsafslutning (report_income.php,
-        // inc/annual_report.lib.php, year_end_close.php) filtrerer BEVIDST
-        // ikke på is_cancelled (se deres egne kommentarer) - de regner med at
-        // en annullering ALTID ledsages af en rigtig modpostering, der
-        // balancerer originalen ud til 0 (præcis mønsteret ledger_view.php's
-        // Annullér allerede bruger). Uden den modpostering her forblev den
-        // originale udgifts fulde beløb med i alle rapporter for evigt -
-        // is_cancelled-flaget havde reelt INGEN regnskabsmæssig effekt.
+        // RETTET (ALVORLIGT FUND, se): dette var HELE annulleringen - is_cancelled=1 blev sat, men der blev ALDRIG
+        // postet en modpostering. Rapporter/årsafslutning (report_income.php, inc/annual_report.lib.php,
+        // year_end_close.php) filtrerer BEVIDST ikke på is_cancelled (se deres egne kommentarer) - de regner med
+        // at en annullering ALTID ledsages af en rigtig modpostering, der balancerer originalen ud til 0 (præcis
+        // mønsteret ledger_view.php's Annullér allerede bruger).
         $orig_jou = DB::fetch_assoc(DB::query($conn, "SELECT jou_id, jou_date, currency FROM journal WHERE voucher_no = " . (int)$voucher_no . " LIMIT 1"));
         if ($orig_jou) {
             $orig_lines = [];
@@ -211,10 +193,9 @@ if ($voucher_no !== null) {
             if (!empty($orig_lines)) {
                 $cancel_voucher_no = next_voucher_no($conn);
                 $cancel_text = DB::escape($conn, "Annullering af udgift #$id (bilag #$voucher_no)");
-                // RETTET (§currency-setting-is-cosmetic-label): modposteringen
-                // arver nu den oprindelige posterings valuta (i stedet for
-                // altid at falde tilbage til skemaets DEFAULT 'DKK'), så en
-                // annullering aldrig fejlagtigt skifter valuta undervejs.
+                // RETTET: modposteringen arver nu den oprindelige posterings valuta (i stedet for altid at falde
+                // tilbage til skemaets DEFAULT 'DKK'), så en annullering aldrig fejlagtigt skifter valuta
+                // undervejs.
                 $cancel_currency = DB::escape($conn, $orig_jou['currency'] ?? ($global_settings['currency'] ?? 'DKK'));
                 // NYT (BEK 811/2026-gennemgang, [[digital-standard-bookkeeping-registration-goal]]).
                 $cb = journal_created_by_sql($conn);
@@ -227,8 +208,7 @@ if ($voucher_no !== null) {
         }
 
         DB::commit($conn);
-        header("Location: expense_list.php?msg=deleted");
-        exit;
+        redirect('expense_list.php', '@The expense has been cancelled (a reversing entry was posted) or the draft deleted.');
     } else {
         DB::rollback($conn);
         die(lang('@Error marking cancellation in database:') . " " . DB::error($conn));
@@ -250,8 +230,7 @@ if ($voucher_no !== null) {
                 @unlink($file_path);
             }
         }
-        header("Location: expense_list.php?msg=deleted");
-        exit;
+        redirect('expense_list.php', '@The expense has been cancelled (a reversing entry was posted) or the draft deleted.');
     } else {
         DB::rollback($conn);
         die(lang('@Error deleting draft from database:') . " " . DB::error($conn));

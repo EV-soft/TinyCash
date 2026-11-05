@@ -23,15 +23,10 @@ if (isset($_GET['del']) && (int)$_GET['del'] > 0) {
     $del_id = (int)$_GET['del'];
 
     // Sikkerhedstjek: Hent fakturaer der er tilknyttet kunden.
-    // RETTET 2026-08-19: forespurgte før en kolonne "invoice_id", som ikke
-    // findes i invoices (den rigtige hedder inv_id) - forespørgslen fejlede
-    // derfor ALTID, og DB::num_rows() på det fejlede resultat returnerede
-    // stille 0 (efter en tidligere robusthedsrettelse denne session, som
-    // forhindrer crashes ved fejlede forespørgsler generelt). Tjekket troede
-    // dermed ALTID at ingen fakturaer var tilknyttet, uanset det reelle
-    // billede - enhver kunde kunne slettes, og deres fakturaer fik en
-    // kunde-reference der pegede på ingenting. Fundet ved en projekt-/
-    // kundefunktions-gennemgang.
+    // RETTET 2026-08-19: forespurgte før en kolonne "invoice_id", som ikke findes i invoices (den rigtige hedder
+    // inv_id) - forespørgslen fejlede derfor ALTID, og DB::num_rows på det fejlede resultat returnerede stille 0.
+    // Tjekket troede dermed ALTID at ingen fakturaer var tilknyttet, uanset det reelle billede - enhver kunde
+    // kunne slettes, og deres fakturaer fik en kunde-reference der pegede på ingenting.
     $check_inv = DB::query($conn, "SELECT inv_id FROM invoices WHERE cust_id = $del_id");
     $linked_invoices = [];
     if ($check_inv) {
@@ -47,11 +42,9 @@ if (isset($_GET['del']) && (int)$_GET['del'] > 0) {
         while ($p = DB::fetch_assoc($check_proj)) { $linked_projects[] = $p['proj_id']; }
     }
 
-    // NYT (§bugs-batch-30-review): samme fejlklasse igen - quotes (tilbud/
-    // ordrebekræftelser) har også en cust_id, men blev tilføjet EFTER dette
-    // tjek blev skrevet og var derfor aldrig med. quote_list.php joiner
-    // customers med et INNER JOIN, så en kunde kunne slettes og efterlade et
-    // tilbud der ikke bare fik en løs reference, men blev fuldstændig
+    // NYT: samme fejlklasse igen - quotes (tilbud/ordrebekræftelser) har også en cust_id, men blev tilføjet EFTER
+    // dette tjek blev skrevet og var derfor aldrig med. quote_list.php joiner customers med et INNER JOIN, så en
+    // kunde kunne slettes og efterlade et tilbud der ikke bare fik en løs reference, men blev fuldstændig
     // usynligt/uopnåeligt overalt i UI'et (ingen fejl, bare væk).
     $linked_quotes = [];
     $check_quotes = @DB::query($conn, "SELECT quote_id FROM quotes WHERE cust_id = $del_id");
@@ -80,29 +73,17 @@ if (isset($_GET['del']) && (int)$_GET['del'] > 0) {
         $old_res = DB::query($conn, "SELECT cust_id, cust_name, cust_email, cust_cvr FROM customers WHERE cust_id = $del_id");
         $old_row = $old_res ? DB::fetch_assoc($old_res) : null;
 
-        // RETTET (bruger-anmodet, "kan bogholderen ønske sig mere", runde
-        // 31): "Slet" var permanent og uigenkaldeligt - kun beskyttet mod at
-        // slette en kunde med fakturaer/projekter/tilbud (tjekket ovenfor,
-        // uændret). En slettet, ubrugt testkunde var tabt for evigt ved et
-        // uheld. Sætter nu blot deleted_at i stedet for at fjerne rækken -
-        // se trash_bin.php for gendannelse. Stille degraderet til en RIGTIG
-        // sletning, hvis migrationen ikke er kørt endnu (uændret adfærd).
-        $has_trash_col = false;
-        if (DB::is_sqlite()) {
-            $tc = DB::query($conn, "PRAGMA table_info(customers)");
-            if ($tc) { while ($tcr = DB::fetch_assoc($tc)) { if ($tcr['name'] === 'deleted_at') { $has_trash_col = true; break; } } }
-        } else {
-            $tc = DB::query($conn, "SHOW COLUMNS FROM customers LIKE 'deleted_at'");
-            $has_trash_col = ($tc && DB::num_rows($tc) > 0);
-        }
+        // RETTET: "Slet" var permanent og uigenkaldeligt - kun beskyttet mod at slette en kunde med
+        // fakturaer/projekter/tilbud (tjekket ovenfor, uændret). Sætter nu blot deleted_at i stedet for at fjerne
+        // rækken - se trash_bin.php for gendannelse.
+        $has_trash_col = db_has_column($conn, 'customers', 'deleted_at');
         $del_sql = $has_trash_col
             ? "UPDATE customers SET deleted_at = '" . date('Y-m-d H:i:s') . "' WHERE cust_id = $del_id"
             : "DELETE FROM customers WHERE cust_id = $del_id";
 
         if (DB::query($conn, $del_sql)) {
             if ($old_row) log_action($conn, 'DELETE_CUSTOMER', 'customers', $del_id, $old_row, null);
-            header("Location: sales_hub.php");
-            exit;
+            redirect("sales_hub.php");
         } else {
             $err = lang('@SQL Error:') . " " . DB::error($conn);
         }
@@ -120,48 +101,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $notes   = DB::escape($conn, $_POST['cust_notes']);
     $days    = max(0, (int)$_POST['cust_payment_days']);      // RETTET: negative dage gav en forfaldsdato FØR fakturadatoen
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): valgfrit
-    // fravalg af automatiske rykkere - samme "stille degradering hvis ikke
-    // migreret endnu"-mønster som andre nyere kolonner. cust_no_reminders
-    // findes kun efter db-setup/migrate_customer_no_reminders.php er kørt.
-    $has_no_rem_col = false;
-    if (DB::is_sqlite()) {
-        $nrc = DB::query($conn, "PRAGMA table_info(customers)");
-        if ($nrc) { while ($nrcr = DB::fetch_assoc($nrc)) { if ($nrcr['name'] === 'cust_no_reminders') { $has_no_rem_col = true; break; } } }
-    } else {
-        $nrc = DB::query($conn, "SHOW COLUMNS FROM customers LIKE 'cust_no_reminders'");
-        $has_no_rem_col = ($nrc && DB::num_rows($nrc) > 0);
-    }
+    // NYT: valgfrit fravalg af automatiske rykkere - samme "stille degradering hvis ikke migreret endnu"-mønster
+    // som andre nyere kolonner. cust_no_reminders findes kun efter db-setup/migrate_customer_no_reminders.php er
+    // kørt.
+    $has_no_rem_col = db_has_column($conn, 'customers', 'cust_no_reminders');
     $no_reminders = !empty($_POST['cust_no_reminders']) ? 1 : 0;
     $has_no_rem_col = $has_no_rem_col && field_visible_to_user($conn, 'customer_edit.cust_no_reminders');     // Skjult felt: den gemte værdi bevares
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): valgfri
-    // kreditgrænse - samme "stille degradering hvis ikke migreret endnu"-
-    // mønster. Tomt felt gemmes som NULL (ingen grænse sat), ikke som en
-    // falsk 0-kr-grænse, der ville blokere enhver ny faktura.
-    $has_credit_limit_col = false;
-    if (DB::is_sqlite()) {
-        $clc = DB::query($conn, "PRAGMA table_info(customers)");
-        if ($clc) { while ($clcr = DB::fetch_assoc($clc)) { if ($clcr['name'] === 'credit_limit') { $has_credit_limit_col = true; break; } } }
-    } else {
-        $clc = DB::query($conn, "SHOW COLUMNS FROM customers LIKE 'credit_limit'");
-        $has_credit_limit_col = ($clc && DB::num_rows($clc) > 0);
-    }
+    // NYT: valgfri kreditgrænse - samme "stille degradering hvis ikke migreret endnu"- mønster. Tomt felt gemmes
+    // som NULL (ingen grænse sat), ikke som en falsk 0-kr-grænse, der ville blokere enhver ny faktura.
+    $has_credit_limit_col = db_has_column($conn, 'customers', 'credit_limit');
     $has_credit_limit_col = $has_credit_limit_col && field_visible_to_user($conn, 'customer_edit.credit_limit');
     $credit_limit_raw = trim($_POST['credit_limit'] ?? '');
-    $credit_limit_sql = $credit_limit_raw !== '' ? parse_dk_number($credit_limit_raw) : 'NULL';
+    $credit_limit_sql = tc_num($credit_limit_raw, 0) ?? 'NULL';      // tomt eller ugyldigt = ingen grænse
 
     // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 28):
     // valgfrit fakturasprog - samme "stille degradering hvis ikke migreret
     // endnu"-mønster. Tomt = brug systemets standardsprog (uændret adfærd).
-    $has_language_col = false;
-    if (DB::is_sqlite()) {
-        $lgc = DB::query($conn, "PRAGMA table_info(customers)");
-        if ($lgc) { while ($lgcr = DB::fetch_assoc($lgc)) { if ($lgcr['name'] === 'cust_language') { $has_language_col = true; break; } } }
-    } else {
-        $lgc = DB::query($conn, "SHOW COLUMNS FROM customers LIKE 'cust_language'");
-        $has_language_col = ($lgc && DB::num_rows($lgc) > 0);
-    }
+    $has_language_col = db_has_column($conn, 'customers', 'cust_language');
     $has_language_col = $has_language_col && field_visible_to_user($conn, 'customer_edit.cust_language');
     $cust_language_raw = trim($_POST['cust_language'] ?? '');
     $cust_language_sql = $cust_language_raw !== '' ? "'" . DB::escape($conn, $cust_language_raw) . "'" : 'NULL';
@@ -171,17 +128,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $has_layout_col = il_ready($conn) && field_visible_to_user($conn, 'customer_edit.cust_layout_id');
     $cust_layout_sql = ($has_layout_col && ($cl_id = il_valid_id($conn, $_POST['cust_layout_id'] ?? 0)) > 0) ? $cl_id : 'NULL';
 
-    // RETTET (§bugs-batch-22-review): e-mailfeltet blev kun tjekket klient-
-    // side (type:'email' er blot et HTML5-hint, trivielt at omgå eller
-    // simpelthen ikke understøttet ensartet af browseren). En forkert
-    // indtastet adresse blev derfor gemt uændret og lå og ventede - den
-    // dukkede først op som en fejl langt senere, hver gang send_invoice_
-    // action.php/reminder_action.php forsøgte at sende noget til kunden
-    // (og kunne i praksis let overses, da PHPMailer's fejl kun vises i en
-    // AJAX-boks, ikke noget der aktivt får en bruger til at rette stamdata).
-    // Tomt felt er stadig tilladt (nogle kunder får kun papirfaktura).
+    // RETTET: e-mailfeltet blev kun tjekket klient-side (type:'email' er blot et HTML5-hint, trivielt at omgå
+    // eller simpelthen ikke understøttet ensartet af browseren). En forkert indtastet adresse blev derfor gemt
+    // uændret og lå og ventede - den dukkede først op som en fejl langt senere, hver gang
+    // send_invoice_action.php/reminder_action.php forsøgte at sende noget til kunden (og kunne i praksis let
+    // overses, da PHPMailer's fejl kun vises i en AJAX-boks, ikke noget der aktivt får en bruger til at rette
+    // stamdata).
     $raw_email = trim($_POST['cust_email'] ?? '');
-    if ($raw_email !== '' && filter_var($raw_email, FILTER_VALIDATE_EMAIL) === false) {
+    if (trim((string)($_POST['cust_name'] ?? '')) === '') {      // RETTET: en kunde uden navn blev oprettet - intet krævede et navn
+        $err = lang('@Please enter the customer name.');
+    } elseif ($raw_email !== '' && filter_var($raw_email, FILTER_VALIDATE_EMAIL) === false) {
         $err = lang('@Please enter a valid email address, or leave the field empty.');
     } elseif ($cust_id > 0) {
         $sql = "UPDATE customers SET
@@ -234,8 +190,7 @@ if (isset($err) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cust_n
     $cust = DB::fetch_assoc($res);
     // Hvis kunden ikke findes (f.eks. lige slettet), stopper vi ikke med "die", men sender til hubben
     if (!$cust) {
-        header("Location: sales_hub.php");
-        exit;
+        redirect("sales_hub.php");
     }
 } else {
     $cust = [
@@ -255,10 +210,8 @@ $title = $cust_id > 0 ? lang('@Edit Customer') . ": " . $display_name .
 htm_Header($title);
 showMenu();
 
-// NYT (bruger-anmodet): tillader en admin at højreklikke og skjule
-// "tillægsfelter" (credit_limit/cust_no_reminders herunder) for L1/L2 -
-// samme mønster som menuens egen højreklik-skjul-funktion, se inc/field_
-// visibility.inc.php.
+// NYT: tillader en admin at højreklikke og skjule "tillægsfelter" for L1/L2 - samme mønster som menuens egen
+// højreklik-skjul-funktion, se inc/field_visibility.inc.php.
 $fv_overrides = get_field_visibility_overrides($conn);
 $fv_is_admin  = (($_SESSION['user_role'] ?? '') === 'admin');
 $fv_uLev      = (int)($_SESSION['user_level'] ?? 1);
@@ -266,15 +219,9 @@ $fv_uLev      = (int)($_SESSION['user_level'] ?? 1);
 if ($msg) htm_Alert($msg, 'success');
 if ($err) htm_Alert($err, 'error');
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): kundekortet viste
-// FØR kun stamdata - intet om kundens økonomiske historik. Man skulle ind på
-// det separate kontoudtog (customer_statement.php) for overhovedet at se
-// saldo/omsætning. Genbruger den allerede udtrukne
-// get_customer_statement_data() (inc/customer_statement.inc.php) i stedet
-// for at genopfinde saldo-/forfaldsberegningen endnu en gang et tredje sted
-// (se invoice_credit.php's egen rettelse samme runde for hvorfor det
-// undgås). Skjules helt for en kunde uden fakturahistorik endnu, for ikke at
-// vise fire tomme 0-kr-felter på en frisk oprettet kunde.
+// NYT: kundekortet viste FØR kun stamdata - intet om kundens økonomiske historik. Genbruger den allerede udtrukne
+// get_customer_statement_data (inc/customer_statement.inc.php) i stedet for at genopfinde
+// saldo-/forfaldsberegningen endnu en gang et tredje sted.
 if ($cust_id > 0) {
     require_once 'inc/customer_statement.inc.php';
     $stmt_data = get_customer_statement_data($conn, $cust_id);
@@ -291,9 +238,9 @@ if ($cust_id > 0) {
 
         echo '<div style="max-width:650px; margin:0 auto 15px auto; display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap:12px; text-align:center;">';
         foreach ([
-            ['@Outstanding Balance', number_format($stmt_data['total_outstanding'], 2, ',', '.') . ' ' . ($global_settings['currency'] ?? 'DKK'), $bal_type],
+            ['@Outstanding Balance', fmt_dk($stmt_data['total_outstanding']) . ' ' . ($global_settings['currency'] ?? 'DKK'), $bal_type],
             ['@Overdue Invoices',    $stmt_data['overdue_invoices'], $stmt_data['overdue_invoices'] > 0 ? 'danger' : 'success'],
-            ['@Revenue This Year',   number_format($revenue_this_year, 2, ',', '.') . ' ' . ($global_settings['currency'] ?? 'DKK'), 'primary'],
+            ['@Revenue This Year',   fmt_dk($revenue_this_year) . ' ' . ($global_settings['currency'] ?? 'DKK'), 'primary'],
             ['@Last Invoice',        date(CONF_DATE_FORMAT, strtotime($last_inv['inv_date'])), 'secondary'],
         ] as [$lbl, $val, $type]) {
             echo '<div style="background:var(--bg-panel); padding:12px; border-radius:8px;">';
@@ -318,13 +265,8 @@ htm_Card_(capt: '@Customer Information', wdth: 650, form: 'edit_customer_form');
         echo '<div style="flex:1;">';
         htm_Field(icon: 'fa-id-card', labl: '@CVR', name: 'cust_cvr', valu: $cust['cust_cvr'], extr: 'align-left onblur="checkCvrDuplicate(this.value, \'customer\', '.$cust_id.')"', wdth: '100%');
         echo '</div>';
-        // NYT (bruger-anmodet, CVR-opslag): slår CVR-nummeret op via
-        // cvr_proxy.php (cvrapi.dk) og udfylder navn/adresse/telefon/email
-        // automatisk - se cvrLookup() nedenfor. type="button" (ikke
-        // htm_Button(), som kun kan bygge type="submit" når $link er tom -
-        // ville sende hele formularen af sted ved et klik her, se samme
-        // fravalg i htm-table-button-refactor.md for invoice_edit.php).
-        // "tc-info-fill" (htm_page.lib.php): mørkere tekst/ikon i dark-temaet,
+        // NYT: slår CVR-nummeret op via cvr_proxy.php (cvrapi.dk) og udfylder navn/adresse/telefon/email
+        // automatisk - se cvrLookup nedenfor. "tc-info-fill" (htm_page.lib.php): mørkere tekst/ikon i dark-temaet,
         // hvor var(--color-info) er lysegrå og ellers gør ikonet ulæseligt.
         echo '<button type="button" onclick="cvrLookup(this)" class="tc-info-fill" style="flex-shrink:0; margin-bottom:2px; padding:9px 10px; background:var(--color-info); color:var(--text-light); border:none; border-radius:4px; cursor:pointer;" data-hint="'.lang('@Look up company name, address, phone and email from the CVR number').'"><i class="fa-solid fa-magnifying-glass"></i></button>';
         echo '</div>';
@@ -343,37 +285,18 @@ htm_Card_(capt: '@Customer Information', wdth: 650, form: 'edit_customer_form');
     
     htm_Field(icon: 'fa-sticky-note', labl: '@Notes', name: 'cust_notes', valu: $cust['cust_notes'], type: 'textarea', extr: 'align-left', wdth: '100%');
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 28):
-    // valgfrit fakturasprog - stille degraderet hvis migrationen ikke er
-    // kørt endnu. Bruges af invoice_view.php til at vise/sende selve
-    // faktura-papiret på kundens sprog, uden at påvirke bogholderens egen
-    // session/UI-sprog (se dens egen kommentar for den ikke-mutérende metode).
-    $has_language_col_disp = false;
-    if (DB::is_sqlite()) {
-        $lgc2 = DB::query($conn, "PRAGMA table_info(customers)");
-        if ($lgc2) { while ($lgcr2 = DB::fetch_assoc($lgc2)) { if ($lgcr2['name'] === 'cust_language') { $has_language_col_disp = true; break; } } }
-    } else {
-        $lgc2 = DB::query($conn, "SHOW COLUMNS FROM customers LIKE 'cust_language'");
-        $has_language_col_disp = ($lgc2 && DB::num_rows($lgc2) > 0);
-    }
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): valgfri
-    // kreditgrænse - der findes allerede en advarsel om FORFALDEN saldo ved
-    // fakturaoprettelse (customer_balance_check.php), men ingen grænse for
-    // den samlede udestående saldo. Tomt felt = ingen grænse sat (viser
-    // ingen advarsel, uanset saldo) - kun vist hvis migrationen er kørt.
-    $show_credit_limit_field = false;
-    if (DB::is_sqlite()) {
-        $clc2 = DB::query($conn, "PRAGMA table_info(customers)");
-        if ($clc2) { while ($clcr2 = DB::fetch_assoc($clc2)) { if ($clcr2['name'] === 'credit_limit') { $show_credit_limit_field = true; break; } } }
-    } else {
-        $clc2 = DB::query($conn, "SHOW COLUMNS FROM customers LIKE 'credit_limit'");
-        $show_credit_limit_field = ($clc2 && DB::num_rows($clc2) > 0);
-    }
+    // NYT: valgfrit fakturasprog - stille degraderet hvis migrationen ikke er kørt endnu. Bruges af
+    // invoice_view.php til at vise/sende selve faktura-papiret på kundens sprog, uden at påvirke bogholderens egen
+    // session/UI-sprog (.
+    $has_language_col_disp = db_has_column($conn, 'customers', 'cust_language');
+    // NYT: valgfri kreditgrænse - der findes allerede en advarsel om FORFALDEN saldo ved fakturaoprettelse
+    // (customer_balance_check.php), men ingen grænse for den samlede udestående saldo. Tomt felt = ingen grænse
+    // sat (viser ingen advarsel, uanset saldo) - kun vist hvis migrationen er kørt.
+    $show_credit_limit_field = db_has_column($conn, 'customers', 'credit_limit');
 
-    // RETTET (bruger-anmodet, runde 28-opfølgning #2): Fakturasprog og
-    // Kreditgrænse deler nu linje i stedet for hver sin fulde linje - kortet
-    // er samtidig gjort bredere (550→650) for at give dem rigelig plads.
-    // Flere fakturalayouts: kundens layout - kun når migreret (inc/invoice_layouts.inc.php)
+    // RETTET: Fakturasprog og Kreditgrænse deler nu linje i stedet for hver sin fulde linje - kortet er samtidig
+    // gjort bredere (550→650) for at give dem rigelig plads. Flere fakturalayouts: kundens layout - kun når
+    // migreret (inc/invoice_layouts.inc.php)
     require_once 'inc/invoice_layouts.inc.php';
     $show_layout_field = il_ready($conn);
     if ($has_language_col_disp || $show_credit_limit_field || $show_layout_field) {
@@ -418,7 +341,7 @@ htm_Card_(capt: '@Customer Information', wdth: 650, form: 'edit_customer_form');
         render_hideable_field($fv_overrides, 'customer_edit.credit_limit', $fv_is_admin, $fv_uLev, function() use ($cust) {
             htm_Field(icon: 'fa-shield-halved', labl: '@Credit Limit', name: 'credit_limit',
                 valu: isset($cust['credit_limit']) && $cust['credit_limit'] !== null && $cust['credit_limit'] !== ''
-                    ? number_format((float)$cust['credit_limit'], 2, ',', '') : '',
+                    ? fmt_dk_input((float)$cust['credit_limit']) : '',
                 extr: 'align-left', wdth: '260px',
                 hint: '@Optional. Warns when creating a new invoice would push this customer\'s total outstanding balance above this amount. Leave empty for no limit.');
         }, true); // has_own_box: htm_Field() tegner allerede sin egen fieldset-kant
@@ -427,26 +350,14 @@ htm_Card_(capt: '@Customer Information', wdth: 650, form: 'edit_customer_form');
         echo "</div>";
     }
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): fravalg af
-    // automatiske rykkere - relevant for følsomme kunderelationer, hvor
-    // bogholderen hellere vil rykke manuelt/telefonisk. Kun vist hvis
-    // migrationen er kørt.
-    $show_no_rem_field = false;
-    if (DB::is_sqlite()) {
-        $nrc2 = DB::query($conn, "PRAGMA table_info(customers)");
-        if ($nrc2) { while ($nrcr2 = DB::fetch_assoc($nrc2)) { if ($nrcr2['name'] === 'cust_no_reminders') { $show_no_rem_field = true; break; } } }
-    } else {
-        $nrc2 = DB::query($conn, "SHOW COLUMNS FROM customers LIKE 'cust_no_reminders'");
-        $show_no_rem_field = ($nrc2 && DB::num_rows($nrc2) > 0);
-    }
+    // NYT: fravalg af automatiske rykkere - relevant for følsomme kunderelationer, hvor bogholderen hellere vil
+    // rykke manuelt/telefonisk. Kun vist hvis migrationen er kørt.
+    $show_no_rem_field = db_has_column($conn, 'customers', 'cust_no_reminders');
     if ($show_no_rem_field) {
-        // RETTET (bruger-anmodet: "Fravælg mangler label"): feltet havde
-        // ingen synlig feltnavn-label (kun selve beskrivelsesteksten ved
-        // siden af afkrydsningsfeltet) - i modsætning til alle andre felter
-        // på siden, der har en <legend> via htm_Field(). Tilføjet samme
-        // fieldset+legend-stil manuelt (htm_Field() understøtter ikke type
-        // 'checkbox'), så feltet nu har et rigtigt navn ("Restancerykker"),
-        // ligesom Kreditgrænse/Fakturasprog ovenfor.
+        // RETTET: feltet havde ingen synlig feltnavn-label (kun selve beskrivelsesteksten ved siden af
+        // afkrydsningsfeltet) - i modsætning til alle andre felter på siden, der har en <legend> via htm_Field.
+        // Tilføjet samme fieldset+legend-stil manuelt (htm_Field understøtter ikke type 'checkbox'), så feltet nu
+        // har et rigtigt navn ("Restancerykker"), ligesom Kreditgrænse/Fakturasprog ovenfor.
         render_hideable_field($fv_overrides, 'customer_edit.cust_no_reminders', $fv_is_admin, $fv_uLev, function() use ($cust) {
             echo '<div style="display:inline-block; width:260px; min-width:0;">'
                 . '<fieldset style="border-radius:8px; margin:2px; border:1px solid var(--border-fieldset); background-color: var(--bg-card); min-width:0; box-sizing:border-box; padding:5px 10px;">'
@@ -491,25 +402,15 @@ htm_Card_(capt: '@Customer Information', wdth: 650, form: 'edit_customer_form');
     
 htm_Card_end();
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 33): kunden
-// havde kun ét fladt sæt kontaktfelter (cust_contact_person/cust_email/
-// cust_phone) ovenfor - en kunde med fx en separat fakturamodtager og en
-// anden daglig kontaktperson kunne ikke registreres. Ny, separat
-// customer_contacts-tabel, vist/redigeret her. Kun for allerede oprettede
-// kunder (en kontaktperson skal knyttes til et rigtigt cust_id).
+// NYT: kunden havde kun ét fladt sæt kontaktfelter (cust_contact_person/cust_email/cust_phone) ovenfor - en kunde
+// med fx en separat fakturamodtager og en anden daglig kontaktperson kunne ikke registreres. Kun for allerede
+// oprettede kunder (en kontaktperson skal knyttes til et rigtigt cust_id).
 if ($cust_id > 0) {
-    $has_contacts_table = false;
-    if (DB::is_sqlite()) {
-        $cct = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='customer_contacts'");
-        $has_contacts_table = ($cct && DB::fetch_assoc($cct));
-    } else {
-        $cct = DB::query($conn, "SHOW TABLES LIKE 'customer_contacts'");
-        $has_contacts_table = ($cct && DB::num_rows($cct) > 0);
-    }
+    $has_contacts_table = db_has_table($conn, 'customer_contacts');
     if ($has_contacts_table) {
         echo '<div id="contacts" style="margin-top:20px;">';
         htm_Card_(capt: '@Contact Persons', wdth: 650);
-        echo '<p style="color:var(--text-muted); font-size:12px; margin-top:0;">' . lang('@Use this for a customer with more than one relevant contact - e.g. a separate invoice recipient and a general contact person.') . '</p>';
+        htm_Note(lang('@Use this for a customer with more than one relevant contact - e.g. a separate invoice recipient and a general contact person.'), 'font-size:12px; margin-top:0;');
 
         $res_contacts = DB::query($conn, "SELECT * FROM customer_contacts WHERE cust_id = $cust_id ORDER BY contact_id ASC");
         $has_any_contact = false;
@@ -522,7 +423,7 @@ if ($cust_id > 0) {
                 echo '</div>';
                 echo '<div style="flex:1; min-width:150px; font-size:13px; color:var(--text-main);">' . htmlspecialchars($cc['contact_email'] ?: '-') . '</div>';
                 echo '<div style="width:120px; font-size:13px; color:var(--text-main);">' . htmlspecialchars($cc['contact_phone'] ?: '-') . '</div>';
-                echo '<form method="post" action="customer_contact_action.php" style="margin:0;" onsubmit="return confirm(' . json_encode(lang('@Are you sure?')) . ');">'
+                echo '<form method="post" action="customer_contact_action.php" style="margin:0;" onsubmit="' . htm_confirm_js('@Are you sure?') . '">'
                     . csrf_field(false)
                     . '<input type="hidden" name="action" value="delete">'
                     . '<input type="hidden" name="cust_id" value="' . $cust_id . '">'
@@ -532,7 +433,7 @@ if ($cust_id > 0) {
             }
         }
         if (!$has_any_contact) {
-            echo '<p style="color:var(--text-muted);">' . lang('@No contact persons added yet.') . '</p>';
+            htm_Note(lang('@No contact persons added yet.'));
         }
 
         echo '<form method="post" action="customer_contact_action.php" style="display:flex; gap:8px; align-items:flex-end; margin-top:15px; flex-wrap:wrap;">';

@@ -6,14 +6,14 @@ require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !csrf_verify()) {
-    header("Location: sales_hub.php"); exit;
+    redirect("sales_hub.php");
 }
 
 $action  = $_POST['action'] ?? '';
 $cust_id = (int)($_POST['cust_id'] ?? 0);
 
 if ($cust_id <= 0) {
-    header("Location: sales_hub.php"); exit;
+    redirect("sales_hub.php");
 }
 
 if ($action === 'add') {
@@ -38,4 +38,4 @@ if ($action === 'add') {
     }
 }
 
-header("Location: customer_edit.php?id=$cust_id#contacts");
+redirect("customer_edit.php?id=$cust_id#contacts");

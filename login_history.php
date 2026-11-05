@@ -44,9 +44,7 @@ $status_options = [
 
 htm_Card_(capt: '@Login History', wdth: 1100);
 
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">' .
-    lang('@A read-only record of every login attempt - who, when, from which IP address, and whether it succeeded. Repeated failed attempts for the same username may indicate someone trying to guess a password.') .
-    '</p>';
+htm_Note(lang('@A read-only record of every login attempt - who, when, from which IP address, and whether it succeeded. Repeated failed attempts for the same username may indicate someone trying to guess a password.'), 'font-size:0.9em; margin-top:-5px;');
 
 // --- Opsummering: samlet antal mislykkede forsøg de sidste 7 dage - hurtig
 // "er der noget at bekymre sig om"-indikator øverst, uden at skulle læse
@@ -77,7 +75,7 @@ $headers = ['@Date', '@Username', '@Status', '@IP Address', '@Browser'];
 $data = [];
 
 if (!$res) {
-    echo htm_Alert("SQL Error: " . DB::error($conn), "error");
+    echo htm_Alert(lang('@Error:') . ' ' . htmlspecialchars((string)DB::error($conn)), "error");
 } else {
     while ($row = DB::fetch_assoc($res)) {
         $when = date(CONF_DATE_FORMAT . ' H:i', strtotime(db_ts_local($row['login_time'])));
@@ -109,7 +107,7 @@ if (empty($data) && $res) {
     echo "<p style='padding:30px; text-align:center; color:var(--text-muted);'>" . lang('@No login attempts found for the selected filters.') . "</p>";
 } elseif (!empty($data)) {
     htm_Table($headers, $data, 'loginHistTbl', 300, '', true, [], '600px', 'login_history_export.csv');
-    echo '<p style="color:var(--text-muted); font-size:0.8em; margin-top:10px;">' . lang('@Showing the 300 most recent matching entries.') . '</p>';
+    htm_Note(lang('@Showing the 300 most recent matching entries.'), 'font-size:0.8em; margin-top:10px;');
 }
 
 htm_Card_end();

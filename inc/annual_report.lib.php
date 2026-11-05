@@ -125,22 +125,13 @@ function arl_income_statement($conn, $period_start, $period_end) {
     $acc_vat_in  = (int)($s['conf_acc_purchase_vat'] ?? 6910);
     $ps = DB::escape($conn, $period_start);
     $pe = DB::escape($conn, $period_end);
-    // RETTET (ALVORLIGT FUND, se [[year-end-close-bugs-review]]): manglede en
-    // udelukkelse af selve årsafslutningens egen lukkepostering
-    // (trans_type='year_end_close'). Den postering er dateret på periodens
-    // egen slutdato (jf. year_end_close.php) og nulstiller netop de samme
-    // indtægts-/udgiftskonti den selv lige har summeret op - falder derfor
-    // ALTID inden for sin egen periodes BETWEEN-forespørgsel og kancellerer
-    // hele resultatet til 0. Bekræftet direkte: en afsluttet regnskabsårs
-    // årsrapport viste 0,00 kr i omsætning/omkostninger/resultat for et år
-    // hvor der reelt var bogført en rigtig udgift - selve pointen med at
-    // generere en årsrapport EFTER en afslutning blev derved altid ødelagt.
-    // RETTET (§bugs-batch-22-review, samme fund som year_end_close.php): NULL
-    // trans_type (reelt forekommende - ingen NOT NULL/standardværdi i skemaet)
-    // blev stiltiende UDELUKKET af "!= 'year_end_close'" pga. SQL's tre-
-    // værdis-logik (NULL != x evaluerer til NULL, ikke SAND). Resultat-
-    // opgørelsen ville derfor mangle enhver postering hvis journalpost har
-    // trans_type=NULL. Kræver nu eksplicit at NULL også tælles med.
+    // RETTET (ALVORLIGT FUND, se): manglede en udelukkelse af selve årsafslutningens egen lukkepostering
+    // (trans_type='year_end_close'). Den postering er dateret på periodens egen slutdato (jf. year_end_close.php)
+    // og nulstiller netop de samme indtægts-/udgiftskonti den selv lige har summeret op - falder derfor ALTID
+    // inden for sin egen periodes BETWEEN-forespørgsel og kancellerer hele resultatet til 0.
+    // RETTET: NULL trans_type (reelt forekommende - ingen NOT NULL/standardværdi i skemaet) blev stiltiende
+    // UDELUKKET af "!= 'year_end_close'" pga. Resultat-opgørelsen ville derfor mangle enhver postering hvis
+    // journalpost har trans_type=NULL.
     $date_sql = "j.jou_date BETWEEN '$ps' AND '$pe' AND (j.trans_type IS NULL OR j.trans_type != 'year_end_close')";
 
     $rev_row = DB::fetch_assoc(DB::query($conn, "

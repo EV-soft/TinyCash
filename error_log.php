@@ -20,14 +20,9 @@ showMenu();
 // installationsspecifikke data) - gammel sti bevaret som fallback.
 $log_file = file_exists('inc/data/system_errors.log') ? 'inc/data/system_errors.log' : 'inc/system_errors.log';
 
-// RETTET (§bugs-batch-34-review): læste FØR hele filen ind i hukommelsen
-// uafhængigt af dens størrelse - about.php's eget "seneste fejl"-udsnit af
-// PRÆCIS samme fil begrænser allerede bevidst til halen (8KB), netop fordi
-// en fejllog kan vokse betydeligt over en installations levetid. Uden en
-// tilsvarende grænse her kunne selve fejllog-VISNINGEN ende med at udløse
-// PHP's eget memory_limit på en installation der har kørt længe med jævnlige
-// advarsler/fejl - ironisk nok en fejl i den side der skal vise fejl.
-// Viser nu kun halen (seneste ~500KB) med en tydelig note, hvis filen er
+// RETTET: læste FØR hele filen ind i hukommelsen uafhængigt af dens størrelse - about.php's eget "seneste
+// fejl"-udsnit af PRÆCIS samme fil begrænser allerede bevidst til halen (8KB), netop fordi en fejllog kan vokse
+// betydeligt over en installations levetid. Viser nu kun halen (seneste ~500KB) med en tydelig note, hvis filen er
 // større end det.
 $max_read = 500 * 1024;
 $log_size = file_exists($log_file) ? filesize($log_file) : 0;
@@ -35,7 +30,7 @@ $log_size = file_exists($log_file) ? filesize($log_file) : 0;
 if (file_exists($log_file)) {
     htm_Card_('@System Error Log', 1200);
     if ($log_size > $max_read) {
-        htm_Banner('<i class="fa fa-info-circle"></i> ' . sprintf(lang('@This log file is %s - showing only the most recent part below. Check the file directly on the server for the full history.'), number_format($log_size / 1048576, 2, ',', '.') . ' MB'), 'info');
+        htm_Banner('<i class="fa fa-info-circle"></i> ' . sprintf(lang('@This log file is %s - showing only the most recent part below. Check the file directly on the server for the full history.'), fmt_dk($log_size / 1048576) . ' MB'), 'info');
     }
     $fh = @fopen($log_file, 'r');
     $tail = '';

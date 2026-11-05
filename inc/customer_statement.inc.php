@@ -9,6 +9,24 @@
 # reconcile_one_bank_line()/send_single_reminder()/mark_expense_paid() fra
 # samme session.
 
+// Er en invoice_payments-note en afskrivning? Notens præfiks er lang('@Written off as bad debt') på det sprog brugeren
+// havde, da afskrivningen blev lavet - derfor sammenlignes mod alle sprogs oversættelser (og den engelske nøgle).
+function cs_is_writeoff_note(string $note): bool {
+    static $prefixes = null;
+    if ($note === '') return false;
+    if ($prefixes === null) {
+        $prefixes = ['Written off as bad debt'];
+        $d = json_decode((string)@file_get_contents(dirname(__DIR__) . '/json-data/languages.json'), true);
+        foreach (($d['language'] ?? []) as $l) {
+            $t = trim((string)($l['translation']['@Written off as bad debt'] ?? ''));
+            if ($t !== '') $prefixes[] = $t;
+        }
+        $prefixes = array_unique($prefixes);
+    }
+    foreach ($prefixes as $pre) if (strncasecmp($note, $pre, strlen($pre)) === 0) return true;
+    return false;
+}
+
 /**
  * Beregner et kundekontoudtogs fulde datagrundlag: kronologisk
  * begivenhedsliste, løbende saldo, "Saldo primo" ved periodefilter, samt
@@ -19,19 +37,10 @@ function get_customer_statement_data($conn, int $cust_id, string $from = '', str
     $cust  = DB::fetch_assoc($res_c);
     if (!$cust) return null;
 
-    // --- Hent alle bogførte fakturaer (kladder udelades - ingen
-    // fakturanummer, ingen reel transaktion endnu) ---
-    // NYT (runde 33): credit_note_no findes kun efter db-setup/migrate_
-    // credit_note_no.php er kørt - samme "stille degradering"-mønster som
-    // andre nyere kolonner.
-    $has_cn_no_col = false;
-    if (DB::is_sqlite()) {
-        $cnc = DB::query($conn, "PRAGMA table_info(invoices)");
-        if ($cnc) { while ($cncr = DB::fetch_assoc($cnc)) { if ($cncr['name'] === 'credit_note_no') { $has_cn_no_col = true; break; } } }
-    } else {
-        $cnc = DB::query($conn, "SHOW COLUMNS FROM invoices LIKE 'credit_note_no'");
-        $has_cn_no_col = ($cnc && DB::num_rows($cnc) > 0);
-    }
+    // --- Hent alle bogførte fakturaer (kladder udelades - ingen fakturanummer, ingen reel transaktion endnu) ---
+    // NYT: credit_note_no findes kun efter db-setup/migrate_credit_note_no.php er kørt - samme "stille
+    // degradering"-mønster som andre nyere kolonner.
+    $has_cn_no_col = db_has_column($conn, 'invoices', 'credit_note_no');
     $cs_cn_no_select = $has_cn_no_col ? ", credit_note_no" : "";
     $res_i = DB::query($conn, "SELECT inv_id, invoice_no, inv_date, inv_due_date, credit_ref, inv_status$cs_cn_no_select
                                 FROM invoices
@@ -82,12 +91,16 @@ function get_customer_statement_data($conn, int $cust_id, string $from = '', str
             if (!empty($inv['inv_due_date']) && $inv['inv_due_date'] < $today) $overdue_invoices++;
         }
 
-        $pay_res = DB::query($conn, "SELECT payment_date, amount FROM invoice_payments
+        $pay_res = DB::query($conn, "SELECT payment_date, amount, note FROM invoice_payments
                                       WHERE inv_id = " . $inv['inv_id'] . " ORDER BY payment_date ASC, payment_id ASC");
         while ($p = DB::fetch_assoc($pay_res)) {
+            // RETTET: en afskrivning (tab på debitor, invoice_writeoff.php) gemmes som en "betaling" og stod derfor som
+            // "Betaling for faktura #..." - også på kontoudtoget der mailes til kunden, som en betaling kunden aldrig
+            // har foretaget. Genkendes på notens præfiks (skrevet på brugerens sprog på afskrivningstidspunktet).
+            $is_wo = cs_is_writeoff_note((string)($p['note'] ?? ''));
             $events[] = [
                 'date'   => $p['payment_date'],
-                'label'  => lang('@Payment for invoice') . ' #' . str_pad((string)$inv['invoice_no'], 6, '0', STR_PAD_LEFT),
+                'label'  => lang($is_wo ? '@Written off as bad debt' : '@Payment for invoice') . ($is_wo ? ' - ' . lang('@Invoice') : '') . ' #' . str_pad((string)$inv['invoice_no'], 6, '0', STR_PAD_LEFT),
                 'link'   => 'invoice_view.php?id=' . $inv['inv_id'],
                 'amount' => round((float)$p['amount'], 2) * -1,
             ];

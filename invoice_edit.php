@@ -45,8 +45,9 @@ $fv_uLev      = (int)($_SESSION['user_level'] ?? 1);
 if (isset($_GET['del']) && $_GET['del'] == 1) {
     $inv_id = (int)$_GET['id'];
     $del_row = DB::fetch_assoc(DB::query($conn, "SELECT inv_status, cust_id, inv_date FROM invoices WHERE inv_id = $inv_id"));
+    if (!$del_row) redirect('sales_hub.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: meldte succes, selv om intet fandtes (dobbeltklik, en anden fane)
     if ($del_row && strtolower($del_row['inv_status']) !== 'draft') {
-        header("Location: invoice_edit.php?id=$inv_id&err=posted_no_delete"); exit;
+        redirect("invoice_edit.php?id=$inv_id", '@This invoice is already posted and cannot be deleted. Use Create Credit Note to correct it.', 'error');
     }
     // RETTET: kladden blev slettet, men det den var lavet AF blev ikke frigivet - timerne stod stadig som
     // "faktureret" (kunne aldrig faktureres igen), tilbuddet stod som "konverteret" til en faktura der ikke
@@ -60,39 +61,46 @@ if (isset($_GET['del']) && $_GET['del'] == 1) {
         log_action($conn, 'DELETE_DRAFT_INVOICE', 'invoices', $inv_id, $del_row, null);
     }
     DB::commit($conn);
-    header("Location: sales_hub.php?msg=deleted"); exit;
+    redirect('sales_hub.php', '@Draft invoice deleted.');
 }
 
 // 2. HÅNDTER GEM / OPDATER
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_invoice'])) {
+    // Linjens momssats er et frit talfelt - en tastefejl som 250 eller -25 må ikke bogføres (tom linje = 0 %)
+    foreach ((array)($_POST['line_vat'] ?? []) as $vchk) {
+        if (trim((string)$vchk) !== '' && tc_pct($vchk) === null) redirect("invoice_edit.php?id=" . (int)($_POST['inv_id'] ?? 0), '@The VAT rate must be between 0 and 100 %.', 'error');
+    }
     $inv_id       = (int)$_POST['inv_id'];
     $cust_id      = (int)$_POST['cust_id'];
+    $ie_keep_cust = $inv_id > 0 ? (int)(DB::fetch_row(DB::query($conn, "SELECT cust_id FROM invoices WHERE inv_id = $inv_id"))[0] ?? 0) : 0;
+    if (!tc_customer_ok($conn, $cust_id, $ie_keep_cust)) redirect("invoice_edit.php?id=$inv_id", '@Please choose a customer from the list.', 'error');      // RETTET: en kunde der ikke findes (eller ligger i papirkurven) blev godtaget - en bogført faktura stod da på debitorkontoen uden kunde
     $inv_date     = DB::escape($conn, $_POST['inv_date']);
     $inv_due_date = DB::escape($conn, $_POST['inv_due_date']);
+    // RETTET: fakturadatoen blev ikke kontrolleret på serveren - en tom eller ugyldig dato ("2026-02-31") blev gemt på
+    // kladden og senere bogført som journaldato (momsperiode, periodelås og rapporter ramte forkert eller slet ikke)
+    if (!tc_is_date($inv_date) || ($inv_due_date !== '' && !tc_is_date($inv_due_date))) {
+        redirect("invoice_edit.php?id=" . (int)($_POST['inv_id'] ?? 0), '@Please enter a valid date.', 'error');
+    }
     // RETTET: forfaldsdatoen kunne ligge FØR fakturadatoen (fx efter at fakturadatoen blev rykket) - fakturaen
     // var så "forfalden" allerede da den blev udstedt, og rykkerlisten/restancelisten talte dage fra før den fandtes
     if ($inv_due_date !== '' && $inv_date !== '' && $inv_due_date < $inv_date) {
-        die(lang('@The due date cannot be before the invoice date.'));
+        redirect("invoice_edit.php?id=" . (int)($_POST['inv_id'] ?? 0), '@The due date cannot be before the invoice date.', 'error');
     }
-    // KRITISK (§bugs-batch-17-review): inv_status blev gemt direkte fra
-    // POST'et Status-dropdown (draft/sent/paid/void), uden nogen server-side
-    // kontrol. Dette gemme-endpoint bruges KUN til stadig-ikke-bogførte
-    // fakturaer (den finansielle lås nedenfor blokerer enhver anden sti), så
-    // en helt almindelig bruger kunne blot vælge "Betalt" i den synlige
-    // dropdown og gemme - fakturaen blev sat til 'paid' UDEN nogensinde at
-    // gå igennem invoice_post_action.php (intet fakturanummer, INGEN
-    // hovedbogspostering, intet lagertræk). Nøjagtig samme fejlklasse som de
-    // tre allerede lukkede huller i [[invoice-flow-integrity]] (send/
-    // bankafstemning/linje-sletning kunne springe bogføringen over) - denne
-    // fjerde, mest direkte vej (et almindeligt formularfelt) var overset.
-    // Tvinger derfor status til at forblive 'draft' her, uanset hvad der
-    // reelt blev sendt - den eneste gyldige vej fra kladde til bogført er
-    // invoice_post_action.php.
+    // Et tomt forfald blev gemt som '' - fakturaen viste forfald 01-01-1970 og stod som forfalden siden 1970 i
+    // rykker- og restancelisten. Nu: fakturadatoen + kundens betalingsfrist.
+    if ($inv_due_date === '') {
+        $ie_days = (int)(DB::fetch_row(DB::query($conn, "SELECT cust_payment_days FROM customers WHERE cust_id = $cust_id"))[0] ?? 8);
+        $inv_due_date = date('Y-m-d', strtotime($inv_date . ' +' . max(0, $ie_days) . ' days'));
+    }
+    // KRITISK: inv_status blev gemt direkte fra POST'et Status-dropdown (draft/sent/paid/void), uden nogen
+    // server-side kontrol. Tvinger derfor status til at forblive 'draft' her, uanset hvad der reelt blev sendt -
+    // den eneste gyldige vej fra kladde til bogført er invoice_post_action.php.
     $inv_status   = 'draft';
     $cust_ref     = DB::escape($conn, $_POST['cust_reference'] ?? '');
     $inv_note     = DB::escape($conn, $_POST['inv_note']);
     $deliv_addr   = DB::escape($conn, $_POST['delivery_address']);
     $proj_id      = (int)($_POST['proj_id'] ?? 0);
+    if (!tc_project_ok($conn, $proj_id, $proj_id)) $proj_id = 0;      // RETTET: et projekt-id der ikke findes, blev gemt (løs henvisning i projektregnskabet)
     $proj_sql     = ($proj_id > 0) ? $proj_id : 'NULL';
     // Flere fakturalayouts: kladdens eget layout (tomt = kundens / standarden) - kun når migreret.
     // Gemmes kun på kladder (nedenfor) - en bogført faktura beholder det layout den blev sendt med.
@@ -101,14 +109,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_invoice'])) {
     $inv_layout_sql = ($il_on_save && ($il_pick = il_valid_id($conn, $_POST['inv_layout_id'] ?? 0)) > 0) ? $il_pick : 'NULL';
 
     // Valuta — fremmed valuta med kurs
-    // RETTET (§currency-setting-is-cosmetic-label): "fremmed" blev afgjort ved
-    // sammenligning mod den hardkodede streng 'DKK', ikke firmaets faktisk
-    // konfigurerede bogføringsvaluta ($global_settings['currency']) - en
-    // faktura i firmaets EGEN valuta (fx en SEK-faktura hos et SEK-firma)
-    // blev derfor fejlagtigt behandlet som "fremmed" og fik unødvendigt en
-    // exch_rate påført, mens en faktura i den hardkodede 'DKK' altid gled
-    // igennem som "ikke fremmed" selv hos et ikke-DKK-firma, hvor DKK reelt
-    // ER en fremmed valuta.
+    // RETTET: "fremmed" blev afgjort ved sammenligning mod den hardkodede streng 'DKK', ikke firmaets faktisk
+    // konfigurerede bogføringsvaluta ($global_settings['currency']) - en faktura i firmaets EGEN valuta (fx en
+    // SEK-faktura hos et SEK-firma) blev derfor fejlagtigt behandlet som "fremmed" og fik unødvendigt en exch_rate
+    // påført, mens en faktura i den hardkodede 'DKK' altid gled igennem som "ikke fremmed" selv hos et
+    // ikke-DKK-firma, hvor DKK reelt ER en fremmed valuta.
     $base_currency      = strtoupper(preg_replace('/[^A-Z]/', '', $global_settings['currency'] ?? 'DKK')) ?: 'DKK';
     $post_currency      = strtoupper(preg_replace('/[^A-Z]/', '', $_POST['currency'] ?? $base_currency));
     $post_orig_currency = strtoupper(preg_replace('/[^A-Z]/', '', $_POST['orig_currency'] ?? ''));
@@ -129,49 +134,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_invoice'])) {
     }
     $db_currency = DB::escape($conn, $currency);
 
-    // Linjer — bygges til ÉT normaliseret array her, uanset om fakturaen er en
-    // kladde (bruges så til det reelle gem nedenfor) eller allerede bogført
-    // (bruges KUN til sammenligning i den finansielle lås lige herunder).
-    // RETTET (Timeregistrering, §time-tracking-feature): denne linje-
-    // gemmelogik understøttede reelt KUN produktbaserede linjer - "if ($pid
-    // <= 0 ...) continue;" sprang enhver linje UDEN et gyldigt prod_id helt
-    // over, uanset om den havde en gyldig mængde/pris. En fritekst-linje
-    // (fx en tidsregistrerings-linje som "25/08 - Rettede login-fejl", uden
-    // noget tilknyttet produkt - se time_actions.php) blev derfor SLETTET
-    // FULDSTÆNDIGT, ikke bare omdøbt, blot ved at åbne fakturaen her og
-    // trykke Gem uden at røre linjen - bekræftet direkte: en faktura med 2
-    // fritekst-linjer fra "Opret faktura af timer" endte med 0 linjer efter
-    // et almindeligt "Gem" uden nogen ændringer. Roden er at line_text[]
-    // reelt er en PRODUKT-vælger (en <select>), ikke et frit tekstfelt -
-    // dens indsendte værdi er altid et prod_id, aldrig den viste tekst,
-    // uanset hvad linjen egentlig indeholder. Løsning: et separat, skjult
-    // line_desc[]-felt (se linje-rendering nedenfor) bærer linjens EGEN,
-    // allerede gemte tekst uafhængigt af select'ens værdi - bruges som
-    // fallback-tekst OG gør linjen "værd at gemme", når intet produkt er
-    // valgt, i stedet for automatisk at blive kasseret.
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): valgfri
-    // rabat pr. linje - samme "stille degradering hvis ikke migreret
-    // endnu"-mønster som andre nyere kolonner.
-    $has_discount_col_ie = false;
-    if (DB::is_sqlite()) {
-        $dcc_ie = DB::query($conn, "PRAGMA table_info(invoice_lines)");
-        if ($dcc_ie) { while ($dccr_ie = DB::fetch_assoc($dcc_ie)) { if ($dccr_ie['name'] === 'discount_pct') { $has_discount_col_ie = true; break; } } }
-    } else {
-        $dcc_ie = DB::query($conn, "SHOW COLUMNS FROM invoice_lines LIKE 'discount_pct'");
-        $has_discount_col_ie = ($dcc_ie && DB::num_rows($dcc_ie) > 0);
-    }
+    // Linjer — bygges til ÉT normaliseret array her, uanset om fakturaen er en kladde (bruges så til det reelle
+    // gem nedenfor) eller allerede bogført.
+    // RETTET: denne linje-gemmelogik understøttede reelt KUN produktbaserede linjer - "if ($pid <= 0...)
+    // continue;" sprang enhver linje UDEN et gyldigt prod_id helt over, uanset om den havde en gyldig mængde/pris.
+    // En fritekst-linje (fx en tidsregistrerings-linje som "25/08 - Rettede login-fejl", uden noget tilknyttet
+    // produkt - se time_actions.php) blev derfor SLETTET FULDSTÆNDIGT, ikke bare omdøbt, blot ved at åbne
+    // fakturaen her og trykke Gem uden at røre linjen - bekræftet direkte: en faktura med 2 fritekst-linjer fra
+    // "Opret faktura af timer" endte med 0 linjer efter et almindeligt "Gem" uden nogen ændringer.
+    // NYT: valgfri rabat pr. linje - samme "stille degradering hvis ikke migreret endnu"-mønster som andre nyere
+    // kolonner.
+    $has_discount_col_ie = db_has_column($conn, 'invoice_lines', 'discount_pct');
 
     $posted_lines = [];
     if (isset($_POST['line_text']) && is_array($_POST['line_text'])) {
         foreach ($_POST['line_text'] as $k => $v) {
             $pid = isset($_POST['prod_id'][$k]) ? (int)$_POST['prod_id'][$k] : 0;
-            // RETTET v1.4.3->v1.4.4: den første rettelse (blot str_replace(','
-            // ,'.')) var selv util­strækkelig - se parse_dk_number() i
-            // inc/db_connect.inc.php for hvorfor et HÆVET beløb skrevet med
-            // fuld dansk tusindtals-formatering ("1.500,00") blev endnu VÆRRE
-            // ramt (endte som 1,5, ikke bare afrundet) end det oprindelige
-            // "199,95"->"199"-fund. Bruger-bekræftet reelt oplevet: en hævet
-            // pris "virkede ikke" ved gem.
+            // RETTET v1.4.3->v1.4.4: den første rettelse (blot str_replace(',','.')) var selv util­strækkelig - se
+            // parse_dk_number i inc/db_connect.inc.php for hvorfor et HÆVET beløb skrevet med fuld dansk
+            // tusindtals-formatering ("1.500,00") blev endnu VÆRRE ramt end det oprindelige "199,95"->"199"-fund.
+            // Bruger-bekræftet reelt oplevet: en hævet pris "virkede ikke" ved gem.
             $qty = parse_dk_number($_POST['quantity'][$k]);
             $prc = parse_dk_number($_POST['price_each'][$k]);
             $vat = parse_dk_number($_POST['line_vat'][$k]);
@@ -181,8 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_invoice'])) {
             // en NEGATIV linjetotal.
             $disc = 0.0;
             if ($has_discount_col_ie && isset($_POST['line_discount'][$k]) && trim($_POST['line_discount'][$k]) !== '') {
-                $disc = parse_dk_number($_POST['line_discount'][$k]);
-                if ($disc < 0 || $disc > 100) $disc = 0.0;
+                $disc = tc_pct($_POST['line_discount'][$k]) ?? 0.0;
             }
             $prod_row = DB::fetch_assoc(DB::query($conn, "SELECT prod_name FROM products WHERE prod_id=$pid"));
             $existing_desc = trim($_POST['line_desc'][$k] ?? '');
@@ -193,28 +174,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_invoice'])) {
             } else {
                 $txt = $_POST['line_text'][$k];
             }
+            if ($qty <= 0 && ($pid > 0 || $existing_desc !== '')) $GLOBALS['tc_dropped_lines'] = ($GLOBALS['tc_dropped_lines'] ?? 0) + 1;      // RETTET: en udfyldt linje med antal 0 eller negativt forsvandt stille - nu en advarsel efter gem
             if ($qty <= 0 || ($pid <= 0 && $existing_desc === '')) continue;
             $posted_lines[] = ['text' => $txt, 'qty' => $qty, 'price' => $prc, 'vat' => $vat, 'prod_id' => $pid, 'discount' => $disc];
         }
     }
 
-    // Uforanderlighed (bogføringslov): en allerede bogført faktura må ikke
-    // kunne få sine finansielle felter (dato/linjer/beløb/valuta) ændret "on
-    // the spot" - ledger-posteringen fra invoice_post_action.php ville ellers
-    // stille og roligt glide fra det fakturaen faktisk viser. Rettelse af
-    // disse felter skal ske via invoice_credit.php (kreditnota).
-    // UNDTAGELSE (bruger-anmodet, samme princip som expense_edit.php har for
-    // udgifter): rent beskrivende/kategoriserende felter - projekt,
-    // kundereference, note, leveringsadresse, forfaldsdato - må stadig
-    // ændres frit på en bogført faktura, da de hverken påvirker hovedbogen
-    // eller det udstedte fakturabeløb. invoice_post_action.php sætter aldrig
-    // noget projekt-felt på selve journalposten for fakturaer (i modsætning
-    // til expense_edit.php, som eksplicit synkroniserer journal.proj_id) -
-    // projekt-tilknytningen for fakturaer lever udelukkende i
-    // invoices.proj_id + invoice_lines.proj_id, begge rene rapporterings-
-    // felter. Sammenligner derfor de FAKTISK finansielle felter (dato,
-    // valuta/kurs, linjeindhold) mod det gemte - kun hvis INGEN af dem er
-    // ændret tillades gemmet at gå igennem (begrænset til metadata-felterne).
+    // Uforanderlighed (bogføringslov): en allerede bogført faktura må ikke kunne få sine finansielle felter
+    // (dato/linjer/beløb/valuta) ændret "on the spot" - ledger-posteringen fra invoice_post_action.php ville
+    // ellers stille og roligt glide fra det fakturaen faktisk viser. Sammenligner derfor de FAKTISK finansielle
+    // felter (dato, valuta/kurs, linjeindhold) mod det gemte - kun hvis INGEN af dem er ændret tillades gemmet at
+    // gå igennem (begrænset til metadata-felterne).
     if ($inv_id > 0) {
         $existing_inv = DB::fetch_assoc(DB::query($conn, "SELECT * FROM invoices WHERE inv_id = $inv_id"));
         if ($existing_inv && strtolower($existing_inv['inv_status']) !== 'draft') {
@@ -251,13 +221,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_invoice'])) {
             }
 
             if ($financial_changed) {
-                die(lang('@This invoice is already posted. Its details cannot be changed here — use Create Credit Note to correct it.'));
+                redirect("invoice_edit.php?id=" . (int)($_POST['inv_id'] ?? 0), '@This invoice is already posted. Its details cannot be changed here — use Create Credit Note to correct it.', 'error');
             }
 
             DB::query($conn, "UPDATE invoices SET inv_due_date='$inv_due_date', cust_reference='$cust_ref',
                 inv_note='$inv_note', delivery_address='$deliv_addr', proj_id=$proj_sql WHERE inv_id=$inv_id");
             DB::query($conn, "UPDATE invoice_lines SET proj_id=$proj_sql WHERE inv_id=$inv_id");
-            header("Location: invoice_edit.php?id=$inv_id&msg=saved"); exit;
+            if (!empty($GLOBALS['tc_dropped_lines'])) flash(sprintf(lang('@%d line(s) with a quantity of 0 or less were not saved - use a credit note to reduce an invoice.'), $GLOBALS['tc_dropped_lines']), 'warning');
+            redirect("invoice_edit.php?id=$inv_id", '@Changes saved successfully');
         }
     }
 
@@ -277,13 +248,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_invoice'])) {
         if ($save_ok) {
             $inv_id = DB::insert_id($conn);
             if ($il_on_save && $inv_layout_sql !== 'NULL') DB::query($conn, "UPDATE invoices SET inv_layout_id=$inv_layout_sql WHERE inv_id=$inv_id");
-            // TILFØJET (bruger-rapporteret følgefejl til langsom-sidevisning-
-            // fejlsøgningen, se [[auto-backup-check-perf-bug]]): denne, den
-            // hyppigste vej til en ny faktura, loggede FØR kun sletning
-            // (DELETE_DRAFT_INVOICE ovenfor), aldrig oprettelse - så
-            // auto_backup_check()'s ændrings-tjek (som bl.a. kigger på
-            // audit_log) aldrig så en ny faktura oprettet herfra, medmindre
-            // den også ramte expenses/journal på en eller anden led.
+            // TILFØJET: denne, den hyppigste vej til en ny faktura, loggede FØR kun sletning (DELETE_DRAFT_INVOICE
+            // ovenfor), aldrig oprettelse - så auto_backup_check's ændrings-tjek (som bl.a. kigger på audit_log)
+            // aldrig så en ny faktura oprettet herfra, medmindre den også ramte expenses/journal på en eller anden
+            // led.
             log_action($conn, 'CREATE_DRAFT_INVOICE', 'invoices', $inv_id, null, ['cust_id' => $cust_id, 'inv_date' => $inv_date]);
         }
     }
@@ -307,7 +275,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_invoice'])) {
             VALUES ($inv_id, '$txt', {$pl['qty']}, {$pl['price']}, {$pl['vat']}, {$pl['prod_id']}, $proj_sql"
             . ($has_discount_col_ie ? ", {$pl['discount']}" : "") . ")");
     }
-    header("Location: invoice_edit.php?id=$inv_id&msg=saved"); exit;
+    if (!empty($GLOBALS['tc_dropped_lines'])) flash(sprintf(lang('@%d line(s) with a quantity of 0 or less were not saved - use a credit note to reduce an invoice.'), $GLOBALS['tc_dropped_lines']), 'warning');
+    redirect("invoice_edit.php?id=$inv_id", '@Changes saved successfully');
 }
 
 // 3. HENT DATA
@@ -318,7 +287,7 @@ $currency_module  = !empty($s['module_currency']) && $s['module_currency'] == '1
 
 if ($inv_id > 0) {
     $inv = DB::fetch_assoc(DB::query($conn, "SELECT * FROM invoices WHERE inv_id=$inv_id"));
-    if (!$inv) die(lang('@Invoice not found'));
+    if (!$inv) redirect("invoice_edit.php?id=" . (int)($_POST['inv_id'] ?? 0), '@Invoice not found', 'error');
     $inv_lines = [];
     $lines_res = DB::query($conn, "SELECT * FROM invoice_lines WHERE inv_id=$inv_id ORDER BY line_id");
     while ($l = DB::fetch_assoc($lines_res)) { $inv_lines[] = $l; }
@@ -333,12 +302,10 @@ if ($inv_id > 0) {
         'proj_id' => (int)($_GET['proj_id'] ?? 0),
         'orig_currency' => null, 'exch_rate' => null
     ];
-    // RETTET: $inv_lines blev aldrig sat for en NY faktura (kun i grenen
-    // ovenfor) - virkede tidligere kun ved en tilfældighed, fordi den
-    // hårdkodede 5-linjers-løkke udelukkende læste den via isset(), som
-    // tåler en helt udefineret variabel. Direkte count($inv_lines) (se
-    // $line_render_count nedenfor) gør ikke det samme - uden denne linje
-    // gav "Opret ny faktura" en fatal TypeError.
+    // RETTET: $inv_lines blev aldrig sat for en NY faktura (kun i grenen ovenfor) - virkede tidligere kun ved en
+    // tilfældighed, fordi den hårdkodede 5-linjers-løkke udelukkende læste den via isset, som tåler en helt
+    // udefineret variabel. Direkte count($inv_lines) (se $line_render_count nedenfor) gør ikke det samme - uden
+    // denne linje gav "Opret ny faktura" en fatal TypeError.
     $inv_lines = [];
 }
 
@@ -352,20 +319,7 @@ htm_Header($inv_id > 0 ? lang('@Edit Invoice')." #$inv_id" : lang('@Create New I
 showMenu();
 
 $tools = htm_Button('fa-list', '@Back to Hub', 'secondary', 'sales_hub.php', '', 'data-hint="'.lang('@Return to the sales hub without saving').'"', '<div style="display:flex; gap:10px;"></div>', false);
-$card_msg = '';
-// RETTET (bruger-anmodet, "kan bogholderen ønske sig mere"): specifikt
-// tjek for 'duplicated' skal stå FØR det generiske isset($_GET['msg'])-
-// tjek nedenfor, som ellers matcher enhver værdi af msg (inkl. denne) og
-// ville vise den forkerte "Ændringer gemt"-besked på en helt frisk kladde
-// der aldrig er blevet gemt endnu.
-if (isset($_GET['msg']) && $_GET['msg'] === 'duplicated') {
-    $card_msg = htm_Alert(sprintf(lang('@New draft created as a duplicate of invoice #%d - review and adjust before sending.'), (int)($_GET['src'] ?? 0)), 'info', 700, false);
-} elseif (isset($_GET['msg'])) {
-    $card_msg = htm_Alert(lang('@Changes saved successfully'), 'success', 700, false);
-} elseif (isset($_GET['err']) && $_GET['err'] === 'posted_no_delete') {
-    $card_msg = htm_Alert(lang('@This invoice is already posted and cannot be deleted. Use Create Credit Note to correct it.'), 'error', 700, false);
-}
-htm_Card_($inv_id > 0 ? '@Edit Invoice' : '@New Invoice', 1000, $card_msg, 'edit_form', true, $tools);
+htm_Card_($inv_id > 0 ? '@Edit Invoice' : '@New Invoice', 1000, '', 'edit_form', true, $tools);
 
 echo '<input type="hidden" name="inv_id" value="'.$inv_id.'">';
 
@@ -373,6 +327,12 @@ echo '<input type="hidden" name="inv_id" value="'.$inv_id.'">';
 $cust_res = DB::query($conn, "SELECT cust_id, cust_name, cust_payment_days FROM customers WHERE " . customers_active_filter($conn) . " ORDER BY cust_name");
 $cust_opt = [];  $cust_days_map = [];
 while ($c = DB::fetch_assoc($cust_res)) { $cust_opt[$c['cust_id']] = $c['cust_name'];  $cust_days_map[$c['cust_id']] = (int)($c['cust_payment_days'] ?? 8); }
+// RETTET: en kladde til en kunde i papirkurven viste den FØRSTE kunde i listen som fakturaens kunde (den låste
+// liste havde ikke kundens egen række) - samme "(slettet)"-mærkning som quote_edit.php.
+if (!empty($inv['cust_id']) && !isset($cust_opt[$inv['cust_id']])) {
+    $del_cust = DB::fetch_assoc(DB::query($conn, "SELECT cust_name FROM customers WHERE cust_id = " . (int)$inv['cust_id']));
+    if ($del_cust) $cust_opt[$inv['cust_id']] = $del_cust['cust_name'] . ' (' . lang('@Deleted') . ')';
+}
 htm_Field(icon:'fa-user', labl:'@Customer', name:'cust_id', valu:$inv['cust_id'], type:'sele',
     opti:$cust_opt, extr:($inv_id > 0 ? 'disabled required' : 'required onchange="checkCustomerBalance(this.value)"'), wdth:'70%', echo:true);
 htm_ProjektCodeField($conn, $proj_id ?: null, '30%');
@@ -388,15 +348,10 @@ if ($inv_id == 0) {
        . '})();</script>';
 }
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): advarer - blokerer
-// IKKE - hvis den valgte kunde allerede har en forfalden saldo, FØR endnu
-// mere "kredit" udvides til dem via en ny faktura. Genbruger
-// get_customer_statement_data() via customer_balance_check.php (samme
-// beregning som kundekortets sammendrag, se [[bookkeeper-wishlist-round10]]).
-// For en EKSISTERENDE kladde kendes kunden allerede server-side, så
-// advarslen forudberegnes med det samme (intet AJAX-kald nødvendigt); for
-// en helt NY faktura kendes kunden først når dropdownen ændres, se
-// checkCustomerBalance() nedenfor.
+// NYT: advarer - blokerer IKKE - hvis den valgte kunde allerede har en forfalden saldo, FØR endnu mere "kredit"
+// udvides til dem via en ny faktura. For en EKSISTERENDE kladde kendes kunden allerede server-side, så advarslen
+// forudberegnes med det samme (intet AJAX-kald nødvendigt); for en helt NY faktura kendes kunden først når
+// dropdownen ændres, se checkCustomerBalance nedenfor.
 echo '<div id="cust_balance_warning" style="display:none; margin:10px 0; padding:10px 14px; background:var(--bg-panel); border-left:4px solid var(--color-warning); border-radius:4px; font-size:0.9em;"></div>';
 if ($inv_id > 0 && (int)$inv['cust_id'] > 0) {
     $bal_stmt = get_customer_statement_data($conn, (int)$inv['cust_id']);
@@ -404,21 +359,12 @@ if ($inv_id > 0 && (int)$inv['cust_id'] > 0) {
         $bal_cur = $global_settings['currency'] ?? 'DKK';
         echo '<div style="margin:10px 0; padding:10px 14px; background:var(--bg-panel); border-left:4px solid var(--color-warning); border-radius:4px; font-size:0.9em;">'
             . '<i class="fa-solid fa-triangle-exclamation" style="color:var(--color-warning);"></i> '
-            . sprintf(lang('@This customer already has %d overdue invoice(s) totaling %s.'), $bal_stmt['overdue_invoices'], number_format($bal_stmt['total_outstanding'], 2, ',', '.') . ' ' . $bal_cur)
+            . sprintf(lang('@This customer already has %d overdue invoice(s) totaling %s.'), $bal_stmt['overdue_invoices'], fmt_dk($bal_stmt['total_outstanding']) . ' ' . $bal_cur)
             . '</div>';
     }
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): kreditgrænse -
-    // uafhængig af "forfalden saldo" ovenfor, en kunde der altid betaler til
-    // tiden kan sagtens vokse forbi en fornuftig grænse uden nogensinde at
-    // udløse den advarsel.
-    $has_credit_limit_col_ie = false;
-    if (DB::is_sqlite()) {
-        $clc_ie = DB::query($conn, "PRAGMA table_info(customers)");
-        if ($clc_ie) { while ($clcr_ie = DB::fetch_assoc($clc_ie)) { if ($clcr_ie['name'] === 'credit_limit') { $has_credit_limit_col_ie = true; break; } } }
-    } else {
-        $clc_ie = DB::query($conn, "SHOW COLUMNS FROM customers LIKE 'credit_limit'");
-        $has_credit_limit_col_ie = ($clc_ie && DB::num_rows($clc_ie) > 0);
-    }
+    // NYT: kreditgrænse - uafhængig af "forfalden saldo" ovenfor, en kunde der altid betaler til tiden kan sagtens
+    // vokse forbi en fornuftig grænse uden nogensinde at udløse den advarsel.
+    $has_credit_limit_col_ie = db_has_column($conn, 'customers', 'credit_limit');
     if ($has_credit_limit_col_ie && $bal_stmt) {
         $cl_row_ie = DB::fetch_assoc(DB::query($conn, "SELECT credit_limit FROM customers WHERE cust_id = " . (int)$inv['cust_id']));
         $cl_ie = ($cl_row_ie && $cl_row_ie['credit_limit'] !== null) ? (float)$cl_row_ie['credit_limit'] : null;
@@ -427,8 +373,8 @@ if ($inv_id > 0 && (int)$inv['cust_id'] > 0) {
             echo '<div style="margin:10px 0; padding:10px 14px; background:var(--bg-panel); border-left:4px solid var(--color-danger); border-radius:4px; font-size:0.9em;">'
                 . '<i class="fa-solid fa-shield-halved" style="color:var(--color-danger);"></i> '
                 . sprintf(lang('@This customer\'s outstanding balance (%s) already exceeds their credit limit (%s).'),
-                    number_format((float)$bal_stmt['total_outstanding'], 2, ',', '.') . ' ' . $bal_cur_ie,
-                    number_format($cl_ie, 2, ',', '.') . ' ' . $bal_cur_ie)
+                    fmt_dk((float)$bal_stmt['total_outstanding']) . ' ' . $bal_cur_ie,
+                    fmt_dk($cl_ie) . ' ' . $bal_cur_ie)
                 . '</div>';
         }
     }
@@ -447,14 +393,11 @@ echo '</div>';
 // firmaets faktisk konfigurerede $default_currency, ikke en hardkodet 'DKK'.
 $fc_checked = ($orig_currency && $orig_currency !== $default_currency) ? 'checked' : '';
 if ($currency_module) {
-// RETTET (bruger-anmodet, felt-højreklik-skjul): en L1/L2-bruger for hvem
-// dette felt er skjult, skal STADIG kunne gemme en allerede-oprettet
-// fremmed-valuta-faktura uden at valutadata går tabt - render_hideable_field()
-// udelader HELE feltet fra output for en skjult bruger, så uden en fallback
-// ville $_POST['orig_currency']/['exch_rate']/['currency'] alle mangle, og
-// POST-håndteringen ville stille falde tilbage til firmaets basisvaluta (se
-// linje ~104-116) og dermed NULSTILLE en eksisterende fakturas valutakurs.
-// Samme mønster som allerede brugt i "modul deaktiveret"-grenen nedenfor.
+// RETTET: en L1/L2-bruger for hvem dette felt er skjult, skal STADIG kunne gemme en allerede-oprettet
+// fremmed-valuta-faktura uden at valutadata går tabt - render_hideable_field udelader HELE feltet fra output for
+// en skjult bruger, så uden en fallback ville $_POST['orig_currency']/['exch_rate']/['currency'] alle mangle, og
+// POST-håndteringen ville stille falde tilbage til firmaets basisvaluta (se linje ~104-116) og dermed NULSTILLE en
+// eksisterende fakturas valutakurs. Samme mønster som allerede brugt i "modul deaktiveret"-grenen nedenfor.
 render_hideable_field($fv_overrides, 'invoice_edit.orig_currency', $fv_is_admin, $fv_uLev, function() use ($fc_checked, $cur, $orig_currency, $default_currency, $exch_rate) {
 echo '<div style="margin:10px 0 15px; padding:12px; background:var(--bg-panel); border-radius:8px; border:2px dashed blue;">';
 echo '<div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">';
@@ -470,10 +413,9 @@ echo '<div id="fc-fields" style="display:'.($fc_checked ? 'grid' : 'none').'; gr
 // Valuta-valg
 echo '<div><label style="font-size:11px; font-weight:bold; color:var(--text-muted);">'.lang('@Currency').'</label>';
 echo '<select name="orig_currency" id="fc-currency" onchange="fetchRate()" style="width:100%; padding:7px; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-main);">';
-// RETTET: listen udelod altid 'DKK' (gav mening da hovedbogen kun var DKK -
-// DKK var jo aldrig "fremmed"), men firmaets base kan nu være en anden valuta
-// (fx SEK) - så er DKK reelt en fremmed valuta og skal kunne vælges. Filtrerer
-// i stedet firmaets EGEN valuta fra listen, uanset hvilken den er.
+// RETTET: listen udelod altid 'DKK' (gav mening da hovedbogen kun var DKK - DKK var jo aldrig "fremmed"), men
+// firmaets base kan nu være en anden valuta (fx SEK) - så er DKK reelt en fremmed valuta og skal kunne vælges.
+// Filtrerer i stedet firmaets EGEN valuta fra listen, uanset hvilken den er.
 $currencies = array_values(array_diff(['DKK','EUR','USD','GBP','SEK','NOK','CHF','JPY','CAD','AUD','PLN','CZK','HUF','RON','ISK'], [$default_currency]));
 foreach ($currencies as $c) {
     $sel = ($orig_currency === $c || $cur === $c) ? ' selected' : '';
@@ -484,7 +426,7 @@ echo '</select></div>';
 // Kurs
 echo '<div><label style="font-size:11px; font-weight:bold; color:var(--text-muted);">'.sprintf(lang('@Exchange rate to %s'), htmlspecialchars($default_currency)).' <span id="fc-rate-date" style="font-weight:normal; font-size:10px; color:var(--text-muted);"></span></label>';
 echo '<div style="display:flex; gap:4px;">';
-echo '<input type="text" name="exch_rate" id="fc-rate" value="'.($exch_rate ? number_format($exch_rate, 4, ',', '') : '').'"
+echo '<input type="text" name="exch_rate" id="fc-rate" value="'.($exch_rate ? fmt_dk_input($exch_rate, 4) : '').'"
     placeholder="0,0000" oninput="updateCurrencyHidden()"
     style="flex:1; padding:7px; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-main); text-align:right;">';
 echo '<button type="button" onclick="fetchRate()" title="'.lang('@Fetch current rate').'"
@@ -502,7 +444,7 @@ echo '</div>'; // fc-fields
 if ($exch_rate && $orig_currency) {
     echo '<div style="margin-top:6px; font-size:11px; color:var(--text-muted);">';
     echo '<i class="fa fa-info-circle" style="color:var(--color-primary);"></i> ';
-    echo lang('@Saved rate').': 1 '.htmlspecialchars($orig_currency).' = '.number_format($exch_rate, 4, ',', '').' '.htmlspecialchars($default_currency);
+    echo lang('@Saved rate').': 1 '.htmlspecialchars($orig_currency).' = '.fmt_dk_input($exch_rate, 4).' '.htmlspecialchars($default_currency);
     echo '</div>';
 }
 echo '</div>'; // valuta-sektion
@@ -515,7 +457,7 @@ if (!$fv_is_admin && empty($fv_vis_fc[$fv_uLev])) {
     echo '<input type="hidden" name="currency" value="'.htmlspecialchars($cur).'">';
     if ($orig_currency && $orig_currency !== $default_currency) {
         echo '<input type="hidden" name="orig_currency" value="'.htmlspecialchars($orig_currency).'">';
-        echo '<input type="hidden" name="exch_rate" value="'.($exch_rate ? number_format($exch_rate, 4, ',', '') : '').'">';
+        echo '<input type="hidden" name="exch_rate" value="'.($exch_rate ? fmt_dk_input($exch_rate, 4) : '').'">';
     }
 }
 } else {
@@ -523,7 +465,7 @@ if (!$fv_is_admin && empty($fv_vis_fc[$fv_uLev])) {
     echo '<input type="hidden" name="currency" value="'.htmlspecialchars($cur).'">';
     if ($orig_currency && $orig_currency !== $default_currency) {
         echo '<input type="hidden" name="orig_currency" value="'.htmlspecialchars($orig_currency).'">';
-        echo '<input type="hidden" name="exch_rate" value="'.($exch_rate ? number_format($exch_rate, 4, ',', '') : '').'">';
+        echo '<input type="hidden" name="exch_rate" value="'.($exch_rate ? fmt_dk_input($exch_rate, 4) : '').'">';
     }
 }
 // ── Slut valuta-sektion ───────────────────────────────────────────────────────
@@ -554,48 +496,31 @@ echo '<h3 style="margin:20px 0 10px 0;">'.lang('@Invoice Lines').'</h3>';
 $prod_res = DB::query($conn, "SELECT p.prod_id, p.prod_name, p.prod_price, p.prod_stock, a.vat_rate FROM products p LEFT JOIN accounts a ON p.acc_id = a.acc_id ORDER BY p.prod_name");
 $prod_opt = [0 => '-- '.lang('@Select Product/Description').' --'];
 $prod_vat_map = [0 => 25]; $prod_price_map = [0 => 0.00];
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): et lagerlavarsel
-// ved selve faktureringen manglede - man opdagede først en overskredet
-// lagerbeholdning EFTER fakturaen var gemt (prod_stock trækkes automatisk
-// ved gemning, se invoice_actions.php), aldrig FØR. Samme "advarer, blokerer
-// ikke"-princip som customer_balance_check.php/expense_duplicate_check.php:
-// en bogholder kan sagtens have en gyldig grund til at fakturere mere end
-// det aktuelt registrerede lager (fx en efterbestilling er på vej), så
-// dette må aldrig forhindre selve gemningen.
+// NYT: et lagerlavarsel ved selve faktureringen manglede - man opdagede først en overskredet lagerbeholdning EFTER
+// fakturaen var gemt (prod_stock trækkes automatisk ved gemning, se invoice_actions.php), aldrig FØR. Samme
+// "advarer, blokerer ikke"-princip som customer_balance_check.php/expense_duplicate_check.php: en bogholder kan
+// sagtens have en gyldig grund til at fakturere mere end det aktuelt registrerede lager (fx en efterbestilling er
+// på vej), så dette må aldrig forhindre selve gemningen.
 $prod_stock_map = [0 => null];
 while ($p = DB::fetch_assoc($prod_res)) {
     $prod_opt[$p['prod_id']] = $p['prod_name'];
     $prod_vat_map[$p['prod_id']]   = ($p['vat_rate']   !== null) ? (float)$p['vat_rate']   : 25.00;
     $prod_price_map[$p['prod_id']] = ($p['prod_price'] !== null) ? (float)$p['prod_price'] : 0.00;
-    $prod_stock_map[$p['prod_id']] = ($p['prod_stock'] !== null) ? (int)$p['prod_stock'] : null;
+    $prod_stock_map[$p['prod_id']] = ($p['prod_stock'] !== null) ? (float)$p['prod_stock'] : null;      // (float: lager kan have decimaler, fx 7,5 kg)
 }
 
-// RETTET (bruger-spurgte "kan man oprette en række for extra linje(r)"):
-// tabellen var hårdkodet til NØJAGTIGT 5 linjer (for ($i=0;$i<5;$i++)) - der
-// var hverken en "Tilføj linje"-knap, ELLER nogen måde at se/redigere en
-// linje nummer 6+, hvis fakturaen af en anden vej (fx "Opret faktura af
-// timer" i time_actions.php, eller en genereret gentagende faktura med
-// mange produkter) allerede havde fået flere end 5 linjer. VÆRRE: gem-
-// håndteringen ovenfor sletter ALTID alle linjer først og genopretter dem
-// udelukkende fra det, formularen reelt indsendte - så en faktura med 6+
-// linjer, der blot blev åbnet og gemt her uden nogen tilsigtet ændring,
-// ville stille og permanent miste linje 6 og fremefter (nøjagtig samme
-// datatabs-mønster som den allerede rettede fritekst-linje-fejl beskrevet
-// nedenfor, blot en anden rodårsag). Rettet ved (1) altid at vise MINDST
-// lige så mange rækker som der reelt er linjer (aldrig færre - ingen
-// eksisterende linje skjules/tabes længere), og (2) en "+ Tilføj linje"-
-// knap, der via JS kloner en frisk, tom skabelon-række ind i tabellen -
-// selve gem-logikken behøvede INGEN ændring, den itererer allerede
-// generisk over hele $_POST['line_text'], uanset antal.
+// RETTET (bruger-spurgte "kan man oprette en række for extra linje(r)"): tabellen var hårdkodet til NØJAGTIGT 5
+// linjer (for ($i=0;$i<5;$i++)) - der var hverken en "Tilføj linje"-knap, ELLER nogen måde at se/redigere en linje
+// nummer 6+, hvis fakturaen af en anden vej (fx "Opret faktura af timer" i time_actions.php, eller en genereret
+// gentagende faktura med mange produkter) allerede havde fået flere end 5 linjer. Rettet ved (1) altid at vise
+// MINDST lige så mange rækker som der reelt er linjer (aldrig færre - ingen eksisterende linje skjules/tabes
+// længere), og (2) en "+ Tilføj linje"- knap, der via JS kloner en frisk, tom skabelon-række ind i tabellen -
+// selve gem-logikken behøvede INGEN ændring, den itererer allerede generisk over hele $_POST['line_text'], uanset
+// antal.
 function build_invoice_line_row($i, $prod_id, $line_qty, $line_price, $line_vat, $existing_line_text, $prod_opt, $line_discount = null) {
-    // RETTET (Timeregistrering): line_text[] er reelt en produkt-<select>,
-    // ikke et frit tekstfelt - dens indsendte værdi er altid et prod_id.
-    // line_desc[] bærer linjens EGEN, faktisk gemte tekst uafhængigt heraf,
-    // så en fritekst-linje (intet prod_id, fx fra time_actions.php) hverken
-    // mistes eller ombyttes til "0" ved et almindeligt Gem - se save-
-    // håndteringen ovenfor. Vist som en lille note under feltet, når linjen
-    // reelt er fritekst, så brugeren kan se hvad der faktisk står der, selv
-    // om selve dropdown'en nødvendigvis viser "-- Vælg produkt --".
+    // RETTET (Timeregistrering): line_text[] er reelt en produkt-<select>, ikke et frit tekstfelt - dens indsendte
+    // værdi er altid et prod_id. Vist som en lille note under feltet, når linjen reelt er fritekst, så brugeren
+    // kan se hvad der faktisk står der, selv om selve dropdown'en nødvendigvis viser "-- Vælg produkt --".
     $f_prod  = '<input type="hidden" name="prod_id[]" value="'.$prod_id.'">'
              . '<input type="hidden" name="line_desc[]" value="'.htmlspecialchars($existing_line_text, ENT_QUOTES).'">';
     $f_text  = htm_Field('', '', 'line_text[]', $prod_id, 'sele', $prod_opt, 'onchange="updateVatRate(this, '.$i.')"', '100%', '', '', '', false) . $f_prod;
@@ -607,11 +532,9 @@ function build_invoice_line_row($i, $prod_id, $line_qty, $line_price, $line_vat,
     $f_price = htm_Field('', '', 'price_each[]', $line_price, 'number', null, 'step="any"', '100%', '', '', '', false);
     $f_vat   = htm_Field('', '', 'line_vat[]',   $line_vat,   'number', null, '', '100%', '', '', '', false);
     $row = [$f_text, $f_qty, $f_price, $f_vat];
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): valgfrit rabat-
-    // felt (%) pr. linje - $line_discount er null (ikke bare 0) når kolonnen
-    // slet ikke er migreret endnu, så denne celle helt kan udelades fra
-    // tabellen (samme "stille degradering"-mønster som andre nyere kolonner,
-    // her anvendt på selve KOLONNEN i tabellen, ikke kun et enkelt felt).
+    // NYT: valgfrit rabat-felt (%) pr. linje - $line_discount er null (ikke bare 0) når kolonnen slet ikke er
+    // migreret endnu, så denne celle helt kan udelades fra tabellen (samme "stille degradering"-mønster som andre
+    // nyere kolonner, her anvendt på selve KOLONNEN i tabellen, ikke kun et enkelt felt).
     if ($line_discount !== null) {
         $row[] = htm_Field('', '', 'line_discount[]', $line_discount, 'number', null, 'step="any" min="0" max="100" onchange="calculateInvoiceTotals()"', '100%', '', '', '', false);
     }
@@ -621,14 +544,7 @@ function build_invoice_line_row($i, $prod_id, $line_qty, $line_price, $line_vat,
 // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): findes discount_pct
 // (db-setup/migrate_invoice_line_discount.php)? Beregnes her (ikke kun i
 // gem-logikken ovenfor), da denne del af siden kører uafhængigt af POST.
-$has_discount_col_display = false;
-if (DB::is_sqlite()) {
-    $dcc_disp = DB::query($conn, "PRAGMA table_info(invoice_lines)");
-    if ($dcc_disp) { while ($dccr_disp = DB::fetch_assoc($dcc_disp)) { if ($dccr_disp['name'] === 'discount_pct') { $has_discount_col_display = true; break; } } }
-} else {
-    $dcc_disp = DB::query($conn, "SHOW COLUMNS FROM invoice_lines LIKE 'discount_pct'");
-    $has_discount_col_display = ($dcc_disp && DB::num_rows($dcc_disp) > 0);
-}
+$has_discount_col_display = db_has_column($conn, 'invoice_lines', 'discount_pct');
 
 $line_render_count = max(5, count($inv_lines));
 $tbl_data = [];
@@ -652,12 +568,9 @@ echo '<button type="button" onclick="addInvoiceLine()" style="display:inline-blo
 echo '<i class="fa-solid fa-plus"></i> ' . lang('@Add Line');
 echo '</button>';
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 32):
-// fakturaskabeloner - gem det nuværende linjesæt som en navngivet, genbrugelig
-// skabelon, eller indsæt en tidligere gemt skabelons linjer i den aktuelle
-// faktura. Rører aldrig selve fakturaen direkte - indsætter blot flere
-// "Tilføj linje"-rækker (samme addInvoiceLine(), se dens egen kommentar for
-// hvorfor det er trygt), som brugeren stadig kan redigere/fjerne bagefter.
+// NYT: fakturaskabeloner - gem det nuværende linjesæt som en navngivet, genbrugelig skabelon, eller indsæt en
+// tidligere gemt skabelons linjer i den aktuelle faktura. Rører aldrig selve fakturaen direkte - indsætter blot
+// flere "Tilføj linje"-rækker (samme addInvoiceLine,.
 echo '<select id="invTplSelect" style="padding:6px; border-radius:4px; font-size:13px;"><option value="">' . lang('@Select a template...') . '</option></select>';
 echo '<button type="button" onclick="insertInvoiceTemplate()" style="padding:6px 12px; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-panel); cursor:pointer; font-size:13px;"><i class="fa-solid fa-file-import"></i> ' . lang('@Insert Template') . '</button>';
 echo '<button type="button" onclick="saveInvoiceTemplate()" style="padding:6px 12px; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-panel); cursor:pointer; font-size:13px;"><i class="fa-solid fa-floppy-disk"></i> ' . lang('@Save Lines as Template') . '</button>';
@@ -704,7 +617,7 @@ function checkStockWarning(rowIndex) {
     if (!pidF || !qtyF) return;
     const pid   = pidF.value;
     const stock = stockMap[pid];
-    const qty   = parseFloat(qtyF.value.toString().replace(',', '.')) || 0;
+    const qty   = tcNum(qtyF.value);
     if (stock === null || stock === undefined || qty <= stock) {
         warnEl.style.display = 'none';
         return;
@@ -896,6 +809,8 @@ function insertInvoiceTemplate() {
                 document.getElementsByName('quantity[]')[i].value    = String(item.quantity);
                 document.getElementsByName('price_each[]')[i].value  = String(item.price_each);
                 document.getElementsByName('line_vat[]')[i].value    = item.line_vat_rate;
+                const discIn = document.getElementsByName('line_discount[]')[i];
+                if (discIn && item.discount_pct !== undefined && item.discount_pct !== null) discIn.value = String(item.discount_pct);
             });
             calculateInvoiceTotals();
         })
@@ -913,6 +828,7 @@ function saveInvoiceTemplate() {
         const vatF  = document.getElementsByName('line_vat[]');
         const pidF  = document.getElementsByName('prod_id[]');
         const descF = document.getElementsByName('line_desc[]');
+        const discF = document.getElementsByName('line_discount[]');      // (findes kun når rabatkolonnen er migreret)
         const lines = [];
         for (let i = 0; i < textF.length; i++) {
             // RETTET: textF er produktvalglisten - dens VÆRDI er produktets id, så skabelonen gemte "12" som
@@ -923,9 +839,10 @@ function saveInvoiceTemplate() {
             if (!txt) continue;
             lines.push({
                 line_text: txt,
-                quantity: parseFloat((qtyF[i].value || '0').toString().replace(',', '.')) || 0,
-                price_each: parseFloat((priF[i].value || '0').toString().replace(',', '.')) || 0,
-                line_vat_rate: parseFloat((vatF[i].value || '0').toString().replace(',', '.')) || 0,
+                quantity: (qtyF[i].value || '0').toString(),      // (rå feltværdi - serveren læser dansk talformat)
+                price_each: (priF[i].value || '0').toString(),
+                line_vat_rate: (vatF[i].value || '0').toString(),
+                discount_pct: (discF[i] && discF[i].value) ? discF[i].value.toString() : '0',
                 prod_id: pidSel || (pidF[i] ? (parseInt(pidF[i].value) || 0) : 0),
             });
         }
@@ -974,10 +891,10 @@ function calculateInvoiceTotals() {
     const discF = document.getElementsByName('line_discount[]');
     let sub = 0, vat = 0;
     for (let i = 0; i < qtyF.length; i++) {
-        let q = parseFloat(qtyF[i].value.toString().replace(',','.')) || 0;
-        let p = parseFloat(priF[i].value.toString().replace(',','.')) || 0;
-        let v = parseFloat(vatF[i].value.toString().replace(',','.')) || 0;
-        let discPct = (discF[i] && discF[i].value !== '') ? (parseFloat(discF[i].value.toString().replace(',','.')) || 0) : 0;
+        let q = tcNum(qtyF[i].value);      // ("1.500,00" blev til 1,5 i totalerne)
+        let p = tcNum(priF[i].value);
+        let v = tcNum(vatF[i].value);
+        let discPct = (discF[i] && discF[i].value !== '') ? tcNum(discF[i].value) : 0;
         if (discPct < 0 || discPct > 100) discPct = 0;
         let lineNet = q * p * (100 - discPct) / 100;
         sub += lineNet;

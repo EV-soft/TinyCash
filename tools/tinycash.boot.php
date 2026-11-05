@@ -182,7 +182,7 @@ $boot_txt_exists = file_exists(__DIR__ . '/tinycash.boot.txt');
         <li><b>Afsendelse af mail</b> (fakturaer, rykkere) - udfyld <code>[mail_config]</code>.</li>
         <li><b>Modtagelse af mail</b> (auto-import af kvitteringer/fakturaer) - de tre <code>IMAP_*</code>-postkasser.</li>
         <li><b>AI-bilagsskanning og oversættelseshjælp</b> - <code>OPENAI_API_KEY</code> / <code>DEEPL_API_KEY</code>.</li>
-        <li><b>Krypteret off-site backup</b> - to ting kræves: <code>[backup_config]</code> <code>BACKUP_PASSWORD</code> i env.ini OG en modtager-mail under <b>System -> Backup-administration -> Automatisk Backup</b> (uden begge dele sker der intet).</li>
+        <li><b>Krypteret off-site backup</b> - to ting kræves: <code>[backup_config]</code> <code>BACKUP_PASSWORD</code> i env.ini OG en modtager-mail under <b>System -> Vedligeholdelse -> Backup-administration -> Automatisk Backup</b> (uden begge dele sker der intet).</li>
         <li><b>Bankintegration (PSD2)</b> - <code>[enablebanking_config]</code>, kræver en gratis konto på enablebanking.com.</li>
     </ul>
     <p style="font-size:13px; color:#555;">

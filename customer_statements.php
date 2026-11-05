@@ -21,21 +21,9 @@ $cur = $s['currency'] ?? 'DKK';
 htm_Header('@Account Statements');
 showMenu();
 
-if (isset($_GET['msg']) && $_GET['msg'] === 'bulk') {
-    $b_sent   = (int)($_GET['sent'] ?? 0);
-    $b_failed = (int)($_GET['failed'] ?? 0);
-    if ($b_failed > 0) {
-        htm_Alert(sprintf(lang('@%d statement(s) sent. %d could not be sent (no email address, or a mail error) - please check them individually.'), $b_sent, $b_failed), 'warning');
-    } else {
-        htm_Alert(sprintf(lang('@%d statement(s) sent successfully.'), $b_sent), 'success');
-    }
-}
-
 htm_Card_(capt: '@Account Statements', wdth: 1100);
 
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">' .
-    lang('@Customers with an open balance. Send an account statement directly from here, one at a time or in bulk.') .
-    '</p>';
+htm_Note(lang('@Customers with an open balance. Send an account statement directly from here, one at a time or in bulk.'), 'font-size:0.9em; margin-top:-5px;');
 
 // Kandidater: kunder med mindst én bogført faktura og en mailadresse - resten
 // filtreres fra nedenfor (saldo <= 0), samme "hent kandidater, filtrér i PHP"-
@@ -60,7 +48,9 @@ if ($res) {
 
         $send_btn = $has_email
             ? '<a href="customer_statement_send.php?id=' . $cid . '" data-hint="' . lang('@Email the account statement to the customer (you are asked first)') . '" '
-              . 'onclick="return confirm(\'' . addslashes(sprintf(lang('@Send an account statement to %s?'), $row['cust_email'])) . '\')" '
+              // RETTET (XSS): addslashes() beskytter kun JS-strengen, ikke HTML-attributten - en gyldig e-mail som
+              // "x/onfocus=alert(1)/autofocus/"@x.dk (fx fra en webshop-ordre) brød ud af onclick="...". Nu også HTML-escapet.
+              . 'onclick="' . htm_confirm_js(sprintf(lang('@Send an account statement to %s?'), $row['cust_email'])) . '" '
               . 'style="background:var(--color-primary); color:#fff; padding:6px 14px; border-radius:4px; text-decoration:none; font-weight:bold; font-size:0.85em;">'
               . '<i class="fa-solid fa-envelope"></i> ' . lang('@Send Statement') . '</a>'
             : '<span style="color:var(--text-muted); font-size:0.85em;">' . lang('@No email address') . '</span>';
@@ -71,7 +61,7 @@ if ($res) {
                 : '',
             '<a href="customer_statement.php?id=' . $cid . '">' . htmlspecialchars($row['cust_name']) . '</a>',
             $has_email ? htmlspecialchars($row['cust_email']) : '<span style="color:var(--color-danger);">' . lang('@Missing') . '</span>',
-            '<span style="color:'.$bal_color.'; font-weight:bold;">' . number_format($stmt['total_outstanding'], 2, ',', '.') . ' ' . $cur . '</span>',
+            '<span style="color:'.$bal_color.'; font-weight:bold;">' . fmt_dk($stmt['total_outstanding']) . ' ' . $cur . '</span>',
             $stmt['overdue_invoices'] > 0
                 ? '<span style="color:var(--color-danger); font-weight:bold;">' . $stmt['overdue_invoices'] . '</span>'
                 : '0',

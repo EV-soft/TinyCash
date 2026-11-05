@@ -20,30 +20,9 @@ try {
     require_once 'inc/audit.inc.php';
     require_once 'inc/invoice_pdf_archive.inc.php';
 
-    // AUTOMATISK KONTROL AF DATABASETABEL (Fakta-sikring) - nu cross-engine.
-    // Den gamle version brugte ren MySQL-syntaks (AUTO_INCREMENT uden INTEGER
-    // PRIMARY KEY, ENUM, afsluttende ENGINE=...), som er en syntaksfejl på
-    // SQLite - tabellen blev derfor ALDRIG oprettet på SQLite-installationer.
-    if (DB::is_sqlite()) {
-        DB::query($conn, "CREATE TABLE IF NOT EXISTS tbl_maillog (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          faktura_id INTEGER,
-          modtager_mail TEXT NOT NULL,
-          afsendt_dato TIMESTAMP NOT NULL,
-          status TEXT NOT NULL DEFAULT 'Sendt',
-          server_respons TEXT
-        )");
-    } else {
-        DB::query($conn, "CREATE TABLE IF NOT EXISTS `tbl_maillog` (
-          `id` int(11) NOT NULL AUTO_INCREMENT,
-          `faktura_id` int(11) DEFAULT NULL,
-          `modtager_mail` varchar(255) NOT NULL,
-          `afsendt_dato` datetime NOT NULL,
-          `status` enum('Sendt','Fejl') NOT NULL DEFAULT 'Sendt',
-          `server_respons` text DEFAULT NULL,
-          PRIMARY KEY (`id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-    }
+    // tbl_maillog oprettes af db-setup (create_all_tables) - ikke længere ved hver afsendelse. Mangler den på en
+    // gammel installation, springes loggen over (al udgående post logges også centralt i mail_log af sendTinyMail()).
+    $has_maillog = db_has_table($conn, 'tbl_maillog');
 
     $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
     if ($id === 0) {
@@ -51,14 +30,7 @@ try {
         exit;
     }
 
-    $has_cust_lang_col_si = false;
-    if (DB::is_sqlite()) {
-        $clgc_si = DB::query($conn, "PRAGMA table_info(customers)");
-        if ($clgc_si) { while ($clgcr_si = DB::fetch_assoc($clgc_si)) { if ($clgcr_si['name'] === 'cust_language') { $has_cust_lang_col_si = true; break; } } }
-    } else {
-        $clgc_si = DB::query($conn, "SHOW COLUMNS FROM customers LIKE 'cust_language'");
-        $has_cust_lang_col_si = ($clgc_si && DB::num_rows($clgc_si) > 0);
-    }
+    $has_cust_lang_col_si = db_has_column($conn, 'customers', 'cust_language');
     $cust_lang_select_si = $has_cust_lang_col_si ? ", c.cust_language" : "";
 
     $sql = "SELECT i.*, c.cust_name, c.cust_email $cust_lang_select_si FROM invoices i JOIN customers c ON i.cust_id = c.cust_id WHERE i.inv_id = $id";
@@ -81,14 +53,10 @@ try {
         exit;
     }
 
-    // RETTET (BEK 811/2026-gennemgang, [[digital-standard-bookkeeping-registration-goal]]):
-    // gemte FØR kun PDF'en som en MIDLERTIDIG arbejdsfil direkte i storage/
-    // (til selve mail-vedhæftningen) og SLETTEDE den igen efter en vellykket
-    // afsendelse (se den fjernede unlink() nedenfor) - kun en faktura, hvis
-    // afsendelse reelt FEJLEDE, beholdt ved et tilfælde sin PDF-kopi. Bruger
-    // nu den delte invoice_store_uploaded_pdf() (inc/invoice_pdf_archive.
-    // inc.php), som gemmer PERMANENT under storage/invoices/ - samme fil
-    // bruges nu til BÅDE selve mail-vedhæftningen OG den varige arkivering.
+    // RETTET: gemte FØR kun PDF'en som en MIDLERTIDIG arbejdsfil direkte i storage/(til selve mail-vedhæftningen)
+    // og SLETTEDE den igen efter en vellykket afsendelse (se den fjernede unlink nedenfor) - kun en faktura, hvis
+    // afsendelse reelt FEJLEDE, beholdt ved et tilfælde sin PDF-kopi. Bruger nu den delte
+    // invoice_store_uploaded_pdf (inc/invoice_pdf_archive.
     $store_result = invoice_store_uploaded_pdf($conn, $id);
     if (!$store_result['success']) {
         echo json_encode(['success' => false, 'error' => $store_result['error']]);
@@ -104,16 +72,14 @@ try {
     $doc_key  = $is_credit_note ? '@Credit Note' : '@Invoice';
     $text_key = $is_credit_note ? "@Hi %s,\n\nPlease find your credit note attached.\n\nBest regards," : "@Hi %s,\n\nPlease find your invoice attached.\n\nBest regards,";
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 28):
-    // samme princip som invoice_view.php's papir-sprogskift - kun emnelinjen
-    // (den eneste lang()-afhængige del af selve mailen her) skiftes
-    // midlertidigt til kundens sprog, straks tilbagerullet bagefter.
+    // NYT: samme princip som invoice_view.php's papir-sprogskift - kun emnelinjen (den eneste lang-afhængige del
+    // af selve mailen her) skiftes midlertidigt til kundens sprog, straks tilbagerullet bagefter.
     if ($has_cust_lang_col_si && !empty($inv['cust_language'])) {
-        $si_lang_orig = $_SESSION['lang'] ?? 'da';
-        $_SESSION['lang'] = $inv['cust_language'];
+        require_once __DIR__ . '/inc/doc_paper.inc.php';
+        doc_lang_push((string)$inv['cust_language']);
         $subject = lang($doc_key) . ' ' . $f_no;
         $default_text = sprintf(lang($text_key), $inv['cust_name']);
-        $_SESSION['lang'] = $si_lang_orig;
+        doc_lang_pop();
     } else {
         $subject = lang($doc_key) . ' ' . $f_no;
         $default_text = sprintf(lang($text_key), $inv['cust_name']);
@@ -138,15 +104,12 @@ try {
     // ANALYSER REEL STATUS FRA MAIL-HANDLEREN
     if (isset($result['success']) && $result['success'] == true) {
         $log_status = 'Sendt';
+        $_SESSION['tc_sent_invoice'] = $id;      // (invoice_view.php viser kun "sendt"-bekræftelsen efter en reel afsendelse)
         $log_msg = 'Mail afleveret fejlfrit til den lokale mail-server/relay.';
 
-        // RETTET (se [[bugs-batch-10-review]]): satte ubetinget status til
-        // 'sent', selv hvis fakturaen allerede var 'paid' eller 'credited' -
-        // at gensende en kopi af en allerede betalt faktura (fx fordi kunden
-        // bad om det igen) rullede den fejlagtigt tilbage til "afventer
-        // betaling" i alle lister/rapporter, selvom betalingen og
-        // posteringerne stod urørt. Kun 'sent' hvis den ikke allerede er
-        // nået længere end det.
+        // RETTET: satte ubetinget status til 'sent', selv hvis fakturaen allerede var 'paid' eller 'credited' - at
+        // gensende en kopi af en allerede betalt faktura (fx fordi kunden bad om det igen) rullede den fejlagtigt
+        // tilbage til "afventer betaling" i alle lister/rapporter, selvom betalingen og posteringerne stod urørt.
         // (RETTET: også en kreditnota - status 'credit' - blev sat til 'sent' og lignede så en ubetalt faktura)
         if (!in_array(strtolower($inv['inv_status']), ['paid', 'credited', 'credit'], true)) {
             DB::query($conn, "UPDATE invoices SET inv_status = 'sent' WHERE inv_id = $id");
@@ -154,9 +117,8 @@ try {
                 ['status' => $inv['inv_status']], ['status' => 'sent', 'to' => $inv['cust_email']]);
         }
 
-        // RETTET (se den store kommentar ved selve lagrings-kaldet ovenfor):
-        // PDF'en er nu en PERMANENT arkivkopi (bogføringslov-opbevaringskrav),
-        // ikke en midlertidig arbejdsfil - slettes derfor IKKE længere her,
+        // RETTET (se den store kommentar ved selve lagrings-kaldet ovenfor): PDF'en er nu en PERMANENT arkivkopi
+        // (bogføringslov-opbevaringskrav), ikke en midlertidig arbejdsfil - slettes derfor IKKE længere her,
         // uanset om afsendelsen lykkedes.
     } else {
         $log_status = 'Fejl';
@@ -165,7 +127,7 @@ try {
 
     // SKRIV DET HISTORISKE BEVIS - via DB::insert() (cross-engine, parameteriseret,
     // ingen manuel stmt-håndtering og ingen MySQL-specifik NOW()).
-    DB::insert($conn, 'tbl_maillog', [
+    if ($has_maillog) DB::insert($conn, 'tbl_maillog', [
         'faktura_id'     => $id,
         'modtager_mail'  => $inv['cust_email'],
         'afsendt_dato'   => date('Y-m-d H:i:s'),
@@ -184,7 +146,7 @@ try {
     // var netop det der før gjorde en almindelig fejl (fx mail-serverfejl) til
     // en hård 500 i stedet for en pæn JSON-fejlbesked til browseren.
     try {
-        if (isset($conn) && isset($id) && $id > 0) {
+        if (isset($conn) && isset($id) && $id > 0 && !empty($has_maillog)) {
             DB::insert($conn, 'tbl_maillog', [
                 'faktura_id'     => $id,
                 'modtager_mail'  => isset($inv['cust_email']) ? $inv['cust_email'] : 'unknown',

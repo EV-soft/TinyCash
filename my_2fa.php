@@ -100,7 +100,7 @@ if (!empty($_SESSION['show_recovery_codes_once'])) {
 
 if ($totp_enabled) {
     echo '<p><span style="color:var(--color-success); font-weight:bold;"><i class="fa fa-shield-alt"></i> ' . lang('@Two-factor login is ON') . '</span></p>';
-    echo '<p style="color:var(--text-muted); font-size:0.9em;">' . lang('@A code from your authenticator app is now required every time you log in, in addition to your password.') . '</p>';
+    htm_Note(lang('@A code from your authenticator app is now required every time you log in, in addition to your password.'), 'font-size:0.9em;');
 
     echo '<form method="post" style="margin-top:20px; padding-top:20px; border-top:1px solid var(--border-color);">';
     csrf_field();
@@ -129,7 +129,7 @@ if ($totp_enabled) {
     echo '<p style="font-size:0.8em; color:var(--text-muted); margin-top:15px; word-break:break-all;">' . lang('@Manual entry URI (advanced):') . ' <code>' . htmlspecialchars($uri) . '</code></p>';
 } else {
     echo '<p><span style="color:var(--text-muted);"><i class="fa fa-shield-alt"></i> ' . lang('@Two-factor login is OFF') . '</span></p>';
-    echo '<p style="color:var(--text-muted); font-size:0.9em;">' . lang('@Adds a second step at login - a 6-digit code from an authenticator app on your phone, in addition to your password. Recommended for any account with admin access.') . '</p>';
+    htm_Note(lang('@Adds a second step at login - a 6-digit code from an authenticator app on your phone, in addition to your password. Recommended for any account with admin access.'), 'font-size:0.9em;');
     echo '<form method="post">';
     csrf_field();
     htm_Button(icon: 'fa-shield-alt', labl: '@Enable 2FA', type: 'success', link: '', attr: 'name="start_setup" data-hint="'.lang('@Start setting up two-factor login').'"');

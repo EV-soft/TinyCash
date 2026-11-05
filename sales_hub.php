@@ -19,23 +19,6 @@ $current_cust   = (int)($_GET['cust'] ?? 0);      // Fakturalisten for én kunde
 htm_Header("@Sales & Customers", 1600);
 showMenu();
 
-// RETTET (se [[bugs-batch-10-review]]): invoice_credit.php's err=-omdirigeringer
-// hertil har ALDRIG været vist - landede altid tavst på denne side uden
-// nogen synlig fejlbesked. Samme "stille fejl"-mønster som er fundet og
-// rettet flere gange denne session.
-if (isset($_GET['err'])) {
-    $err_map = [
-        'invalid_credit_ref'          => '@Invoice or customer not found',
-        'not_found'                   => '@Invoice or customer not found',
-        'already_credited'            => '@This invoice has already been credited.',
-        'date_locked'                 => '@Credit date is in a locked accounting period.',
-        'cannot_credit_a_credit_note' => '@A credit note cannot itself be credited.',
-    ];
-    if (isset($err_map[$_GET['err']])) {
-        htm_Alert(lang($err_map[$_GET['err']]), 'error');
-    }
-}
-
 echo '<style>
     .hub-total { font-family: "Courier New", monospace; font-size: 1.1rem; font-weight: 600; text-align: right; }
     #hub_cust th, #hub_inv th, th.sortable { color: #333333 !important; font-weight: bold !important; }
@@ -128,7 +111,7 @@ function postInv(id) {
         function() {
             if (_postInvInFlight[id]) return;
             _postInvInFlight[id] = true;
-            fetch("invoice_post_action.php?id=" + id)
+            fetch("invoice_post_action.php?id=" + id, { method: "POST", body: new URLSearchParams({ csrf_token: ' . json_encode(csrf_token()) . ' }) })
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) { sysAlert("' . lang('@Invoice successfully posted with number: ') . '" + data.invoice_no); location.reload(); }
@@ -143,7 +126,7 @@ function postInv(id) {
 function delInv(id) {
     sysConfirm(
         "' . lang('@Delete Invoice?') . '",
-        function() { window.location = "invoice_edit.php?id=" + id + "&del=1"; },
+        function() { tcPost("invoice_edit.php?id=" + id + "&del=1"); },
         { title: "' . lang('@Delete Invoice') . '", icon: "🗑️", okLabel: "' . lang('@Delete') . '", okColor: "var(--color-danger)" }
     );
 }
@@ -201,15 +184,10 @@ echo '<div style="flex:2; min-width:400px;">';
     $c_tools .= htm_Button('fa-user-plus', '', 'success', 'customer_edit.php?id=0',     'padding:4px 8px;',                   'data-hint="'.lang('@Create New').'"',                    '', false);
     htm_Card_('@Customers', "100%", "", "c_card", true, $c_tools, fold: true); // TEST: fold-toggle
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): ingen side i
-    // systemet rangerede kunder efter reel omsætning - man kunne se ÉN
-    // kundes tal ad gangen på kundekortet ([[bookkeeper-wishlist-round10]]),
-    // men ikke sammenligne på tværs. Samme "ekskludér kladder"-princip som
-    // det nye "Bedst sælgende produkter"-panel på inventory_status.php
-    // (samme runde) - en kladde er endnu ikke en reel handel. Ganges med
-    // exch_rate for fremmed-valuta-fakturaer, samme mønster som reminders.php/
-    // reconcile_action.php (§reel-multi-valuta-bogforing) - ellers ville en
-    // stor EUR-faktura tælle med sit rå, uomregnede beløb.
+    // NYT: ingen side i systemet rangerede kunder efter reel omsætning - man kunne se ÉN kundes tal ad gangen på
+    // kundekortet, men ikke sammenligne på tværs. Ganges med exch_rate for fremmed-valuta-fakturaer, samme mønster
+    // som reminders.php/reconcile_action.php - ellers ville en stor EUR-faktura tælle med sit rå, uomregnede
+    // beløb.
     $sh_disc = invoice_discount_sql($conn, 'il.');
     $top_cust_res = DB::query($conn, "
         SELECT c.cust_id, c.cust_name,
@@ -226,7 +204,7 @@ echo '<div style="flex:2; min-width:400px;">';
     while ($tcr = DB::fetch_assoc($top_cust_res)) {
         $top_cust_rows[] = [
             '<a href="customer_edit.php?id='.(int)$tcr['cust_id'].'">'.htmlspecialchars($tcr['cust_name']).'</a>',
-            number_format((float)$tcr['revenue'], 2, ',', '.') . ' ' . ($global_settings['currency'] ?? 'DKK'),
+            fmt_dk((float)$tcr['revenue']) . ' ' . ($global_settings['currency'] ?? 'DKK'),
         ];
     }
     if (!empty($top_cust_rows)) {
@@ -240,10 +218,9 @@ echo '<div style="flex:2; min-width:400px;">';
     $data_c = [];
     $missing_email_cnt = 0;
     $dormant_cnt = 0;
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): sidste
-    // fakturadato pr. kunde hentes i samme forespørgsel (undgår N+1), samme
-    // "ekskludér kladder"-princip som resten af rundens nye paneler - en
-    // kladde er endnu ikke en reel handel og skal ikke tælle som "aktivitet".
+    // NYT: sidste fakturadato pr. kunde hentes i samme forespørgsel (undgår N+1), samme "ekskludér
+    // kladder"-princip som resten af rundens nye paneler - en kladde er endnu ikke en reel handel og skal ikke
+    // tælle som "aktivitet".
     $resc = DB::query($conn, "SELECT c.cust_id, c.cust_name, c.cust_email,
         (SELECT MAX(i.inv_date) FROM invoices i WHERE i.cust_id = c.cust_id AND LOWER(i.inv_status) != 'draft') AS last_inv_date
         FROM customers c WHERE " . customers_active_filter($conn, 'c.') . " ORDER BY c.cust_name");
@@ -257,29 +234,21 @@ echo '<div style="flex:2; min-width:400px;">';
                 ['icon' => 'fa-file-invoice-dollar',  'link' => 'customer_statement.php?id='.$rowc['cust_id'], 'hint' => '@Account Statement', 'type' => 'info'],
                 ['icon' => 'fa-list',                 'link' => 'sales_hub.php?cust='.$rowc['cust_id'].'#i_card', 'hint' => '@Show the invoices of this customer', 'type' => ((int)$rowc['cust_id'] === $current_cust ? 'success' : 'secondary')],
             ], false);
-            // RETTET (bruger-anmodet, "kan bogholderen ønske sig mere"): en
-            // manglende mailadresse blot viste et tomt felt her, uden
-            // nogen forklaring på at det stille blokerer flere andre
-            // funktioner (reminders.php/customer_statement_send.php/
-            // quote_followup.php springer alle en kunde uden mail over
-            // uden varsel). Fremhæver nu tomme mailfelter i rødt.
+            // RETTET: en manglende mailadresse blot viste et tomt felt her, uden nogen forklaring på at det stille
+            // blokerer flere andre funktioner (reminders.php/customer_statement_send.php/quote_followup.php
+            // springer alle en kunde uden mail over uden varsel). Fremhæver nu tomme mailfelter i rødt.
             $email_cell = !empty($rowc['cust_email'])
                 ? htmlspecialchars($rowc['cust_email'])
                 : '<span style="color:var(--color-danger); font-weight:bold;" data-hint="'.htmlspecialchars(lang('@No email registered - this customer will silently be skipped by payment reminders, account statement emails and quote follow-ups')).'"><i class="fa-solid fa-triangle-exclamation"></i> '.lang('@Missing').'</span>';
             if (empty($rowc['cust_email'])) $missing_email_cnt++;
-            // RETTET (§bugs-batch-13-review): cust_name/cust_email skrevet
-            // direkte ind i tabellen uden escaping - htm_Table() antager at
-            // hver celle allerede er den HTML der skal vises (mange kald
-            // sender bevidst <a>/<span>), så uescaped fritekst som et
-            // kundenavn er en lagret XSS (fx et kundenavn "<script>...").
+            // RETTET: cust_name/cust_email skrevet direkte ind i tabellen uden escaping - htm_Table antager at
+            // hver celle allerede er den HTML der skal vises (mange kald sender bevidst <a>/<span>), så uescaped
+            // fritekst som et kundenavn er en lagret XSS (fx et kundenavn "<script>...").
             $name_cell = htmlspecialchars($rowc['cust_name']);
-            // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): en
-            // kunde der har haft mindst én rigtig faktura, men intet i 180+
-            // dage, flages som "inaktiv" - nyttigt til at fange kunder der
-            // er ved at forsvinde, før det er for sent at genaktivere dem.
-            // En kunde der ALDRIG har fået en faktura flages IKKE her - det
-            // er en anden situation (en helt ny/potentiel kunde), ikke et
-            // tegn på at nogen er ved at forsvinde.
+            // NYT: en kunde der har haft mindst én rigtig faktura, men intet i 180+ dage, flages som "inaktiv" -
+            // nyttigt til at fange kunder der er ved at forsvinde, før det er for sent at genaktivere dem. En
+            // kunde der ALDRIG har fået en faktura flages IKKE her - det er en anden situation (en helt
+            // ny/potentiel kunde), ikke et tegn på at nogen er ved at forsvinde.
             if (!empty($rowc['last_inv_date'])) {
                 $days_since = days_between($rowc['last_inv_date'], $today);
                 if ($days_since > 180) {
@@ -310,16 +279,11 @@ echo '<div style="flex:3;">';
     $i_filter  = '<div style="display:flex; gap:3px; margin-bottom:10px; align-items:center;" data-hint="'.lang('@Filter: Hide all data rows that do not meet criteria').'">';
     $i_filter .= '<span class="filter-label">' . lang('@Filter:') . '</span>';
     foreach (['all', 'draft', 'sent', 'paid'] as $f) {
-        // RETTET: $f er altid småt ('draft'/'sent'/'paid'), men de faktiske
-        // oversættelsesnøgler er med stort forbogstav (@Draft/@Sent/@Paid) -
-        // lang('@draft') matchede derfor aldrig noget, og filterknapperne
-        // viste altid det engelske ord uanset sprogvalg. Samme fejlklasse
-        // fundet flere steder i denne runde (quote_view.php, year_end_close.php,
-        // invoice_view.php, settings_fees.php).
-        // NB: lang('@'.ucfirst($f)) kan frase-skanneren ikke selv opdage - de
-        // faktiske nøgler nævnes derfor bevidst som strengliteraler herunder:
-        // '@Draft', '@Sent', '@Paid'
-        $l        = ($f === 'all') ? lang('@All') : lang('@'.ucfirst($f));
+        // RETTET: $f er altid småt ('draft'/'sent'/'paid'), men de faktiske oversættelsesnøgler er med stort
+        // forbogstav (@Draft/@Sent/@Paid) - lang('@draft') matchede derfor aldrig noget, og filterknapperne viste
+        // altid det engelske ord uanset sprogvalg. NB: lang('@'.ucfirst($f)) kan frase-skanneren ikke selv opdage
+        // - de faktiske nøgler nævnes derfor bevidst som strengliteraler herunder: '@Draft', '@Sent', '@Paid'
+        $l        = ($f === 'all') ? lang('@All') : tc_invoice_status_label($f);
         $isActive = (strtolower($current_status) === $f);
         $bg       = $isActive ? 'var(--theme-primary, #3498db)' : 'var(--theme-field-bg, #fff)';
         $color    = $isActive ? '#fff' : 'var(--theme-text, #333)';
@@ -344,39 +308,19 @@ echo '<div style="flex:3;">';
 
     $data_i = [];
     if (!defined('SALES_HUB_INV_LIMIT')) define('SALES_HUB_INV_LIMIT', 500);
-    // RETTET 2026-08-20: ALVORLIGT FUND - "SUM(l.quantity * l.price_each)"
-    // manglede momsen HELT (intet moms-udtryk overhovedet) - "Beløb"-kolonnen
-    // viste nettobeløbet, ikke det kunden reelt skylder, i modsætning til
-    // hver anden fakturasum-visning i systemet (invoice_view.php,
-    // reminders.php osv.). "(100+rate)/100" i stedet for "(1+rate/100)", som
-    // ville have udregnet momsen til 0 på SQLite (se
-    // [[reminders-feature-and-vat-truncation-bug]]).
-    // RETTET (§reel-multi-valuta-bogforing, §bugs-batch-32-review): samme
-    // fejlklasse som lige fundet i reconcile_action.php/invoice_view.php -
-    // total_amount blev regnet i fakturaens EGEN valuta (fx EUR), men
-    // sammenlignet direkte mod amount_paid, som ALTID er i DKK (rigtige
-    // bankbeløb). "Restbeløb" for en delvist betalt udenlandsk faktura viste
-    // derfor et meningsløst tal (EUR-total minus DKK-indbetaling). Ganger nu
-    // med invoices.exch_rate (1 hvis ikke sat, dvs. en helt almindelig DKK-
-    // faktura er uændret) - samme konvertering som invoice_dkk_totals() i
-    // inc/db_connect.inc.php bruger, blot udført direkte i SQL'en her for at
-    // undgå 100 ekstra enkelt-forespørgsler i denne oversigt. Kan i sjældne
-    // tilfælde afvige med en brøkdel af en øre fra det faktisk bogførte
-    // beløb pga. afrundingsrækkefølgen (invoice_dkk_totals() runder netto og
-    // moms hver for sig FØR kursomregning) - uden betydning for en oversigts-
-    // kolonne, i modsætning til den hidtidige fejl på op til hele kursfaktoren.
+    // RETTET 2026-08-20: ALVORLIGT FUND - "SUM(l.quantity * l.price_each)" manglede momsen HELT (intet moms-udtryk
+    // overhovedet) - "Beløb"-kolonnen viste nettobeløbet, ikke det kunden reelt skylder, i modsætning til hver
+    // anden fakturasum-visning i systemet (invoice_view.php, reminders.php osv.). "(100+rate)/100" i stedet for
+    // "(1+rate/100)", som ville have udregnet momsen til 0 på SQLite.
+    // RETTET: samme fejlklasse som lige fundet i reconcile_action.php/invoice_view.php - total_amount blev regnet
+    // i fakturaens EGEN valuta (fx EUR), men sammenlignet direkte mod amount_paid, som ALTID er i DKK (rigtige
+    // bankbeløb). "Restbeløb" for en delvist betalt udenlandsk faktura viste derfor et meningsløst tal (EUR-total
+    // minus DKK-indbetaling).
     $sh_disc2 = invoice_discount_sql($conn, 'l.');
     // NYT (runde 33): credit_note_no findes kun efter db-setup/migrate_
     // credit_note_no.php er kørt - samme "stille degradering"-mønster som
     // andre nyere kolonner i denne kodebase.
-    $has_cn_no_col = false;
-    if (DB::is_sqlite()) {
-        $cnc = DB::query($conn, "PRAGMA table_info(invoices)");
-        if ($cnc) { while ($cncr = DB::fetch_assoc($cnc)) { if ($cncr['name'] === 'credit_note_no') { $has_cn_no_col = true; break; } } }
-    } else {
-        $cnc = DB::query($conn, "SHOW COLUMNS FROM invoices LIKE 'credit_note_no'");
-        $has_cn_no_col = ($cnc && DB::num_rows($cnc) > 0);
-    }
+    $has_cn_no_col = db_has_column($conn, 'invoices', 'credit_note_no');
     $sh_cn_no_select = $has_cn_no_col ? ", i.credit_note_no" : "";
     $query  = "SELECT i.inv_id, i.invoice_no, i.credit_ref$sh_cn_no_select, i.inv_date, c.cust_name, i.inv_status,
                       SUM(l.quantity * l.price_each $sh_disc2 * (100 + l.line_vat_rate) / 100.0 * COALESCE(NULLIF(i.exch_rate, 0), 1)) as total_amount,
@@ -392,7 +336,7 @@ echo '<div style="flex:3;">';
     $resi = DB::query($conn, $query);
     if ($resi) {
         while ($rowi = DB::fetch_assoc($resi)) {
-            $amou = number_format($rowi['total_amount'] ?? 0, 2, ',', '.');
+            $amou = fmt_dk($rowi['total_amount'] ?? 0);
             // Delvis betaling (2026-08-20): en faktura der er 'sent' men har
             // en eller flere indbetalinger registreret uden at dække det
             // fulde beløb, viser nu restbeløbet i stedet for at se ud som
@@ -401,37 +345,31 @@ echo '<div style="flex:3;">';
             $credited_so_far = (float)($rowi['amount_credited'] ?? 0);      // (negativ: en delvis kreditnota)
             if (strtolower($rowi['inv_status']) === 'sent' && ($paid_so_far > 0.01 || $credited_so_far < -0.01)) {
                 $remaining = max(0, (float)($rowi['total_amount'] ?? 0) + $credited_so_far - $paid_so_far);
-                $amou .= '<br><small style="color:var(--color-warning); font-weight:normal;">' . lang('@Remaining:') . ' ' . number_format($remaining, 2, ',', '.') . '</small>';
+                $amou .= '<br><small style="color:var(--color-warning); font-weight:normal;">' . lang('@Remaining:') . ' ' . fmt_dk($remaining) . '</small>';
             }
             $row_actions = [
                 ['icon' => 'fa-eye', 'link' => 'invoice_view.php?id='.$rowi['inv_id'], 'hint' => lang('@Show and process'), 'type' => 'info'],
             ];
-            // Slet vises nu KUN for kladder - en bogført faktura afvises alligevel
-            // server-side (invoice_edit.php, §bogforingslov-compliance), så vis
-            // aldrig en knap der bare ville blive nægtet. Rettelse af en bogført
-            // faktura sker via kreditnota (samme knap som allerede fandtes).
+            // Slet vises nu KUN for kladder - en bogført faktura afvises alligevel server-side, så vis aldrig en
+            // knap der bare ville blive nægtet. Rettelse af en bogført faktura sker via kreditnota (samme knap som
+            // allerede fandtes).
             if (strtolower($rowi['inv_status']) === 'draft') {
                 $row_actions[] = ['icon' => 'fa-pencil', 'link'    => 'invoice_edit.php?id='.$rowi['inv_id'], 'hint' => '@Edit',                        'type' => 'primary'];
                 $row_actions[] = ['icon' => 'fa-gavel',  'onclick' => 'postInv('.$rowi['inv_id'].')',          'hint' => '@Post Invoice (Assign No.)',    'type' => 'success'];
                 $row_actions[] = ['icon' => 'fa-trash',  'onclick' => 'delInv('.$rowi['inv_id'].')',           'hint' => '@Delete',                       'type' => 'danger'];
             } elseif (!in_array(strtolower($rowi['inv_status']), ['credited', 'credit'], true) && (int)($rowi['n_credit_notes'] ?? 0) === 0) {     // (én kreditnota pr. faktura - også en delvis)
-                // RETTET (se [[bugs-batch-10-review]]): knappen blev vist for
-                // ALLE ikke-kladde-fakturaer, inkl. allerede krediterede
-                // fakturaer og kreditnota-rækkerne selv - samme "vis aldrig en
-                // knap der bare bliver afvist"-princip som Slet-knappen
-                // ovenfor allerede følger, nu udvidet til denne.
-                $row_actions[] = ['icon' => 'fa-undo',   'link'    => 'invoice_edit.php?id=0&credit_ref='.$rowi['inv_id'], 'hint' => '@Credit this invoice (Auto-create)', 'type' => 'warning'];
+                // RETTET: knappen blev vist for ALLE ikke-kladde-fakturaer, inkl. allerede krediterede fakturaer
+                // og kreditnota-rækkerne selv - samme "vis aldrig en knap der bare bliver afvist"-princip som
+                // Slet-knappen ovenfor allerede følger, nu udvidet til denne.
+                $row_actions[] = ['icon' => 'fa-undo',   'link'    => 'invoice_credit.php?credit_ref='.$rowi['inv_id'],      /* RETTET: pegede på invoice_edit.php?id=0&credit_ref=, som ikke kender credit_ref - åbnede en tom ny faktura, og kreditnota-siden kunne slet ikke nås */ 'hint' => '@Credit this invoice (Auto-create)', 'type' => 'warning'];
             }
 
-            // RETTET (bruger-anmodet, "kan bogholderen ønske sig mere"): en
-            // kladde der har ligget i månedsvis så identisk ud som en fra i
-            // går - dashboardets "Kladdefakturaer"-tæller viser kun et råt
-            // antal, uden nogen alders-dimension. Fremhæver nu kladder
-            // ældre end 30 dage med en rød "(N dage)"-markering direkte i
-            // listen, hvor man rent faktisk beslutter om de skal ryddes op.
-            // RETTET (runde 33): en kreditnota-række har intet invoice_no -
-            // viste før blot '---'. Bruger nu dens eget credit_note_no, hvis
-            // migrationen er kørt og nummeret er tildelt.
+            // RETTET: en kladde der har ligget i månedsvis så identisk ud som en fra i går - dashboardets
+            // "Kladdefakturaer"-tæller viser kun et råt antal, uden nogen alders-dimension. Fremhæver nu kladder
+            // ældre end 30 dage med en rød "(N dage)"-markering direkte i listen, hvor man rent faktisk beslutter
+            // om de skal ryddes op.
+            // RETTET: en kreditnota-række har intet invoice_no - viste før blot '---'. Bruger nu dens eget
+            // credit_note_no, hvis migrationen er kørt og nummeret er tildelt.
             if (!empty($rowi['credit_ref'])) {
                 $invoice_display_no = !empty($rowi['credit_note_no']) ? 'KN-'.str_pad($rowi['credit_note_no'], 6, "0", STR_PAD_LEFT) : '---';
             } else {
@@ -447,10 +385,10 @@ echo '<div style="flex:3;">';
             // kundelisten ovenfor - lagret XSS via et fritekst-kundenavn.
             $data_i[] = [
                 $invoice_display_no,
-                $rowi['inv_date'],
+                (!empty($rowi['inv_date']) ? date(CONF_DATE_FORMAT, strtotime($rowi['inv_date'])) : ''),      // RETTET: vist rå (ISO) uanset datoformatet
                 htmlspecialchars($rowi['cust_name'] ?: '---'),
                 $amou,
-                lang('@'.strtoupper($rowi['inv_status'])),
+                mb_strtoupper(tc_invoice_status_label($rowi['inv_status'])),      // (nøglerne SENT/PAID med store bogstaver fandtes ikke - kun DRAFT)
                 htm_ActionButtons($row_actions, false)
             ];
         }

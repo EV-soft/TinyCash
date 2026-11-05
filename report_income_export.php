@@ -69,15 +69,15 @@ $output = fopen('php://output', 'w');
 fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
 
 fputcsv($output, [lang('@Section'), lang('@Account'), lang('@Amount') . ' (' . $currency . ')'], ';');
-fputcsv($output, [lang('@REVENUE'), '', number_format($revenue, 2, ',', '')], ';');
+fputcsv($output, [lang('@REVENUE'), '', fmt_dk_input($revenue)], ';');
 foreach ($cost_rows as $cost) {
-    fputcsv($output, [lang('@COSTS'), csv_safe($cost['acc_id'] . ' - ' . $cost['acc_name']), number_format(-(float)$cost['cat_total'], 2, ',', '')], ';');
+    fputcsv($output, [lang('@COSTS'), csv_safe($cost['acc_id'] . ' - ' . $cost['acc_name']), fmt_dk_input(-(float)$cost['cat_total'])], ';');
 }
-fputcsv($output, [lang('@ANNUAL RESULT'), '', number_format($revenue - $total_costs, 2, ',', '')], ';');
+fputcsv($output, [lang('@ANNUAL RESULT'), '', fmt_dk_input($revenue - $total_costs)], ';');
 fputcsv($output, [], ';');
-fputcsv($output, [lang('@Sales VAT Due (from invoices)'), '', number_format($sales_vat, 2, ',', '')], ';');
-fputcsv($output, [lang('@Deductible Purchase VAT (from bookkeeping)'), '', number_format(-$purchase_vat, 2, ',', '')], ';');
-fputcsv($output, [$vat_to_pay >= 0 ? lang('@VAT to pay:') : lang('@VAT to receive:'), '', number_format(abs($vat_to_pay), 2, ',', '')], ';');
+fputcsv($output, [lang('@Sales VAT Due (from invoices)'), '', fmt_dk_input($sales_vat)], ';');
+fputcsv($output, [lang('@Deductible Purchase VAT (from bookkeeping)'), '', fmt_dk_input(-$purchase_vat)], ';');
+fputcsv($output, [$vat_to_pay >= 0 ? lang('@VAT to pay:') : lang('@VAT to receive:'), '', fmt_dk_input(abs($vat_to_pay))], ';');
 
 fclose($output);
 exit;

@@ -15,7 +15,7 @@ require_once 'inc/php2htm.lib.php';
 require_once 'inc/customer_statement.inc.php';
 
 $cust_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if ($cust_id <= 0) { header("Location: sales_hub.php"); exit; }
+if ($cust_id <= 0) { redirect("sales_hub.php"); }
 
 $s   = get_settings($conn);
 $cur = $s['currency'] ?? 'DKK';
@@ -25,14 +25,13 @@ $to   = isset($_GET['to'])   && $_GET['to']   !== '' ? $_GET['to']   : '';
 // RETTET: periodedatoerne blev ikke kontrolleret - en ugyldig dato ("31-06-2026", "abc") blev sammenlignet som tekst
 // og vist som 01-01-1970, og udtoget viste stille den forkerte periode. En ugyldig dato ignoreres nu.
 foreach (['from', 'to'] as $cs_k) if ($$cs_k !== '' && (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $$cs_k) || !checkdate((int)substr($$cs_k, 5, 2), (int)substr($$cs_k, 8, 2), (int)substr($$cs_k, 0, 4)))) $$cs_k = '';
+if ($from !== '' && $to !== '' && $from > $to) [$from, $to] = [$to, $from];      // (en omvendt periode gav et tomt udtog med "saldo primo" fra slutdatoen)
 
-// RETTET (bruger-anmodet, "kan bogholderen ønske sig mere"): al beregnings-
-// logik (kronologisk begivenhedsliste, løbende saldo, "Saldo primo",
-// åbne/forfaldne fakturaer) udtrukket til get_customer_statement_data() -
-// se inc/customer_statement.inc.php for baggrunden. customer_statement_send.php
-// (den nye "Send på mail"-handling) genbruger nøjagtig samme funktion.
+// RETTET: al beregnings-logik (kronologisk begivenhedsliste, løbende saldo, "Saldo primo", åbne/forfaldne
+// fakturaer) udtrukket til get_customer_statement_data - se inc/customer_statement.inc.php for baggrunden.
+// customer_statement_send.php (den nye "Send på mail"-handling) genbruger nøjagtig samme funktion.
 $stmt = get_customer_statement_data($conn, $cust_id, $from, $to);
-if ($stmt === null) { header("Location: sales_hub.php"); exit; }
+if ($stmt === null) { redirect("sales_hub.php"); }
 $cust              = $stmt['cust'];
 $invoices          = $stmt['invoices'];
 $events            = $stmt['events'];
@@ -45,12 +44,6 @@ $overdue_invoices  = $stmt['overdue_invoices'];
 $title = lang('@Account Statement') . ': ' . $cust['cust_name'];
 htm_Header($title, 1100);
 showMenu();
-
-if (isset($_GET['msg']) && $_GET['msg'] === 'sent') {
-    htm_Alert(lang('@Account statement sent successfully.'), 'success');
-} elseif (isset($_GET['msg']) && $_GET['msg'] === 'error') {
-    htm_Alert(lang('@Could not send the account statement. Check your mail settings.'), 'error');
-}
 
 // --- Kundeinfo ---
 htm_Card_(capt: '@Customer Information', wdth: 1100);
@@ -67,17 +60,18 @@ if (!empty($cust['cust_contact_person'])) echo lang('@Contact Person') . ': ' . 
 echo '</div>';
 echo '<div class="no-print" style="display:flex; flex-direction:column; gap:8px;">';
     htm_Button(icon: 'fa-pencil', labl: '@Edit Customer', type: 'secondary', link: 'customer_edit.php?id=' . $cust_id, attr: 'data-hint="'.lang('@Edit this customer\'s details').'"');
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): "Send på
-    // mail" - kun tilgængelig når kunden reelt har en registreret
-    // mailadresse (matcher hvordan reminders.php/send_invoice_action.php
-    // allerede stiltiende kræver en mailadresse). Sender netop den periode
-    // der lige nu er vist ($from/$to følger med i linket), så en bogholder
-    // der har filtreret til fx "denne måned" sender præcis det, de kan se.
+    // NYT: "Send på mail" - kun tilgængelig når kunden reelt har en registreret mailadresse (matcher hvordan
+    // reminders.php/send_invoice_action.php allerede stiltiende kræver en mailadresse). Sender netop den periode
+    // der lige nu er vist ($from/$to følger med i linket), så en bogholder der har filtreret til fx "denne måned"
+    // sender præcis det, de kan se.
     if (!empty($cust['cust_email'])) {
-        $send_confirm = addslashes(sprintf(lang('@Send this account statement to %s?'), $cust['cust_email']));
-        htm_Button(icon: 'fa-envelope', labl: '@Send by Mail', type: 'info', attr: 'onclick="if(confirm(\''.$send_confirm.'\')) window.location.href=\'customer_statement_send.php?id='.$cust_id.'&from='.urlencode($from).'&to='.urlencode($to).'\'" data-hint="'.lang('@Email this account statement to the customer').'"');
+        // RETTET (XSS): addslashes() beskytter kun JS-strengen, ikke HTML-attributten - en gyldig e-mail som
+        // "x/onfocus=alert(1)/autofocus/"@x.dk (fx fra en webshop-ordre) brød ud af onclick="...". Nu også HTML-escapet.
+        htm_Button(icon: 'fa-envelope', labl: '@Send by Mail', type: 'info', attr: 'onclick="' . htm_confirm_js(sprintf(lang('@Send this account statement to %s?'), $cust['cust_email']), "tcPost('customer_statement_send.php?id=$cust_id&from=" . urlencode($from) . '&to=' . urlencode($to) . "')") . '" data-hint="'.lang('@Email this account statement to the customer').'"');
     }
-    htm_Button(icon: 'fa-print',  labl: '@Print',         type: 'primary',   link: '', attr: 'onclick="window.print()" data-hint="'.lang('@Print this statement').'"');
+    htm_Button(icon: 'fa-file-lines', labl: '@Statement letter', type: 'primary', link: 'customer_statement_view.php?id=' . $cust_id . '&from=' . urlencode($from) . '&to=' . urlencode($to),
+        attr: 'data-hint="'.lang('@Show the account statement as a letter with your letterhead - print it, save it as PDF or design its layout').'"');
+    htm_Button(icon: 'fa-print',  labl: '@Print',         type: 'secondary', link: '', attr: 'onclick="window.print()" data-hint="'.lang('@Print this statement').'"');
     htm_Button(icon: 'fa-arrow-left', labl: '@Back',      type: 'secondary', link: 'sales_hub.php', attr: 'data-hint="'.lang('@Return to the sales hub').'"');
 echo '</div>';
 echo '</div>';
@@ -89,8 +83,8 @@ echo '<div style="display:flex; gap:20px; flex-wrap:wrap;">';
 $bal_color = $total_outstanding > 0.01 ? 'var(--color-danger)' : ($total_outstanding < -0.01 ? 'var(--color-success)' : 'var(--text-main)');
 echo '<div style="flex:1; min-width:180px; text-align:center; padding:10px;">'
     . '<div style="font-size:0.8em; color:var(--text-muted); text-transform:uppercase;">' . lang('@Total Outstanding') . '</div>'
-    . '<div style="font-size:1.6em; font-weight:bold; color:' . $bal_color . ';">' . number_format($total_outstanding, 2, ',', '.') . ' ' . $cur . '</div>'
-    . ($to !== '' ? '<div style="font-size:0.85em; color:var(--text-muted);">' . lang('@Closing Balance') . ' ' . htmlspecialchars(date(CONF_DATE_FORMAT, strtotime($to))) . ': ' . number_format($stmt['closing_balance'], 2, ',', '.') . ' ' . $cur . '</div>' : '')      // RETTET: saldoen ved periodens slutning
+    . '<div style="font-size:1.6em; font-weight:bold; color:' . $bal_color . ';">' . fmt_dk($total_outstanding) . ' ' . $cur . '</div>'
+    . ($to !== '' ? '<div style="font-size:0.85em; color:var(--text-muted);">' . lang('@Closing Balance') . ' ' . htmlspecialchars(date(CONF_DATE_FORMAT, strtotime($to))) . ': ' . fmt_dk($stmt['closing_balance']) . ' ' . $cur . '</div>' : '')      // RETTET: saldoen ved periodens slutning
     . '</div>';
 echo '<div style="flex:1; min-width:180px; text-align:center; padding:10px;">'
     . '<div style="font-size:0.8em; color:var(--text-muted); text-transform:uppercase;">' . lang('@Open Invoices') . '</div>'
@@ -129,7 +123,7 @@ if ($from !== '' && !empty($opening_balance)) {
         date(CONF_DATE_FORMAT, strtotime($from)) . ' ' . lang('@or earlier'),
         '<em>' . lang('@Opening Balance') . '</em>',
         '',
-        '<strong>' . number_format($opening_balance, 2, ',', '.') . ' ' . $cur . '</strong>',
+        '<strong>' . fmt_dk($opening_balance) . ' ' . $cur . '</strong>',
     ];
 }
 
@@ -138,8 +132,8 @@ foreach ($visible_events as $e) {
     $data[] = [
         date(CONF_DATE_FORMAT, strtotime($e['date'])),
         '<a href="' . $e['link'] . '">' . htmlspecialchars($e['label']) . '</a>',
-        '<span style="color:' . $amount_color . ';">' . number_format($e['amount'], 2, ',', '.') . ' ' . $cur . '</span>',
-        number_format($e['balance'], 2, ',', '.') . ' ' . $cur,
+        '<span style="color:' . $amount_color . ';">' . fmt_dk($e['amount']) . ' ' . $cur . '</span>',
+        fmt_dk($e['balance']) . ' ' . $cur,
     ];
 }
 

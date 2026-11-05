@@ -13,48 +13,16 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
 htm_Header('@User Management');
 showMenu();
 
-if (isset($_GET['msg'])) {
-    $msg_map = [
-        'deleted'             => ['@User deleted successfully', 'success'],
-        'cannot_delete_self'  => ['@You cannot delete your own account', 'error'],
-        'cannot_delete_in_use' => ['@Cannot delete user: they have historical ledger entries, audit log records, or expenses/payments attributed to them', 'error'],
-        'not_found'           => ['@User not found', 'error'],
-        'error'               => ['@Error deleting user', 'error'],
-    ];
-    if (isset($msg_map[$_GET['msg']])) {
-        htm_Alert(lang($msg_map[$_GET['msg']][0]), $msg_map[$_GET['msg']][1]);
-    }
-}
 
 htm_Card_(capt: '@System Users', wdth: 900);
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): ingen side viste
-// hvilke brugere - særligt andre admin-konti - reelt har to-faktor-login
-// slået til. En admin kunne derfor ikke se hvilke konti der er særligt
-// sårbare uden 2FA. Samme "stille degradering hvis ikke migreret endnu"-
-// mønster som andre nyere kolonner i denne kodebase - totp_enabled findes
-// kun efter db-setup/migrate_2fa.php er kørt.
-$has_2fa_col = false;
-if (DB::is_sqlite()) {
-    $c2fa = DB::query($conn, "PRAGMA table_info(users)");
-    if ($c2fa) { while ($cr = DB::fetch_assoc($c2fa)) { if ($cr['name'] === 'totp_enabled') { $has_2fa_col = true; break; } } }
-} else {
-    $c2fa = DB::query($conn, "SHOW COLUMNS FROM users LIKE 'totp_enabled'");
-    $has_2fa_col = ($c2fa && DB::num_rows($c2fa) > 0);
-}
+// NYT: ingen side viste hvilke brugere - særligt andre admin-konti - reelt har to-faktor-login slået til. En admin
+// kunne derfor ikke se hvilke konti der er særligt sårbare uden 2FA.
+$has_2fa_col = db_has_column($conn, 'users', 'totp_enabled');
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): samme mønster som
-// 2FA-kolonnen ovenfor - is_active findes kun efter db-setup/migrate_user_
-// active_status.php er kørt (se user_edit.php/inc/auth.inc.php for selve
-// deaktiverings-funktionen).
-$has_active_col = false;
-if (DB::is_sqlite()) {
-    $cact = DB::query($conn, "PRAGMA table_info(users)");
-    if ($cact) { while ($cr2 = DB::fetch_assoc($cact)) { if ($cr2['name'] === 'is_active') { $has_active_col = true; break; } } }
-} else {
-    $cact = DB::query($conn, "SHOW COLUMNS FROM users LIKE 'is_active'");
-    $has_active_col = ($cact && DB::num_rows($cact) > 0);
-}
+// NYT: samme mønster som 2FA-kolonnen ovenfor - is_active findes kun efter db-setup/migrate_user_active_status.php
+// er kørt (se user_edit.php/inc/auth.inc.php for selve deaktiverings-funktionen).
+$has_active_col = db_has_column($conn, 'users', 'is_active');
 
 $select_cols = "user_id, username, user_role" . ($has_2fa_col ? ", totp_enabled" : "") . ($has_active_col ? ", is_active" : "");
 $sql = "SELECT $select_cols FROM users ORDER BY username ASC";
@@ -63,11 +31,8 @@ $res = DB::query($conn, $sql);
 if (!$res) {
     echo "<p style='color:red;'>" . lang('@SQL Error') . ": " . DB::error($conn) . "</p>";
 } else {
-    // RETTET (§bugs-batch-22-review, del b): erstattet den håndrullede
-    // <table> med htm_Table() (se csrf-protection-added.md/
-    // htm-alert-banner-refactor.md for baggrunden på hele denne oprydnings-
-    // runde) - cellernes indhold (badge/links) er uændret, kun selve
-    // tabelrammen er nu den fælles funktion.
+    // RETTET: erstattet den håndrullede <table> med htm_Table - cellernes indhold (badge/links) er uændret, kun
+    // selve tabelrammen er nu den fælles funktion.
     $rows = [];
     while ($row = DB::fetch_assoc($res)) {
         $isAdmin = ($row['user_role'] === 'admin');
@@ -99,13 +64,10 @@ if (!$res) {
             $actions_cell .= "<span style='color: var(--text-muted); cursor: not-allowed; font-weight:bold;'>" . lang('@Delete') . "</span>";
         }
 
-        // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): login_log
-        // (login_history.php, tidligere runde) gemmer allerede hvert
-        // loginforsøg, men intet sted viste hvornår en given bruger sidst
-        // reelt loggede ind - en admin kunne derfor ikke se hvilke konti der
-        // rent faktisk er i brug versus glemte/forladte, relevant for at
-        // rydde op i adgange. Kun 'Success'-rækker tæller (et fejlet forsøg
-        // er ikke et reelt login).
+        // NYT: login_log gemmer allerede hvert loginforsøg, men intet sted viste hvornår en given bruger sidst
+        // reelt loggede ind - en admin kunne derfor ikke se hvilke konti der rent faktisk er i brug versus
+        // glemte/forladte, relevant for at rydde op i adgange. Kun 'Success'-rækker tæller (et fejlet forsøg er
+        // ikke et reelt login).
         $last_login_row = DB::fetch_assoc(DB::query($conn,
             "SELECT MAX(login_time) AS t FROM login_log WHERE user_id = " . (int)$row['user_id'] . " AND status = 'Success'"));
         $last_login = $last_login_row['t'] ?? null;

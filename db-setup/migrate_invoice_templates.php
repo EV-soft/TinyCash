@@ -39,6 +39,7 @@ if ($has_table) {
             quantity NUMERIC,
             price_each NUMERIC,
             line_vat_rate NUMERIC,
+            discount_pct NUMERIC DEFAULT 0,
             prod_id INTEGER
         )");
     } else {
@@ -55,6 +56,7 @@ if ($has_table) {
             quantity DECIMAL(15,2),
             price_each DECIMAL(15,2),
             line_vat_rate DECIMAL(5,2),
+            discount_pct DECIMAL(5,2) DEFAULT 0,
             prod_id INT
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     }

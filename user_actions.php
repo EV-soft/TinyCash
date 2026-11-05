@@ -16,44 +16,29 @@ $action = $_GET['action'] ?? '';
 $id     = (int)($_GET['id'] ?? 0);
 
 if ($action !== 'delete' || $id <= 0) {
-    header("Location: user_list.php");
-    exit;
+    redirect("user_list.php");
 }
 
 // Server-side værn mod selvsletning (UI'et skjuler allerede knappen for egen
 // konto, men et direkte URL-kald skal spærres uafhængigt af det).
 if ($id === (int)($_SESSION['user_id'] ?? 0)) {
-    header("Location: user_list.php?msg=cannot_delete_self");
-    exit;
+    redirect('user_list.php', '@You cannot delete your own account', 'error');
 }
 
 $res = DB::query($conn, "SELECT username, user_role FROM users WHERE user_id = $id");
 $target = $res ? DB::fetch_assoc($res) : null;
 
 if (!$target) {
-    header("Location: user_list.php?msg=not_found");
-    exit;
+    redirect('user_list.php', '@User not found', 'error');
 }
 
-// RETTET (§bugs-batch-21-review): denne bruger blev slettet med et HÅRDT
-// DELETE, uden noget tjek for om bruger-ID'et er historisk refereret nogen
-// steder - modsat account_delete.php/inventory_actions.php, som allerede
-// korrekt blokerer sletning af en konto/produkt der er i brug. ledger.user_id
-// (hvem der reelt bogførte hver postering i selve hovedbogen),
-// audit_log.user_id (revisionssporet), expenses.created_by/cancelled_by og
-// invoice_payments.created_by ville alle stå tilbage med en henvisning til
-// et bruger-ID der ikke længere findes - "bogført af" ville stille forsvinde
-// fra historikken, hvilket underminerer selve revisionssporets formål (se
-// bogforingslov-compliance). login_log er bevidst IKKE med her - ren
-// logind-historik skal ikke kunne forhindre oprydning i gamle brugerkonti.
-//
-// NYT (§bugs-batch-30-review): samme fejlklasse igen - time_entries.user_id
-// (hvem der reelt loggede hver time) blev tilføjet EFTER denne liste blev
-// skrevet og var aldrig med. "Hvem lavede arbejdet" er lige så meget en del
-// af revisionssporet som "hvem bogførte posteringen" ovenfor - en slettet
-// bruger ville ellers stille forsvinde fra timeregistreringernes historik,
-// inkl. for allerede fakturerede timer. @-hæmmet, da tabellen kun findes
-// efter db-setup/migrate_time_tracking.php er kørt.
+// RETTET: denne bruger blev slettet med et HÅRDT DELETE, uden noget tjek for om bruger-ID'et er historisk
+// refereret nogen steder - modsat account_delete.php/inventory_actions.php, som allerede korrekt blokerer sletning
+// af en konto/produkt der er i brug. login_log er bevidst IKKE med her - ren logind-historik skal ikke kunne
+// forhindre oprydning i gamle brugerkonti.
+// NYT: samme fejlklasse igen - time_entries.user_id (hvem der reelt loggede hver time) blev tilføjet EFTER denne
+// liste blev skrevet og var aldrig med. @-hæmmet, da tabellen kun findes efter db-setup/migrate_time_tracking.php
+// er kørt.
 $in_use = false;
 $user_ref_checks = [['ledger','user_id'], ['audit_log','user_id'], ['expenses','created_by'], ['expenses','cancelled_by'], ['invoice_payments','created_by'], ['time_entries','user_id']];
 foreach ($user_ref_checks as [$tbl, $col]) {
@@ -61,18 +46,15 @@ foreach ($user_ref_checks as [$tbl, $col]) {
     if ($chk && DB::num_rows($chk) > 0) { $in_use = true; break; }
 }
 if ($in_use) {
-    header("Location: user_list.php?msg=cannot_delete_in_use");
-    exit;
+    redirect('user_list.php', '@Cannot delete user: they have historical ledger entries, audit log records, or expenses/payments attributed to them', 'error');
 }
 
 if (DB::query($conn, "DELETE FROM users WHERE user_id = $id")) {
     log_action($conn, 'DELETE_USER', 'users', $id,
         ['username' => $target['username'], 'user_role' => $target['user_role']], null);
-    header("Location: user_list.php?msg=deleted");
-    exit;
+    redirect('user_list.php', '@User deleted successfully');
 } else {
-    header("Location: user_list.php?msg=error");
-    exit;
+    redirect('user_list.php', '@Error deleting user', 'error');
 }
 
 ob_end_flush();

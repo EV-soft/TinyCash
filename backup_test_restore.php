@@ -27,11 +27,9 @@ function btr_cleanup($dir) {
         new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
         RecursiveIteratorIterator::CHILD_FIRST
     );
-    // RETTET (selv-fanget under live-test): @ foran unlink()/rmdir() - en
-    // enkelt fil Windows endnu ikke har frigivet sin lås på (fx SQLite's
-    // egen -journal-fil, lige efter forbindelsen er lukket) må ikke kunne
-    // stoppe HELE den rekursive oprydning halvvejs og efterlade resten af
-    // den midlertidige mappe liggende.
+    // RETTET: @ foran unlink/rmdir - en enkelt fil Windows endnu ikke har frigivet sin lås på (fx SQLite's egen
+    // -journal-fil, lige efter forbindelsen er lukket) må ikke kunne stoppe HELE den rekursive oprydning halvvejs
+    // og efterlade resten af den midlertidige mappe liggende.
     foreach ($files as $fileinfo) {
         $fileinfo->isDir() ? @rmdir($fileinfo->getRealPath()) : @unlink($fileinfo->getRealPath());
     }
@@ -68,12 +66,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['backup_file'])) {
                     try {
                         $testPdo = new PDO('sqlite:' . $testDbPath);
                         $testPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-                        // RETTET (selv-fanget under live-test): uden en eksplicit
-                        // transaktion udfører SQLite en fsync-tung commit PR.
-                        // enkelt INSERT i dumpet - et dump med blot nogle få
-                        // hundrede rækker tog over 80 sekunder at importere. En
-                        // engangs BEGIN/COMMIT omkring HELE importen gør det til
-                        // én samlet commit i stedet, konsekvent hurtigere.
+                        // RETTET: uden en eksplicit transaktion udfører SQLite en fsync-tung commit PR. enkelt
+                        // INSERT i dumpet - et dump med blot nogle få hundrede rækker tog over 80 sekunder at
+                        // importere. En engangs BEGIN/COMMIT omkring HELE importen gør det til én samlet commit i
+                        // stedet, konsekvent hurtigere.
                         $testPdo->exec('PRAGMA synchronous = OFF');
                         $testPdo->beginTransaction();
                         $testPdo->exec($sql);
@@ -115,9 +111,7 @@ showMenu();
 
 echo "<div style='max-width:700px; margin:0 auto; padding:10px;'>";
 htm_Card_('@Backup Test Restore', 700);
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">'
-    . lang('@Upload a TinyCash backup ZIP to verify it can actually be restored, WITHOUT touching your live database - the dump is imported into a temporary, isolated file that is deleted immediately afterward.')
-    . '</p>';
+htm_Note(lang('@Upload a TinyCash backup ZIP to verify it can actually be restored, WITHOUT touching your live database - the dump is imported into a temporary, isolated file that is deleted immediately afterward.'), 'font-size:0.9em; margin-top:-5px;');
 
 if (!DB::is_sqlite()) {
     htm_Banner('<i class="fa fa-triangle-exclamation"></i> ' . lang('@Test restore is only supported for SQLite installations - a MySQL test would require CREATE DATABASE privileges the normal connection account may not have.'), 'warning');
@@ -136,7 +130,7 @@ if ($result !== null) {
         foreach ($result['tables'] as [$name, $count, $ok]) {
             $rows[] = [
                 '<span style="font-family:monospace;">' . htmlspecialchars($name) . '</span>',
-                $ok ? number_format((int)$count, 0, ',', '.') : '<span style="color:var(--color-danger);">' . lang('@Missing') . '</span>',
+                $ok ? fmt_dk((int)$count, 0) : '<span style="color:var(--color-danger);">' . lang('@Missing') . '</span>',
             ];
         }
         htm_Table(['@Table', '@Row Count'], $rows, 'btrTbl', 20);

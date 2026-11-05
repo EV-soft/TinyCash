@@ -36,7 +36,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $err = lang('@Cannot permanently delete: this record is still linked to invoices, projects or quotes.');
             } else {
                 $old_row = DB::fetch_assoc(DB::query($conn, "SELECT * FROM customers WHERE cust_id = $id"));
-                DB::query($conn, "DELETE FROM customers WHERE cust_id = $id");
+                // RETTET: kun en kunde der rent faktisk ligger i papirkurven kan slettes endeligt, og kundens
+                // kontaktpersoner (navn, e-mail, telefon) slettes med - de blev før liggende som forældreløse
+                // personoplysninger efter en "endelig" sletning (GDPR).
+                $old_contacts = [];
+                $oc_res = @DB::query($conn, "SELECT * FROM customer_contacts WHERE cust_id = $id");
+                while ($oc_res && ($oc = DB::fetch_assoc($oc_res))) $old_contacts[] = $oc;
+                if ($old_row) $old_row['contacts'] = $old_contacts;
+                $purge_res = $old_row ? DB::query($conn, "DELETE FROM customers WHERE cust_id = $id AND deleted_at IS NOT NULL") : false;
+                if ($purge_res && DB::affected_rows($conn, $purge_res) > 0) {
+                    @DB::query($conn, "DELETE FROM customer_contacts WHERE cust_id = $id");
+                }
                 log_action($conn, 'PURGE_CUSTOMER', 'customers', $id, $old_row, null);
                 $msg = lang('@Permanently deleted');
             }
@@ -54,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $err = lang('@Cannot permanently delete: this record is still linked to invoices, projects or quotes.');
             } else {
                 $old_row = DB::fetch_assoc(DB::query($conn, "SELECT * FROM suppliers WHERE supplier_id = $id"));
-                DB::query($conn, "DELETE FROM suppliers WHERE supplier_id = $id");
+                DB::query($conn, "DELETE FROM suppliers WHERE supplier_id = $id AND deleted_at IS NOT NULL");  // kun fra papirkurven
                 log_action($conn, 'PURGE_SUPPLIER', 'suppliers', $id, $old_row, null);
                 $msg = lang('@Permanently deleted');
             }
@@ -69,18 +79,9 @@ echo "<div style='max-width:900px; margin:0 auto; padding:10px;'>";
 if ($msg) htm_Alert($msg, 'success');
 if ($err) htm_Alert($err, 'error');
 
-echo '<p style="color:var(--text-muted); margin-bottom:20px;">'
-    . lang('@Customers and suppliers deleted from their own pages land here first, instead of being removed permanently right away. Restore them, or delete them permanently once you are sure.')
-    . '</p>';
+htm_Note(lang('@Customers and suppliers deleted from their own pages land here first, instead of being removed permanently right away. Restore them, or delete them permanently once you are sure.'), 'margin-bottom:20px;');
 
-$has_cust_trash = false;
-if (DB::is_sqlite()) {
-    $r = DB::query($conn, "PRAGMA table_info(customers)");
-    if ($r) { while ($row = DB::fetch_assoc($r)) { if ($row['name'] === 'deleted_at') { $has_cust_trash = true; break; } } }
-} else {
-    $r = DB::query($conn, "SHOW COLUMNS FROM customers LIKE 'deleted_at'");
-    $has_cust_trash = ($r && DB::num_rows($r) > 0);
-}
+$has_cust_trash = db_has_column($conn, 'customers', 'deleted_at');
 
 htm_Card_('@Deleted Customers', 900);
 if (!$has_cust_trash) {
@@ -96,12 +97,12 @@ if (!$has_cust_trash) {
             '<form method="post" style="display:inline;" onsubmit="return true;">' . csrf_field(false)
                 . '<input type="hidden" name="type" value="customer"><input type="hidden" name="id" value="' . (int)$r['cust_id'] . '">'
                 . '<button type="submit" name="action" value="restore" style="cursor:pointer; margin-right:6px;" data-hint="' . htmlspecialchars(lang('@Restore this record')) . '"><i class="fa fa-trash-restore"></i> ' . lang('@Restore') . '</button>'
-                . '<button type="submit" name="action" value="purge" style="cursor:pointer; color:var(--color-danger);" onclick="return confirm(' . htmlspecialchars(json_encode(lang('@Permanently delete this record? This cannot be undone.')), ENT_QUOTES) . ')" data-hint="' . htmlspecialchars(lang('@Permanently delete - cannot be undone')) . '"><i class="fa fa-trash"></i> ' . lang('@Delete Permanently') . '</button>'
+                . '<button type="submit" name="action" value="purge" style="cursor:pointer; color:var(--color-danger);" onclick="' . htm_confirm_js('@Permanently delete this record? This cannot be undone.') . '" data-hint="' . htmlspecialchars(lang('@Permanently delete - cannot be undone')) . '"><i class="fa fa-trash"></i> ' . lang('@Delete Permanently') . '</button>'
                 . '</form>',
         ];
     }
     if (empty($rows)) {
-        echo '<p style="color:var(--text-muted); font-style:italic;">' . lang('@Trash bin is empty.') . '</p>';
+        htm_Note(lang('@Trash bin is empty.'), 'font-style:italic;');
     } else {
         htm_Table(['@Name', '@Email', '@Deleted At', '@Actions'], $rows, 'trashCustTbl', 50);
     }
@@ -110,14 +111,7 @@ htm_Card_end();
 
 echo "<div style='margin-top:20px;'></div>";
 
-$has_supp_trash = false;
-if (DB::is_sqlite()) {
-    $r = DB::query($conn, "PRAGMA table_info(suppliers)");
-    if ($r) { while ($row = DB::fetch_assoc($r)) { if ($row['name'] === 'deleted_at') { $has_supp_trash = true; break; } } }
-} else {
-    $r = DB::query($conn, "SHOW COLUMNS FROM suppliers LIKE 'deleted_at'");
-    $has_supp_trash = ($r && DB::num_rows($r) > 0);
-}
+$has_supp_trash = db_has_column($conn, 'suppliers', 'deleted_at');
 
 htm_Card_('@Deleted Suppliers', 900);
 if (!$has_supp_trash) {
@@ -133,12 +127,12 @@ if (!$has_supp_trash) {
             '<form method="post" style="display:inline;">' . csrf_field(false)
                 . '<input type="hidden" name="type" value="supplier"><input type="hidden" name="id" value="' . (int)$r['supplier_id'] . '">'
                 . '<button type="submit" name="action" value="restore" style="cursor:pointer; margin-right:6px;" data-hint="' . htmlspecialchars(lang('@Restore this record')) . '"><i class="fa fa-trash-restore"></i> ' . lang('@Restore') . '</button>'
-                . '<button type="submit" name="action" value="purge" style="cursor:pointer; color:var(--color-danger);" onclick="return confirm(' . htmlspecialchars(json_encode(lang('@Permanently delete this record? This cannot be undone.')), ENT_QUOTES) . ')" data-hint="' . htmlspecialchars(lang('@Permanently delete - cannot be undone')) . '"><i class="fa fa-trash"></i> ' . lang('@Delete Permanently') . '</button>'
+                . '<button type="submit" name="action" value="purge" style="cursor:pointer; color:var(--color-danger);" onclick="' . htm_confirm_js('@Permanently delete this record? This cannot be undone.') . '" data-hint="' . htmlspecialchars(lang('@Permanently delete - cannot be undone')) . '"><i class="fa fa-trash"></i> ' . lang('@Delete Permanently') . '</button>'
                 . '</form>',
         ];
     }
     if (empty($rows)) {
-        echo '<p style="color:var(--text-muted); font-style:italic;">' . lang('@Trash bin is empty.') . '</p>';
+        htm_Note(lang('@Trash bin is empty.'), 'font-style:italic;');
     } else {
         htm_Table(['@Name', '@Email', '@Deleted At', '@Actions'], $rows, 'trashSuppTbl', 50);
     }

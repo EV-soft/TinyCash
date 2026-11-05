@@ -37,14 +37,11 @@ if ($key === '' || !in_array($action, ['set_levels', 'restore'], true)) {
     exit;
 }
 
-// RETTET (selv-fanget under live-test): manglede FØR helt at tjekke om
-// menu_visibility-tabellen overhovedet findes, og - mere alvorligt - tjekkede
-// ALDRIG selve DB::query()-resultatet nedenfor, så en fejlet gemning (fx
-// denne manglende tabel) rapporterede stille "success":true til brugeren,
-// som troede punktet var skjult, mens intet reelt skete. Samme fejlklasse
-// som denne sessions "silent-success failed restore"-fund
-# (§bugs-batch-12-review).
-$table_exists = @DB::query($conn, "SELECT 1 FROM menu_visibility LIMIT 1") !== false;
+// RETTET: manglede FØR helt at tjekke om menu_visibility-tabellen overhovedet findes, og - mere alvorligt -
+// tjekkede ALDRIG selve DB::query-resultatet nedenfor, så en fejlet gemning (fx denne manglende tabel)
+// rapporterede stille "success":true til brugeren, som troede punktet var skjult, mens intet reelt skete. Samme
+// fejlklasse som denne sessions "silent-success failed restore"-fund.
+$table_exists = db_has_table($conn, 'menu_visibility');
 if (!$table_exists) {
     http_response_code(500);
     echo json_encode(['success' => false, 'error' => lang('@The menu visibility database structure has not been set up yet. Run the migration under System -> Maintenance -> Database migration.')]);
@@ -75,23 +72,13 @@ if ($action === 'restore') {
     exit;
 }
 
-// "set_levels": L1/L2 sættes UAFHÆNGIGT ud fra de to separate afkrydsnings-
-// felter (hide_l1/hide_l2, "1" = skjult, alt andet = synlig) - kan derfor
-// skjule kun L1, kun L2, begge, eller gøre begge synlige igen (uden helt at
+// "set_levels": L1/L2 sættes UAFHÆNGIGT ud fra de to separate afkrydsnings-felter (hide_l1/hide_l2, "1" = skjult,
+// alt andet = synlig) - kan derfor skjule kun L1, kun L2, begge, eller gøre begge synlige igen (uden helt at
 // slette overstyringen, som "restore" gør).
-// RETTET (selv-fanget, "find fem fejl", live-bekræftet): skrev FØR ALTID
-// begge niveauer ud fra $_POST, uanset om klienten reelt havde ændret dem -
-// klienten sendte et snapshot taget da context-menuen blev åbnet. To
-// administratorer der samtidig højreklikkede SAMME punkt og hver især kun
-// ændrede ÉT niveau kunne dermed tabe hinandens ændring til den anden
-// administrators forældede snapshot af det niveau, VEDKOMMENDE ikke rørte
-// (bekræftet reproduceret: admin A skjuler L1, admin B - med et forældet
-// snapshot fra FØR A's ændring - skjuler uafhængigt L2, og B's gem
-// overskriver stille A's L1-skjulning tilbage til synlig). $current er
-// allerede læst friskt herover - bruges nu FAKTISK som fallback for et
-// niveau der slet ikke indgår i denne request (se inc/menu.inc.php's
-// tilsvarende rettelse, som nu kun sender det/de niveauer brugeren reelt
-// lige har ændret).
+// RETTET: skrev FØR ALTID begge niveauer ud fra $_POST, uanset om klienten reelt havde ændret dem - klienten
+// sendte et snapshot taget da context-menuen blev åbnet. $current er allerede læst friskt herover - bruges nu
+// FAKTISK som fallback for et niveau der slet ikke indgår i denne request (se inc/menu.inc.php's tilsvarende
+// rettelse, som nu kun sender det/de niveauer brugeren reelt lige har ændret).
 $current_l1 = !empty($current[1]) ? 1 : 0;
 $current_l2 = !empty($current[2]) ? 1 : 0;
 $l1 = isset($_POST['hide_l1']) ? (($_POST['hide_l1'] === '1') ? 0 : 1) : $current_l1;

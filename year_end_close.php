@@ -86,35 +86,19 @@ $has_equity_accounts = (count($acc_options) > 1);
 // Hjælpefunktion: beregn saldo pr. income/expense-konto for en periode
 // -------------------------------------------------------------------------
 function calc_closing_lines($conn, $period_start, $period_end) {
-    // RETTET 2026-08-15: filtrerede før på 'revenue', men den faktiske konto-
-    // plan (create_all_tables.php, demo- og live-data) bruger 'income' - så
-    // ALDRIG nogen indtægtskonti blev fundet, kun udgiftskonti. Årsafslut-
-    // ningen har derfor aldrig lukket omsætningen korrekt.
-    // BEVIDST intet "j.is_cancelled = 0"-filter - se inc/annual_report.lib.php
-    // for hvorfor (rettet 2026-08-19, samme fund): kun ORIGINALEN af en
-    // annulleret+modposteret postering får is_cancelled=1, ikke selve mod-
-    // posteringen - et filter her ville derfor ekskludere originalen men
-    // medtage modposteringen, og lade et rent annulleret spøgelsesbeløb
-    // slippe igennem i årsafslutningens nulstilling. Samme mønster som
-    // report_income.php allerede brugte korrekt.
-    // RETTET (se [[year-end-close-bugs-review]]): manglede samme udelukkelse
-    // af trans_type='year_end_close' som blev fundet og rettet i
-    // inc/annual_report.lib.php's arl_income_statement() (samme dag, samme
-    // rodårsag). Rammer denne funktion specifikt hvis en periode fejlagtigt
-    // tillades at overlappe et allerede afsluttet regnskabsår (se
-    // year_end_validate_period()'s nye period_start-tjek ovenfor) - uden
-    // denne udelukkelse ville en sådan (nu blokeret) gentaget lukning have
-    // genberegnet OG genbogført den forrige lukkeposterings egne linjer.
-    // RETTET (§bugs-batch-22-review): "j.trans_type != 'year_end_close'" så
-    // rigtig ud, men trans_type ER nullable (ingen NOT NULL/standardværdi i
-    // skemaet) og reelt NULL på en del af de faktiske journalposter (bekræftet
-    // direkte: 3 ud af 6 rækker i en testdatabase). SQL's tre-værdis-logik
-    // gør at "NULL != 'year_end_close'" evaluerer til NULL, ikke SAND - en
-    // sådan række bliver derfor stiltiende UDELUKKET af hele WHERE-klausulen,
-    // ikke inkluderet som ellers tiltænkt. Enhver indtægts-/udgiftspostering
-    // hvis journalpost har trans_type=NULL ville dermed aldrig blive lukket/
-    // nulstillet af en årsafslutning. Kræver nu eksplicit at NULL også
-    // tælles med (kun selve year_end_close-posteringerne skal udelukkes).
+    // RETTET 2026-08-15: filtrerede før på 'revenue', men den faktiske konto-plan (create_all_tables.php, demo- og
+    // live-data) bruger 'income' - så ALDRIG nogen indtægtskonti blev fundet, kun udgiftskonti. Årsafslut-ningen
+    // har derfor aldrig lukket omsætningen korrekt.
+    // RETTET: manglede samme udelukkelse af trans_type='year_end_close' som blev fundet og rettet i
+    // inc/annual_report.lib.php's arl_income_statement (samme dag, samme rodårsag). Rammer denne funktion
+    // specifikt hvis en periode fejlagtigt tillades at overlappe et allerede afsluttet regnskabsår (se
+    // year_end_validate_period's nye period_start-tjek ovenfor) - uden denne udelukkelse ville en sådan (nu
+    // blokeret) gentaget lukning have genberegnet OG genbogført den forrige lukkeposterings egne linjer.
+    // RETTET: "j.trans_type != 'year_end_close'" så rigtig ud, men trans_type ER nullable (ingen NOT
+    // NULL/standardværdi i skemaet) og reelt NULL på en del af de faktiske journalposter (bekræftet direkte: 3 ud
+    // af 6 rækker i en testdatabase). SQL's tre-værdis-logik gør at "NULL != 'year_end_close'" evaluerer til NULL,
+    // ikke SAND - en sådan række bliver derfor stiltiende UDELUKKET af hele WHERE-klausulen, ikke inkluderet som
+    // ellers tiltænkt.
     $sql = "SELECT l.acc_id, a.acc_name, a.acc_type, SUM(l.amount) as balance
             FROM ledger l
             JOIN journal j ON l.jou_id = j.jou_id
@@ -146,9 +130,22 @@ function calc_closing_lines($conn, $period_start, $period_end) {
 // visningen (trin 1) og selve bogføringen (trin 2), så en bruger der
 // manipulerer de skjulte felter mellem de to trin fanges på begge steder.
 // -------------------------------------------------------------------------
-function year_end_validate_period($conn, $period_start, $period_end) {
+function year_end_validate_period($conn, $period_start, $period_end, int $year_id = 0) {
     if ($period_start === '' || $period_end === '') {
         return lang('@Please select a period start and end date.');
+    }
+    // RETTET: perioden kunne redigeres frit - et forkortet år (fx marts-december) markerede HELE regnskabsåret som
+    // lukket, og januar-februars resultat blev aldrig ført over. Og et senere år kunne lukkes før et tidligere, som
+    // så lå bag låsedatoen for altid. Perioden skal nu være præcis det valgte år, og det skal være det ældste åbne.
+    if ($year_id > 0) {
+        $fy = DB::fetch_assoc(DB::query($conn, "SELECT start_date, end_date FROM fiscal_years WHERE year_id = $year_id AND is_closed = 0"));
+        if (!$fy || substr((string)$fy['start_date'], 0, 10) !== $period_start || substr((string)$fy['end_date'], 0, 10) !== $period_end) {
+            return lang('@The period must match the selected fiscal year exactly.');
+        }
+        $older = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM fiscal_years WHERE is_closed = 0 AND start_date < '" . DB::escape($conn, $period_start) . "'"));
+        if ((int)($older[0] ?? 0) > 0) {
+            return lang('@Close the oldest open fiscal year first.');
+        }
     }
     if (strtotime($period_end) < strtotime($period_start)) {
         return lang('@Period end date cannot be before period start date.');
@@ -162,27 +159,19 @@ function year_end_validate_period($conn, $period_start, $period_end) {
     if (is_date_locked($conn, $period_end)) {
         return lang('@This period is on or before the current accounting lock date - it may already be closed, or would move the lock date backwards.');
     }
-    // RETTET (se [[year-end-close-bugs-review]]): kun period_end blev tjekket
-    // mod lock-datoen - period_start blev aldrig tjekket. En periode der
-    // starter FØR (eller på) den nuværende lock-dato, men slutter et godt
-    // stykke efter, bestod derfor valideringen uændret, selvom den rækker
-    // baglæns ind i et allerede afsluttet regnskabsår. Bekræftet direkte:
-    // efter en afslutning af 2026-01-01–2026-12-31, blev en efterfølgende
-    // "lukning" af 2026-06-01–2027-06-30 fejlagtigt accepteret og genberegnede
-    // det allerede afsluttede halvår, inkl. selve den forrige lukkepostering.
+    // RETTET: kun period_end blev tjekket mod lock-datoen - period_start blev aldrig tjekket. En periode der
+    // starter FØR (eller på) den nuværende lock-dato, men slutter et godt stykke efter, bestod derfor valideringen
+    // uændret, selvom den rækker baglæns ind i et allerede afsluttet regnskabsår.
     if (is_date_locked($conn, $period_start)) {
         return lang('@This period starts on or before the current accounting lock date - it would overlap with an already closed period.');
     }
     return null;
 }
 
-// RETTET (se [[year-end-close-bugs-review]]): $acc_options-dropdown'en viser
-// kun egenkapitalkonti (acc_type = 'equity'), men INTET tjekkede server-side
-// at det POSTEDE equity_acc_id rent faktisk var en af dem - præcis den fejl
-// filens egen kommentar ved $acc_options siger den forhindrer. Bekræftet
-// direkte: postede equity_acc_id=1000 (en almindelig indtægtskonto) blev
-// accepteret uden indsigelse, og hele årets nettoresultat blev bogført
-// derpå i stedet for at blive afvist.
+// RETTET: $acc_options-dropdown'en viser kun egenkapitalkonti (acc_type = 'equity'), men INTET tjekkede
+// server-side at det POSTEDE equity_acc_id rent faktisk var en af dem - præcis den fejl filens egen kommentar ved
+// $acc_options siger den forhindrer. Bekræftet direkte: postede equity_acc_id=1000 (en almindelig indtægtskonto)
+// blev accepteret uden indsigelse, og hele årets nettoresultat blev bogført derpå i stedet for at blive afvist.
 function year_end_is_equity_account($conn, $acc_id) {
     if ($acc_id <= 0) return false;
     $row = DB::fetch_assoc(DB::query($conn, "SELECT acc_type FROM accounts WHERE acc_id = " . (int)$acc_id));
@@ -206,7 +195,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['preview'])) {
         $err = lang('@Please select an equity account to post the result to.');
     } elseif (!year_end_is_equity_account($conn, $posted_equity_acc)) {
         $err = lang('@The selected account is not an equity account.');
-    } elseif (($period_err = year_end_validate_period($conn, $posted_period_start, $posted_period_end)) !== null) {
+    } elseif (($period_err = year_end_validate_period($conn, $posted_period_start, $posted_period_end, $posted_year_id)) !== null) {
         $err = $period_err;
     } else {
         $preview = calc_closing_lines($conn, $ps, $pe);
@@ -230,7 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_close'])) {
         $err = lang('@Please select an equity account to post the result to.');
     } elseif (!year_end_is_equity_account($conn, $equity_acc)) {
         $err = lang('@The selected account is not an equity account.');
-    } elseif (($period_err = year_end_validate_period($conn, $_POST['period_start'], $_POST['period_end'])) !== null) {
+    } elseif (($period_err = year_end_validate_period($conn, $_POST['period_start'], $_POST['period_end'], $year_id)) !== null) {
         $err = $period_err;
     } else {
         $calc = calc_closing_lines($conn, $period_start, $period_end);
@@ -240,23 +229,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_close'])) {
         if (empty($closing_lines)) {
             $err = lang('@No income or expense postings found in the selected period - nothing to close.');
         } else {
-          // RETTET (§bugs-batch-22-review): KRITISK - hele denne flerdelte
-          // bogføring (ny journalpost + N ledger-linjer + ny lock-dato +
-          // markering af regnskabsåret som lukket) kørte HELT uden om
-          // DB::begin_transaction()/commit()/rollback (i modsætning til alle
-          // andre flerdelte posteringsflows i appen), og intet atomisk tjek
-          // forhindrede is_closed=1 i at blive sat blindt uanset dens
-          // nuværende værdi. Et dobbeltklik på "Bekræft lukning" (eller en
-          // gensendt formular) kunne derfor nå at poste TO FULDE
-          // lukkeposteringer for samme regnskabsår - hver med sin egen fulde
-          // nulstilling af indtægts-/udgiftskonti OG sin egen nettoresultat-
-          // postering til egenkapitalkontoen, en potentielt alvorlig, dobbelt
-          // regnskabsmæssig forvrængning. Regnskabsåret "kræves" nu atomisk
-          // FØR noget som helst bogføres (WHERE year_id=? AND is_closed=0) -
-          // et 0-rækker-resultat (en anden, hurtigere forespørgsel nåede
-          // først) afbryder hele lukningen med det samme, og hele
-          // transaktionen (inkl. et evt. allerede oprettet journal-/ledger-
-          // arbejde) rulles tilbage i stedet for at lade en dublet ske.
+          // RETTET: KRITISK - hele denne flerdelte bogføring (ny journalpost + N ledger-linjer + ny lock-dato +
+          // markering af regnskabsåret som lukket) kørte HELT uden om DB::begin_transaction/commit/rollback (i
+          // modsætning til alle andre flerdelte posteringsflows i appen), og intet atomisk tjek forhindrede
+          // is_closed=1 i at blive sat blindt uanset dens nuværende værdi. Et dobbeltklik på "Bekræft lukning"
+          // (eller en gensendt formular) kunne derfor nå at poste TO FULDE lukkeposteringer for samme regnskabsår
+          // - hver med sin egen fulde nulstilling af indtægts-/udgiftskonti OG sin egen nettoresultat-postering
+          // til egenkapitalkontoen, en potentielt alvorlig, dobbelt regnskabsmæssig forvrængning.
           DB::begin_transaction($conn);
           try {
             if ($year_id > 0) {
@@ -282,11 +261,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_close'])) {
                 'currency'   => $global_settings['currency'] ?? 'DKK',
                 'voucher_no' => $voucher_no
             ];
-            // NYT (BEK 811/2026-gennemgang, [[digital-standard-bookkeeping-registration-goal]]):
-            // bruger-id for hvem der lukkede regnskabsåret - dette array-baserede
-            // DB::insert()-kald (i modsætning til de øvrige 13 raw-SQL-steder)
-            // bruger journal_created_by_sql()'s kolonne-fund blot til at afgøre
-            // OM nøglen skal tilføjes, ikke selve SQL-fragmentet.
+            // NYT: bruger-id for hvem der lukkede regnskabsåret - dette array-baserede DB::insert-kald (i
+            // modsætning til de øvrige 13 raw-SQL-steder) bruger journal_created_by_sql's kolonne-fund blot til at
+            // afgøre OM nøglen skal tilføjes, ikke selve SQL-fragmentet.
             if (journal_created_by_sql($conn)['col'] !== '') {
                 $jou_insert_data['created_by'] = (int)($_SESSION['user_id'] ?? 0);
             }
@@ -318,13 +295,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_close'])) {
                 DB::prepare_and_execute($conn, $sql_close, [$_SESSION['user_id'], $jou_id, $equity_acc, $net_result, $year_id]);
             }
 
-            // RETTET 2026-08-20: brugte før et hånd-rullet, direkte INSERT INTO
-            // audit_log i stedet for den fælles log_action()-hjælpefunktion -
-            // fungerede, men brugte små bogstaver ("year_end_close") i stedet
-            // for den ellers konsekvente STORE_BOGSTAVER-navngivning
-            // (CANCEL_EXPENSE, POST_INVOICE osv.), og var reelt den eneste
-            // log_action-uafhængige logskrivning i hele kodebasen. Fundet under
-            // en revisionsspor-gennemgang.
+            // RETTET 2026-08-20: brugte før et hånd-rullet, direkte INSERT INTO audit_log i stedet for den fælles
+            // log_action-hjælpefunktion - fungerede, men brugte små bogstaver ("year_end_close") i stedet for den
+            // ellers konsekvente STORE_BOGSTAVER-navngivning (CANCEL_EXPENSE, POST_INVOICE osv.), og var reelt den
+            // eneste log_action-uafhængige logskrivning i hele kodebasen. Fundet under en
+            // revisionsspor-gennemgang.
             log_action($conn, 'YEAR_END_CLOSE', 'journal', $jou_id, null,
                 ['period' => "$period_start - $period_end", 'net_result' => $net_result, 'equity_acc' => $equity_acc]);
 
@@ -344,9 +319,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_close'])) {
           }
         }
 
-        if (!isset($err)) {
+        // RETTET: $err sættes til '' øverst, så !isset($err) var altid falsk - succesbeskeden blev aldrig vist
+        if ($err === '') {
             $msg = lang('@Fiscal year closed successfully.') . ' '
-                 . lang('@Net result:') . ' ' . number_format($net_result, 2, ',', '.') . ' ' . htmlspecialchars($global_settings['currency'] ?? 'DKK') . '. '
+                 . lang('@Net result:') . ' ' . fmt_dk($net_result) . ' ' . htmlspecialchars($global_settings['currency'] ?? 'DKK') . '. '
                  . lang('@Journal entry:') . ' #' . $jou_id;
         }
     }
@@ -372,15 +348,11 @@ if (empty($open_years)) {
     // -------------------------------------------------------------------
     echo '<p style="font-size:0.9em; color:var(--text-muted);">' . lang('@Review the calculation below. Nothing has been posted yet.') . '</p>';
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 25): ingen
-    // advarsel fandtes om løse ender inden for den periode der lukkes - en
-    // fakturakladde/ubogført udgift dateret ind i året BLIVER IKKE med i
-    // selve nulstillingen ovenfor (calc_closing_lines() læser kun fra
-    // ledger/journal, altså kun det der reelt er bogført), men efterlades
-    // stille i et regnskabsår der ellers fremstår "lukket". Rent INFORMATIV -
-    // blokerer bevidst IKKE selve lukningen (det er bogholderens egen
-    // vurdering), samme "gør opmærksom, ikke stop"-princip som index.php's
-    // "Mine opgaver"-tællere.
+    // NYT: ingen advarsel fandtes om løse ender inden for den periode der lukkes - en fakturakladde/ubogført
+    // udgift dateret ind i året BLIVER IKKE med i selve nulstillingen ovenfor (calc_closing_lines læser kun fra
+    // ledger/journal, altså kun det der reelt er bogført), men efterlades stille i et regnskabsår der ellers
+    // fremstår "lukket". Rent INFORMATIV - blokerer bevidst IKKE selve lukningen (det er bogholderens egen
+    // vurdering), samme "gør opmærksom, ikke stop"-princip som index.php's "Mine opgaver"-tællere.
     $ps_chk = DB::escape($conn, $posted_period_start);
     $pe_chk = DB::escape($conn, $posted_period_end);
     $checklist = [];
@@ -409,30 +381,26 @@ if (empty($open_years)) {
     $headers = ['@Account', '@Type', '@Balance'];
     $rows = [];
     foreach ($preview['lines'] as $l) {
-        // RETTET: $l['acc_type'] kommer altid småt fra databasen ('income',
-        // 'expense' osv.), men den faktiske oversættelsesnøgle er stort
-        // forbogstav (@Income, @Expense) - lang('@income') matchede derfor
-        // aldrig noget i languages.json, og kontotypen kunne aldrig oversættes
-        // på denne forhåndsvisning før en regnskabsafslutning. Samme fejlklasse
-        // som quote_view.php's status-stempel, fundet i samme runde.
-        // NB: lang('@'.ucfirst($l['acc_type'])) kan frase-skanneren ikke selv
-        // opdage - forespørgslen ovenfor begrænser acc_type til kun 'income'/
-        // 'expense' her, så de faktiske nøgler nævnes bevidst som streng-
-        // literaler: '@Income', '@Expense'
+        // RETTET: $l['acc_type'] kommer altid småt fra databasen ('income', 'expense' osv.), men den faktiske
+        // oversættelsesnøgle er stort forbogstav (@Income, @Expense) - lang('@income') matchede derfor aldrig
+        // noget i languages.json, og kontotypen kunne aldrig oversættes på denne forhåndsvisning før en
+        // regnskabsafslutning. NB: lang('@'.ucfirst($l['acc_type'])) kan frase-skanneren ikke selv opdage -
+        // forespørgslen ovenfor begrænser acc_type til kun 'income'/'expense' her, så de faktiske nøgler nævnes
+        // bevidst som streng-literaler: '@Income', '@Expense'
         $rows[] = [
             $l['acc_id'] . ' - ' . htmlspecialchars($l['acc_name']),
             lang('@' . ucfirst($l['acc_type'])),
-            '<div style="text-align:right; font-weight:bold; color:' . ($l['balance'] >= 0 ? 'green' : 'red') . ';">' . number_format($l['balance'], 2, ',', '.') . '</div>'
+            '<div style="text-align:right; font-weight:bold; color:' . ($l['balance'] >= 0 ? 'green' : 'red') . ';">' . fmt_dk($l['balance']) . '</div>'
         ];
     }
     htm_Table($headers, $rows, 'preview_tbl', 100);
 
     echo '<div style="display:flex; justify-content:space-between; align-items:center; padding:15px 0; border-top:2px solid var(--color-primary); margin-top:10px; font-weight:bold; font-size:1.1em;">';
     echo '<span>' . lang('@Net Result') . '</span>';
-    echo '<span style="color:' . ($preview['net_result'] >= 0 ? 'green' : 'red') . ';">' . number_format($preview['net_result'], 2, ',', '.') . ' ' . htmlspecialchars($global_settings['currency'] ?? 'DKK') . '</span>';
+    echo '<span style="color:' . ($preview['net_result'] >= 0 ? 'green' : 'red') . ';">' . fmt_dk($preview['net_result']) . ' ' . htmlspecialchars($global_settings['currency'] ?? 'DKK') . '</span>';
     echo '</div>';
 
-    echo '<form method="post" onsubmit="return confirm(\'' . htmlspecialchars(lang('@Are you sure you want to close this fiscal year? This cannot be undone.'), ENT_QUOTES) . '\');">';
+    echo '<form method="post" onsubmit="' . htm_confirm_js('@Are you sure you want to close this fiscal year? This cannot be undone.') . '">';
     csrf_field();
     echo '<input type="hidden" name="year_id" value="' . $posted_year_id . '">';
     echo '<input type="hidden" name="period_start" value="' . htmlspecialchars($posted_period_start) . '">';
@@ -475,11 +443,11 @@ if (empty($open_years)) {
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
             <div>
                 <label style="font-size:0.85em; font-weight:bold; display:block; margin-bottom:5px;"><?php echo lang('@Period Start'); ?></label>
-                <input type="date" name="period_start" id="period_start" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:4px; box-sizing:border-box;">
+                <input type="date" name="period_start" id="period_start" required readonly style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:4px; box-sizing:border-box;">
             </div>
             <div>
                 <label style="font-size:0.85em; font-weight:bold; display:block; margin-bottom:5px;"><?php echo lang('@Period End'); ?></label>
-                <input type="date" name="period_end" id="period_end" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:4px; box-sizing:border-box;">
+                <input type="date" name="period_end" id="period_end" required readonly style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:4px; box-sizing:border-box;">
             </div>
         </div>
 

@@ -4,22 +4,14 @@
 // INTEGRATION — to steder skal ændres i eksisterende filer:
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── 1. htm_page.lib.php → htm_Footer() ──────────────────────────────────────
-// Tilføj disse linjer EFTER include_once 'notepad.inc.php':
-//
-//    if (function_exists('auto_backup_check') && isset($GLOBALS['conn'])) {
-//        auto_backup_check($GLOBALS['conn']);
-//    }
-//
-// Og øverst i htm_Footer() eller i htm_Header():
-//    require_once __DIR__ . '/auto_backup.inc.php';
-//
+// ── 1. htm_page.lib.php → htm_Footer ────────────────────────────────────── Tilføj disse linjer EFTER
+// include_once 'notepad.inc.php':
+// if (function_exists('auto_backup_check') && isset($GLOBALS['conn'])) { auto_backup_check($GLOBALS['conn']); }
+// Og øverst i htm_Footer eller i htm_Header: require_once __DIR__. '/auto_backup.inc.php';
 // ── 2. backup.php → kald render_auto_backup_settings($conn) ─────────────────
-// RETTET (§backup-manual-vs-automatic-separation, bruger-rapporteret "backup
-// er ikke et klart begreb"): kaldtes FØR fra company_settings.php - flyttet
-// til backup.php's egen "🤖 Automatisk Backup"-sektion, samlet med resten af
-// alt der hedder backup i stedet for spredt ud på en side om firmanavn/moms/
-// valuta. Se nedenfor for selve kaldet.
+// RETTET: kaldtes FØR fra company_settings.php - flyttet til backup.php's egen "🤖 Automatisk Backup"-sektion,
+// samlet med resten af alt der hedder backup i stedet for spredt ud på en side om firmanavn/moms/valuta. Se
+// nedenfor for selve kaldet.
 
 // ════════════════════════════════════════════════════════════════════════════
 // BACKUP-SEKTION til backup.php
@@ -61,15 +53,12 @@ function render_auto_backup_settings($conn) {
         htm_Alert(lang('@Master password removed from the database.'), 'success');
         $pass_in_db = false;
     }
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): der var ingen
-    // måde at bekræfte at backup-mailadressen/SMTP-opsætningen reelt virker,
-    // uden at vente på den automatiske ugentlige kørsel - "Tving backup ved
-    // næste sidevisning" ovenfor kører kun HVIS der rent faktisk er ændringer
-    // siden sidste backup (auto_backup_check()'s eget tjek), og bygger en
-    // fuld ZIP/kryptering først, hvilket ikke isolerer "virker selve
-    // mailafsendelsen" fra "er der noget at sikkerhedskopiere". Sender kun en
-    // simpel testmail via den allerede afprøvede sendTinyMail() - ingen
-    // backup-indhold, rører ikke ved auto_backup_last/den reelle tidsplan.
+    // NYT: der var ingen måde at bekræfte at backup-mailadressen/SMTP-opsætningen reelt virker, uden at vente på
+    // den automatiske ugentlige kørsel - "Tving backup ved næste sidevisning" ovenfor kører kun HVIS der rent
+    // faktisk er ændringer siden sidste backup (auto_backup_check's eget tjek), og bygger en fuld ZIP/kryptering
+    // først, hvilket ikke isolerer "virker selve mailafsendelsen" fra "er der noget at sikkerhedskopiere". Sender
+    // kun en simpel testmail via den allerede afprøvede sendTinyMail - ingen backup-indhold, rører ikke ved
+    // auto_backup_last/den reelle tidsplan.
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_test_backup_mail'])) {
         $test_mail = trim($_POST['auto_backup_mail'] ?? $backup_mail);
         if ($test_mail === '') {
@@ -106,9 +95,8 @@ function render_auto_backup_settings($conn) {
     echo '</div>';
 
     // ── Master-kodeord: styres i inc/data/env.ini, aldrig i databasen ───────
-    // RETTET: env.ini flyttet til inc/data/env.ini (konsolidering af
-    // installationsspecifikke data) - tekststrengene herunder opdateret,
-    // hvilket bevidst danner NYE lang()-nøgler (se languages.json).
+    // RETTET: env.ini flyttet til inc/data/env.ini (konsolidering af installationsspecifikke data) -
+    // tekststrengene herunder opdateret, hvilket bevidst danner NYE lang-nøgler (se languages.json).
     echo '<div style="margin-bottom:15px; padding:12px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-panel); font-size:13px;">';
     echo '<div style="font-weight:bold; margin-bottom:6px;"><i class="fa fa-key"></i> ' . lang('@Master password (encryption)') . '</div>';
     if ($pass_in_env) {
@@ -122,7 +110,7 @@ function render_auto_backup_settings($conn) {
     echo '<pre style="margin:6px 0 0 0; padding:8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; font-size:12px; overflow-x:auto;">[backup_config]' . "\n" . 'BACKUP_PASSWORD="your-strong-password"</pre>';
     if ($pass_in_db) {
         if ($pass_in_env) {
-            echo '<form method="POST" style="margin-top:8px;" onsubmit="return confirm(\'' . addslashes(lang('@Remove the master password from the database? Ensure it is set in inc/data/env.ini and saved off-site first.')) . '\');">';
+            echo '<form method="POST" style="margin-top:8px;" onsubmit="' . htm_confirm_js('@Remove the master password from the database? Ensure it is set in inc/data/env.ini and saved off-site first.') . '">';
             csrf_field();
             echo '<button type="submit" name="remove_db_password" value="1" style="background:var(--color-danger); color:white; border:none; padding:7px 14px; border-radius:4px; cursor:pointer; font-size:13px;"><i class="fa fa-trash"></i> ' . lang('@Remove master password from database') . '</button>';
             echo '</form>';

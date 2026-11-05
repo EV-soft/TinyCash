@@ -31,25 +31,19 @@ if (isset($_GET['del']) && (int)$_GET['del'] > 0) {
     } else {
         $old_res = DB::query($conn, "SELECT supplier_id, supplier_name FROM suppliers WHERE supplier_id = $del_id");
         $old_row = $old_res ? DB::fetch_assoc($old_res) : null;
+        if (!$old_row) redirect('supplier_list.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: meldte succes, selv om intet fandtes (dobbeltklik, en anden fane)
 
         // RETTET (bruger-anmodet, "kan bogholderen ønske sig mere", runde
         // 31): samme princip som customer_edit.php's tilsvarende rettelse -
         // "Slet" er nu en gendannelig blødsletning, se trash_bin.php.
-        $has_trash_col = false;
-        if (DB::is_sqlite()) {
-            $tc = DB::query($conn, "PRAGMA table_info(suppliers)");
-            if ($tc) { while ($tcr = DB::fetch_assoc($tc)) { if ($tcr['name'] === 'deleted_at') { $has_trash_col = true; break; } } }
-        } else {
-            $tc = DB::query($conn, "SHOW COLUMNS FROM suppliers LIKE 'deleted_at'");
-            $has_trash_col = ($tc && DB::num_rows($tc) > 0);
-        }
+        $has_trash_col = db_has_column($conn, 'suppliers', 'deleted_at');
         $del_sql = $has_trash_col
             ? "UPDATE suppliers SET deleted_at = '" . date('Y-m-d H:i:s') . "' WHERE supplier_id = $del_id"
             : "DELETE FROM suppliers WHERE supplier_id = $del_id";
 
         if (DB::query($conn, $del_sql)) {
             if ($old_row) log_action($conn, 'DELETE_SUPPLIER', 'suppliers', $del_id, $old_row, null);
-            header("Location: supplier_list.php?msg=deleted"); exit;
+            redirect('supplier_list.php', '@Deleted successfully');
         } else {
             $err = lang('@SQL Error:') . " " . DB::error($conn);
         }
@@ -59,46 +53,33 @@ if (isset($_GET['del']) && (int)$_GET['del'] > 0) {
 htm_Header('@Suppliers', 1200);
 showMenu();
 
-if (isset($_GET['msg']) && $_GET['msg'] === 'deleted') htm_Alert(lang('@Deleted successfully'), 'success');
 if ($err) htm_Alert($err, 'error');
 
 $tools = htm_Button(icon: 'fa-plus', labl: '@New Supplier', type: 'success', link: 'supplier_edit.php?id=0', attr: 'data-hint="'.lang('@Create a new supplier').'"', echo: false);
 htm_Card_(capt: '@Suppliers', wdth: 1200, tool: $tools);
 
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">' .
-    lang('@Master data for suppliers/vendors, linked to expenses. Amount owed reflects expenses registered as "not yet paid" (see Aging Report).') .
-    '</p>';
+htm_Note(lang('@Master data for suppliers/vendors, linked to expenses. Amount owed reflects expenses registered as "not yet paid" (see Aging Report).'), 'font-size:0.9em; margin-top:-5px;');
 
 // Findes leverandørgæld-kolonnerne endnu (kun tilfældet efter
 // db-setup/migrate_suppliers.php er kørt)?
-$has_debt_columns = false;
-if (DB::is_sqlite()) {
-    $ccheck = DB::query($conn, "PRAGMA table_info(expenses)");
-    if ($ccheck) { while ($cr = DB::fetch_assoc($ccheck)) { if ($cr['name'] === 'due_date') { $has_debt_columns = true; break; } } }
-} else {
-    $ccheck = DB::query($conn, "SHOW COLUMNS FROM expenses LIKE 'due_date'");
-    $has_debt_columns = ($ccheck && DB::num_rows($ccheck) > 0);
-}
+$has_debt_columns = db_has_column($conn, 'expenses', 'due_date');
 
 $s     = get_settings($conn);
 $cur   = $s['currency'] ?? 'DKK';
 $today = date('Y-m-d');
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): ingen side i
-// systemet rangerede leverandører efter reelt forbrug - "Skyldigt beløb"
-// nedenfor viser kun UBETALTE udgifter, ikke den samlede historik. Samme
-// "ekskludér annullerede"-princip og collapsible-panel-mønster som
-// sales_hub.php's "Top Customers by Revenue" (samme runde). "amount" bruges
-// direkte (ikke ganget med exch_rate) - samme konvention som "Skyldigt
-// beløb"-kolonnen herunder allerede bruger: expenses.amount er altid
-// indtastet i regnskabets basisvaluta, orig_amount/exch_rate er kun
-// supplerende metadata, ikke en omregning der mangler at blive foretaget.
+// NYT: ingen side i systemet rangerede leverandører efter reelt forbrug - "Skyldigt beløb" nedenfor viser kun
+// UBETALTE udgifter, ikke den samlede historik. "amount" bruges direkte (ikke ganget med exch_rate) - samme
+// konvention som "Skyldigt beløb"-kolonnen herunder allerede bruger: expenses.amount er altid indtastet i
+// regnskabets basisvaluta, orig_amount/exch_rate er kun supplerende metadata, ikke en omregning der mangler at
+// blive foretaget.
 if ($has_debt_columns) {
+    // RETTET: kladder og indtægtsbilag talte med som "forbrug" hos leverandøren (samme filter som supplier_statement.php)
     $top_supp_res = DB::query($conn, "
         SELECT s.supplier_id, s.supplier_name, SUM(e.amount) AS spend
         FROM expenses e
         JOIN suppliers s ON e.supplier_id = s.supplier_id
-        WHERE e.is_cancelled = 0
+        WHERE e.is_cancelled = 0 AND e.voucher_no IS NOT NULL AND (e.exp_type IS NULL OR e.exp_type != 'income')
         GROUP BY s.supplier_id, s.supplier_name
         HAVING SUM(e.amount) != 0
         ORDER BY spend DESC
@@ -107,7 +88,7 @@ if ($has_debt_columns) {
     while ($tsr = DB::fetch_assoc($top_supp_res)) {
         $top_supp_rows[] = [
             '<a href="supplier_edit.php?id='.(int)$tsr['supplier_id'].'">'.htmlspecialchars($tsr['supplier_name']).'</a>',
-            number_format((float)$tsr['spend'], 2, ',', '.') . ' ' . $cur,
+            fmt_dk((float)$tsr['spend']) . ' ' . $cur,
         ];
     }
     if (!empty($top_supp_rows)) {
@@ -128,13 +109,11 @@ if ($res) {
     while ($row = DB::fetch_assoc($res)) {
         $sid = (int)$row['supplier_id'];
 
-        // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): "Skyldigt
-        // beløb" viste FØR kun ét samlet tal, uden at skelne mellem beløb der
-        // reelt er FORFALDNE (due_date overskredet) og beløb der bare endnu
-        // ikke er forfaldet - samme skelnen aging_report.php allerede laver
-        // for begge sider (kunder/leverandører), men som manglede her på selve
-        // listen. Beregnes i PHP med en streng dato-sammenligning, samme
-        // cross-engine-mønster som aging_report.php/customer_statement.php.
+        // NYT: "Skyldigt beløb" viste FØR kun ét samlet tal, uden at skelne mellem beløb der reelt er FORFALDNE
+        // (due_date overskredet) og beløb der bare endnu ikke er forfaldet - samme skelnen aging_report.php
+        // allerede laver for begge sider (kunder/leverandører), men som manglede her på selve listen. Beregnes i
+        // PHP med en streng dato-sammenligning, samme cross-engine-mønster som
+        // aging_report.php/customer_statement.php.
         $owed = 0.0;
         $owed_overdue = 0.0;
         if ($has_debt_columns) {
@@ -165,9 +144,9 @@ if ($res) {
             htmlspecialchars($contact_email),
             htmlspecialchars($row['cvr'] ?? ''),
             $owed > 0.01
-                ? '<strong style="color:var(--color-'.($owed_overdue > 0.01 ? 'danger' : 'warning').');">' . number_format($owed, 2, ',', '.') . ' ' . $cur . '</strong>'
-                    . ($owed_overdue > 0.01 ? '<br><small style="color:var(--color-danger); font-weight:bold;"><i class="fa-solid fa-triangle-exclamation"></i> ' . sprintf(lang('@%s overdue'), number_format($owed_overdue, 2, ',', '.') . ' ' . $cur) . '</small>' : '')
-                : '<span style="color:var(--text-muted);">' . number_format(0, 2, ',', '.') . ' ' . $cur . '</span>',
+                ? '<strong style="color:var(--color-'.($owed_overdue > 0.01 ? 'danger' : 'warning').');">' . fmt_dk($owed) . ' ' . $cur . '</strong>'
+                    . ($owed_overdue > 0.01 ? '<br><small style="color:var(--color-danger); font-weight:bold;"><i class="fa-solid fa-triangle-exclamation"></i> ' . sprintf(lang('@%s overdue'), fmt_dk($owed_overdue) . ' ' . $cur) . '</small>' : '')
+                : '<span style="color:var(--text-muted);">' . fmt_dk(0) . ' ' . $cur . '</span>',
             htm_ActionButtons($actions, false) . htm_ConfirmLink(
                 icon: 'fa-trash', labl: '', link: 'supplier_list.php?del='.$sid,
                 mess: '@Are you sure you want to delete this supplier? This cannot be undone.',

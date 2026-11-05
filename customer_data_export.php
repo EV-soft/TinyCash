@@ -13,6 +13,7 @@ require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
+require_once 'inc/invoice_layouts.inc.php';  // il_column_exists()
 
 $cust_id = isset($_GET['cust_id']) ? (int)$_GET['cust_id'] : 0;
 
@@ -27,7 +28,10 @@ function gdpr_collect_customer_data($conn, int $cust_id): ?array {
     $data = ['customer' => $cust, 'invoices' => [], 'quotes' => [], 'recurring_invoices' => [], 'sent_mail' => []];
 
     $disc = invoice_discount_sql($conn);
-    $inv_res = DB::query($conn, "SELECT invoice_no, inv_date, inv_due_date, inv_status, currency,
+    // RETTET: kreditnotaer kom ud uden nummer (de har credit_note_no, ikke invoice_no), og fakturaens egne
+    // personoplysninger (leveringsadresse, kundens reference, note) manglede i indsigtsudtrækket.
+    $cn_col  = il_column_exists($conn, 'invoices', 'credit_note_no') ? 'credit_note_no, ' : '';
+    $inv_res = DB::query($conn, "SELECT invoice_no, {$cn_col}credit_ref, inv_date, inv_due_date, inv_status, currency, delivery_address, cust_reference, inv_note,
             (SELECT COALESCE(SUM(quantity * price_each $disc * (100 + line_vat_rate) / 100.0), 0)
              FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1) AS total
         FROM invoices i WHERE cust_id = $cust_id ORDER BY inv_date DESC");
@@ -39,8 +43,15 @@ function gdpr_collect_customer_data($conn, int $cust_id): ?array {
     $ri_res = @DB::query($conn, "SELECT interval_type, next_run_date, is_active FROM recurring_invoices WHERE cust_id = $cust_id");
     if ($ri_res) { while ($r = DB::fetch_assoc($ri_res)) { $data['recurring_invoices'][] = $r; } }
 
-    if (!empty($cust['cust_email'])) {
-        $m_res = @DB::query($conn, "SELECT sent_at, subject, success FROM mail_log WHERE to_email = '" . DB::escape($conn, $cust['cust_email']) . "' ORDER BY sent_at DESC");
+    // RETTET: kun mails til kundens egen adresse kom med - mails til kontaktpersonernes adresser manglede
+    $mail_to = [];
+    if (!empty($cust['cust_email'])) $mail_to[] = strtolower(trim($cust['cust_email']));
+    $ce_res = @DB::query($conn, "SELECT contact_email FROM customer_contacts WHERE cust_id = $cust_id AND contact_email IS NOT NULL AND contact_email != ''");
+    while ($ce_res && ($ce = DB::fetch_assoc($ce_res))) $mail_to[] = strtolower(trim($ce['contact_email']));
+    $mail_to = array_unique($mail_to);
+    if ($mail_to) {
+        $in = implode(',', array_map(fn($m) => "'" . DB::escape($conn, $m) . "'", $mail_to));
+        $m_res = @DB::query($conn, "SELECT sent_at, to_email, subject, success FROM mail_log WHERE LOWER(to_email) IN ($in) ORDER BY sent_at DESC");
         if ($m_res) { while ($r = DB::fetch_assoc($m_res)) { $data['sent_mail'][] = $r; } }
     }
 
@@ -69,14 +80,9 @@ if (isset($_GET['download']) && $cust_id > 0) {
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     header('Pragma: no-cache');
     header('Expires: 0');
-    // JSON_INVALID_UTF8_SUBSTITUTE: uden dette flag fejler json_encode() TAVST
-    // (returnerer false, som blot ville blive echo'et som en tom 0-byte-fil
-    // med HTTP 200 - selv-fanget live under test af cust_id=2, "Den Grimme
-    // Ælling A/S", som viste sig at have en rå Latin-1-byte i navnet, se
-    // §bookkeeper-wishlist-round26) i stedet for reelt ugyldig UTF-8-data.
-    // Erstatter den ugyldige byte med Unicode-erstatningstegnet i stedet for
-    // at fejle - eksporten skal virke for ENHVER kunde, uanset om deres
-    // stamdata tilfældigvis er korrupt fra før.
+    // JSON_INVALID_UTF8_SUBSTITUTE: uden dette flag fejler json_encode TAVST i stedet for reelt ugyldig
+    // UTF-8-data. Erstatter den ugyldige byte med Unicode-erstatningstegnet i stedet for at fejle - eksporten skal
+    // virke for ENHVER kunde, uanset om deres stamdata tilfældigvis er korrupt fra før.
     echo json_encode(['generated_at' => date('c'), 'data' => $data], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
@@ -86,9 +92,7 @@ showMenu();
 
 echo "<div style='max-width:900px; margin:0 auto; padding:10px;'>";
 htm_Card_('@Customer Data Export (GDPR)', 900);
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">'
-    . lang('@Collects everything the system holds about one customer - master data, invoices, quotes, recurring invoice templates, and sent emails - into a single document, for responding to a data access request (GDPR Art. 15). This is an EXPORT tool only - it does not delete or anonymize anything, since bookkeeping-posted invoices must be retained for 5 years under Danish bookkeeping law regardless.')
-    . '</p>';
+htm_Note(lang('@Collects everything the system holds about one customer - master data, invoices, quotes, recurring invoice templates, and sent emails - into a single document, for responding to a data access request (GDPR Art. 15). This is an EXPORT tool only - it does not delete or anonymize anything, since bookkeeping-posted invoices must be retained for 5 years under Danish bookkeeping law regardless.'), 'font-size:0.9em; margin-top:-5px;');
 
 echo '<form method="get" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:20px;">';
 echo '<div style="flex:1;"><label style="font-size:0.85em; font-weight:bold; display:block;">' . lang('@Customer') . '</label>';
@@ -114,16 +118,16 @@ if ($cust_id > 0) {
 
         echo '<h4>' . lang('@Invoices') . ' (' . count($data['invoices']) . ')</h4>';
         if (empty($data['invoices'])) {
-            echo '<p style="color:var(--text-muted); font-style:italic;">' . lang('@None found.') . '</p>';
+            htm_Note(lang('@None found.'), 'font-style:italic;');
         } else {
             $rows = [];
-            foreach ($data['invoices'] as $r) { $rows[] = [htmlspecialchars($r['invoice_no']), $r['inv_date'], htmlspecialchars($r['inv_status']), number_format((float)$r['total'], 2, ',', '.') . ' ' . htmlspecialchars($r['currency'])]; }
+            foreach ($data['invoices'] as $r) { $rows[] = [htmlspecialchars((string)(!empty($r['invoice_no']) ? $r['invoice_no'] : (!empty($r['credit_note_no']) ? 'KN-' . str_pad((string)$r['credit_note_no'], 6, '0', STR_PAD_LEFT) : '---'))), $r['inv_date'], htmlspecialchars($r['inv_status']), fmt_dk((float)$r['total']) . ' ' . htmlspecialchars($r['currency'])]; }
             htm_Table(['@Invoice No', '@Date', '@Status', '@Total'], $rows, 'gdprInvTbl', 50);
         }
 
         echo '<h4>' . lang('@Quotes') . ' (' . count($data['quotes']) . ')</h4>';
         if (empty($data['quotes'])) {
-            echo '<p style="color:var(--text-muted); font-style:italic;">' . lang('@None found.') . '</p>';
+            htm_Note(lang('@None found.'), 'font-style:italic;');
         } else {
             $rows = [];
             foreach ($data['quotes'] as $r) { $rows[] = [htmlspecialchars($r['quote_no']), $r['quote_date'], htmlspecialchars($r['status'])]; }
@@ -132,7 +136,7 @@ if ($cust_id > 0) {
 
         echo '<h4>' . lang('@Sent Mail Log') . ' (' . count($data['sent_mail']) . ')</h4>';
         if (empty($data['sent_mail'])) {
-            echo '<p style="color:var(--text-muted); font-style:italic;">' . lang('@None found.') . '</p>';
+            htm_Note(lang('@None found.'), 'font-style:italic;');
         } else {
             $rows = [];
             foreach ($data['sent_mail'] as $r) { $rows[] = [db_ts_local($r['sent_at']), htmlspecialchars($r['subject']), $r['success'] ? lang('@Yes') : lang('@No')]; }

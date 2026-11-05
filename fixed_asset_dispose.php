@@ -17,12 +17,12 @@ require_once 'inc/php2htm.lib.php';
 require_once 'inc/audit.inc.php';
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if ($id <= 0) { header("Location: fixed_asset_list.php"); exit; }
+if ($id <= 0) { redirect("fixed_asset_list.php"); }
 
 $res   = DB::query($conn, "SELECT * FROM fixed_assets WHERE asset_id = $id");
 $asset = $res ? DB::fetch_assoc($res) : null;
-if (!$asset) { header("Location: fixed_asset_list.php"); exit; }
-if ($asset['status'] !== 'active') { header("Location: fixed_asset_list.php"); exit; }
+if (!$asset) { redirect("fixed_asset_list.php"); }
+if ($asset['status'] !== 'active') { redirect("fixed_asset_list.php"); }
 
 $nbv = round((float)$asset['acquisition_cost'] - (float)$asset['accumulated_depreciation'], 2);
 $err = '';
@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_dispose'])) {
     // blev bogført med en restværdi der allerede var afskrevet for måneder EFTER salget, og en tom / ugyldig
     // dato gav en journalpost uden dato. En fremtidig dato bogførte salget i en periode der ikke er nået.
     $fa_floor = max((string)$asset['acquisition_date'], (string)($asset['last_depreciated_date'] ?? ''));
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dispose_date) || !strtotime($dispose_date)) {
+    if (!tc_is_date($dispose_date)) {
         $err = lang('@Please enter a valid date.');
     // RETTET: et negativt salgsprovenu (fx "-5.000" tastet for et tab) blev taget imod - banken blev KREDITERET
     // som om virksomheden betalte køberen, og tabet blev dobbelt så stort. Et tab beregnes selv ud fra restværdien.
@@ -59,10 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_dispose'])) {
                 throw new Exception(lang('@This asset was already disposed of by another, simultaneous request.'));
             }
 
-            // RETTET: hele salgsprisen blev ført som provenu uden salgsmoms. Salg af et driftsmiddel er momspligtigt
-            // for en momsregistreret virksomhed: momsen manglede på momskontoen, og gevinsten var momsen for høj.
-            // "Inkl. moms" (standard) udskiller nu 25 % moms til salgsmomskontoen; fjern fluebenet ved fx salg
-            // af et aktiv, der er købt uden momsfradrag.
+            // RETTET: hele salgsprisen blev ført som provenu uden salgsmoms. "Inkl. moms" (standard) udskiller nu
+            // 25 % moms til salgsmomskontoen; fjern fluebenet ved fx salg af et aktiv, der er købt uden
+            // momsfradrag.
             $ds_settings = get_settings($conn);
             $sale_vat   = !empty($_POST['proceeds_incl_vat']) ? round($proceeds * 25 / 125, 2) : 0.0;
             $net_proceeds = round($proceeds - $sale_vat, 2);
@@ -90,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_dispose'])) {
                 ['status' => 'disposed', 'proceeds' => $proceeds, 'sale_vat' => $sale_vat, 'gain_loss' => $gain_loss, 'disposal_voucher_no' => $voucher_no]);
 
             DB::commit($conn);
-            header("Location: fixed_asset_list.php?msg=disposed"); exit;
+            redirect('fixed_asset_list.php', '@Asset disposed successfully.');
         } catch (Exception $e) {
             DB::rollback($conn);
             $err = lang('@Error:') . ' ' . $e->getMessage();
@@ -110,7 +109,7 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
 htm_Card_(capt: '@Dispose Fixed Asset', wdth: 600);
 
 $notice = '<strong><i class="fa fa-info-circle"></i> ' . lang('@What happens when you dispose of this asset:') . '</strong><ul style="margin:8px 0 0 0; padding-left:20px; line-height:1.8;">'
-    . '<li>' . sprintf(lang('@The remaining net book value (%s) is removed from the asset account'), number_format($nbv, 2, ',', '.') . ' ' . $cur) . '</li>'
+    . '<li>' . sprintf(lang('@The remaining net book value (%s) is removed from the asset account'), fmt_dk($nbv) . ' ' . $cur) . '</li>'
     . '<li>' . lang('@Any sale proceeds are posted to the bank account') . '</li>'
     . '<li>' . lang('@Any gain or loss versus the net book value is posted to the depreciation account') . '</li>'
     . '<li>' . lang('@No further depreciation can be posted for this asset afterwards') . '</li>'
@@ -119,7 +118,7 @@ htm_Banner($notice, 'warning');
 
 echo '<div style="margin-bottom:15px; padding:12px; background:var(--bg-panel); border-radius:6px;">';
 echo '<strong>' . htmlspecialchars($asset['asset_name']) . '</strong><br>';
-echo '<span style="font-size:0.9em; color:var(--text-muted);">' . lang('@Net Book Value') . ': ' . number_format($nbv, 2, ',', '.') . ' ' . $cur . '</span>';
+echo '<span style="font-size:0.9em; color:var(--text-muted);">' . lang('@Net Book Value') . ': ' . fmt_dk($nbv) . ' ' . $cur . '</span>';
 echo '</div>';
 
 echo '<form method="post">';

@@ -23,39 +23,17 @@ require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
 
 // --- Generiske statustjek, genbrugt af flere migrationer nedenfor ---
-// RETTET 2026-08-20: MySQL-grenene brugte "SHOW TABLES LIKE"/"SHOW COLUMNS
-// FROM ... LIKE" - bruger-bekræftet at give forkert "Mangler"-status på en
-// rigtig MySQL-installation for en migration der reelt allerede var anvendt
-// (migration_credit.php meldte "allerede til stede" for alle tre kolonner,
-// men dashboardet havde vist "Mangler"). Erstattet med information_schema-
-// forespørgsler mod DATABASE() (den aktuelt valgte database) - samme
-// afprøvede mønster migration_projects.php/migration_credit.php selv bruger
-// til MySQL, i stedet for SHOW-varianterne, som er mere følsomme over for
-// LIKE-mønster-fortolkning (% og _ er wildcards, kan i sjældne tilfælde give
-// falske positive/negative for kolonne-/tabelnavne der indeholder dem) og
-// generelt mindre robuste på tværs af MySQL-versioner/-konfigurationer end
-// et almindeligt SELECT mod information_schema.
+// RETTET 2026-08-20: MySQL-grenene brugte "SHOW TABLES LIKE"/"SHOW COLUMNS FROM... Erstattet med
+// information_schema-forespørgsler mod DATABASE (den aktuelt valgte database) - samme afprøvede mønster
+// migration_projects.php/migration_credit.php selv bruger til MySQL, i stedet for SHOW-varianterne, som er mere
+// følsomme over for LIKE-mønster-fortolkning (% og _ er wildcards, kan i sjældne tilfælde give falske
+// positive/negative for kolonne-/tabelnavne der indeholder dem) og generelt mindre robuste på tværs af
+// MySQL-versioner/-konfigurationer end et almindeligt SELECT mod information_schema.
 function rm_table_exists($conn, $table) {
-    if (DB::is_sqlite()) {
-        $res = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='$table'");
-        return ($res && DB::fetch_assoc($res));
-    }
-    $res = DB::query($conn, "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '$table'");
-    return ($res && DB::fetch_assoc($res));
+    return db_has_table($conn, (string)$table);
 }
 function rm_column_exists($conn, $table, $column) {
-    if (!rm_table_exists($conn, $table)) return false;
-    if (DB::is_sqlite()) {
-        $res = DB::query($conn, "PRAGMA table_info($table)");
-        if ($res) {
-            while ($row = DB::fetch_assoc($res)) {
-                if (strtolower($row['name']) === strtolower($column)) return true;
-            }
-        }
-        return false;
-    }
-    $res = DB::query($conn, "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '$table' AND COLUMN_NAME = '$column'");
-    return ($res && DB::fetch_assoc($res));
+    return db_has_column($conn, (string)$table, (string)$column);
 }
 function rm_account_exists($conn, $acc_id) {
     $res = DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = " . (int)$acc_id);
@@ -86,24 +64,16 @@ function rm_index_exists($conn, $table, $index) {
 }
 
 // --- Alle kendte migrationer, ældste til nyeste ---
-// RETTET (§bugs-batch-16-review): db-setup/db_migrate.php - dokumenteret i
-// selve CLAUDE.md som en del af migrationssystemet - manglede helt her, fordi
-// den ikke følger migrate_*.php/migration_*.php-navnekonventionen dette
-// dashboard oprindeligt blev bygget ved at gennemsøge efter (se
-// [[run-migrate-dashboard]]). Filen er derfor helt ureferet fra resten af
-// appen (intet menupunkt, ikke listet her) - kun findbar ved at kende/gætte
-// den præcise URL. Kun relevant for installationer ældre end 2026-07-06
-// (friske installationer har allerede disse valuta-kolonner direkte i
-// create_all_tables.core.php), men et dashboard der hævder at vise "ALLE
-// kendte migrationer" bør reelt vise alle kendte migrationer.
+// RETTET: db-setup/db_migrate.php - dokumenteret i selve CLAUDE.md som en del af migrationssystemet - manglede
+// helt her, fordi den ikke følger migrate_*.php/migration_*.php-navnekonventionen dette dashboard oprindeligt blev
+// bygget ved at gennemsøge efter. Filen er derfor helt ureferet fra resten af appen (intet menupunkt, ikke listet
+// her) - kun findbar ved at kende/gætte den præcise URL.
 $migrations = [
     ['file' => 'db_migrate.php', 'label' => 'Valuta-kolonner (juli 2026)', 'desc' => 'currency på expenses/invoices/journal/invoice_lines/transactions. Kører alle på én gang (ikke ét script pr. kolonne som resten af listen).',
      'check' => fn($c) => rm_column_exists($c, 'invoices', 'currency') && rm_column_exists($c, 'expenses', 'currency')],
-    // TILFØJET (bruger-anmodet "find 5 fejl"-runde): fandtes i db-setup/, gør
-    // sit arbejde korrekt og er fuldt idempotent, men var slet ikke listet
-    // her og lå ikke linket noget andet sted i appen - en admin, der havde
-    // brug for den (ældre installationer uden login_log-tabellen), kunne kun
-    // finde den ved at gætte det præcise filnavn.
+    // TILFØJET: fandtes i db-setup/, gør sit arbejde korrekt og er fuldt idempotent, men var slet ikke listet her
+    // og lå ikke linket noget andet sted i appen - en admin, der havde brug for den (ældre installationer uden
+    // login_log-tabellen), kunne kun finde den ved at gætte det præcise filnavn.
     ['file' => 'fix_login_log.php', 'label' => 'Login-log (reparation af ældre installationer)', 'desc' => 'Opretter kun login_log-tabellen, hvis den mangler - for installationer sat op før tabellen indgik i den almindelige opsætning.',
      'check' => fn($c) => rm_table_exists($c, 'login_log')],
     ['file' => 'migration_projects.php',        'label' => 'Projekt-modul (v1.3.0-tilføjelser)',   'desc' => 'expenses.exp_type + projects.note_expenses/note_income/note_general. Kræver at projects-tabellen allerede findes.',
@@ -154,11 +124,9 @@ $migrations = [
      'check' => fn($c) => rm_table_exists($c, 'quotes')],
     ['file' => 'migrate_time_tracking.php',      'label' => 'Timeregistrering',                     'desc' => 'Tabellen time_entries + projects.default_hourly_rate - loggede timer pr. projekt, der kan samles til en fakturakladde ("Opret faktura af timer").',
      'check' => fn($c) => rm_table_exists($c, 'time_entries')],
-    // RETTET (bruger-anmodet "find 5 fejl"-runde): "modtaget DKK-beløb" var
-    // forældet siden §currency-setting-is-cosmetic-label Fase 1 gjorde
-    // bogføringsvalutaen konfigurerbar - selve koden (reconcile_action.php)
-    // er allerede valuta-agnostisk, kun denne beskrivelsestekst var ikke
-    // opdateret. Samme fejlklasse som about.php-rettelsen i tidligere runde.
+    // RETTET: "modtaget DKK-beløb" var forældet siden Fase 1 gjorde bogføringsvalutaen konfigurerbar - selve koden
+    // (reconcile_action.php) er allerede valuta-agnostisk, kun denne beskrivelsestekst var ikke opdateret. Samme
+    // fejlklasse som about.php-rettelsen i tidligere runde.
     ['file' => 'migrate_currency_gainloss.php',  'label' => 'Kursgevinst/-tab ved betaling',         'desc' => 'Konto 7200 "Kursgevinst/-tab, valuta" - bruges ved bankafstemning når en udenlandsk faktura afsluttes med en kursforskel mellem bogført og modtaget beløb i firmaets bogføringsvaluta.',
      'check' => fn($c) => rm_account_exists($c, 7200) || tc_role_account($c, 'conf_acc_fx', 7200) > 0],
     // TILFØJET (bruger-rapporteret: langsom sidevisning ved sideskift): tre
@@ -168,12 +136,8 @@ $migrations = [
     // hver sidevisning, hver 7. dag) fulde tabel-scanninger.
     ['file' => 'migrate_auto_backup_indexes.php', 'label' => 'Indekser til automatisk backup-tjek',   'desc' => 'Indeks på audit_log.log_date, expenses.created_at og journal.created_at - bruges af auto_backup_check() (kørt på hver sidevisning) til at afgøre om noget er ændret siden sidste backup.',
      'check' => fn($c) => rm_index_exists($c, 'audit_log', 'idx_audit_log_date') && rm_index_exists($c, 'expenses', 'idx_expenses_created') && rm_index_exists($c, 'journal', 'idx_journal_created')],
-    // TILFØJET (bruger-rapporteret: "run_migrate.php viser ikke de nyeste"):
-    // denne liste er en hårdkodet registrering, ikke en mappe-scanning af
-    // db-setup/ - en ny migration bliver ALDRIG synlig her af sig selv, uanset
-    // hvor idempotent/korrekt selve scriptet er. Samme fejlklasse som
-    // db_migrate.php's oprindelige mangel (§bugs-batch-16-review) - denne
-    // gang selv-begået, ikke arvet. Se [[bookkeeper-wishlist-round19]].
+    // TILFØJET: denne liste er en hårdkodet registrering, ikke en mappe-scanning af db-setup/ - en ny migration
+    // bliver ALDRIG synlig her af sig selv, uanset hvor idempotent/korrekt selve scriptet er. Se.
     ['file' => 'migrate_customer_no_reminders.php', 'label' => 'Fravalg af rykkere pr. kunde',          'desc' => 'customers.cust_no_reminders - udelukker en kunde fra automatiske betalingsrykkere (reminders.php), håndhævet både i UI og server-side (reminder_action.php).',
      'check' => fn($c) => rm_column_exists($c, 'customers', 'cust_no_reminders')],
     ['file' => 'migrate_customer_credit_limit.php', 'label' => 'Kreditgrænse pr. kunde',                'desc' => 'customers.credit_limit - valgfri kreditgrænse, udvider den eksisterende saldo-advarsel ved fakturaoprettelse (customer_balance_check.php) til også at tjekke samlet udestående mod grænsen.',
@@ -190,6 +154,8 @@ $migrations = [
      'check' => fn($c) => rm_column_exists($c, 'bank_connections', 'consent_expires_at')],
     ['file' => 'migrate_invoice_line_discount.php',  'label' => 'Rabat pr. fakturalinje',                 'desc' => 'invoice_lines.discount_pct - valgfri procent-rabat pr. linje, trukket fra nettobeløbet før moms. Se invoice_dkk_totals() (inc/db_connect.inc.php) for den autoritative formel.',
      'check' => fn($c) => rm_column_exists($c, 'invoice_lines', 'discount_pct')],
+    ['file' => 'migrate_prod_stock_decimal.php',     'label' => 'Lagerantal med decimaler (MySQL)',       'desc' => 'products.prod_stock INT -> DECIMAL(15,3) på MySQL - decimaler (fx 7,5 kg) blev skåret af. SQLite er upåvirket.',
+     'check' => function ($c) { if (DB::is_sqlite()) return true; $r = DB::query($c, "SHOW COLUMNS FROM products LIKE 'prod_stock'"); $col = $r ? DB::fetch_assoc($r) : null; return $col && stripos((string)$col['Type'], 'int') === false; }],
     ['file' => 'migrate_product_category.php',       'label' => 'Produktkategorier',                     'desc' => 'products.prod_category - valgfrit gruppe-/kategorifelt, bruges til "salg pr. kategori"-panelet på inventory_status.php.',
      'check' => fn($c) => rm_column_exists($c, 'products', 'prod_category')],
     ['file' => 'migrate_customer_language.php',      'label' => 'Kunde-specifik fakturasprog',           'desc' => 'customers.cust_language - fakturaen kan nu vises/sendes på kundens eget sprog i stedet for bogholderens, hvis udfyldt.',
@@ -204,6 +170,8 @@ $migrations = [
      'check' => fn($c) => rm_column_exists($c, 'suppliers', 'supplier_reg_no')],
     ['file' => 'migrate_invoice_templates.php',      'label' => 'Fakturaskabeloner (linjebundter)',       'desc' => 'invoice_line_templates/invoice_line_template_items - gem og genbrug et navngivet sæt fakturalinjer, se invoice_template_action.php.',
      'check' => fn($c) => rm_table_exists($c, 'invoice_line_templates')],
+    ['file' => 'migrate_template_discount.php',      'label' => 'Rabat på fakturaskabeloner',             'desc' => 'invoice_line_template_items.discount_pct - en fakturaskabelon gemmer nu også linjerabatten (kræver Fakturaskabeloner).',
+     'check' => fn($c) => !rm_table_exists($c, 'invoice_line_template_items') || rm_column_exists($c, 'invoice_line_template_items', 'discount_pct')],
     ['file' => 'migrate_credit_note_no.php',         'label' => 'Kreditnota-nummerserie',                 'desc' => 'invoices.credit_note_no + credit_note_no_counter - kreditnotaer fik aldrig sit eget kundevendte nummer (kun voucher_no), se next_credit_note_no() (inc/db_connect.inc.php).',
      'check' => fn($c) => rm_column_exists($c, 'invoices', 'credit_note_no')],
     ['file' => 'migrate_bank_match_rules.php',       'label' => 'Bank-genkendelsesregler',                'desc' => 'bank_match_rules - "hvis beskrivelse indeholder X -> konto Y", foreslås automatisk i reconcile_list.php, administreres på bank_rules.php.',
@@ -232,14 +200,14 @@ $migrations = [
     ['file' => 'migrate_shop_connections.php',       'label' => 'Webbutikker',                           'desc' => 'shop_connections/shop_orders - tilknyt en webbutik med dens egne valg (faktura pr. ordre eller samlet salg pr. dag, automatisk bogføring, mellemregningskonto ...), se shop_connections.php.',
      'check' => fn($c) => rm_table_exists($c, 'shop_connections') && rm_table_exists($c, 'shop_orders')],
     ['file' => 'migrate_invoice_layouts.php',        'label' => 'Flere fakturalayouts',                  'desc' => 'invoice_layouts/invoice_layout_blocks + customers.cust_layout_id + invoices.inv_layout_id - gem flere navngivne layouts i Design Mode, vælg layout pr. kunde og pr. faktura (PDF\'en følger med). Det nuværende layout bliver "Standard".',
-     'check' => fn($c) => rm_table_exists($c, 'invoice_layouts') && rm_column_exists($c, 'invoices', 'inv_layout_id')],
+     'check' => fn($c) => rm_table_exists($c, 'invoice_layouts') && rm_column_exists($c, 'invoices', 'inv_layout_id') && rm_column_exists($c, 'invoice_layouts', 'doc_type')],      // (doc_type: egne tilbudslayouts)
 ];
 
 htm_Header('@Database Migration', 1100);
 showMenu();
 
 htm_Card_(capt: '@Database Migration', wdth: 1100);
-echo '<p style="color:var(--text-muted); font-size:0.9em;">' . lang('@All migrations below are idempotent - safe to run more than once. Each opens its own page with the result. Status is checked live against your current database.') . '</p>';
+htm_Note(lang('@All migrations below are idempotent - safe to run more than once. Each opens its own page with the result. Status is checked live against your current database.'), 'font-size:0.9em;');
 
 $headers = ['@Migration', '@Description', '@Status', '@Actions'];
 $data = [];
@@ -266,10 +234,9 @@ foreach ($migrations as $m) {
 }
 
 if ($pending_count > 0) {
-    // RETTET (§bugs-batch-22-review, del b): htm_Banner() (ny, se
-    // csrf-protection-added.md) er den rigtige funktion her - en STÅENDE
-    // sidenotits, ikke et engangs-handlings-resultat (det er htm_Alert()'s
-    // formål). Erstatter den tidligere håndrullede venstre-kant-boks.
+    // RETTET: htm_Banner (ny, se csrf-protection-added.md) er den rigtige funktion her - en STÅENDE sidenotits,
+    // ikke et engangs-handlings-resultat (det er htm_Alert's formål). Erstatter den tidligere håndrullede
+    // venstre-kant-boks.
     htm_Banner("<i class='fa fa-exclamation-triangle'></i> " . sprintf(lang('@%d migration(s) not yet applied on this installation.'), $pending_count), 'warning');
 } else {
     htm_Alert(lang('@All known migrations are applied on this installation.'), 'success');

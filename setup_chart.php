@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['template']) && !$coaI
             // midtvejs ruller hele installationen tilbage i stedet for at efterlade en delvis kontoplan.
             DB::begin_transaction($conn);
             try {
-                if (sc_count_accounts($conn) > 0) { DB::rollback($conn); header("Location: setup_chart.php"); exit; }
+                if (sc_count_accounts($conn) > 0) { DB::rollback($conn); redirect("setup_chart.php"); }
                 // Skabelonerne er udsnit af standardkontoplanen (samme numre og navne): hver konto knyttes til sin
                 // standardkonto (std_ref_id = eget nummer), så et senere skift eller en import af resten aldrig konflikter
                 $std_doc = json_decode((string)@file_get_contents(ACC_STD_CHART_FILE), true);
@@ -124,8 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['template']) && !$coaI
                 DB::commit($conn);
             } catch (Throwable $e) { DB::rollback($conn); throw $e; }
         }
-        header("Location: chart_of_accounts.php");
-        exit;
+        redirect("chart_of_accounts.php");
     } catch (Throwable $e) {
         $err = lang('@Could not install the chart of accounts') . ': ' . $e->getMessage();
         $coaInUse = sc_count_accounts($conn) > 0;
@@ -309,7 +308,7 @@ $cards = [
     <div style="text-align:right;">
     <?php if (!$coaInUse): ?>
         <button type="submit" style="padding:12px 30px; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer; background:var(--color-primary);"
-                onclick="return confirm(<?= htmlspecialchars(json_encode(lang('@Install the selected chart of accounts?')), ENT_QUOTES) ?>)">
+                onclick="<?= htm_confirm_js('@Install the selected chart of accounts?') ?>">
             <i class="fa fa-check-circle"></i> <?= lang('@Install selected chart of accounts and start') ?>
         </button>
     <?php else: ?>

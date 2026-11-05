@@ -30,17 +30,11 @@
 
 const EB_API_BASE = 'https://api.enablebanking.com';
 
-// RETTET (§bugs-batch-25-review): ALVORLIGT FUND - alle tre EB_*-opslag i
-// denne fil (herunder) læste udelukkende $_ENV/$_SERVER, aldrig selve
-// inc/env.ini via parse_ini_file() - men det er inc/env.ini, ikke rigtige
-// OS-miljøvariabler, der er den dokumenterede konfigurationsvej i hele
-// projektet (se env.ini's egen EB_APPLICATION_ID/EB_PRIVATE_KEY_PATH/
-// EB_REDIRECT_URL-sektion, og CLAUDE.md). Ingen kode noget sted i projektet
-// kopierer nogensinde env.ini's værdier over i $_ENV (ingen putenv()-kald
-// findes) - så en administrator kunne udfylde alle tre felter korrekt i
-// env.ini, og bankintegrationen ville STADIG opføre sig som om intet var
-// konfigureret. Samme fundklasse og samme rettelse som lige fundet i
-// inc/help.lib.php's OPENAI_API_KEY-opslag (se dens kommentar for baggrund).
+// RETTET: ALVORLIGT FUND - alle tre EB_*-opslag i denne fil læste udelukkende $_ENV/$_SERVER, aldrig selve
+// inc/env.ini via parse_ini_file - men det er inc/env.ini, ikke rigtige OS-miljøvariabler, der er den
+// dokumenterede konfigurationsvej i hele projektet (se env.ini's egen
+// EB_APPLICATION_ID/EB_PRIVATE_KEY_PATH/EB_REDIRECT_URL-sektion, og CLAUDE.md). Samme fundklasse og samme rettelse
+// som lige fundet i inc/help.lib.php's OPENAI_API_KEY-opslag (se dens kommentar for baggrund).
 function eb_ini_config(): array {
     static $config = null;
     if ($config !== null) return $config;
@@ -168,11 +162,9 @@ function eb_start_authorization(string $aspsp_name, string $aspsp_country, strin
         'psu_type'     => $psu_type,
         'language'     => 'da',
     ]);
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): $valid_until
-    // beregnes lige ovenfor og sendes allerede til banken, men blev FØR
-    // aldrig returneret herfra - bank_integration_connect.php kunne derfor
-    // aldrig gemme, hvornår samtykket reelt udløber. Se db-setup/migrate_
-    // bank_consent_expiry.php/bank_integration.php for selve advarslen.
+    // NYT: $valid_until beregnes lige ovenfor og sendes allerede til banken, men blev FØR aldrig returneret herfra
+    // - bank_integration_connect.php kunne derfor aldrig gemme, hvornår samtykket reelt udløber. Se
+    // db-setup/migrate_bank_consent_expiry.php/bank_integration.php for selve advarslen.
     return ['url' => $r['url'] ?? null, 'authorization_id' => $r['authorization_id'] ?? null, 'error' => $r['_status'] >= 400 ? $r : null, 'valid_until' => $valid_until];
 }
 

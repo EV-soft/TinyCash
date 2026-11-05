@@ -49,7 +49,7 @@ $is_posted = false;
 if ($id > 0) {
     $res = DB::query($conn, "SELECT * FROM fixed_assets WHERE asset_id = $id");
     $row = $res ? DB::fetch_assoc($res) : null;
-    if (!$row) { header("Location: fixed_asset_list.php"); exit; }
+    if (!$row) { redirect("fixed_asset_list.php"); }
     $asset = $row;
     $is_posted = !empty($asset['voucher_no']);
 }
@@ -68,7 +68,8 @@ $s = get_settings($conn);
 $module_projects = !empty($s['module_projects']) && $s['module_projects'] == '1';
 $proj_options = ['' => lang('@No project')];
 if ($module_projects) {
-    $pres = DB::query($conn, "SELECT proj_id, proj_no FROM projects WHERE is_active = 1 ORDER BY proj_no ASC");
+    // RETTET: aktivets eget projekt beholdes, også når projektet er afsluttet (ellers blev koblingen fjernet ved gem)
+    $pres = DB::query($conn, "SELECT proj_id, proj_no FROM projects WHERE is_active = 1 OR proj_id = " . (int)($asset['proj_id'] ?? 0) . " ORDER BY proj_no ASC");
     if ($pres) { while ($p = DB::fetch_assoc($pres)) { $proj_options[$p['proj_id']] = htmlspecialchars($p['proj_no']); } }
 }
 
@@ -76,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name        = trim($_POST['asset_name'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $proj_id     = (int)($_POST['proj_id'] ?? 0);
+    if (!tc_project_ok($conn, $proj_id, $proj_id)) $proj_id = 0;      // RETTET: et projekt-id der ikke findes, blev gemt (løs henvisning i projektregnskabet)
 
     if ($name === '') {
         $err = lang('@Please enter a name for the asset.');
@@ -87,17 +89,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             description = '" . DB::escape($conn, $description) . "',
             proj_id = " . ($proj_id > 0 ? $proj_id : 'NULL') . "
             WHERE asset_id = $id");
-        header("Location: fixed_asset_list.php?msg=saved"); exit;
+        redirect('fixed_asset_list.php', '@Asset saved successfully.');
     } else {
         $acq_date  = trim($_POST['acquisition_date'] ?? date('Y-m-d'));
         $acq_cost  = parse_dk_number($_POST['acquisition_cost'] ?? 0);
+        // RETTET: anskaffelsen blev bogført uden købsmoms - afhændelsen (fixed_asset_dispose.php) kan udskille salgsmoms,
+        // men købet kunne ikke fradrage købsmomsen: enten blev hele beløbet inkl. moms aktiveret (og afskrevet), eller
+        // banken blev kun krediteret nettobeløbet, selvom der gik mere fra kontoen. Er beløbet inkl. 25 % moms, aktiveres
+        // nu nettobeløbet, momsen debiteres købsmomskontoen, og banken krediteres det fulde beløb.
+        $acq_gross     = $acq_cost;
+        $acq_vat       = !empty($_POST['cost_incl_vat']) ? round($acq_gross * 25 / 125, 2) : 0.0;
+        $acq_cost      = round($acq_gross - $acq_vat, 2);
         $residual  = parse_dk_number($_POST['residual_value'] ?? 0);
         $life      = max(1, (int)($_POST['useful_life_years'] ?? 5));
         $asset_acc = (int)($_POST['asset_account_id'] ?? 0);
         $dep_acc   = (int)($_POST['depreciation_account_id'] ?? 0);
 
-        if ($acq_cost <= 0) {
+        // RETTET: anskaffelsesdatoen blev ikke kontrolleret (i modsætning til afhændelsesdatoen i fixed_asset_dispose.php)
+        // - en tom eller ugyldig dato blev bogført direkte som journaldato for anskaffelsen og afskrivningsgrundlaget
+        if (!tc_is_date($acq_date)) {
+            $err = lang('@Please enter a valid date.');
+        } elseif ($acq_cost <= 0) {
             $err = lang('@Please enter a valid acquisition cost.');
+        } elseif ($residual < 0) {      // RETTET: en negativ restværdi afskrev mere end anskaffelsessummen (negativ bogført værdi)
+            $err = lang('@The residual value cannot be negative - enter 0 if the asset has no value at the end.');
         } elseif ($residual >= $acq_cost) {
             $err = lang('@Residual value must be lower than the acquisition cost.');
         } elseif (!isset($asset_accounts[$asset_acc])) {
@@ -133,13 +148,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $jou_id = DB::insert_id($conn);
 
                 ledger_post($conn, $jou_id, $asset_acc, $acq_cost);   // DEBET aktivkonto (aktivet oprettes)
-                ledger_post($conn, $jou_id, $acc_bank, $acq_cost * -1); // KREDIT bank (betalt med det samme)
+                if ($acq_vat != 0) ledger_post($conn, $jou_id, (int)($s['conf_acc_purchase_vat'] ?? 6910), $acq_vat);      // DEBET købsmoms
+                ledger_post($conn, $jou_id, $acc_bank, $acq_gross * -1); // KREDIT bank (betalt med det samme)
 
                 log_action($conn, 'CREATE_FIXED_ASSET', 'fixed_assets', $new_asset_id, null,
-                    ['asset_name' => $name, 'acquisition_cost' => $acq_cost, 'voucher_no' => $voucher_no]);
+                    ['asset_name' => $name, 'acquisition_cost' => $acq_cost, 'purchase_vat' => $acq_vat, 'voucher_no' => $voucher_no]);
 
                 DB::commit($conn);
-                header("Location: fixed_asset_list.php?msg=created"); exit;
+                redirect('fixed_asset_list.php', '@Asset registered and posted successfully.');
             } catch (Exception $e) {
                 DB::rollback($conn);
                 $err = lang('@Error:') . ' ' . $e->getMessage();
@@ -150,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // at nulstille formularen til de tomme standardværdier.
         $asset = array_merge($asset, [
             'asset_name' => $name, 'description' => $description, 'acquisition_date' => $acq_date,
-            'acquisition_cost' => $acq_cost, 'residual_value' => $residual, 'useful_life_years' => $life,
+            'acquisition_cost' => $acq_gross, 'residual_value' => $residual, 'useful_life_years' => $life,
             'asset_account_id' => $asset_acc ?: $asset['asset_account_id'],
             'depreciation_account_id' => $dep_acc ?: $asset['depreciation_account_id'],
             'proj_id' => $proj_id,
@@ -178,15 +194,19 @@ echo '<div style="display:flex; width:100%; gap:10px;">';
 htm_Field(icon: 'fa-calendar', labl: '@Acquisition Date', name: 'acquisition_date', valu: $asset['acquisition_date'], type: 'date',
     extr: ($is_posted ? 'readonly' : 'required'), wdth: '50%');
 htm_Field(icon: 'fa-coins', labl: '@Acquisition Cost', name: 'acquisition_cost',
-    valu: number_format((float)$asset['acquisition_cost'], 2, ',', ''), type: 'text',
+    valu: fmt_dk_input((float)$asset['acquisition_cost']), type: 'text',
     extr: ($is_posted ? 'readonly' : 'required') . ' style="text-align:right;"', wdth: '50%');
 echo '</div>';
+if (!$is_posted) {
+    echo '<label style="display:block; margin:0 0 10px; font-size:0.9em;"><input type="checkbox" name="cost_incl_vat" value="1"' . (!empty($_POST['cost_incl_vat']) ? ' checked' : '') . '> '
+       . lang('@The cost includes 25 % VAT (deducted as input VAT - the asset is recorded excl. VAT)') . '</label>';
+}
 
 echo '<div style="display:flex; width:100%; gap:10px;">';
 htm_Field(icon: 'fa-hourglass-half', labl: '@Useful Life (years)', name: 'useful_life_years', valu: $asset['useful_life_years'], type: 'number',
     extr: ($is_posted ? 'readonly' : 'required') . ' min="1"', wdth: '50%');
 htm_Field(icon: 'fa-recycle', labl: '@Residual Value', name: 'residual_value',
-    valu: number_format((float)$asset['residual_value'], 2, ',', ''), type: 'text',
+    valu: fmt_dk_input((float)$asset['residual_value']), type: 'text',
     extr: ($is_posted ? 'readonly' : '') . ' style="text-align:right;"', wdth: '50%',
     hint: '@Estimated scrap/resale value at the end of the useful life - not depreciated below this.');
 echo '</div>';
@@ -218,21 +238,18 @@ if ($module_projects) {
 if ($is_posted) {
     $nbv = (float)$asset['acquisition_cost'] - (float)$asset['accumulated_depreciation'];
     echo '<div style="margin:15px 5px; padding:12px; background:var(--bg-panel); border-radius:6px; font-size:0.9em;">';
-    echo '<div style="display:flex; justify-content:space-between;"><span>' . lang('@Accumulated Depreciation') . ':</span><strong>' . number_format((float)$asset['accumulated_depreciation'], 2, ',', '.') . '</strong></div>';
-    echo '<div style="display:flex; justify-content:space-between; margin-top:4px;"><span>' . lang('@Net Book Value') . ':</span><strong>' . number_format($nbv, 2, ',', '.') . '</strong></div>';
+    echo '<div style="display:flex; justify-content:space-between;"><span>' . lang('@Accumulated Depreciation') . ':</span><strong>' . fmt_dk((float)$asset['accumulated_depreciation']) . '</strong></div>';
+    echo '<div style="display:flex; justify-content:space-between; margin-top:4px;"><span>' . lang('@Net Book Value') . ':</span><strong>' . fmt_dk($nbv) . '</strong></div>';
     if (!empty($asset['last_depreciated_date'])) {
         echo '<div style="display:flex; justify-content:space-between; margin-top:4px; color:var(--text-muted);"><span>' . lang('@Last depreciated through') . ':</span><span>' . date(CONF_DATE_FORMAT, strtotime($asset['last_depreciated_date'])) . '</span></div>';
     }
     echo '</div>';
 }
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): siden viste kun
-// den AKTUELLE bogførte værdi ovenfor - ingen fremadskuende år-for-år-
-// oversigt over hele levetiden, nyttigt til planlægning eller ved en
-// revisorgennemgang. Ren beregning/visning (fa_build_full_schedule(),
-// samme formel som selve den bogførende afskrivningskørsel bruger) - ingen
-// ny bogføring, og vist uanset om aktivet allerede er bogført, så tallene
-// kan tjekkes FØR man gemmer et helt nyt aktiv.
+// NYT: siden viste kun den AKTUELLE bogførte værdi ovenfor - ingen fremadskuende år-for-år-oversigt over hele
+// levetiden, nyttigt til planlægning eller ved en revisorgennemgang. Ren beregning/visning
+// (fa_build_full_schedule, samme formel som selve den bogførende afskrivningskørsel bruger) - ingen ny bogføring,
+// og vist uanset om aktivet allerede er bogført, så tallene kan tjekkes FØR man gemmer et helt nyt aktiv.
 $schedule = fa_build_full_schedule($asset);
 if (!empty($schedule)) {
     echo '<details style="margin:15px 5px;"><summary style="cursor:pointer; font-weight:bold; color:var(--text-muted); user-select:none; list-style:none; display:flex; align-items:center; gap:6px;">'
@@ -245,9 +262,9 @@ if (!empty($schedule)) {
         $year_cell = $is_current_year ? '<strong>' . $row['year'] . ' (' . lang('@this year') . ')</strong>' : (string)$row['year'];
         $sched_rows[] = [
             $year_cell,
-            number_format($row['depreciation'], 2, ',', '.'),
-            number_format($row['accumulated'], 2, ',', '.'),
-            number_format($row['book_value'], 2, ',', '.'),
+            fmt_dk($row['depreciation']),
+            fmt_dk($row['accumulated']),
+            fmt_dk($row['book_value']),
         ];
     }
     htm_Table(['@Year', '@Depreciation', '@Accumulated', '@Book Value'], $sched_rows, 'fa_schedule_tbl', 100, '', true,
@@ -258,10 +275,9 @@ if (!empty($schedule)) {
 echo "<div style='display:flex; gap:10px; margin-top:20px; border-top:1px solid #eee; padding-top:20px;'>";
 htm_Button(icon: 'fa-save', labl: '@Save', type: 'success', link: '', styl: 'flex:2;', attr: 'onclick="document.getElementById(\'fa_form\').submit();" name="action_save" data-hint="'.lang('@Save this asset').'"');
 if ($id > 0 && $asset['status'] === 'active') {
-    // NYT (§bugs-batch-26-review): "Fortryd registrering" - kun muligt mens
-    // aktivet endnu ikke er afskrevet (den eneste økonomiske hændelse er
-    // selve anskaffelsen) - se fixed_asset_actions.php?action=cancel.
-    // "Afhænd" er for et REELT salg/kasseret aktiv, ikke en fejltastning.
+    // NYT: "Fortryd registrering" - kun muligt mens aktivet endnu ikke er afskrevet (den eneste økonomiske
+    // hændelse er selve anskaffelsen) - se fixed_asset_actions.php?action=cancel. "Afhænd" er for et REELT
+    // salg/kasseret aktiv, ikke en fejltastning.
     if ((float)$asset['accumulated_depreciation'] == 0) {
         htm_ConfirmLink(
             icon: 'fa-rotate-left', labl: '@Undo Registration',

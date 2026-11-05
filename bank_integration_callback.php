@@ -26,14 +26,17 @@ $state = $_GET['state'] ?? '';
 // Fælles hjælpefunktion: send brugeren tilbage med en synlig, reel
 // fejlbeskrivelse i stedet for en tavs generisk besked - se filens
 // header-kommentar for hvorfor dette blev tilføjet.
+// Fejlbesked + den reelle API-/redirect-fejl (i monospace under beskeden) til flash-beskeden på bank_integration.php
+function bank_flash_detail(string $key, string $detail): string {
+    return lang($key) . ($detail !== '' ? '<br><span style="font-family:monospace; word-break:break-word; font-size:0.85em;">' . htmlspecialchars($detail) . '</span>' : '');
+}
 function eb_callback_fail(?int $conn_id, string $reason, array $context = []): void {
     global $conn;
     error_log("bank_integration_callback.php: $reason - " . json_encode($context));
     if ($conn_id) {
         log_action($conn, 'BANK_CONNECTION_FAILED', 'bank_connections', $conn_id, null, array_merge(['reason' => $reason], $context));
     }
-    header("Location: bank_integration.php?msg=error&detail=" . urlencode(substr($reason . ' - ' . json_encode($context), 0, 400)));
-    exit;
+    redirect('bank_integration.php', bank_flash_detail('@Could not connect to the bank. Please try again.', substr($reason . ' - ' . json_encode($context), 0, 400)), 'error');
 }
 
 if ($code === '' || $state === '') {
@@ -65,7 +68,7 @@ if (!empty($session['session_id']) && !empty($session['accounts'][0]['uid'])) {
     $account_uid = DB::escape($conn, $session['accounts'][0]['uid']);
     DB::query($conn, "UPDATE bank_connections SET status = 'LN', gc_account_id = '$account_uid', requisition_id = '" . DB::escape($conn, $session['session_id']) . "' WHERE conn_id = " . (int)$bc['conn_id']);
     log_action($conn, 'BANK_CONNECTION_LINKED', 'bank_connections', (int)$bc['conn_id'], ['status' => $bc['status']], ['status' => 'LN']);
-    header("Location: bank_integration.php?msg=connected"); exit;
+    redirect('bank_integration.php', '@Bank connected successfully! You can now sync transactions.');
 }
 
 // Session-oprettelsen fejlede, eller kontolisten var tom.
@@ -74,6 +77,5 @@ error_log("bank_integration_callback.php: eb_create_session fejlede for conn_id=
 log_action($conn, 'BANK_CONNECTION_FAILED', 'bank_connections', (int)$bc['conn_id'], null, ['http_status' => $http_status, 'response' => $session]);
 
 $error_summary = $session['error'] ?? $session['message'] ?? $session['error_description'] ?? ('HTTP ' . $http_status);
-header("Location: bank_integration.php?msg=pending&detail=" . urlencode(substr((string)$error_summary, 0, 300)));
-exit;
+redirect('bank_integration.php', bank_flash_detail('@The bank has not confirmed the connection yet. Try again in a moment, or reconnect if this persists.', substr((string)$error_summary, 0, 300)), 'error');
 ?>

@@ -13,6 +13,21 @@
 # -------------------------------------------------------------------------
 # SPROGFUNKTION (Sikret mod dobbeltindlæsning, men dynamisk ved sprogskift)
 # -------------------------------------------------------------------------
+// UTF-8-KONTROL: tekst der ikke er gyldig UTF-8 (typisk Windows-1252 - fra et ældre program, en integration eller
+// curl på Windows) blev gemt som den var, og "ø" blev vist som et ødelagt tegn overalt. Den konverteres nu fra
+// Windows-1252, før den bruges. Gyldig UTF-8 røres ikke. Arrays behandles rekursivt (også nøglerne).
+if (!function_exists('tc_utf8')) {
+    function tc_utf8($v) {
+        if (is_array($v)) {
+            $out = [];
+            foreach ($v as $k => $x) $out[is_string($k) ? tc_utf8($k) : $k] = tc_utf8($x);
+            return $out;
+        }
+        if (!is_string($v) || $v === '' || mb_check_encoding($v, 'UTF-8')) return $v;
+        return mb_convert_encoding($v, 'UTF-8', 'Windows-1252');
+    }
+}
+
 if (!function_exists('lang')) {
     function lang($key, $echo=false) {
         $current_lang = isset($_SESSION['lang']) ? $_SESSION['lang'] : 'da';
@@ -39,6 +54,16 @@ if (!function_exists('lang')) {
             return ltrim($key, '@');
         }
         if ($echo) echo $tr[$key]; else return $tr[$key];
+    }
+}
+
+// Oversat månedsnavn (1-12). RETTET: momsrapporterne og forsidens graf brugte date('F')/date('M'), som altid giver
+// engelske navne ("March 2026") uanset sprog. $short = de første 3 bogstaver af det oversatte navn.
+if (!function_exists('tc_month_name')) {
+    function tc_month_name(int $m, bool $short = false): string {
+        $names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        $full  = lang('@' . $names[max(1, min(12, $m)) - 1]);
+        return $short ? mb_substr($full, 0, 3) : $full;
     }
 }
 

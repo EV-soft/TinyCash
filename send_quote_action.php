@@ -35,9 +35,11 @@ try {
         exit;
     }
 
-    $dir = __DIR__ . '/storage';
-    $pdfPath = $dir . '/quote_' . $id . '.pdf';
-    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    // Vedhæftningen er en midlertidig fil, der altid slettes igen. Før lå den som storage/quote_<id>.pdf - fælles for alle
+    // regnskaber (samme tilbuds-id) og blev liggende, når mailen fejlede - og hvad som helst blev sendt som "PDF"
+    $tmpBase = tempnam(sys_get_temp_dir(), 'tcq');
+    $pdfPath = $tmpBase . '.pdf';      // (filnavnet på vedhæftningen kommer fra $doc_label, ikke herfra)
+    register_shutdown_function(function () use ($tmpBase, $pdfPath) { @unlink($tmpBase);  @unlink($pdfPath); });
     if (isset($_FILES['pdf_file']) && $_FILES['pdf_file']['error'] === UPLOAD_ERR_OK) {
         move_uploaded_file($_FILES['pdf_file']['tmp_name'], $pdfPath);
     } elseif (isset($_POST['pdf_data'])) {
@@ -49,11 +51,15 @@ try {
         exit;
     }
 
-    if (!file_exists($pdfPath) || filesize($pdfPath) === 0) {
+    $fh = @fopen($pdfPath, 'rb');  $head = $fh ? (string)fread($fh, 5) : '';  if ($fh) fclose($fh);
+    if (!file_exists($pdfPath) || filesize($pdfPath) === 0 || $head !== '%PDF-') {
         echo json_encode(['success' => false, 'error' => lang('@PDF file could not be saved or was empty.')]);
         exit;
     }
 
+    // RETTET: emne og standardtekst fulgte den indloggede brugers sprog, ikke kundens (som fakturamailen gør)
+    require_once __DIR__ . '/inc/doc_paper.inc.php';
+    doc_lang_push(doc_customer_lang($conn, (int)$q['cust_id']));
     $quote_no_display = 'T-' . str_pad((string)$q['quote_no'], 6, '0', STR_PAD_LEFT);
     $is_confirmation = in_array($q['status'], ['accepted', 'converted'], true);
     $doc_title = $is_confirmation ? lang('@Order Confirmation') : lang('@Quote');
@@ -68,9 +74,14 @@ try {
     } else {
         // RETTET: hårdkodet engelsk og dobbelt escapet kundenavn - se send_invoice_action.php
         // (firmaets egen standardtekst er en FAKTURAtekst - et tilbud får sin egen oversatte tekst)
-        $fallback_text = sprintf(lang("@Hi %s,\n\nPlease find your quote attached.\n\nBest regards,"), $q['cust_name']);
+        // RETTET: en ORDREBEKRÆFTELSE (accepteret tilbud) blev sendt med emnet "Ordrebekræftelse", men teksten
+        // "Vedhæftet finder du dit tilbud" - kunden kunne tro, at der var tale om et nyt tilbud
+        $fallback_text = $is_confirmation
+            ? sprintf(lang("@Hi %s,\n\nPlease find your order confirmation attached.\n\nBest regards,"), $q['cust_name'])
+            : sprintf(lang("@Hi %s,\n\nPlease find your quote attached.\n\nBest regards,"), $q['cust_name']);
         $body = nl2br(htmlspecialchars($fallback_text));
     }
+    doc_lang_pop();
 
     $result = sendTinyMail($q['cust_email'], $q['cust_name'], $subject, $body, $pdfPath, $q['quote_no'], $doc_label);
 
@@ -83,15 +94,14 @@ try {
             DB::query($conn, "UPDATE quotes SET status = 'sent' WHERE quote_id = $id");
             log_action($conn, 'MARK_QUOTE_SENT', 'quotes', $id, ['status' => 'draft'], ['status' => 'sent', 'to' => $q['cust_email']]);
         }
-        if (file_exists($pdfPath)) unlink($pdfPath);
     }
 
     echo json_encode($result);
     exit;
 
 } catch (Throwable $e) {
-    $sys_err = lang('@PHP Error:') . ' ' . $e->getMessage() . ' ' . lang('@in') . ' ' . $e->getFile() . ' ' . lang('@on line') . ' ' . $e->getLine();
-    echo json_encode(['success' => false, 'error' => $sys_err]);
+    error_log('[send_quote_action] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    echo json_encode(['success' => false, 'error' => lang('@PHP Error:') . ' ' . $e->getMessage()]);      // (fil og linje kun i loggen)
     exit;
 }
 ?>

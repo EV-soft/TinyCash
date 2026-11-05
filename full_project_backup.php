@@ -19,7 +19,8 @@ $msg = ""; $err = "";
 
 if (isset($_POST['create_zip'])) {
     $db_suffix = DB::is_sqlite() ? '_sqlite' : '_mysql';
-    $zipName = 'FULL_BACKUP_' . date('Y-m-d_H-i-s') . $db_suffix . '.zip';
+    $fb_acct = rtrim(tc_account_storage_subdir(), '/');      // (flere regnskaber: hvilket regnskabs backup)
+    $zipName = 'FULL_BACKUP_' . ($fb_acct !== '' ? $fb_acct . '_' : '') . date('Y-m-d_H-i-s') . $db_suffix . '.zip';
     $zipPath = $backupDir . $zipName;
     $zip = new ZipArchive();
 

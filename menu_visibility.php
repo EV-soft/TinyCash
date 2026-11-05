@@ -69,20 +69,12 @@ function detect_access_gate(string $path): array {
     if (preg_match('/user_role[\'"]?\]\s*(?:!==|===|!=|==)\s*[\'"]admin[\'"]/', $src)) {
         return ['has_auth' => $has_auth, 'gate' => 'admin_role', 'level' => null];
     }
-    // RETTET (bruger-anmodet "find 5 fejl"-runde, selv-fundet): en TREDJE
-    // reel spærre-konvention findes også i kodebasen - direkte
-    // $_SESSION['user_level'] < N, afsluttet med enten deny_access_gracefully()
-    // (backup.php/error_log.php/backup_restore.php) eller et simpelt die()
-    // (full_project_backup.php/program_backup.php) - som hverken $rLev- eller
-    // user_role-mønstret ovenfor fangede. Uden dette blev flere reelt
-    // admin-only-sider fejlagtigt vist som kun "enhver logget ind bruger" i
-    // selve denne revisionstabel - en unøjagtighed i den anden retning
-    // (undervurderer beskyttelsen), men stadig en reel fejl i et værktøj hvis
-    // eneste formål er præcision. Selve "<"-retningen er det der adskiller en
-    // rigtig spærre fra fx about.php's ">= 3"-tjek (som kun viser EKSTRA
-    // indhold til admins, ikke spærrer siden) - kræver derfor ikke at
-    // die()/deny_access_gracefully() ligger i selve if-blokken, kun at et af
-    // dem findes et sted i filen.
+    // RETTET: en TREDJE reel spærre-konvention findes også i kodebasen - direkte $_SESSION['user_level'] < N,
+    // afsluttet med enten deny_access_gracefully (backup.php/error_log.php/backup_restore.php) eller et simpelt
+    // die (full_project_backup.php/program_backup.php) - som hverken $rLev- eller user_role-mønstret ovenfor
+    // fangede. Selve "<"-retningen er det der adskiller en rigtig spærre fra fx about.php's ">= 3"-tjek (som kun
+    // viser EKSTRA indhold til admins, ikke spærrer siden) - kræver derfor ikke at die/deny_access_gracefully
+    // ligger i selve if-blokken, kun at et af dem findes et sted i filen.
     if (preg_match('/user_level[\'"]?\]\s*<\s*(\d+)/', $src, $m)
         && preg_match('/\bdie\s*\(|\bexit\s*\(|deny_access_gracefully\s*\(/', $src)) {
         return ['has_auth' => $has_auth, 'gate' => 'level', 'level' => (int)$m[1]];
@@ -139,7 +131,7 @@ function scan_files_without_menu_entry(array $known_keys): array {
 if (isset($_GET['reset'])) {
     DB::query($conn, "DELETE FROM menu_visibility");
     log_action($conn, 'RESET_MENU_VISIBILITY', 'menu_visibility', 0, null, null);
-    header("Location: menu_visibility.php?msg=reset"); exit;
+    redirect('menu_visibility.php', '@All menu visibility settings reset to defaults.');
 }
 
 // --- GEM ---
@@ -167,16 +159,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_visibility'])) {
     }
 
     log_action($conn, 'UPDATE_MENU_VISIBILITY', 'menu_visibility', 0, null, ['items_changed' => count($seen_keys)]);
-    header("Location: menu_visibility.php?msg=saved"); exit;
+    redirect('menu_visibility.php', '@Menu visibility saved.');
 }
 
 htm_Header('@Menu Visibility', 1000);
 showMenu();
 
-if (isset($_GET['msg'])) {
-    if ($_GET['msg'] === 'saved') htm_Alert(lang('@Menu visibility saved.'), 'success');
-    elseif ($_GET['msg'] === 'reset') htm_Alert(lang('@All menu visibility settings reset to defaults.'), 'success');
-}
 
 htm_Card_(capt: '@Menu Visibility per User Level', wdth: 1000, fold: true); // TEST: fold-toggle
 
@@ -192,12 +180,10 @@ echo '<div style="overflow-x:auto;">';
 echo '<table style="width:100%; border-collapse:collapse;" id="menuVisTbl">';
 echo '<thead><tr style="border-bottom:2px solid var(--border-color);">';
 echo '<th style="text-align:left; padding:8px;">' . lang('@Menu Item') . '</th>';
-// RETTET (bruger-anmodet terminologiskift): "Level 1/2/3" + "Beginner/
-// Experienced/Developer" beskrev niveauerne som en brugers ERFARING, hvilket
-// ikke matchede hvad denne side reelt styrer (hvor MEGET af menuen der vises,
-// ikke brugerens dygtighed). Ny terminologi beskriver visningens OMFANG i
-// stedet, med samme niveau-tal bevaret som L1/L2/L3 andre steder i appen
-// (fx toggleTestLevel()-knappen).
+// RETTET: "Level 1/2/3" + "Beginner/Experienced/Developer" beskrev niveauerne som en brugers ERFARING, hvilket
+// ikke matchede hvad denne side reelt styrer (hvor MEGET af menuen der vises, ikke brugerens dygtighed). Ny
+// terminologi beskriver visningens OMFANG i stedet, med samme niveau-tal bevaret som L1/L2/L3 andre steder i appen
+// (fx toggleTestLevel-knappen).
 echo '<th style="padding:8px; text-align:center; width:110px;">' . lang('@Minimal View') . '<br><small style="font-weight:normal; color:var(--text-muted);">' . lang('@For everyday use') . '</small></th>';
 echo '<th style="padding:8px; text-align:center; width:110px;">' . lang('@Custom View') . '<br><small style="font-weight:normal; color:var(--text-muted);">' . lang("@The company's current needs") . '</small></th>';
 echo '<th style="padding:8px; text-align:center; width:110px;">' . lang('@Maximum View') . '<br><small style="font-weight:normal; color:var(--text-muted);">' . lang("@Administrator's needs") . '</small></th>';

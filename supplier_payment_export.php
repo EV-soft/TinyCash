@@ -27,22 +27,8 @@ function spe_csv_safe($v) {
 $s   = get_settings($conn);
 $cur = $s['currency'] ?? 'DKK';
 
-$supplier_module_ready = false;
-if (DB::is_sqlite()) {
-    $cc = DB::query($conn, "PRAGMA table_info(expenses)");
-    if ($cc) { while ($ccr = DB::fetch_assoc($cc)) { if ($ccr['name'] === 'paid_date') { $supplier_module_ready = true; break; } } }
-} else {
-    $cc = DB::query($conn, "SHOW COLUMNS FROM expenses LIKE 'paid_date'");
-    $supplier_module_ready = ($cc && DB::num_rows($cc) > 0);
-}
-$has_bank_cols = false;
-if (DB::is_sqlite()) {
-    $bc = DB::query($conn, "PRAGMA table_info(suppliers)");
-    if ($bc) { while ($bcr = DB::fetch_assoc($bc)) { if ($bcr['name'] === 'supplier_reg_no') { $has_bank_cols = true; break; } } }
-} else {
-    $bc = DB::query($conn, "SHOW COLUMNS FROM suppliers LIKE 'supplier_reg_no'");
-    $has_bank_cols = ($bc && DB::num_rows($bc) > 0);
-}
+$supplier_module_ready = db_has_column($conn, 'expenses', 'paid_date');
+$has_bank_cols = db_has_column($conn, 'suppliers', 'supplier_reg_no');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['exp_ids']) && is_array($_POST['exp_ids'])) {
     $ids = array_map('intval', $_POST['exp_ids']);
@@ -62,14 +48,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['exp_ids']) && is_arra
         $id_list = implode(',', $ids);
         $res = DB::query($conn, "SELECT e.*, s.supplier_name, s.supplier_reg_no, s.supplier_account_no
             FROM expenses e JOIN suppliers s ON e.supplier_id = s.supplier_id
-            WHERE e.exp_id IN ($id_list) AND e.is_cancelled = 0 AND e.paid_date IS NULL AND e.voucher_no IS NOT NULL");
+            WHERE e.exp_id IN ($id_list) AND e.is_cancelled = 0 AND e.paid_date IS NULL AND e.voucher_no IS NOT NULL AND (e.exp_type IS NULL OR e.exp_type != 'income')
+              AND e.amount > 0 AND COALESCE(s.supplier_reg_no, '') <> '' AND COALESCE(s.supplier_account_no, '') <> ''");      // (kun noget der skal betales, til en kendt konto)
         if ($res) {
             while ($r = DB::fetch_assoc($res)) {
                 fputcsv($output, [
                     spe_csv_safe($r['supplier_name']),
                     spe_csv_safe($r['supplier_reg_no'] ?? ''),
                     spe_csv_safe($r['supplier_account_no'] ?? ''),
-                    number_format(!empty($r['orig_currency']) && (float)($r['orig_amount'] ?? 0) != 0 ? (float)$r['orig_amount'] : (float)$r['amount'], 2, ',', ''),
+                    fmt_dk_input(!empty($r['orig_currency']) && (float)($r['orig_amount'] ?? 0) != 0 ? (float)$r['orig_amount'] : (float)$r['amount']),
                     !empty($r['orig_currency']) && (float)($r['orig_amount'] ?? 0) != 0 ? strtoupper($r['orig_currency']) : $base_cur,
                     lang('@Voucher') . ' ' . $r['voucher_no'],
                 ], ';');
@@ -85,9 +72,7 @@ showMenu();
 
 echo "<div style='max-width:1000px; margin:0 auto; padding:10px;'>";
 htm_Card_('@Supplier Payment Export', 1000);
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">'
-    . lang('@Select unpaid, posted expenses below and download a CSV (supplier, reg. no., account no., amount, reference) for a batch payment in your netbank. This is NOT a certified bank file format - just a helpful export for manual/semi-automatic import. Does not mark anything as paid - do that from the Expense List once the transfer is actually made.')
-    . '</p>';
+htm_Note(lang('@Select unpaid, posted expenses below and download a CSV (supplier, reg. no., account no., amount, reference) for a batch payment in your netbank. This is NOT a certified bank file format - just a helpful export for manual/semi-automatic import. Does not mark anything as paid - do that from the Expense List once the transfer is actually made.'), 'font-size:0.9em; margin-top:-5px;');
 
 if (!$supplier_module_ready) {
     htm_Banner('<i class="fa fa-triangle-exclamation"></i> ' . lang('@The supplier module database structure has not been set up yet. Run the migration under System -> Maintenance -> Database migration to enable the creditor side of this report.'), 'warning');
@@ -97,7 +82,10 @@ if (!$supplier_module_ready) {
     $res = DB::query($conn, "SELECT e.exp_id, e.amount, e.voucher_no, e.due_date, s.supplier_name, s.supplier_reg_no, s.supplier_account_no
         FROM expenses e JOIN suppliers s ON e.supplier_id = s.supplier_id
         WHERE e.is_cancelled = 0 AND e.voucher_no IS NOT NULL AND e.due_date IS NOT NULL AND e.paid_date IS NULL
+          AND (e.exp_type IS NULL OR e.exp_type != 'income') AND e.amount > 0
         ORDER BY e.due_date ASC");
+    // RETTET: et indtægtsbilag (exp_type 'income' - penge der skal IND) med forfaldsdato stod på listen over
+    // leverandører der skal BETALES og kom med i betalingsfilen. Samme udelukkelse som aging_report.php.
     $rows = [];
     while ($r = DB::fetch_assoc($res)) {
         $has_bank_details = !empty($r['supplier_reg_no']) && !empty($r['supplier_account_no']);
@@ -105,11 +93,11 @@ if (!$supplier_module_ready) {
             '<input type="checkbox" name="exp_ids[]" value="' . (int)$r['exp_id'] . '" ' . ($has_bank_details ? '' : 'disabled') . ' onchange="updateSpeCount()">',
             htmlspecialchars($r['supplier_name']) . ($has_bank_details ? '' : ' <span style="color:var(--color-danger); font-size:0.8em;" data-hint="' . htmlspecialchars(lang('@No bank details registered for this supplier')) . '">(' . lang('@No bank details') . ')</span>'),
             date(CONF_DATE_FORMAT, strtotime($r['due_date'])),
-            number_format((float)$r['amount'], 2, ',', '.') . ' ' . $cur,
+            fmt_dk((float)$r['amount']) . ' ' . $cur,
         ];
     }
     if (empty($rows)) {
-        echo '<p style="color:var(--text-muted); font-style:italic;">' . lang('@No unpaid, posted expenses found.') . '</p>';
+        htm_Note(lang('@No unpaid, posted expenses found.'), 'font-style:italic;');
     } else {
         echo '<form method="post">';
         csrf_field();

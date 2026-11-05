@@ -24,14 +24,14 @@ require_once 'inc/menu.inc.php';
 require_once 'inc/audit.inc.php';
 
 $inv_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if ($inv_id <= 0) { header("Location: sales_hub.php"); exit; }
+if ($inv_id <= 0) { redirect("sales_hub.php"); }
 
 $inv = DB::fetch_assoc(DB::query($conn,
     "SELECT i.*, c.cust_name FROM invoices i JOIN customers c ON i.cust_id = c.cust_id WHERE i.inv_id = $inv_id"));
-if (!$inv) { header("Location: sales_hub.php"); exit; }
+if (!$inv) { redirect("sales_hub.php"); }
 
 if (strtolower($inv['inv_status']) !== 'sent') {
-    header("Location: invoice_view.php?id=$inv_id&msg=cannot_writeoff"); exit;
+    redirect("invoice_view.php?id=$inv_id", '@This invoice cannot be written off in its current status.', 'error');
 }
 
 $totals = invoice_dkk_totals($conn, $inv_id);
@@ -47,7 +47,7 @@ if ($remaining <= 0.01) {
 // Samme "stille degradering hvis ikke migreret endnu"-mønster som andre
 // nyere posteringskonti (fx conf_acc_fx, §currency-gainloss-feature).
 $acc_bad_debt = (int)($global_settings['conf_acc_bad_debt'] ?? 7100);
-$acc_exists = DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = $acc_bad_debt"));
+$acc_exists = tc_account_ok($conn, $acc_bad_debt);
 if (!$acc_exists) {
     $err = lang('@The "Bad Debt Loss" account has not been set up yet. Run the migration under System -> Maintenance -> Database migration.');
 }
@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_writeoff']) &
     $wo_date = $_POST['writeoff_date'] ?? date('Y-m-d');
     $wo_note = trim($_POST['writeoff_note'] ?? '');
 
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $wo_date)) {
+    if (!tc_is_date($wo_date)) {
         $err = lang('@Please enter a valid date.');
     } elseif ($wo_date < substr((string)$inv['inv_date'], 0, 10) || $wo_date > date('Y-m-d')) {
         // RETTET: tabet kunne dateres før fakturaen eller ud i fremtiden (tab i en periode hvor fordringen ikke fandtes)
@@ -106,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_writeoff']) &
                 ['status' => 'paid', 'writeoff_amount' => $cur_remaining, 'writeoff_date' => $wo_date, 'note' => $wo_note]);
 
             DB::commit($conn);
-            header("Location: invoice_view.php?id=$inv_id&msg=written_off"); exit;
+            redirect("invoice_view.php?id=$inv_id", '@Invoice written off as bad debt successfully.');
 
         } catch (Exception $e) {
             DB::rollback($conn);
@@ -132,7 +132,7 @@ $writeoff_notice = '<strong><i class="fa fa-info-circle"></i> ' . lang('@What ha
 htm_Banner($writeoff_notice, 'warning');
 
 if ($remaining > 0.01 && $acc_exists) {
-    echo '<p style="color:var(--text-muted); font-size:0.9em;">' . sprintf(lang('@Outstanding amount to be written off: %s.'), number_format($remaining, 2, ',', '.') . ' ' . ($global_settings['currency'] ?? 'DKK')) . '</p>';
+    htm_Note(sprintf(lang('@Outstanding amount to be written off: %s.'), fmt_dk($remaining) . ' ' . ($global_settings['currency'] ?? 'DKK')), 'font-size:0.9em;');
 
     echo '<form method="POST">';
     csrf_field();

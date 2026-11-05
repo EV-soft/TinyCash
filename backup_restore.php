@@ -16,41 +16,9 @@ if (!isset($_SESSION['user_level']) || (int)$_SESSION['user_level'] < 3) {
 htm_Header('@Restore System');
 showMenu();
 
-// Kvittering fra backup_restore_worker.php's redirect
-// (?msg=success|error|engine_mismatch|safety_backup_failed)
-if (isset($_GET['msg'])) {
-    if ($_GET['msg'] === 'success') {
-        htm_Alert(lang('@Backup restored successfully. Please verify your data.') . ' ' .
-            lang('@A safety copy of your previous database was saved to the backups/ folder before restoring (pre_restore_safety_*.sql), in case you need to go back.'),
-            'success');
-    } elseif ($_GET['msg'] === 'engine_mismatch') {
-        $src = isset($_GET['src']) ? strtoupper(preg_replace('/[^a-z]/i', '', $_GET['src'])) : '?';
-        $dst = isset($_GET['dst']) ? strtoupper(preg_replace('/[^a-z]/i', '', $_GET['dst'])) : '?';
-        htm_Alert(
-            lang('@Restore aborted: the backup was created on a different database engine and cannot be restored here.') .
-            ' (' . $src . ' &rarr; ' . $dst . '). ' .
-            lang('@Switch the active database engine to match the backup, then try again. No data was changed.'),
-            'error'
-        );
-    } elseif ($_GET['msg'] === 'safety_backup_failed') {
-        htm_Alert(
-            lang('@Restore aborted: could not save a safety copy of the current database before restoring (check that backups/ is writable). No data was changed.'),
-            'error'
-        );
-    } elseif ($_GET['msg'] === 'missing_dump') {
-        htm_Alert(
-            lang('@Restore aborted: the uploaded file does not contain a database_dump.sql and is not a valid TinyCash backup. No data was changed.'),
-            'error'
-        );
-    } elseif ($_GET['msg'] === 'error') {
-        htm_Alert(lang('@Restore failed. The backup file could not be read or processed.'), 'error');
-    }
-}
-
 htm_Shell_('max-width:600px; margin:20px auto;');
 htm_Card_('@Restore System', 600);
 
-$confirm = addslashes(lang('@Are you absolutely sure? This will overwrite ALL existing data and cannot be undone.'));
 
 echo '<div style="text-align:center; padding:20px;">';
 echo '<i class="fa-solid fa-triangle-exclamation" style="font-size:3.5em; color:#e67e22; margin-bottom:15px;"></i>';
@@ -62,7 +30,7 @@ echo '<p style="color:#666; line-height:1.5;">' .
      '</p>';
 
 echo '<form method="post" action="backup_restore_worker.php" enctype="multipart/form-data" ' .
-     'style="margin-top:25px;" onsubmit="return confirm(\'' . $confirm . '\');">';
+     'style="margin-top:25px;" onsubmit="' . htm_confirm_js('@Are you absolutely sure? This will overwrite ALL existing data and cannot be undone.') . '">';
 csrf_field();
 echo '<input type="file" name="backup_file" accept=".zip" required ' .
      'style="display:block; margin:0 auto 20px auto; max-width:100%;">';

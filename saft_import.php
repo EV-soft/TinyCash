@@ -31,14 +31,14 @@ if (!is_dir($import_dir)) @mkdir($import_dir, 0755, true);
 // --- UPLOAD (POST) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_saft'])) {
     if (!csrf_verify()) {
-        header('Location: saft_import.php?msg=csrf'); exit;
+        redirect('saft_import.php', '@Security check failed (CSRF). Please try again.', 'error');
     }
     if (empty($_FILES['saft_file']['name']) || $_FILES['saft_file']['error'] !== UPLOAD_ERR_OK) {
-        header('Location: saft_import.php?msg=upload_error'); exit;
+        redirect('saft_import.php', '@Error: Could not save the uploaded file.', 'error');
     }
     $orig_ext = strtolower(pathinfo($_FILES['saft_file']['name'], PATHINFO_EXTENSION));
     if ($orig_ext !== 'xml') {
-        header('Location: saft_import.php?msg=bad_type'); exit;
+        redirect('saft_import.php', '@Error: Please upload an .xml file.', 'error');
     }
     // Hurtig gyldighedstjek FØR filen gemmes permanent - afvis tydeligt ikke-
     // XML/ikke-SAF-T-indhold i stedet for at arkivere støj.
@@ -46,31 +46,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_saft'])) {
     libxml_use_internal_errors(true);
     $probe = simplexml_load_string($raw);
     if ($probe === false || stripos($raw, 'StandardAuditFile') === false) {
-        header('Location: saft_import.php?msg=not_saft'); exit;
+        redirect('saft_import.php', '@Error: This does not look like a SAF-T file.', 'error');
     }
 
     $safe_name = preg_replace('/[^a-zA-Z0-9_.-]/', '_', pathinfo($_FILES['saft_file']['name'], PATHINFO_FILENAME));
     $stored_name = date('Ymd_His') . '_' . $safe_name . '.xml';
     if (!move_uploaded_file($_FILES['saft_file']['tmp_name'], $import_dir . $stored_name)) {
-        header('Location: saft_import.php?msg=upload_error'); exit;
+        redirect('saft_import.php', '@Error: Could not save the uploaded file.', 'error');
     }
 
     log_action($conn, 'IMPORT_SAFT_FILE', 'storage', 0, null, ['filename' => $stored_name, 'size' => filesize($import_dir . $stored_name)]);
-    header('Location: saft_import.php?view=' . urlencode($stored_name));
-    exit;
+    redirect('saft_import.php?view=' . urlencode($stored_name));
 }
 
 // --- SLET (POST) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_saft'])) {
-    if (!csrf_verify()) { header('Location: saft_import.php?msg=csrf'); exit; }
+    if (!csrf_verify()) { redirect('saft_import.php', '@Security check failed (CSRF). Please try again.', 'error'); }
     $target = basename($_POST['delete_saft']);
     $path = $import_dir . $target;
     if (is_file($path) && pathinfo($path, PATHINFO_EXTENSION) === 'xml') {
         @unlink($path);
         log_action($conn, 'DELETE_SAFT_IMPORT_FILE', 'storage', 0, ['filename' => $target], null);
     }
-    header('Location: saft_import.php?msg=deleted');
-    exit;
+    redirect('saft_import.php', '@File deleted.');
 }
 
 // --- PARSER: en uploadet/arkiveret SAF-T-DK-fil til et skrivebeskyttet overblik ---
@@ -83,15 +81,10 @@ function saft_import_parse(string $path): array {
     $xml = simplexml_load_string($raw);
     if ($xml === false) return ['error' => lang('@This file is not valid XML.')];
 
-    // RETTET (find-fem-fejl-gennemgang): den oprindelige antagelse ("SimpleXML
-    // følger det automatisk, så længe der ikke blandes præfikser") holdt kun
-    // for filer UDEN namespace-præfiks (som TinyCashs egen eksport). En fil
-    // fra et andet system, der (helt gyldigt) bruger et præfiks, fx
-    // <n1:AuditFile xmlns:n1="...">, gav FØR en helt tom, fejlmeldings-løs
-    // oversigt - bekræftet direkte: $xml->Header blev null, selvom filen
-    // bestod upload-tjekket. $xml->children($ns) virker korrekt i BEGGE
-    // tilfælde (testet mod begge varianter) og bruges nu konsekvent i stedet
-    // for almindelig ->felt-adgang på selve roden.
+    // RETTET: den oprindelige antagelse ("SimpleXML følger det automatisk, så længe der ikke blandes præfikser")
+    // holdt kun for filer UDEN namespace-præfiks (som TinyCashs egen eksport). $xml->children($ns) virker korrekt
+    // i BEGGE tilfælde (testet mod begge varianter) og bruges nu konsekvent i stedet for almindelig ->felt-adgang
+    // på selve roden.
     $ns = 'urn:StandardAuditFile-Taxation-Financial:DK';
     $root = $xml->children($ns);
     $header = $root->Header ?? null;
@@ -168,14 +161,6 @@ function saft_import_parse(string $path): array {
 htm_Header(capt: '@Import SAF-T', mwidth: 1000);
 showMenu();
 
-if (isset($_GET['msg'])) {
-    $m = $_GET['msg'];
-    if ($m === 'bad_type') htm_Alert(lang('@Error: Please upload an .xml file.'), 'error');
-    elseif ($m === 'not_saft') htm_Alert(lang('@Error: This does not look like a SAF-T file.'), 'error');
-    elseif ($m === 'upload_error') htm_Alert(lang('@Error: Could not save the uploaded file.'), 'error');
-    elseif ($m === 'csrf') htm_Alert(lang('@Security check failed (CSRF). Please try again.'), 'error');
-    elseif ($m === 'deleted') htm_Alert(lang('@File deleted.'), 'success');
-}
 
 // --- VISNING AF ÉN IMPORTERET FIL ---
 if (isset($_GET['view'])) {
@@ -241,9 +226,7 @@ if (isset($_GET['view'])) {
 // --- FORSIDE: UPLOAD + LISTE OVER TIDLIGERE IMPORTEREDE FILER ---
 htm_Card_(capt: '@Import SAF-T', wdth: 1000);
 
-echo '<p style="color:var(--text-muted); font-size:0.9em;">' .
-    lang('@Upload a SAF-T audit file (your own export, or one from another bookkeeping system) to keep its data permanently accessible here - as a read-only overview, without affecting TinyCash\'s own bookkeeping.') .
-    '</p>';
+htm_Note(lang('@Upload a SAF-T audit file (your own export, or one from another bookkeeping system) to keep its data permanently accessible here - as a read-only overview, without affecting TinyCash\'s own bookkeeping.'), 'font-size:0.9em;');
 
 echo '<form method="post" enctype="multipart/form-data" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:20px;">';
 csrf_field();
@@ -256,7 +239,7 @@ $files = glob($import_dir . '*.xml');
 usort($files, fn($a, $b) => filemtime($b) <=> filemtime($a));
 
 if (empty($files)) {
-    echo '<p style="color:var(--text-muted);">' . lang('@No files imported yet.') . '</p>';
+    htm_Note(lang('@No files imported yet.'));
 } else {
     $rows = [];
     foreach ($files as $f) {
@@ -264,9 +247,9 @@ if (empty($files)) {
         $rows[] = [
             htmlspecialchars($name),
             date(CONF_DATE_FORMAT . ' H:i', filemtime($f)),
-            number_format(filesize($f) / 1024, 1) . ' KB',
+            fmt_dk(filesize($f) / 1024, 1) . ' KB',
             '<a href="saft_import.php?view=' . urlencode($name) . '" data-hint="' . lang('@Show the content of this SAF-T file') . '" class="tc-info-fill" style="padding:5px 10px; border-radius:4px; background:var(--color-info); color:var(--text-light); text-decoration:none;"><i class="fa-solid fa-eye"></i> ' . lang('@View') . '</a> '
-            . '<form method="post" style="display:inline;" onsubmit="return confirm(' . htmlspecialchars(json_encode(lang('@Delete this imported file? This only removes the archived copy, not any data elsewhere.')), ENT_QUOTES) . ');">'
+            . '<form method="post" style="display:inline;" onsubmit="' . htm_confirm_js('@Delete this imported file? This only removes the archived copy, not any data elsewhere.') . '">'
             . csrf_field(false) . '<input type="hidden" name="delete_saft" value="' . htmlspecialchars($name) . '">'
             . '<button type="submit" style="padding:5px 10px; border-radius:4px; background:var(--color-danger); color:var(--text-light); border:none; cursor:pointer;"><i class="fa-solid fa-trash"></i></button></form>',
         ];

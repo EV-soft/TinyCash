@@ -23,13 +23,14 @@ if (isset($_GET['delete'])) {
     // og momsrapportens grundlag for den kode stod uden navn/sats. Den skal fjernes fra kontiene først.
     $used = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM accounts WHERE vat_code = '$id'"));
     if ($used && (int)$used[0] > 0) {
-        $_SESSION['flash_error'] = sprintf(lang('@The VAT code is used by %d account(s) and cannot be deleted.'), (int)$used[0]);
-        header("Location: vat_codes.php"); exit;
+        flash(sprintf(lang('@The VAT code is used by %d account(s) and cannot be deleted.'), (int)$used[0]), 'error');
+        redirect("vat_codes.php");
     }
-    if (DB::query($conn, "DELETE FROM vat_codes WHERE vat_id = '$id'") && $old_row) {
+    if (!$old_row) redirect('vat_codes.php', '@Not found - it may already have been deleted.', 'error');
+    if (DB::query($conn, "DELETE FROM vat_codes WHERE vat_id = '$id'")) {
         log_action($conn, 'DELETE_VAT_CODE', 'vat_codes', 0, $old_row, null);
     }
-    header("Location: vat_codes.php"); exit;
+    redirect('vat_codes.php', '@VAT code deleted.');      // RETTET: en slettet momskode gav ingen bekræftelse
 }
 
 htm_Header('@VAT Codes');
@@ -37,20 +38,14 @@ showMenu();
 
 // Viser en evt. flashet fejlbesked fra vat_save.php (se dens egen rettelse,
 // §find-fem-fejl runde 40) - erstatter det tidligere rå die() uden sideskal.
-if (!empty($_SESSION['flash_error'])) {
-    htm_Alert($_SESSION['flash_error'], 'error');
-    unset($_SESSION['flash_error']);
-}
+flash_render();
 
 echo "<div style='max-width:800px; margin:0 auto;'>";
 
     // Oversigt
-    // RETTET (§bugs-batch-22-review, del b): erstattet den håndrullede
-    // <table> med htm_Table() (se csrf-protection-added.md/
-    // htm-alert-banner-refactor.md for baggrunden). Tilføjede samtidig
-    // htmlspecialchars() på vat_id/vat_name (manglede FØR helt - lav risiko
-    // her da siden er admin-only, men billigt at rette når linjerne
-    // alligevel skulle omskrives).
+    // RETTET: erstattet den håndrullede <table> med htm_Table. Tilføjede samtidig htmlspecialchars på
+    // vat_id/vat_name (manglede FØR helt - lav risiko her da siden er admin-only, men billigt at rette når
+    // linjerne alligevel skulle omskrives).
     htm_Card_('@VAT Codes', '600');
     $vat_rows = [];
     $res = DB::query($conn, "SELECT * FROM vat_codes ORDER BY vat_id ASC");
@@ -95,10 +90,9 @@ echo "<div style='max-width:800px; margin:0 auto;'>";
                 htm_Field('🔑', 'ID', 'vat_id', '', 'text', null, 'required placeholder="f.eks. S25"');
                 htm_Field('📝', '@Name', 'vat_name', '', 'text', null, 'required');
                 htm_Field('📊', '%', 'vat_rate', '25', 'number');
-                // RETTET: feltet hed hidtil "vat_acc_id", men vat_save.php
-                // læser $_POST['vat_account'] og DB-kolonnen hedder samme -
-                // mismatchet betød at kontonummeret aldrig blev gemt (endte
-                // altid som NULL uanset hvad brugeren indtastede).
+                // RETTET: feltet hed hidtil "vat_acc_id", men vat_save.php læser $_POST['vat_account'] og
+                // DB-kolonnen hedder samme - mismatchet betød at kontonummeret aldrig blev gemt (endte altid som
+                // NULL uanset hvad brugeren indtastede).
                 htm_Field('📑', '@Account', 'vat_account', '', 'number', null, 'required');
             ?>
             <label style="grid-column: span 4; font-size:0.9em;"><input type="checkbox" name="update" value="1"> <?php echo lang('@Change the existing code (same ID)'); ?></label>

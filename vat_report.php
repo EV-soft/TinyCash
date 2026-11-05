@@ -19,10 +19,9 @@ require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
 
-// NYT (§currency-setting-is-cosmetic-label, Fase 2): denne rapport er
-// specifikt formet efter dansk momsindberetning (afrunding til hele kroner
-// til SKATs TastSelv Erhverv, jf. kommentaren ovenfor) og giver ikke mening
-// for en virksomhed, der bruger en anden bogføringsvaluta end DKK.
+// NYT: denne rapport er specifikt formet efter dansk momsindberetning (afrunding til hele kroner til SKATs
+// TastSelv Erhverv, jf. kommentaren ovenfor) og giver ikke mening for en virksomhed, der bruger en anden
+// bogføringsvaluta end DKK.
 require_dkk_base_currency($conn);
 
 htm_Header('@VAT Report');
@@ -42,7 +41,7 @@ switch ($period_type) {
         $period_num   = max(1, min(12, $period_num));
         $period_start = sprintf('%04d-%02d-01', $year, $period_num);
         $period_end   = date('Y-m-t', strtotime($period_start));
-        $period_label = date('F', mktime(0, 0, 0, $period_num, 1)) . ' ' . $year;
+        $period_label = tc_month_name($period_num) . ' ' . $year;      // RETTET: date('F') var altid engelsk
         break;
     case 'quarter':
         $period_num   = max(1, min(4, $period_num));
@@ -108,14 +107,11 @@ $sql = "SELECT a.vat_code AS vat_id, a.vat_rate, SUM(l.amount) AS net_amount
         ORDER BY a.vat_code ASC";
 $res = DB::query($conn, $sql);
 
-// RETTET (bruger-rapporteret): '@VAT Report' blev sammensat med den
-// dynamiske periode-tekst (fx årstal) FØR den blev sendt til htm_Card_(),
-// som selv kalder lang() på hele strengen. Enhver sådan sammensat streng
-// ("VAT Report - 2026", "VAT Report - 2027" osv.) er unik og findes aldrig
-// som opslagsnøgle i languages.json, så oversættelsen kunne aldrig virke -
-// samme mønster som customer_statement.php/supplier_statement.php allerede
-// gør korrekt: lang() kaldes FØRST på den statiske del alene, og den
-// dynamiske del sættes til bagefter på den allerede oversatte streng.
+// RETTET: '@VAT Report' blev sammensat med den dynamiske periode-tekst (fx årstal) FØR den blev sendt til
+// htm_Card_, som selv kalder lang på hele strengen. Enhver sådan sammensat streng ("VAT Report - 2026", "VAT
+// Report - 2027" osv.) er unik og findes aldrig som opslagsnøgle i languages.json, så oversættelsen kunne aldrig
+// virke - samme mønster som customer_statement.php/supplier_statement.php allerede gør korrekt: lang kaldes FØRST
+// på den statiske del alene, og den dynamiske del sættes til bagefter på den allerede oversatte streng.
 htm_Card_(lang('@VAT Report') . ' - ' . $period_label, 900);
 
 // --- Periodevælger ---
@@ -134,10 +130,9 @@ echo '<input type="number" name="period_num" min="1" value="' . $period_num . '"
 htm_Button(labl: '@Show', type: 'primary', attr: 'data-hint="'.lang('@Show the VAT report for the selected period').'"');
 echo '</form>';
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 25): denne
-// side bygger selv sin tabel i hånden (ikke htm_Table), som ellers ville
-// have givet en gratis $expo-CSV-knap - se vat_report_export.php, der
-// genberegner PRÆCIS samme forespørgsler ud fra samme URL-parametre.
+// NYT: denne side bygger selv sin tabel i hånden (ikke htm_Table), som ellers ville have givet en gratis
+// $expo-CSV-knap - se vat_report_export.php, der genberegner PRÆCIS samme forespørgsler ud fra samme
+// URL-parametre.
 $export_qs = http_build_query(['year' => $year, 'period_type' => $period_type, 'period_num' => $period_num]);
 htm_Button(icon: 'fa-file-csv', labl: '@Download CSV', type: 'success', link: 'vat_report_export.php?' . $export_qs,
     attr: 'data-hint="'.lang('@Download this VAT report as CSV').'"');
@@ -147,13 +142,13 @@ $box_color = $vat_payable >= 0 ? '#c0392b' : '#27ae60';
 echo '<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:25px;">';
 echo '<div style="background:var(--bg-panel); border-radius:6px; padding:15px; text-align:center;">
         <div style="font-size:0.8em; color:var(--text-muted); text-transform:uppercase; font-weight:bold;">' . lang('@Sales VAT') . '</div>
-        <div style="font-size:1.4em; font-weight:bold; margin-top:5px;">' . number_format($sales_vat, 2, ',', '.') . ' kr</div></div>';
+        <div style="font-size:1.4em; font-weight:bold; margin-top:5px;">' . fmt_dk($sales_vat) . ' kr</div></div>';
 echo '<div style="background:var(--bg-panel); border-radius:6px; padding:15px; text-align:center;">
         <div style="font-size:0.8em; color:var(--text-muted); text-transform:uppercase; font-weight:bold;">' . lang('@Purchase VAT') . '</div>
-        <div style="font-size:1.4em; font-weight:bold; margin-top:5px;">' . number_format($purchase_vat, 2, ',', '.') . ' kr</div></div>';
+        <div style="font-size:1.4em; font-weight:bold; margin-top:5px;">' . fmt_dk($purchase_vat) . ' kr</div></div>';
 echo '<div style="background:var(--bg-panel); border-radius:6px; padding:15px; text-align:center; border:2px solid ' . $box_color . ';">
         <div style="font-size:0.8em; color:var(--text-muted); text-transform:uppercase; font-weight:bold;">' . lang('@VAT Payable (rounded to whole DKK for TastSelv)') . '</div>
-        <div style="font-size:1.6em; font-weight:bold; color:' . $box_color . '; margin-top:5px;">' . number_format(round($vat_payable), 0, ',', '.') . ' kr</div></div>';
+        <div style="font-size:1.6em; font-weight:bold; color:' . $box_color . '; margin-top:5px;">' . fmt_dk(round($vat_payable), 0) . ' kr</div></div>';
 echo '</div>';
 
 // --- Detalje/kontekst-tabel ---
@@ -174,8 +169,8 @@ if (DB::num_rows($res) == 0) {
         <?php while ($row = DB::fetch_assoc($res)): ?>
         <tr style="border-bottom:1px solid #eee;">
             <td style="padding:10px;"><?php echo htmlspecialchars($row['vat_id'] ?? '-'); ?></td>
-            <td style="padding:10px; text-align:right;"><?php echo number_format($row['net_amount'], 2, ',', '.'); ?></td>
-            <td style="padding:10px; text-align:right;"><?php echo number_format($row['vat_rate'], 0); ?>%</td>
+            <td style="padding:10px; text-align:right;"><?php echo fmt_dk($row['net_amount']); ?></td>
+            <td style="padding:10px; text-align:right;"><?php echo fmt_pct($row['vat_rate']); ?>%</td>
         </tr>
         <?php endwhile; ?>
     </tbody>

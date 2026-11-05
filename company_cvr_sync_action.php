@@ -21,16 +21,14 @@ require_once 'inc/cvr_lookup.inc.php';
 require_once 'inc/audit.inc.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !csrf_verify()) {
-    header('Location: company_settings.php?msg=cvr_sync_error&detail=' . urlencode(lang('@Security check failed (CSRF). Please reload the page and try again.')));
-    exit;
+    redirect('company_settings.php', lang('@CVR lookup failed:') . ' ' . lang('@Security check failed (CSRF). Please reload the page and try again.'), 'error');
 }
 
 $cvr = preg_replace('/\D/', '', $_POST['cvr'] ?? '');
 $lookup = cvr_lookup_by_number($conn, $cvr);
 
 if (empty($lookup['success'])) {
-    header('Location: company_settings.php?msg=cvr_sync_error&detail=' . urlencode($lookup['error'] ?? lang('@CVR lookup failed. Please fill in the details manually.')));
-    exit;
+    redirect('company_settings.php', lang('@CVR lookup failed:') . ' ' . htmlspecialchars((string)($lookup['error'] ?? lang('@CVR lookup failed. Please fill in the details manually.'))), 'error');
 }
 
 $before = get_settings($conn);
@@ -64,5 +62,4 @@ foreach ($locked_fields as $key => $val) {
 
 log_action($conn, 'UPDATE_COMPANY_CVR_SYNC', 'settings', 0, $old, $new);
 
-header('Location: company_settings.php?msg=cvr_synced');
-exit;
+redirect('company_settings.php', '@Company name and address fetched and locked from the official CVR register.');

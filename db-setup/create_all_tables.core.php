@@ -383,7 +383,7 @@ $tables_mysql = [
     prod_id INT AUTO_INCREMENT PRIMARY KEY,
     prod_sku VARCHAR(50),
     prod_name VARCHAR(255) NOT NULL,
-    prod_stock INT DEFAULT 0,
+    prod_stock DECIMAL(15,3) DEFAULT 0,
     prod_min_stock INT DEFAULT 5,
     prod_price DECIMAL(12,2) DEFAULT 0,
     acc_id INT

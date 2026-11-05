@@ -19,7 +19,7 @@ require_once 'inc/db_connect.inc.php';
 require_once 'inc/audit.inc.php';
 require_once 'inc/enablebanking.lib.php';
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') { header("Location: bank_integration.php"); exit; }
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') { redirect("bank_integration.php"); }
 
 $institution_name    = DB::escape($conn, $_POST['institution_name'] ?? '');
 $institution_country = DB::escape($conn, $_POST['institution_country'] ?? '');
@@ -31,7 +31,7 @@ $psu_type             = in_array($_POST['psu_type'] ?? '', ['personal', 'busines
 $max_validity_seconds = isset($_POST['max_validity_seconds']) && $_POST['max_validity_seconds'] !== '' ? (int)$_POST['max_validity_seconds'] : null;
 
 if ($institution_name === '' || $acc_id <= 0) {
-    header("Location: bank_integration.php?msg=error"); exit;
+    redirect('bank_integration.php', '@Could not connect to the bank. Please try again.', 'error');
 }
 
 // Et tilfældigt, uforudsigeligt state-token - Enable Banking bruger ÉN fast,
@@ -49,24 +49,14 @@ $auth = eb_start_authorization($_POST['institution_name'], $_POST['institution_c
 
 if (empty($auth['url'])) {
     DB::query($conn, "DELETE FROM bank_connections WHERE conn_id = $conn_id");
-    header("Location: bank_integration.php?msg=error"); exit;
+    redirect('bank_integration.php', '@Could not connect to the bank. Please try again.', 'error');
 }
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): gemmer nu den
-// samtykke-udløbsdato eb_start_authorization() allerede beregnede og sendte
-// til banken (se dens egen kommentar) - stod aldrig gemt før, så en
-// bogholder fik ingen advarsel før forbindelsen stille holdt op med at
-// virke. Samme "stille degradering hvis ikke migreret endnu"-mønster som
-// andre nyere kolonner (db-setup/migrate_bank_consent_expiry.php).
+// NYT: gemmer nu den samtykke-udløbsdato eb_start_authorization allerede beregnede og sendte til banken (. Samme
+// "stille degradering hvis ikke migreret endnu"-mønster som andre nyere kolonner
+// (db-setup/migrate_bank_consent_expiry.php).
 if (!empty($auth['valid_until'])) {
-    $has_expiry_col = false;
-    if (DB::is_sqlite()) {
-        $bec = DB::query($conn, "PRAGMA table_info(bank_connections)");
-        if ($bec) { while ($becr = DB::fetch_assoc($bec)) { if ($becr['name'] === 'consent_expires_at') { $has_expiry_col = true; break; } } }
-    } else {
-        $bec = DB::query($conn, "SHOW COLUMNS FROM bank_connections LIKE 'consent_expires_at'");
-        $has_expiry_col = ($bec && DB::num_rows($bec) > 0);
-    }
+    $has_expiry_col = db_has_column($conn, 'bank_connections', 'consent_expires_at');
     if ($has_expiry_col) {
         $expires_at = date('Y-m-d H:i:s', strtotime($auth['valid_until']));
         DB::query($conn, "UPDATE bank_connections SET consent_expires_at = '" . DB::escape($conn, $expires_at) . "' WHERE conn_id = $conn_id");
@@ -76,6 +66,5 @@ if (!empty($auth['valid_until'])) {
 log_action($conn, 'CONNECT_BANK', 'bank_connections', $conn_id, null,
     ['institution_name' => $_POST['institution_name'], 'institution_country' => $_POST['institution_country'] ?? '', 'acc_id' => $acc_id, 'psu_type' => $psu_type]);
 
-header("Location: " . $auth['url']);
-exit;
+redirect($auth['url']);
 ?>

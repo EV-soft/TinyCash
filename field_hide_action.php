@@ -31,7 +31,7 @@ if ($key === '' || !in_array($action, ['set_levels', 'restore'], true)) {
     exit;
 }
 
-$table_exists = @DB::query($conn, "SELECT 1 FROM field_visibility LIMIT 1") !== false;
+$table_exists = db_has_table($conn, 'field_visibility');
 if (!$table_exists) {
     http_response_code(500);
     echo json_encode(['success' => false, 'error' => lang('@The field visibility database structure has not been set up yet. Run the migration under System -> Maintenance -> Database migration.')]);

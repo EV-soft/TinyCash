@@ -15,15 +15,21 @@ require_once 'inc/db_connect.inc.php';
 require_once 'inc/audit.inc.php';
 
 $src_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if ($src_id <= 0) { header("Location: sales_hub.php"); exit; }
+if ($src_id <= 0) { redirect("sales_hub.php"); }
 
 $src = DB::fetch_assoc(DB::query($conn, "SELECT * FROM invoices WHERE inv_id = $src_id"));
-if (!$src) { header("Location: sales_hub.php"); exit; }
+if (!$src) { redirect("sales_hub.php"); }
+// RETTET: en kreditnota kunne kopieres - kopien blev en almindelig fakturakladde med negative linjer, som ved bogføring
+// fik et nummer i FAKTURA-serien (ikke kreditnota-serien), uden kobling til den krediterede faktura - og dermed uden om
+// reglen om højst én kreditnota pr. faktura (samme faktura kunne krediteres to gange). En kreditnota laves via
+// invoice_credit.php fra den oprindelige faktura.
+if (!empty($src['credit_ref'])) { redirect("invoice_view.php?id=$src_id"); }
 
 // Forfaldsdato beregnes som i dag + kundens betalingsdage - samme kilde
 // (customers.cust_payment_days, fallback 8) som recurring_invoice_edit.php
 // allerede bruger, i stedet for blot at kopiere den oprindelige forfaldsdato
 // (som typisk ville ligge i fortiden for en genbrugt faktura).
+if (!tc_customer_ok($conn, (int)$src['cust_id'])) redirect("invoice_view.php?id=$src_id", '@The customer is in the trash bin - restore the customer first.', 'error');      // RETTET: dannede et dokument til en kunde i papirkurven
 $cust = DB::fetch_assoc(DB::query($conn, "SELECT cust_payment_days FROM customers WHERE cust_id = " . (int)$src['cust_id']));
 $payment_days = (int)($cust['cust_payment_days'] ?? 8);
 
@@ -80,7 +86,7 @@ while ($l = DB::fetch_assoc($lres)) {
 log_action($conn, 'DUPLICATE_INVOICE', 'invoices', $new_id, ['source_inv_id' => $src_id], ['cust_id' => $cust_id_sql, 'inv_date' => $today]);
 
 DB::commit($conn);
-header("Location: invoice_edit.php?id=$new_id&msg=duplicated&src=$src_id");
+redirect("invoice_edit.php?id=$new_id", sprintf(lang('@New draft created as a duplicate of invoice #%d - review and adjust before sending.'), $src_id), 'info');
 ob_end_flush();
 exit;
 ?>

@@ -29,14 +29,14 @@ require_once 'inc/audit.inc.php';
 require_once 'inc/reconcile.inc.php'; // definerer reconcile_one_bank_line() - se dens egen header for hvorfor den bor i inc/ og ikke i selve reconcile_action.php
 
 $inv_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if ($inv_id <= 0) { header("Location: sales_hub.php"); exit; }
+if ($inv_id <= 0) { redirect("sales_hub.php"); }
 
 $inv = DB::fetch_assoc(DB::query($conn,
     "SELECT i.*, c.cust_name FROM invoices i JOIN customers c ON i.cust_id = c.cust_id WHERE i.inv_id = $inv_id"));
-if (!$inv) { header("Location: sales_hub.php"); exit; }
+if (!$inv) { redirect("sales_hub.php"); }
 
 if (strtolower($inv['inv_status']) !== 'sent') {
-    header("Location: invoice_view.php?id=$inv_id&msg=cannot_mark_paid"); exit;
+    redirect("invoice_view.php?id=$inv_id", '@This invoice cannot be manually marked as paid in its current status.', 'error');
 }
 
 $totals = invoice_dkk_totals($conn, $inv_id);
@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_payment'])) {
     $pay_amount = parse_dk_number($_POST['pay_amount'] ?? '0');
     $pay_note = trim($_POST['pay_note'] ?? '');
 
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $pay_date)) {
+    if (!tc_is_date($pay_date)) {
         $err = lang('@Please enter a valid date.');
     } elseif ($pay_amount <= 0) {
         $err = lang('@Please enter a valid amount.');
@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_payment'])) {
     // fakturaen betalt og efterlod kunden med et tilgodehavende på 11.250, og en betaling kunne dateres før
     // fakturaen eller ud i fremtiden. En reel overbetaling kommer ind via bankafstemningen.
     } elseif ($pay_amount > $remaining + 0.01) {
-        $err = sprintf(lang('@The amount is more than what is due (%s). Register an overpayment through the bank reconciliation.'), number_format($remaining, 2, ',', '.'));
+        $err = sprintf(lang('@The amount is more than what is due (%s). Register an overpayment through the bank reconciliation.'), fmt_dk($remaining));
     } elseif ($pay_date < substr((string)$inv['inv_date'], 0, 10) || $pay_date > date('Y-m-d')) {
         $err = lang('@The payment date cannot be before the invoice date or in the future.');
     } else {
@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_payment'])) {
         $result = reconcile_one_bank_line($conn, $s, $tmp_id, $inv_id, 0, 0.0, 0, 0, false);
 
         if (!empty($result['ok'])) {
-            header("Location: invoice_view.php?id=$inv_id&msg=payment_registered"); exit;
+            redirect("invoice_view.php?id=$inv_id", '@Payment registered successfully.');
         } else {
             $err = $result['message'] ?? lang('@Error registering payment.');
             // Fejlet afstemning - fjern den syntetiske banklinje igen, ellers
@@ -90,12 +90,12 @@ htm_Card_(lang('@Register Payment') . ' — ' . lang('@Invoice') . ' #' . ($inv[
 
 if ($err !== '') htm_Alert($err, 'error');
 
-echo '<p style="color:var(--text-muted); font-size:0.9em;">' . sprintf(lang('@For payments that did not come through a bank import (cash, MobilePay, etc.) - amount due: %s.'), number_format($remaining, 2, ',', '.') . ' ' . ($global_settings['currency'] ?? 'DKK')) . '</p>';
+htm_Note(sprintf(lang('@For payments that did not come through a bank import (cash, MobilePay, etc.) - amount due: %s.'), fmt_dk($remaining) . ' ' . ($global_settings['currency'] ?? 'DKK')), 'font-size:0.9em;');
 
 echo '<form method="POST">';
 csrf_field();
 htm_Field(icon:'fa-calendar', labl:'@Payment date', name:'pay_date', valu:date('Y-m-d'), type:'date', echo:true);
-htm_Field(icon:'fa-coins', labl:'@Amount', name:'pay_amount', valu:number_format($remaining, 2, ',', ''), type:'text', hint:'@Defaults to the full amount due - lower it for a partial payment.', echo:true);
+htm_Field(icon:'fa-coins', labl:'@Amount', name:'pay_amount', valu:fmt_dk_input($remaining), type:'text', hint:'@Defaults to the full amount due - lower it for a partial payment.', echo:true);
 htm_Field(icon:'fa-comment', labl:'@Note (optional)', name:'pay_note', valu:'', type:'text', echo:true);
 
 echo '<div style="margin-top:20px; display:flex; gap:10px;">';

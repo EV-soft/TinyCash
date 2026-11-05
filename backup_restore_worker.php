@@ -43,8 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['backup_file'])) {
         $zip->extractTo($extractDir);
         $zip->close();
     } else {
-        header("Location: backup_restore.php?msg=error");
-        exit;
+        redirect('backup_restore.php', '@Restore failed. The backup file could not be read or processed.', 'error');
     }
 
     // 3. Gendan Database
@@ -64,8 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['backup_file'])) {
     // gendannelsesgennemgang.
     if (!file_exists($sqlFile)) {
         cleanup_extract($extractDir);
-        header("Location: backup_restore.php?msg=missing_dump");
-        exit;
+        redirect('backup_restore.php', '@Restore aborted: the uploaded file does not contain a database_dump.sql and is not a valid TinyCash backup. No data was changed.', 'error');
     }
 
     $sql = file_get_contents($sqlFile);
@@ -82,9 +80,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['backup_file'])) {
             $backup_engine = strtolower($m[1]);
             if ($backup_engine !== $current_engine) {
                 cleanup_extract($extractDir);
-                header("Location: backup_restore.php?msg=engine_mismatch&src=" .
-                       urlencode($backup_engine) . "&dst=" . urlencode($current_engine));
-                exit;
+                redirect('backup_restore.php', lang('@Restore aborted: the backup was created on a different database engine and cannot be restored here.')
+                    . ' (' . htmlspecialchars(strtoupper($backup_engine)) . ' &rarr; ' . htmlspecialchars(strtoupper($current_engine)) . '). '
+                    . lang('@Switch the active database engine to match the backup, then try again. No data was changed.'), 'error');
             }
         }
 
@@ -102,8 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['backup_file'])) {
             // Kan vi ikke garantere en sikkerhedskopi, er det tryggere at
             // afbryde gendannelsen end at risikere data uden nogen vej tilbage.
             cleanup_extract($extractDir);
-            header("Location: backup_restore.php?msg=safety_backup_failed");
-            exit;
+            redirect('backup_restore.php', '@Restore aborted: could not save a safety copy of the current database before restoring (check that backups/ is writable). No data was changed.', 'error');
         }
 
         // REVISIONSSPOR (2026-08-20): en gendannelse overskriver hele
@@ -136,18 +133,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['backup_file'])) {
                 mysqli_query($conn, "SET FOREIGN_KEY_CHECKS = 1;");
             }
         } catch (Exception $e) {
-            // RETTET (§bugs-batch-14-review): manglede cleanup_extract() her -
-            // en fejlet import (fx et korrupt/delvist dump) efterlod den
-            // fuldt udpakkede temp_restore/-mappe (ukrypteret database_dump.sql
-            // + uploads/ + storage/ fra den uploadede backup) liggende på
-            // disken på ubestemt tid, aldrig ryddet op. Parret med den
-            // manglende temp_restore/.htaccess (nu tilføjet) var dette reelt
-            // en fuld, uautentificeret kopi af hele databasen efterladt et
-            // web-tilgængeligt sted efter enhver fejlet gendannelse.
+            // RETTET: manglede cleanup_extract her - en fejlet import (fx et korrupt/delvist dump) efterlod den
+            // fuldt udpakkede temp_restore/-mappe (ukrypteret database_dump.sql + uploads/ + storage/ fra den
+            // uploadede backup) liggende på disken på ubestemt tid, aldrig ryddet op. Parret med den manglende
+            // temp_restore/.htaccess (nu tilføjet) var dette reelt en fuld, uautentificeret kopi af hele databasen
+            // efterladt et web-tilgængeligt sted efter enhver fejlet gendannelse.
             error_log("Restore fejl: " . $e->getMessage());
             cleanup_extract($extractDir);
-            header("Location: backup_restore.php?msg=error");
-            exit;
+            redirect('backup_restore.php', '@Restore failed. The backup file could not be read or processed.', 'error');
         }
 
     // 4. Gendan JSON-data (sprogfiler, konfiguration m.m.)
@@ -213,10 +206,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['backup_file'])) {
     // 6. Ryd op
     cleanup_extract($extractDir);
 
-    header("Location: backup_restore.php?msg=success");
-    exit;
+    redirect('backup_restore.php', lang('@Backup restored successfully. Please verify your data.') . ' '
+        . lang('@A safety copy of your previous database was saved to the backups/ folder before restoring (pre_restore_safety_*.sql), in case you need to go back.'));
 } else {
-    header("Location: backup_restore.php?msg=error");
-    exit;
+    redirect('backup_restore.php', '@Restore failed. The backup file could not be read or processed.', 'error');
 }
 ?>

@@ -7,10 +7,10 @@
    søge-knappen fik (inc/notepad.inc.php/inc/htm_page.lib.php) - magen til
    .floating-action-bar's egen border-top: 2px solid var(--color-primary). */
 #currency-btn {
-    position: fixed; bottom: 120px; right: 3px; z-index: 9998;
+    position: fixed; bottom: 116px; right: 3px; z-index: 9998;
     background: var(--color-dark); color: white;
-    border: 2px solid var(--color-primary); border-radius: 50%; width: 50px; height: 50px;
-    font-size: 20px; cursor: pointer;
+    border: 2px solid var(--color-primary); border-radius: 50%; width: 40px; height: 40px;
+    box-sizing: border-box; font-size: 18px; cursor: pointer;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     display: flex; align-items: center; justify-content: center;
     transition: background 0.2s;

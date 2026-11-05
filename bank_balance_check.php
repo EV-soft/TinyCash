@@ -23,31 +23,30 @@ require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
 require_once 'inc/audit.inc.php';
 
-$has_recon_table = @DB::query($conn, "SELECT 1 FROM bank_reconciliations LIMIT 1") !== false;
+$has_recon_table = db_has_table($conn, 'bank_reconciliations');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recon'])) {
     if (!csrf_verify()) {
-        header('Location: bank_balance_check.php?msg=csrf'); exit;
+        redirect('bank_balance_check.php', '@Security check failed (CSRF). Please try again.', 'error');
     }
     if (!$has_recon_table) {
-        header('Location: bank_balance_check.php?msg=no_table'); exit;
+        redirect('bank_balance_check.php', '@This installation has not yet run the "Saved bank reconciliations" migration (see run_migrate.php).', 'error');
     }
     $p_acc_id    = (int)($_POST['acc_id'] ?? 0);
     $p_stmt_date = $_POST['stmt_date'] ?? '';
-    // RETTET (find-fem-fejl-gennemgang): gl_balance/difference blev FØR taget
-    // direkte fra $_POST og skrevet uændret ind i den append-only-ment
-    // afstemningspost - en bruger kunne (fx via devtools) ændre det skjulte
-    // gl_balance-felt og gemme en falsk "afstemt, 0 kr. difference"-post,
-    // selvom hovedbogens reelle saldo var noget andet. Underminerede netop
-    // det, funktionen skal bevise. gl_balance genberegnes nu her, SERVER-SIDE,
-    // fra journal/ledger - nøjagtig samme forespørgsel som selve sammenlignings-
-    // visningen ovenfor bruger. stmt_balance er bevidst STADIG fra $_POST - det
-    // er brugerens egen aflæsning af det fysiske/digitale kontoudtog, intet
-    // TinyCash selv kan genberegne.
+    // RETTET: gl_balance/difference blev FØR taget direkte fra $_POST og skrevet uændret ind i den
+    // append-only-ment afstemningspost - en bruger kunne (fx via devtools) ændre det skjulte gl_balance-felt og
+    // gemme en falsk "afstemt, 0 kr. difference"-post, selvom hovedbogens reelle saldo var noget andet. gl_balance
+    // genberegnes nu her, SERVER-SIDE, fra journal/ledger - nøjagtig samme forespørgsel som selve
+    // sammenlignings-visningen ovenfor bruger.
     $p_stmt_bal  = (float)($_POST['stmt_balance'] ?? 0);
     $p_note      = trim($_POST['note'] ?? '');
 
-    if ($p_acc_id > 0 && $p_stmt_date !== '') {
+    // RETTET: kontoudtogsdatoen blev ikke kontrolleret - en ugyldig dato ("2026-02-31", "abc") blev gemt i den
+    // permanente, daterede afstemningspost (som ikke kan rettes bagefter), og hovedbogssaldoen beregnet til den.
+    $bb_saved = false;
+    if ($p_acc_id > 0 && tc_is_date($p_stmt_date)) {
+        $bb_saved = true;
         $ds_save = DB::escape($conn, $p_stmt_date);
         $gl_row_save = DB::fetch_assoc(DB::query($conn, "SELECT SUM(l.amount) AS bal FROM ledger l JOIN journal j ON l.jou_id = j.jou_id WHERE l.acc_id = $p_acc_id AND j.jou_date <= '$ds_save'"));
         $p_gl_bal = (float)($gl_row_save['bal'] ?? 0);
@@ -65,7 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recon'])) {
         log_action($conn, 'SAVE_BANK_RECONCILIATION', 'bank_reconciliations', 0, null,
             ['acc_id' => $p_acc_id, 'stmt_date' => $p_stmt_date, 'difference' => $p_diff]);
     }
-    header('Location: bank_balance_check.php?acc_id=' . $p_acc_id . '&stmt_date=' . urlencode($p_stmt_date) . '&stmt_bal=' . urlencode(number_format($p_stmt_bal, 2, ',', '')) . '&msg=saved');
+    redirect('bank_balance_check.php?acc_id=' . $p_acc_id . '&stmt_date=' . urlencode($p_stmt_date) . '&stmt_bal=' . urlencode(fmt_dk_input($p_stmt_bal)),
+        $bb_saved ? '@Reconciliation saved - this is now a permanent, dated record.' : '@Nothing was saved - choose a bank account and a valid statement date.', $bb_saved ? 'success' : 'error');      // (sagde "gemt" også når intet blev gemt)
     exit;
 }
 
@@ -78,7 +78,7 @@ $acc_options = [];
 while ($ar = DB::fetch_assoc($acc_res)) { $acc_options[$ar['acc_id']] = $ar['acc_id'] . ' - ' . acc_label($ar['acc_name'], $ar['acc_status'] ?? null); }
 
 $acc_id    = isset($_GET['acc_id']) ? (int)$_GET['acc_id'] : (int)($s['conf_acc_bank'] ?? 0);
-$stmt_date = isset($_GET['stmt_date']) && $_GET['stmt_date'] !== '' ? $_GET['stmt_date'] : date('Y-m-d');
+$stmt_date = isset($_GET['stmt_date']) && tc_is_date($_GET['stmt_date']) ? $_GET['stmt_date'] : date('Y-m-d');
 $stmt_bal  = isset($_GET['stmt_bal']) && $_GET['stmt_bal'] !== '' ? parse_dk_number($_GET['stmt_bal']) : null;
 
 htm_Header('@Bank Balance Reconciliation');
@@ -86,15 +86,9 @@ showMenu();
 
 echo "<div style='max-width:800px; margin:0 auto; padding:10px;'>";
 
-if (isset($_GET['msg'])) {
-    if ($_GET['msg'] === 'saved') htm_Alert(lang('@Reconciliation saved - this is now a permanent, dated record.'), 'success', 800, true);
-    elseif ($_GET['msg'] === 'csrf') htm_Alert(lang('@Security check failed (CSRF). Please try again.'), 'error', 800, true);
-    elseif ($_GET['msg'] === 'no_table') htm_Alert(lang('@This installation has not yet run the "Saved bank reconciliations" migration (see run_migrate.php).'), 'error', 800, true);
-}
+flash_render();
 
-echo '<p style="color:var(--text-muted); margin-bottom:20px;">'
-    . lang('@Compares the general ledger balance of a bank/cash account against the actual closing balance shown on the real bank statement as of a chosen date - catches missing or duplicate imports that reconcile_list.php\'s line-by-line matching alone would not surface.')
-    . '</p>';
+htm_Note(lang('@Compares the general ledger balance of a bank/cash account against the actual closing balance shown on the real bank statement as of a chosen date - catches missing or duplicate imports that reconcile_list.php\'s line-by-line matching alone would not surface.'), 'margin-bottom:20px;');
 
 htm_Card_('@Bank Balance Reconciliation', 800);
 
@@ -119,15 +113,15 @@ if (empty($acc_options)) {
         $diff = round($gl_bal - $stmt_bal, 2);
 
         echo '<div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:15px;">';
-        echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@General Ledger Balance') . '</div><div style="font-weight:bold; font-size:1.2em;"><a href="account_card.php?acc_id=' . $acc_id . '&to=' . htmlspecialchars($stmt_date) . '">' . number_format($gl_bal, 2, ',', '.') . ' ' . $cur . '</a></div></div>';
-        echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Statement Closing Balance') . '</div><div style="font-weight:bold; font-size:1.2em;">' . number_format($stmt_bal, 2, ',', '.') . ' ' . $cur . '</div></div>';
-        echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Difference') . '</div><div style="font-weight:bold; font-size:1.2em; color:' . (abs($diff) > 0.01 ? 'var(--color-danger)' : 'inherit') . ';">' . number_format($diff, 2, ',', '.') . ' ' . $cur . '</div></div>';
+        echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@General Ledger Balance') . '</div><div style="font-weight:bold; font-size:1.2em;"><a href="account_card.php?acc_id=' . $acc_id . '&to=' . htmlspecialchars($stmt_date) . '">' . fmt_dk($gl_bal) . ' ' . $cur . '</a></div></div>';
+        echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Statement Closing Balance') . '</div><div style="font-weight:bold; font-size:1.2em;">' . fmt_dk($stmt_bal) . ' ' . $cur . '</div></div>';
+        echo '<div><div style="color:var(--text-muted); font-size:0.85em;">' . lang('@Difference') . '</div><div style="font-weight:bold; font-size:1.2em; color:' . (abs($diff) > 0.01 ? 'var(--color-danger)' : 'inherit') . ';">' . fmt_dk($diff) . ' ' . $cur . '</div></div>';
         echo '</div>';
 
         if (abs($diff) <= 0.01) {
             htm_Alert(lang('@Reconciled - the ledger balance matches the bank statement.'), 'success', 800, true);
         } else {
-            htm_Alert(sprintf(lang('@NOT reconciled - the ledger and the bank statement differ by %s as of %s. Check reconcile_list.php for unmatched or duplicate lines.'), number_format(abs($diff), 2, ',', '.') . ' ' . $cur, date(CONF_DATE_FORMAT, strtotime($stmt_date))), 'error', 800, true);
+            htm_Alert(sprintf(lang('@NOT reconciled - the ledger and the bank statement differ by %s as of %s. Check reconcile_list.php for unmatched or duplicate lines.'), fmt_dk(abs($diff)) . ' ' . $cur, date(CONF_DATE_FORMAT, strtotime($stmt_date))), 'error', 800, true);
         }
         echo '<p><a href="reconcile_list.php">' . lang('@Go to Bank Reconciliation') . '</a> · <a href="account_card.php?acc_id=' . $acc_id . '">' . lang('@View Account Card') . '</a></p>';
 
@@ -136,10 +130,9 @@ if (empty($acc_options)) {
             csrf_field();
             echo '<input type="hidden" name="acc_id" value="' . $acc_id . '">';
             echo '<input type="hidden" name="stmt_date" value="' . htmlspecialchars($stmt_date) . '">';
-            // RETTET (find-fem-fejl-gennemgang): gl_balance/difference sendes ikke
-            // længere med - gemme-handleren genberegner selv gl_balance server-
-            // side, se dens egen begrundelse. stmt_balance er brugerens eget
-            // aflæste tal og er den ENESTE af de tre, der reelt skal sendes.
+            // RETTET: gl_balance/difference sendes ikke længere med - gemme-handleren genberegner selv gl_balance
+            // server-side,. stmt_balance er brugerens eget aflæste tal og er den ENESTE af de tre, der reelt skal
+            // sendes.
             echo '<input type="hidden" name="stmt_balance" value="' . htmlspecialchars((string)$stmt_bal) . '">';
             echo '<div style="flex:1; min-width:200px;"><label style="font-size:0.85em; font-weight:bold; display:block;">' . lang('@Note (optional)') . '</label>';
             echo '<input type="text" name="note" style="width:100%; padding:6px;" placeholder="' . htmlspecialchars(lang('@e.g. explanation of a difference')) . '"></div>';
@@ -157,9 +150,9 @@ if (empty($acc_options)) {
             $h_diff = (float)$h['difference'];
             $rows[] = [
                 date(CONF_DATE_FORMAT, strtotime($h['stmt_date'])),
-                number_format((float)$h['gl_balance'], 2, ',', '.') . ' ' . $cur,
-                number_format((float)$h['stmt_balance'], 2, ',', '.') . ' ' . $cur,
-                '<span style="' . (abs($h_diff) > 0.01 ? 'color:var(--color-danger); font-weight:bold;' : '') . '">' . number_format($h_diff, 2, ',', '.') . ' ' . $cur . '</span>',
+                fmt_dk((float)$h['gl_balance']) . ' ' . $cur,
+                fmt_dk((float)$h['stmt_balance']) . ' ' . $cur,
+                '<span style="' . (abs($h_diff) > 0.01 ? 'color:var(--color-danger); font-weight:bold;' : '') . '">' . fmt_dk($h_diff) . ' ' . $cur . '</span>',
                 htmlspecialchars($h['username'] ?? '-'),
                 htmlspecialchars($h['note'] ?? ''),
             ];
@@ -167,7 +160,7 @@ if (empty($acc_options)) {
         if ($rows) {
             htm_Table(['@Statement Date', '@General Ledger Balance', '@Statement Closing Balance', '@Difference', '@User', '@Note'], $rows, 'bankReconHistTbl', 25);
         } else {
-            echo '<p style="color:var(--text-muted);">' . lang('@No saved reconciliations for this account yet.') . '</p>';
+            htm_Note(lang('@No saved reconciliations for this account yet.'));
         }
     }
 }

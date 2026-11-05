@@ -63,14 +63,11 @@ function htm_Field($icon, $labl, $name, $valu='', $type='text', $opti=null, $ext
             $clean_hint .= "\n\n(English: " . $english_reference . ")";
         }
         $outer_hint_attr = ' data-hint="'.htmlspecialchars($clean_hint, ENT_QUOTES).'"';
-        // RETTET (bruger-anmodet: "tilføj hint på htm_Field() når cursor er
-        // over caption-text") - $hint sad FØR kun på selve <div>/<fieldset>,
-        // aldrig direkte på <legend>. Et hover over caption-teksten BURDE i
-        // teorien allerede ramme det via closest([data-hint]) op til
-        // <fieldset>, men <legend> har en særlig, ikke-standard boksmodel
-        // (den "stikker hul" i fieldset'ets kant) som ikke alle browsere
-        // hit-tester ens - data-hint lægges derfor nu direkte på <legend>
-        // også, så det aldrig afhænger af den opførsel.
+        // RETTET - $hint sad FØR kun på selve <div>/<fieldset>, aldrig direkte på <legend>. Et hover over
+        // caption-teksten BURDE i teorien allerede ramme det via closest([data-hint]) op til <fieldset>, men
+        // <legend> har en særlig, ikke-standard boksmodel (den "stikker hul" i fieldset'ets kant) som ikke alle
+        // browsere hit-tester ens - data-hint lægges derfor nu direkte på <legend> også, så det aldrig afhænger af
+        // den opførsel.
         $legend_hint_attr = $outer_hint_attr;
     }
     elseif ($show_english_fallback) {
@@ -85,17 +82,13 @@ function htm_Field($icon, $labl, $name, $valu='', $type='text', $opti=null, $ext
     elseif (strpos(' '.$extr, 'required') > 0) { $bord = 'border: 2px solid orange;'; } 
     else { $bord = ''; }
     
-    // RETTET (bruger-rapporteret: "Filterfelter overlapper hinanden" på
-    // login_history.php): der stod bogstaveligt "..." her - formentlig et
-    // glemt/ufuldendt tilføjelse. Uden en eksplicit min-width kan et
-    // fieldset-element ikke krympe under sit eget indholds intrinsiske
-    // minimumsbredde (en velkendt, ikke-standard browser-kvirk) - når
-    // flere htm_Field()-felter sidder i en display:flex-række med for lidt
-    // plads (fx et filterformular med 4+ felter), krymper den ydre boks
-    // her korrekt via flex-shrink, men fieldset'et INDENI nægter at følge
-    // med og flyder derfor ud over sin egen boks ind over naboen -
-    // "min-width: 0;" er den etablerede, veldokumenterede rettelse for
-    // netop dette (tillader hele flex-item-kæden at krympe reelt).
+    // RETTET: der stod bogstaveligt "..." her - formentlig et glemt/ufuldendt tilføjelse. Uden en eksplicit
+    // min-width kan et fieldset-element ikke krympe under sit eget indholds intrinsiske minimumsbredde (en
+    // velkendt, ikke-standard browser-kvirk) - når flere htm_Field-felter sidder i en display:flex-række med for
+    // lidt plads (fx et filterformular med 4+ felter), krymper den ydre boks her korrekt via flex-shrink, men
+    // fieldset'et INDENI nægter at følge med og flyder derfor ud over sin egen boks ind over naboen - "min-width:
+    // 0;" er den etablerede, veldokumenterede rettelse for netop dette (tillader hele flex-item-kæden at krympe
+    // reelt).
     $h = '<div'.$outer_hint_attr.' style="display:inline-block; width:'.$wdth.'; min-width: 0;">';
     // min-width:0 også her - selve fieldset-elementet er hvor browserens
     // "min-width:min-content"-standardstil reelt sidder (se kommentaren
@@ -124,24 +117,19 @@ function htm_Field($icon, $labl, $name, $valu='', $type='text', $opti=null, $ext
         $centering_css = ($align == 'center') ? 'margin-left:auto; margin-right:auto; float:none; display:table;' : '';
         $align_css = 'text-align: ' . $align . ';';
 
-        // RETTET (bruger-anmodet: "kan linkområdet udvides til også at
-        // omfatte blank-område til højre for caption") - <legend> krymper
-        // som udgangspunkt til nøjagtig tekstens egen bredde, så selve hover-
-        // /hint-fladen stopper brat lige efter sidste bogstav. Ekstra
-        // padding-right giver et bredere, mere tilgivende hover-mål uden at
-        // ændre selve tekstens visuelle placering (venstre-/center-/højre-
-        // justeringen ovenfor er uændret, kun selve boksen er bredere).
+        // RETTET - <legend> krymper som udgangspunkt til nøjagtig tekstens egen bredde, så selve
+        // hover-/hint-fladen stopper brat lige efter sidste bogstav. Ekstra padding-right giver et bredere, mere
+        // tilgivende hover-mål uden at ændre selve tekstens visuelle placering (venstre-/center-/højre-justeringen
+        // ovenfor er uændret, kun selve boksen er bredere).
         $h .= '<legend'.$legend_hint_attr.' style="font-size:0.85rem; padding:2px 5px; color: var(--text-muted); margin:0; '. $align_css . $centering_css . $clean_legd . '">' . $i_h . $translated_label . '</legend>';
     }
 
     $p_a = ($plho !== '') ? " placeholder='".htmlspecialchars(lang($plho), ENT_QUOTES)."'" : '';
 
-    // RETTET: border:none skal have !important her, ellers overtrumfes den af
-    // den globale "input, select, textarea { border: 1px solid var(--border-color)
-    // !important; }"-regel i htm_page.lib.php (htm_Header()) - uden dette
-    // vises der en synlig kant BÅDE på selve feltet og på fieldset'et udenom
-    // (dobbelt-ramme). CSS-reglen er: en !important-stylesheet-regel vinder
-    // over en inline style UDEN !important, selvom inline normalt har højere
+    // RETTET: border:none skal have !important her, ellers overtrumfes den af den globale "input, select, textarea
+    // { border: 1px solid var(--border-color) !important; }"-regel i htm_page.lib.php (htm_Header) - uden dette
+    // vises der en synlig kant BÅDE på selve feltet og på fieldset'et udenom (dobbelt-ramme). CSS-reglen er: en
+    // !important-stylesheet-regel vinder over en inline style UDEN !important, selvom inline normalt har højere
     // specificitet.
     $s = 'width:100%; border:none !important; outline:none; background:transparent; font-family:inherit; font-size:1.1rem; margin:0; display:block; color:inherit;';
 
@@ -199,8 +187,10 @@ function htm_ProjektCodeField($conn, $selected_proj_id = null, $wdth = '100%'): 
 
     // Byg options-array
     $opts = ['' => lang('@No project')];
+    // RETTET: kun aktive projekter - en udgift/faktura på et siden afsluttet projekt mistede stille sin projektkobling
+    // ved næste gem (feltet blev sendt tomt), og projektets resultat ændrede sig. Det valgte projekt beholdes nu.
     $res = DB::query($conn,
-        "SELECT proj_id, proj_no, cust_id FROM projects WHERE is_active = 1 ORDER BY proj_no ASC"
+        "SELECT proj_id, proj_no, cust_id FROM projects WHERE is_active = 1 OR proj_id = " . (int)$selected_proj_id . " ORDER BY proj_no ASC"
     );
     if ($res) {
         while ($r = DB::fetch_assoc($res)) {
@@ -248,17 +238,11 @@ function htm_Shell_end($echo = true) {
 }
 
 # CSRF-BESKYTTELSE
-# RETTET (§bugs-batch-22-review): fandtes slet ikke noget sted i appen -
-# bekræftet ved en fuld projekt-gennemsøgning. En ondsindet side kunne
-# derfor få en indlogget brugers browser til automatisk at indsende en
-# formular til en hvilken som helst POST-side i TinyCash (ændre firma-
-# indstillinger, oprette en admin-bruger, slette en konto...) uden
-# brugerens vidende - SameSite=Lax (se [[bugs-batch-20-review]]) beskytter
-# kun mod passive tredjeparts-anmodninger (img/iframe/fetch), ikke mod at
-# offeret narres til at klikke et link eller en auto-indsendt formular på
-# en ekstern side. csrf_token() genererer/genbruger én token pr. session;
-# csrf_field() indlejrer den i en formular; csrf_verify() tjekkes centralt
-# i inc/auth.inc.php ved hver POST fra en logget-ind bruger.
+# RETTET: fandtes slet ikke noget sted i appen - bekræftet ved en fuld projekt-gennemsøgning. En ondsindet side
+# kunne derfor få en indlogget brugers browser til automatisk at indsende en formular til en hvilken som helst
+# POST-side i TinyCash (ændre firma-indstillinger, oprette en admin-bruger, slette en konto...) uden brugerens
+# vidende - SameSite=Lax beskytter kun mod passive tredjeparts-anmodninger (img/iframe/fetch), ikke mod at offeret
+# narres til at klikke et link eller en auto-indsendt formular på en ekstern side.
 function csrf_token(): string {
     if (session_status() === PHP_SESSION_ACTIVE && empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -278,13 +262,14 @@ function csrf_verify(): bool {
     return hash_equals($_SESSION['csrf_token'], $_POST['csrf_token']);
 }
 
-// RETTET: CSRF-værnet gjaldt kun POST - men en lang række handlinger udføres af et almindeligt LINK (GET):
-// slet bruger / konto / leverandør / momskode / bankpost, annullér eller slet en journalpost, kør
-// afskrivninger, annullér en udgift, generér / spring over / slå faste fakturaer til og fra, konvertér et
-// tilbud, send en faktura ... SameSite=Lax sender sessionen med ved et klik på et link fra en fremmed side
-// (mail, chat), så et sådant link kunne udføre handlingen i en indlogget administrators navn.
-// Registret: script => de GET-parametre der udløser en handling (en værdi i 'read_only' er kun læsning).
-// inc/auth.inc.php afviser en sådan GET uden csrf_token; htm_Header() lægger nøglen på linkene ved klik.
+// RETTET: CSRF-værnet gjaldt kun POST - men en lang række handlinger udføres af et almindeligt LINK (GET): slet
+// bruger / konto / leverandør / momskode / bankpost, annullér eller slet en journalpost, kør afskrivninger,
+// annullér en udgift, generér / spring over / slå faste fakturaer til og fra, konvertér et tilbud, send en
+// faktura... Registret: script => de GET-parametre der udløser en handling (en værdi i 'read_only' er kun
+// læsning).
+// ÆNDRET: en handling udføres ikke længere som GET med csrf_token i URL'en. Filer der efter navnet er handlinger
+// (*_action(s).php, *_duplicate.php, send_*.php) behøver ikke stå her - se csrf_action_by_name; kun sider der både
+// vises og udfører en handling (fx customer_edit.php?del=) skal.
 function csrf_get_actions(): array {
     return [
         'account_delete.php'          => ['params' => ['id']],
@@ -322,56 +307,63 @@ function csrf_get_actions(): array {
         'webhook_keys.php'            => ['params' => ['revoke']],    // (fortryder en API-nøgle)
     ];
 }
-// Er denne GET-forespørgsel en handling (registret ovenfor)?
-function csrf_get_is_action(): bool {
-    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') return false;
-    $reg = csrf_get_actions()[basename((string)($_SERVER['SCRIPT_NAME'] ?? ''))] ?? null;
-    if (!$reg) return false;
-    foreach ($reg['params'] as $p) {
-        if (!isset($_GET[$p]) || (string)$_GET[$p] === '') continue;
-        if (in_array((string)$_GET[$p], $reg['read_only'] ?? [], true)) continue;
+// Er filen en handling efter navnet? Så er enhver forespørgsel med parametre en handling - et nyt
+// handlings-script er beskyttet uden at skulle huskes i registret (samme regel i htm_Header()'s JS).
+function csrf_action_by_name(string $script): bool {
+    return (bool)preg_match('/^(send_[a-z0-9_]+|[a-z0-9_]+_actions?|[a-z0-9_]+_duplicate)\.php$/', $script);
+}
+// Udløser denne query-string en handling i $script?
+function csrf_query_is_action(string $script, array $q): bool {
+    $reg = csrf_get_actions()[$script] ?? null;
+    $params = $reg['params'] ?? (csrf_action_by_name($script) ? array_keys($q) : []);
+    foreach ($params as $p) {
+        if (!isset($q[$p]) || !is_scalar($q[$p]) || (string)$q[$p] === '') continue;
+        if (in_array((string)$q[$p], $reg['read_only'] ?? [], true)) continue;
         return true;
     }
     return false;
 }
-function csrf_verify_get(): bool {
-    if (empty($_GET['csrf_token']) || empty($_SESSION['csrf_token'])) return false;
-    return hash_equals($_SESSION['csrf_token'], (string)$_GET['csrf_token']);
+// Er denne GET-forespørgsel en handling? (afvises i inc/auth.inc.php - den skal komme som POST)
+function csrf_get_is_action(): bool {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') return false;
+    return csrf_query_is_action(basename((string)($_SERVER['SCRIPT_NAME'] ?? '')), $_GET);
 }
 
-# CARD START
-// NY PARAMETER (bruger-anmodet, inspireret af et "avanceret" htm_Card_-
-// forbillede fra et andet/rigere framework - se menu-visibility-access-audit-
-// sessionen): $fold sætter et fold/luk-ikon yderst til højre i header-linjen,
-// der åbner/lukker selve card-kroppen. Bevidst IKKE en fuld port af
-// forbilledet (som bruger jQuery/tablesorter, en Pmnu_()-popup-menu,
-// dvl_pretty() og globals der slet ikke findes i denne kodebase) - kun selve
-// fold/luk-funktionen, som brugeren eksplicit bad om, genbygget i almindelig
-// vanilla JS (toggleCard() i inc/htm_page.lib.php) og 100% bagudkompatibelt:
-// $fold er opt-in (default false), så alle 89 eksisterende kaldsteder er
-// helt uændrede. Card starter ÅBEN når $fold=true - klik for at lukke.
-// $fold='closed' starter i stedet SAMMENKLAPPET (fx til lange lister man
-// sjældent skal se) - erstatter det tidligere håndrullede <details>-mønster
-// på menu_visibility.php's "Pages Without a Menu Entry"-card.
-// NY PARAMETER (bruger-anmodet, samme runde): $bclr sætter en tonet
-// baggrundsfarve på selve kortet, i stedet for standard var(--bg-card) -
-// bruges til at give flere kort på samme side hver deres visuelle "zone"
-// (fx backup.php's Manuel/Automatisk Backup). 4-tegns-navnet matcher det
-// allerede reserverede 'bclr'=BackgroundColor i inc/Kodestandard.txt.
-// Opt-in (default '' = uændret standardfarve), 100% bagudkompatibelt.
-// RETTET (bruger-fund, live-testet): $form_is_open/$fold_id var FØR en enkelt
-// flad static værdi, ikke en stak - virkede fint for sekventielle kort, men
-// gik i stykker ved INDLEJREDE kort (fx backup.php's foldbare "Automatisk
-// Backup"-kort, som selv indeholder et helt almindeligt, ikke-foldbart kort
-// via render_auto_backup_settings()). Det indre korts htm_Card_end() læste/
-// nulstillede samme delte variabel som det ydre kort lige havde sat, og
-// lukkede derved det YDRE korts fold-wrapper for tidligt, mens det ydre kort
-// selv endte uden nogen lukning - bekræftet direkte i den rå HTML (kun 3
-// lukke-</div> hvor der skulle være 4). Omskrevet til en rigtig stak: hvert
-// htm_Card_()-kald pusher sin egen tilstand, hvert htm_Card_end() popper kun
-// den ØVERSTE (sin egen), uanset hvor mange indlejrede kort der måtte være
-// imellem - samme LIFO-rækkefølge som selve HTML'ens egne tags naturligt
-// følger.
+# FLASH-BESKED + REDIRECT
+// En handling lægger sin besked i sessionen og sender brugeren videre; den vises én gang øverst på den
+// næste side (første htm_Card_(), ellers htm_Footer()). Erstatter ?msg=X/?err=X, hvor hver modtager-side
+// selv skulle kende hver nøgle - en besked som modtageren ikke kendte, blev aldrig vist.
+// $text er en '@nøgle' (oversættes ved visning) eller en allerede oversat tekst.
+function flash(string $text, string $type = 'success'): void {
+    if (session_status() !== PHP_SESSION_ACTIVE || $text === '') return;
+    $_SESSION['tc_flash'][] = [$text, $type];
+}
+function redirect(string $url, string $msg = '', string $type = 'success'): never {
+    if ($msg !== '') flash($msg, $type);
+    header('Location: ' . $url);
+    exit;
+}
+function flash_render($echo = true) {
+    $htm = '';
+    if (session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['tc_flash'])) {
+        foreach ($_SESSION['tc_flash'] as $f) $htm .= htm_Alert(text: (string)$f[0], type: (string)($f[1] ?? 'success'), echo: false);
+        unset($_SESSION['tc_flash']);
+    }
+    if (!$echo) return $htm;
+    echo $htm;
+}
+
+# CARD START NY PARAMETER: $fold sætter et fold/luk-ikon yderst til højre i header-linjen, der åbner/lukker selve
+# card-kroppen. Bevidst IKKE en fuld port af forbilledet (som bruger jQuery/tablesorter, en Pmnu_-popup-menu,
+# dvl_pretty og globals der slet ikke findes i denne kodebase) - kun selve fold/luk-funktionen, som brugeren
+# eksplicit bad om, genbygget i almindelig vanilla JS (toggleCard i inc/htm_page.lib.php) og 100% bagudkompatibelt:
+# $fold er opt-in (default false), så alle 89 eksisterende kaldsteder er helt uændrede.
+# RETTET (bruger-fund, live-testet): $form_is_open/$fold_id var FØR en enkelt flad static værdi, ikke en stak -
+# virkede fint for sekventielle kort, men gik i stykker ved INDLEJREDE kort (fx backup.php's foldbare "Automatisk
+# Backup"-kort, som selv indeholder et helt almindeligt, ikke-foldbart kort via render_auto_backup_settings).
+# Omskrevet til en rigtig stak: hvert htm_Card_-kald pusher sin egen tilstand, hvert htm_Card_end popper kun den
+# ØVERSTE (sin egen), uanset hvor mange indlejrede kort der måtte være imellem - samme LIFO-rækkefølge som selve
+# HTML'ens egne tags naturligt følger.
 function htm_Card_($capt, $wdth='600', $info='', $form=false, $echo = true, $tool = '', $fold = false, $bclr = '') {
     static $stack = [];
     static $fold_ix = 0;
@@ -380,6 +372,7 @@ function htm_Card_($capt, $wdth='600', $info='', $form=false, $echo = true, $too
     if ($form === 'POP_STATE')   { array_pop($stack); return; }
 
     if (!$echo) ob_start();
+    if (empty($stack)) flash_render(); // en ventende flash-besked vises over sidens første kort
     $w = is_numeric($wdth) ? $wdth.'px' : $wdth;
 
     $entry = ['form_open' => false, 'fold_id' => null];
@@ -422,54 +415,33 @@ function htm_Card_($capt, $wdth='600', $info='', $form=false, $echo = true, $too
         // hvilket af de identiske ikoner man klikker på.
         $tool_html .= ($tool_html !== '' ? ' ' : '') . '<span class="tc-toggle-all-wrap" style="display:none;" data-expand-hint="'.htmlspecialchars(lang('@Expand all sections on this page'), ENT_QUOTES).'" data-collapse-hint="'.htmlspecialchars(lang('@Collapse all sections on this page'), ENT_QUOTES).'" data-hint="'.htmlspecialchars(lang('@Expand all sections on this page'), ENT_QUOTES).'"><i class="fa-solid fa-angles-down tc-toggle-all-icon" onclick="toggleAllCards(this)" style="cursor:pointer; color:var(--text-muted); margin-left:10px; font-size:1.1em;"></i></span>';
         $tool_html .= '<span data-hint="'.htmlspecialchars(lang('@Click to expand/collapse this card'), ENT_QUOTES).'"><i id="'.$icon_id.'" class="fa-solid '.$chev.' tc-fold-icon" onclick="toggleCard(\''.$entry['fold_id'].'\', this)" style="cursor:pointer; color:var(--text-muted); margin-left:10px; font-size:1.1em;"></i></span>';
-        // NY (bruger-anmodet): selve titlen skal også kunne folde/lukke kortet,
-        // ikke kun det lille chevron-ikon. Peger på DEN SAMME ikon-reference
-        // (via id) som selve ikonets eget onclick, så pilens retning altid
-        // følger med uanset hvilket af de to man klikker på.
-        //
-        // RETTET (bruger-anmodet: "hint på titel-teksten + linkområdet skal
-        // udvides til blank-området til højre for teksten") - to separate
-        // ting: (1) selve <h2>-elementet fik aldrig sit eget data-hint - kun
-        // fold-ikonet havde ét - så hover over selve overskriften viste
-        // intet. (2) <h2> krymper som udgangspunkt til tekstens egen bredde
-        // i caption-rækkens flex-layout (justify-content:space-between), så
-        // det blanke rum mellem titel og ikoner til højre hverken kunne
-        // klikkes eller vise hint. Samme data-hint-tekst som ikonet, direkte
-        // på <h2>, plus "flex:1" (se $h2_style nedenfor) som lader selve
-        // <h2>-boksen fylde det blanke rum ud i stedet for at overlade det
-        // til justify-content.
+        // NY: selve titlen skal også kunne folde/lukke kortet, ikke kun det lille chevron-ikon. Peger på DEN SAMME
+        // ikon-reference (via id) som selve ikonets eget onclick, så pilens retning altid følger med uanset
+        // hvilket af de to man klikker på.
+        // RETTET - to separate ting: (1) selve <h2>-elementet fik aldrig sit eget data-hint - kun fold-ikonet
+        // havde ét - så hover over selve overskriften viste intet. Samme data-hint-tekst som ikonet, direkte på
+        // <h2>, plus "flex:1" (se $h2_style nedenfor) som lader selve <h2>-boksen fylde det blanke rum ud i stedet
+        // for at overlade det til justify-content.
         $capt_attr = ' onclick="toggleCard(\''.$entry['fold_id'].'\', document.getElementById(\''.$icon_id.'\'))" data-hint="'.htmlspecialchars(lang('@Click to expand/collapse this card'), ENT_QUOTES).'"';
     }
     $h2_style = 'margin:0; color: var(--text-main, #2c3e50);' . ($fold ? ' cursor:pointer; flex:1;' : '');
 
     $stack[] = $entry; // Push FØR resten af HTML'en, så et evt. indlejret htm_Card_-kald i callerens kode lægger sig oven på denne, ikke ved siden af den.
 
-    // RETTET (§bugs-batch-13-review, samme fund som htm_Header()): $capt
-    // landede uescaped direkte i en rigtig <h2> - ingen tag-udbrud nødvendig
-    // her, en dynamisk bygget $capt med rå brugerdata ville udføres med det
-    // samme. Ingen nuværende kalder sender bevidst HTML-markup i $capt (kun
-    // enkelte sender allerede htmlspecialchars()'et brugerdata, fx
-    // project_view.php), så denne escaping er et no-op for alle andre.
+    // RETTET: $capt landede uescaped direkte i en rigtig <h2> - ingen tag-udbrud nødvendig her, en dynamisk bygget
+    // $capt med rå brugerdata ville udføres med det samme. Ingen nuværende kalder sender bevidst HTML-markup i
+    // $capt (kun enkelte sender allerede htmlspecialchars'et brugerdata, fx project_view.php), så denne escaping
+    // er et no-op for alle andre.
     $bg = ($bclr !== '') ? htmlspecialchars($bclr, ENT_QUOTES) : 'var(--bg-card)';
     echo '<div style="max-width:'.$w.'; margin: 20px auto; padding: 0 5px;"><div style="background: '.$bg.'; padding:25px; border-radius:8px; box-shadow:0 4px 15px rgba(0,0,0,0.1);">';
-    // RETTET (bruger-rapporteret: "htm_Card() viser skillelinie under caption
-    // altid - den skal skjules i foldet tilstand") - skillelinjen adskiller
-    // visuelt caption'en fra kortets BRØDTEKST, så den giver ingen mening at
-    // vise, når brødteksten er skjult (fold: 'closed', eller efter man selv
-    // har klappet kortet sammen). Kun relevant når kortet overhovedet KAN
-    // foldes ($fold sandt) - et almindeligt, ikke-foldbart kort beholder sin
-    // linje uændret. Selve caption-rækken får et forudsigeligt id
-    // ({fold_id}_caption), så toggleCard() (htm_page.lib.php) kan slå
-    // border-bottom til/fra i takt med brødteksten, ikke kun ved selve
-    // sidens første indlæsning.
-    // RETTET (bruger-rapporteret: "asymmetri i margin over/under caption som
-    // om der er reserveret plads til divider") - da skillelinjen ovenfor
-    // blev skjult i lukket fold-tilstand, stod margin-bottom/padding-bottom
-    // stadig tilbage uændret (de 25px, der oprindeligt var beregnet til at
-    // give linjen albuerum), så der blev ved med at se ud som tomt,
-    // reserveret rum uden nogen linje i det. De skal falde bort sammen med
-    // selve linjen. toggleCard() (htm_page.lib.php) holder dem i takt ved
-    // manuel fold/udfold.
+    // RETTET - skillelinjen adskiller visuelt caption'en fra kortets BRØDTEKST, så den giver ingen mening at vise,
+    // når brødteksten er skjult (fold: 'closed', eller efter man selv har klappet kortet sammen). Selve
+    // caption-rækken får et forudsigeligt id ({fold_id}_caption), så toggleCard (htm_page.lib.php) kan slå
+    // border-bottom til/fra i takt med brødteksten, ikke kun ved selve sidens første indlæsning.
+    // RETTET - da skillelinjen ovenfor blev skjult i lukket fold-tilstand, stod margin-bottom/padding-bottom
+    // stadig tilbage uændret (de 25px, der oprindeligt var beregnet til at give linjen albuerum), så der blev ved
+    // med at se ud som tomt, reserveret rum uden nogen linje i det. toggleCard (htm_page.lib.php) holder dem i
+    // takt ved manuel fold/udfold.
     $divider = ($fold && $fold_closed) ? 'none' : '2px solid var(--color-primary)';
     $caption_spacing = ($fold && $fold_closed) ? 'margin-bottom:0; padding-bottom:0;' : 'margin-bottom:15px; padding-bottom:10px;';
     $caption_id_attr = $entry['fold_id'] ? ' id="'.$entry['fold_id'].'_caption"' : '';
@@ -674,9 +646,10 @@ function htm_Table($head, $data, $name='tbl', $limt=25, $html='', $echo=true, $c
         var allThs = Array.from(table.getElementsByTagName("th"));
         var colIdx = allThs.indexOf(th);
 
-        var rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
-        switching = true; dir = "asc";
-
+        // RETTET: (1) boblesortering der flyttede én DOM-række ad gangen og startede forfra efter hver flytning - O(n^2)
+        // med DOM-opslag, så en tabel med et par hundrede rækker frøs browseren i sekunder; (2) beløb med valuta eller
+        // enhed ("-1.250,00 DKK", "1.250,00 kr.", "25 %") og tal med én decimal ("12,5") blev sorteret som TEKST.
+        // Nu: hver celles sorteringsværdi beregnes én gang, rækkerne sorteres som et array (stabilt) og sættes ind igen.
         function getCleanValue(cell) {
             if (!cell) return "";
             var text = cell.innerText.trim(); var lower = text.toLowerCase();
@@ -685,35 +658,28 @@ function htm_Table($head, $data, $name='tbl', $limt=25, $html='', $echo=true, $c
                 if (isNaN(num)) return 0;
                 return lower.endsWith(" mb") ? num * 1024 * 1024 : num * 1024;
             }
-            if (/^\d{2}\.\d{2}\.\d{4}\s\d{2}:\d{2}$/.test(text)) {
-                var p = text.split(/[\s.:]/);
-                return new Date(+p[2], +p[1]-1, +p[0], +p[3], +p[4]).getTime();
-            }
-            if (/^-?[\d.]+(,\d{2})?$/.test(text)) {
-                var cleanNum = parseFloat(text.replace(/\./g, "").replace(",", "."));
+            var dm = text.match(/^(\d{2})[.\/-](\d{2})[.\/-](\d{4})(?:\s(\d{2}):(\d{2}))?$/);
+            if (dm) return new Date(+dm[3], +dm[2]-1, +dm[1], +(dm[4] || 0), +(dm[5] || 0)).getTime();
+            var nm = text.replace(/\s*(dkk|eur|usd|sek|nok|gbp|kr\.?|%)$/i, "").replace(/−/g, "-");
+            if (/^-?\d{1,3}(\.\d{3})*(,\d+)?$|^-?\d+(,\d+)?$/.test(nm)) {
+                var cleanNum = parseFloat(nm.replace(/\./g, "").replace(",", "."));
                 if (!isNaN(cleanNum)) return cleanNum;
             }
             return lower;
         }
-
-        while (switching) {
-            switching = false; rows = table.rows;
-            for (i = 1; i < rows.length - 1; i++) {
-                shouldSwitch = false;
-                x = rows[i].getElementsByTagName("TD")[colIdx];
-                y = rows[i+1].getElementsByTagName("TD")[colIdx];
-                if (!x || !y) continue;
-                var xVal = getCleanValue(x), yVal = getCleanValue(y);
-                if (dir === "asc"  && xVal > yVal) { shouldSwitch = true; break; }
-                if (dir === "desc" && xVal < yVal) { shouldSwitch = true; break; }
-            }
-            if (shouldSwitch) {
-                rows[i].parentNode.insertBefore(rows[i+1], rows[i]);
-                switching = true; switchcount++;
-            } else if (switchcount === 0 && dir === "asc") {
-                dir = "desc"; switching = true;
-            }
-        }
+        var body = table.tBodies[0] || table;
+        var rows = Array.from(body.rows).filter(function(r) { return r.getElementsByTagName("TD").length > 0; });
+        var dir = (table.dataset.sortCol == String(colIdx) && table.dataset.sortDir === "asc") ? "desc" : "asc";
+        table.dataset.sortCol = String(colIdx);  table.dataset.sortDir = dir;
+        var keyed = rows.map(function(r, i) { return { r: r, i: i, v: getCleanValue(r.getElementsByTagName("TD")[colIdx]) }; });
+        keyed.sort(function(a, b) {
+            var x = a.v, y = b.v, c;
+            if (typeof x === typeof y) c = (x < y) ? -1 : (x > y ? 1 : 0);
+            else c = (typeof x === "number") ? -1 : 1;      // tal før tekst
+            if (dir === "desc") c = -c;
+            return c || (a.i - b.i);
+        });
+        keyed.forEach(function(k) { body.appendChild(k.r); });
     }
 
     function toggleCell(cell) {
@@ -736,7 +702,10 @@ function htm_Table($head, $data, $name='tbl', $limt=25, $html='', $echo=true, $c
     // m.fl.) genbruger via htm_Table(...,'fil.csv'). Data i cellerne kan
     // stamme fra frit tekstfelter (kundenavn, banktekst osv.), som en bruger
     // reelt kontrollerer.
+    // RETTET: alt der begyndte med "-" fik en apostrof foran (formel-værn) - også negative beløb ("-1.250,00 DKK"),
+    // som så blev tekst med en synlig ' i Excel og ikke kunne regnes med. Et tal (evt. med valuta/enhed) er ufarligt.
     function csvSafe(v) {
+        if (/^-?\d{1,3}(\.\d{3})*(,\d+)?(\s*(dkk|eur|usd|sek|nok|gbp|kr\.?|%))?$|^-?\d+(,\d+)?(\s*(dkk|eur|usd|sek|nok|gbp|kr\.?|%))?$/i.test(v)) return v;
         return (v.length > 0 && "=+-@".indexOf(v[0]) !== -1) ? "'" + v : v;
     }
 
@@ -767,7 +736,7 @@ function htm_Table($head, $data, $name='tbl', $limt=25, $html='', $echo=true, $c
         a.href     = url;
         a.download = filename;
         a.click();
-        URL.revokeObjectURL(url);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 1000);      // (straks efter klik kunne nogle browsere afbryde hentningen)
     }
     </script>
     <?php
@@ -805,14 +774,10 @@ function htm_SectionEnd($echo=true) {
     if ($echo) { echo '</div></details>'; } else { return '</div></details>'; }
 }
 # ALERT
-# RETTET (§bugs-batch-22-review, del b): understøttede FØR kun 'error' og
-# alt-andet-er-'success' - hånd-rullede advarsels-/infobannere i mindst 11
-# filer (se csrf-protection-added.md/[[bugs-batch-22-review]] for baggrund -
-# fundet mens den originale php2html.lib.php-inspiration blev gennemgået)
-# opfandt derfor deres egen farvekode hver gang, i stedet for at kunne bruge
-# denne fælles funktion. 'warning'/'info' tilføjet, samme --bg-alert-*/
-# --text-alert-*-mønster som 'success'/'error' allerede brugte (nu rettet
-# til rent faktisk at ligge inde i temablokkene, se inc/htm_page.lib.php).
+# RETTET: understøttede FØR kun 'error' og alt-andet-er-'success' - hånd-rullede advarsels-/infobannere i mindst 11
+# filer opfandt derfor deres egen farvekode hver gang, i stedet for at kunne bruge denne fælles funktion.
+# 'warning'/'info' tilføjet, samme --bg-alert-*/--text-alert-*-mønster som 'success'/'error' allerede brugte (nu
+# rettet til rent faktisk at ligge inde i temablokkene, se inc/htm_page.lib.php).
 function htm_Alert($text, $type='success', $width=700, $echo=true) {
     if (empty($text)) return "";
     if (!$echo) ob_start();
@@ -830,17 +795,22 @@ function htm_Alert($text, $type='success', $width=700, $echo=true) {
     if ($echo) { echo $htm; } else { return $htm; }
 }
 
+# NOTE (dæmpet forklarende tekst, typisk lige under et korts overskrift). $text er færdig HTML (allerede
+# lang()'et/escaped af kalderen); $styl lægges efter den dæmpede farve (fx 'font-size:0.9em; margin-top:-5px;').
+function htm_Note($text, $styl = '', $echo = true) {
+    $htm = '<p style="color:var(--text-muted);' . ($styl !== '' ? ' ' . $styl : '') . '">' . $text . '</p>';
+    if (!$echo) return $htm;
+    echo $htm;
+}
+
 # BANNER (venstre-kant-markeret, stående sidenotits)
-# RETTET (§bugs-batch-22-review, del b): mindst 11 filer hånd-rullede samme
-# venstre-kant-bannér-mønster (background: var(--bg-panel); border-left:
-# Npx solid var(--color-X); border-radius:4px; ...) hver for sig, med små,
-# utilsigtede forskelle (3-5px kantbredde, forskellige paddings/margener).
-# htm_Banner() er BEVIDST en ANDEN funktion end htm_Alert() ovenfor, ikke
-# blot en ekstra type dér - visuelt og semantisk forskellige formål:
-# htm_Alert() er en centreret, fuldt indrammet boks til et ÉN-GANGS
-# handlings-resultat (gem lykkedes/fejlede); htm_Banner() er en venstrestillet,
-# fuld-bredde, STÅENDE notits/advarsel der sidder øverst på en side uafhængigt
-# af nogen bestemt handling (fx "denne rapport er et udkast").
+# RETTET: mindst 11 filer hånd-rullede samme venstre-kant-bannér-mønster (background: var(--bg-panel); border-left:
+# Npx solid var(--color-X); border-radius:4px;...) hver for sig, med små, utilsigtede forskelle (3-5px kantbredde,
+# forskellige paddings/margener). htm_Banner er BEVIDST en ANDEN funktion end htm_Alert ovenfor, ikke blot en
+# ekstra type dér - visuelt og semantisk forskellige formål: htm_Alert er en centreret, fuldt indrammet boks til et
+# ÉN-GANGS handlings-resultat (gem lykkedes/fejlede); htm_Banner er en venstrestillet, fuld-bredde, STÅENDE
+# notits/advarsel der sidder øverst på en side uafhængigt af nogen bestemt handling (fx "denne rapport er et
+# udkast").
 function htm_Banner($text, $type='warning', $echo=true) {
     if (empty($text)) return "";
     if (!$echo) ob_start();
@@ -864,6 +834,15 @@ function htm_Badge($text, $type = 'secondary', $echo = true) {
     echo $htm;
 }
 
+# CONFIRM - JS til en on*-attribut (onclick/onsubmit="..."): "return confirm(...)" - eller med $then: nej = return false, ja = $then.
+# Teksten (en '@nøgle' eller færdig tekst) escapes til JS (json_encode) OG til attributten (htmlspecialchars) - de
+# håndskrevne varianter (addslashes alene, htmlspecialchars i '...', omvendt rækkefølge) brød på ' eller ", og så
+# sprang browseren bekræftelsen over og udførte handlingen.
+function htm_confirm_js(string $text, string $then = ''): string {
+    $msg = htmlspecialchars(json_encode(strncmp($text, '@', 1) === 0 ? lang($text) : $text, JSON_UNESCAPED_UNICODE), ENT_QUOTES);
+    return $then === '' ? "return confirm($msg)" : "if (!confirm($msg)) return false; $then";
+}
+
 # CONFIRM LINK/BUTTON
 function htm_ConfirmLink($icon = '', $labl = '', $link = '', $mess = '@Are you sure?', 
                          $type = 'danger', $styl = '', $attr = '', $echo = true) {
@@ -872,9 +851,8 @@ function htm_ConfirmLink($icon = '', $labl = '', $link = '', $mess = '@Are you s
        . "border:none; cursor:pointer; font-size:14px; font-weight:600;";
     $l   = ($labl != '') ? ' ' . lang($labl) : '';
     $i_h = ($icon != '') ? "<i class='fa-solid $icon'></i>" : '';
-    $msg_js = htmlspecialchars(lang($mess), ENT_QUOTES);
     $htm = "<a href='" . htmlspecialchars($link) . "' style='$s$styl' "
-       . "onclick=\"return confirm('" . addslashes($msg_js) . "')\" $attr>$i_h$l</a>";
+       . "onclick=\"" . htm_confirm_js($mess) . "\" $attr>$i_h$l</a>";
     if (!$echo) return $htm;
     echo $htm;
 }
@@ -890,10 +868,7 @@ function htm_ActionButtons($acti, $echo = true) {
         $link    = $a['link']    ?? '';
         $onclick = $a['onclick'] ?? '';
         $confirm = $a['confirm'] ?? '';
-        if ($confirm !== '') {
-            $msg_js  = addslashes(htmlspecialchars(lang($confirm), ENT_QUOTES));
-            $onclick = "return confirm('$msg_js')" . ($onclick !== '' ? ";$onclick" : '');
-        }
+        if ($confirm !== '') $onclick = htm_confirm_js($confirm, $onclick);      // (før: "return confirm(...);onclick" - onclick kørte aldrig)
         $has_label = ($label !== '');
         if ($has_label) {
             $style = "display:inline-flex; align-items:center; justify-content:center; gap:6px; "

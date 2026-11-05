@@ -5,6 +5,11 @@
 # gennemgang. Se også login.php + user_edit.php/user_create.php (samme fund).
 require_once 'inc/php2htm.lib.php';
 
+// UTF-8-kontrol af alt hvad en side modtager (formularer, links) - se tc_utf8() i inc/core_utils.lib.php
+$_GET  = tc_utf8($_GET);
+$_POST = tc_utf8($_POST);
+$_REQUEST = tc_utf8($_REQUEST);
+
 if (session_status() === PHP_SESSION_NONE) {
     $session_time = 14400; // 4 timer
     ini_set('session.gc_maxlifetime', $session_time);
@@ -13,13 +18,10 @@ if (session_status() === PHP_SESSION_NONE) {
     // Dette klipper ALT samarbejde med de gamle, defekte sessionsfiler på serveren!
     session_name('TCC_V100_SESSION'); 
 
-    // RETTET (§bugs-batch-20-review): 'secure' manglede helt - session-
-    // cookien (som er den ENESTE ting der beviser man er logget ind) kunne
-    // derfor altid sendes over almindelig, ukrypteret HTTP, selv på en
-    // installation der ellers udelukkende køres over HTTPS. Sættes nu
-    // betinget ud fra om forespørgslen faktisk kom ind over HTTPS - hårdkodet
-    // 'true' ville have låst lokal HTTP-udvikling (php -S, ingen HTTPS) helt
-    // ude af at kunne logge ind overhovedet.
+    // RETTET: 'secure' manglede helt - session-cookien (som er den ENESTE ting der beviser man er logget ind)
+    // kunne derfor altid sendes over almindelig, ukrypteret HTTP, selv på en installation der ellers udelukkende
+    // køres over HTTPS. Sættes nu betinget ud fra om forespørgslen faktisk kom ind over HTTPS - hårdkodet 'true'
+    // ville have låst lokal HTTP-udvikling (php -S, ingen HTTPS) helt ude af at kunne logge ind overhovedet.
     $is_https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
         || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
         || ($_SERVER['SERVER_PORT'] ?? '') == 443;
@@ -117,28 +119,12 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_id'] <= 0) {
     exit;
 }
 
-// 4a. --- DEAKTIVERET-KONTO-TJEK (bruger-anmodet, "kan bogholderen ønske sig
-// mere"): denne fil har ALDRIG genslået den logget-ind bruger op i databasen
-// efter selve login-øjeblikket - alt (rolle, niveau, brugernavn) kom
-// udelukkende fra sessionsvariabler sat én gang ved login. En admin der
-// ændrede en andens rolle, kodeord, eller (denne feature) deaktiverede
-// kontoen, havde derfor INGEN effekt på en allerede aktiv session, som
-// forblev fuldt funktionsdygtig indtil brugeren selv loggede ud. Kræver
-// selve DB-forbindelsen her (auth.inc.php inkluderes normalt FØR
-// db_connect.inc.php i hver sides sædvanlige rækkefølge) - require_once
-// gør det trygt at hente den nu, den almindelige senere require_once i
-// selve siden bliver blot et no-op. Samme "stille degradering hvis ikke
-// migreret endnu"-mønster som andre nyere kolonner (kolonnen findes evt.
-// ikke endnu, se db-setup/migrate_user_active_status.php).
+// 4a. --- DEAKTIVERET-KONTO-TJEK: denne fil har ALDRIG genslået den logget-ind bruger op i databasen efter selve
+// login-øjeblikket - alt (rolle, niveau, brugernavn) kom udelukkende fra sessionsvariabler sat én gang ved login.
+// En admin der ændrede en andens rolle, kodeord, eller (denne feature) deaktiverede kontoen, havde derfor INGEN
+// effekt på en allerede aktiv session, som forblev fuldt funktionsdygtig indtil brugeren selv loggede ud.
 require_once 'inc/db_connect.inc.php';
-$auth_has_is_active_col = false;
-if (DB::is_sqlite()) {
-    $auth_iac = DB::query($conn, "PRAGMA table_info(users)");
-    if ($auth_iac) { while ($auth_iacr = DB::fetch_assoc($auth_iac)) { if ($auth_iacr['name'] === 'is_active') { $auth_has_is_active_col = true; break; } } }
-} else {
-    $auth_iac = DB::query($conn, "SHOW COLUMNS FROM users LIKE 'is_active'");
-    $auth_has_is_active_col = ($auth_iac && DB::num_rows($auth_iac) > 0);
-}
+$auth_has_is_active_col = db_has_column($conn, 'users', 'is_active');
 if ($auth_has_is_active_col) {
     $auth_user_row = DB::fetch_assoc(DB::query($conn, "SELECT is_active FROM users WHERE user_id = " . (int)$_SESSION['user_id']));
     if (!$auth_user_row || (int)$auth_user_row['is_active'] === 0) {
@@ -171,33 +157,34 @@ if ($auth_role_row) {
 }
 
 // 4b. --- CSRF-BESKYTTELSE (kun POST, kun for logget-ind brugere) ---
-// RETTET (§bugs-batch-22-review): fandtes slet ikke noget sted i appen -
-// bekræftet ved en fuld projekt-gennemsøgning. En ondsindet side kunne
-// derfor få en indlogget brugers browser til automatisk at indsende en
-// formular til en hvilken som helst POST-side i TinyCash (ændre firma-
-// indstillinger, oprette en admin-bruger, slette en konto...) uden
-// brugerens vidende - SameSite=Lax (se [[bugs-batch-20-review]]) beskytter
-// kun mod passive tredjeparts-anmodninger (img/iframe/fetch), ikke mod at
-// offeret narres til at klikke et link eller en auto-indsendt formular på
-// en ekstern side. csrf_field()/csrf_token() (inc/php2htm.lib.php) er nu
-// indlejret i hver formular i appen der bygger en <form method="post">
-// (både htm_Card_()'s egen formularbygger og hver hånd-bygget formular -
-// se de enkelte filers egne rettelser), inkl. de par fetch()-baserede
-// AJAX-endepunkter der sender $_POST (save_layout.php, storage_browser.php,
-// send_invoice_action.php). login.php er BEVIDST undtaget (den returnerer
-// allerede ovenfor, før dette punkt) - login-CSRF er en separat, mindre
-// alvorlig problemstilling (kan i værste fald tvinge et offer til at logge
-// ind på en angribers konto, ikke udføre handlinger på offerets egne data)
-// og efterlades bevidst til en senere runde, for ikke at risikere selve
-// login-flowet uden dedikeret testtid.
+// RETTET: fandtes slet ikke noget sted i appen - bekræftet ved en fuld projekt-gennemsøgning. En ondsindet side
+// kunne derfor få en indlogget brugers browser til automatisk at indsende en formular til en hvilken som helst
+// POST-side i TinyCash (ændre firma-indstillinger, oprette en admin-bruger, slette en konto...) uden brugerens
+// vidende - SameSite=Lax beskytter kun mod passive tredjeparts-anmodninger (img/iframe/fetch), ikke mod at offeret
+// narres til at klikke et link eller en auto-indsendt formular på en ekstern side.
+// RETTET: en forespørgsel større end post_max_size (fx et stort bilag) kommer frem med en TOM $_POST - så manglede
+// CSRF-nøglen, og brugeren fik "Sikkerhedstjekket mislykkedes (CSRF)" i stedet for at få at vide, at filen var for stor.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    $tc_back = (string)($_SERVER['HTTP_REFERER'] ?? '');
+    $tc_back = (parse_url($tc_back, PHP_URL_HOST) === ($_SERVER['HTTP_HOST'] ?? '') || parse_url($tc_back, PHP_URL_HOST) === parse_url('http://' . ($_SERVER['HTTP_HOST'] ?? ''), PHP_URL_HOST)) ? $tc_back : 'index.php';
+    redirect($tc_back, sprintf(lang('@The upload was too large (the maximum is %s) - nothing was saved.'), ini_get('post_max_size')), 'error');
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_verify()) {
     http_response_code(403);
     die(lang('@Security check failed (CSRF). Please reload the page and try again.'));
 }
-// RETTET: også de handlinger der udføres af et LINK (GET) - se csrf_get_actions() i inc/php2htm.lib.php
-if (csrf_get_is_action() && !csrf_verify_get()) {
+// Handlinger der startes af et LINK kommer som POST (htm_Header()'s tcPost) - en handling som GET afvises
+// altid, også med csrf_token i URL'en. Se csrf_get_actions()/csrf_action_by_name() i inc/php2htm.lib.php.
+if (csrf_get_is_action()) {
     http_response_code(403);
     die(lang('@Security check failed (CSRF). Please reload the page and try again.'));
+}
+// Et link sendt som POST (nøglen er tjekket ovenfor) behandles som den GET det var: handlings-scriptet
+// læser stadig $_GET, og en side der også har en formular, tager det ikke for en indsendt formular.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['_tc_link'])) {
+    $_SERVER['REQUEST_METHOD'] = 'GET';
+    $_POST = [];
+    $_REQUEST = $_GET;
 }
 
 // 5. --- BRUGER-NIVEAU KONTROL ---
@@ -240,15 +227,11 @@ function deny_access_gracefully() {
     exit;
 }
 
-// NYT (§currency-setting-is-cosmetic-label, Fase 2): fælles afvisnings-
-// funktion til sider, der er specifikt bundet til DANSK lovgivning/SKAT
-// (SAF-T-eksport, OIOUBL e-faktura, den officielle momsrapport med dens
-// TastSelv-afrundingslogik) og derfor ikke giver mening for en ikke-dansk
-// virksomhed, der bruger firmaets faktisk konfigurerede bogføringsvaluta
-// (settings.currency) til noget andet end DKK. Kaldes af den enkelte side
-// selv (efter db_connect.inc.php er indlæst), samme mønster som $rLev
-// ovenfor - men datadrevet (valutaindstilling) i stedet for et statisk
-// niveau-tal.
+// NYT: fælles afvisnings-funktion til sider, der er specifikt bundet til DANSK lovgivning/SKAT (SAF-T-eksport,
+// OIOUBL e-faktura, den officielle momsrapport med dens TastSelv-afrundingslogik) og derfor ikke giver mening for
+// en ikke-dansk virksomhed, der bruger firmaets faktisk konfigurerede bogføringsvaluta (settings.currency) til
+// noget andet end DKK. Kaldes af den enkelte side selv (efter db_connect.inc.php er indlæst), samme mønster som
+// $rLev ovenfor - men datadrevet (valutaindstilling) i stedet for et statisk niveau-tal.
 function require_dkk_base_currency($conn) {
     $base = strtoupper(get_settings($conn)['currency'] ?? 'DKK');
     if ($base === 'DKK') return;

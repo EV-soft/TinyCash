@@ -21,37 +21,43 @@ $msg = "";
 
 // --- GEM/SLET FUNKTIONER ---
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_rule'])) {
-    $source = strtolower(trim($_POST['source']));
+    $source = strtolower(trim((string)($_POST['source'] ?? '')));
+    if ($source === '') redirect('settings_fees.php', '@Please enter the name of the source.', 'error');      // (en regel uden navn blev gemt som "fee_rule_")
     $key    = 'fee_rule_' . $source;
-    // RETTET: (float) alene mangler samme komma->punktum-normalisering som
-    // en lang række andre beløbsfelter denne session (se
-    // [[invoice-line-comma-amount-fix]]) - erstattet med parse_dk_number().
-    $data   = ['model' => $_POST['model'], 'rate' => parse_dk_number($_POST['rate']), 'fixed' => parse_dk_number($_POST['fixed'])];
+    // RETTET: (float) alene mangler samme komma->punktum-normalisering som en lang række andre beløbsfelter denne
+    // session - erstattet med parse_dk_number.
+    // RETTET: model blev gemt ufiltreret (og vist uescapet nedenfor) - nu kun de tre kendte modeller
+    $model  = in_array($_POST['model'] ?? '', ['fixed', 'relative', 'mixed'], true) ? $_POST['model'] : 'fixed';
+    // RETTET: modellen hedder "Procent", men feltet forventede en brøk (0,014) - "1,4" (for 1,4 %) blev gemt som 1,4, og
+    // gebyrformlen beløb / (1 - sats) gav et negativt gebyr (ved 1: division med nul). Feltet er nu i procent (0-99),
+    // og der gemmes stadig en brøk, så eksisterende regler er uændrede.
+    $rate_pct = tc_num($_POST['rate'] ?? '0', 0, 99.99);
+    $fixed    = tc_num($_POST['fixed'] ?? '0', 0);
+    if ($rate_pct === null || $fixed === null) redirect('settings_fees.php', '@Please enter a percentage between 0 and 99 and a fixed amount of 0 or more.', 'error');
+    $data   = ['model' => $model, 'rate' => round($rate_pct / 100, 6), 'fixed' => $fixed];
     $value  = json_encode($data);
 
-    // RETTET: brugte en hjemmelavet str_replace("'", "''", ...)-escaping i
-    // stedet for den fælles DB::escape() - i strid med projektets egen faste
-    // regel ("gå aldrig uden om DB-klassen"). Praktisk risiko var lav her
-    // (utf8mb4 er ikke sårbar over for det klassiske multi-byte-trick denne
-    // slags hjemmelavet escaping ellers kan åbne for), men rettet for
-    // konsistens og for ikke at lade mønstret sprede sig videre.
+    // RETTET: brugte en hjemmelavet str_replace("'", "''",...)-escaping i stedet for den fælles DB::escape - i
+    // strid med projektets egen faste regel ("gå aldrig uden om DB-klassen"). Praktisk risiko var lav her (utf8mb4
+    // er ikke sårbar over for det klassiske multi-byte-trick denne slags hjemmelavet escaping ellers kan åbne
+    // for), men rettet for konsistens og for ikke at lade mønstret sprede sig videre.
     DB::query($conn, "DELETE FROM settings WHERE setting_key = '" . DB::escape($conn, $key) . "'");
     DB::query($conn, "INSERT INTO settings (setting_key, setting_value) VALUES ('" . DB::escape($conn, $key) . "', '" . DB::escape($conn, $value) . "')");
 
     $msg = lang('@Rule saved successfully');
 }
 
-if (isset($_GET['delete'])) {
+// RETTET: ?delete= slettede ENHVER indstilling (fx firmanavn, kontonumre), ikke kun gebyrregler - nu kun fee_rule_*
+if (isset($_GET['delete']) && strpos((string)$_GET['delete'], 'fee_rule_') === 0) {
+    if (!array_key_exists((string)$_GET['delete'], get_settings($conn))) redirect('settings_fees.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: meldte succes, selv om intet fandtes (dobbeltklik, en anden fane)
     $key = DB::escape($conn, $_GET['delete']);
     DB::query($conn, "DELETE FROM settings WHERE setting_key = '$key'");
-    header('Location: settings_fees.php?msg=deleted');
-    exit;
+    redirect('settings_fees.php', '@Rule deleted successfully');
 }
 
 htm_Header('@Fee Rules');
 showMenu();
 
-if (isset($_GET['msg']) && $_GET['msg'] == 'deleted') $msg = lang('@Rule deleted successfully');
 if ($msg) htm_Alert($msg, 'success');
 
 htm_Card_('@Configure Fee Rules', '800');
@@ -61,10 +67,9 @@ htm_Card_('@Configure Fee Rules', '800');
     <?php csrf_field(); ?>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: start; margin-bottom: 20px;">
         <?php 
-        // RETTET: hint-nøglen var selv skrevet på dansk ("Kildens navn") i
-        // stedet for engelsk, i strid med projektets konvention om at
-        // nøgler altid er den engelske kildetekst - oversatte derfor aldrig
-        // for andre sprog end dansk (faldt tilbage til den danske tekst).
+        // RETTET: hint-nøglen var selv skrevet på dansk ("Kildens navn") i stedet for engelsk, i strid med
+        // projektets konvention om at nøgler altid er den engelske kildetekst - oversatte derfor aldrig for andre
+        // sprog end dansk (faldt tilbage til den danske tekst).
         htm_Field(icon: 'fa-tag', labl: '@Source', name: 'source', extr: 'required placeholder="'.lang('@Name').'" data-hint="'.lang('@The name of the source').'"');
 
         $models = ['fixed' => lang('@Fixed amount'), 'relative' => lang('@Percentage'), 'mixed' => lang('@Mixed')];
@@ -72,7 +77,7 @@ htm_Card_('@Configure Fee Rules', '800');
 
         $dual_input = '
             <div style="display: flex; gap: 5px; align-items: center;">
-                <input type="number" name="rate" step="0.0001" placeholder="0.014" style="width: 100%; border: none; outline: none; background: transparent;">
+                <input type="number" name="rate" step="0.01" min="0" max="99.99" placeholder="1.4 %" title="%" style="width: 100%; border: none; outline: none; background: transparent;">
                 <span style="color:var(--text-muted);">|</span>
                 <input type="number" name="fixed" step="0.01" value="1.00" style="width: 100%; border: none; outline: none; background: transparent;">
             </div>';
@@ -111,31 +116,34 @@ htm_Card_('@Configure Fee Rules', '800');
                     
                     // Sikkerhedstjek: Hvis json_decode fejlede, giv den en standardværdi
                     if (!is_array($val)) $val = ['model' => 'fixed', 'rate' => 0, 'fixed' => 0];
+                    if (!in_array($val['model'] ?? '', ['fixed', 'relative', 'mixed'], true)) $val['model'] = 'fixed';
                     
                     // Formater satser pænt til visning
-                    $rate_display = ($val['model'] === 'relative' || $val['model'] === 'mixed') ? ($val['rate'] * 100) . '%' : '-';
-                    $fixed_display = ($val['model'] === 'fixed' || $val['model'] === 'mixed') ? number_format($val['fixed'], 2) . ' ' . $cur : '-';
+                    $rate_display = ($val['model'] === 'relative' || $val['model'] === 'mixed') ? fmt_dk($val['rate'] * 100, 2) . ' %' : '-';
+                    $fixed_display = ($val['model'] === 'fixed' || $val['model'] === 'mixed') ? fmt_dk($val['fixed']) . ' ' . $cur : '-';
                     if ($val['model'] === 'mixed') {
-                        $rate_display = ($val['rate'] * 100) . '% + ' . number_format($val['fixed'], 2) . ' ' . $cur;
+                        $rate_display = fmt_dk($val['rate'] * 100, 2) . ' % + ' . fmt_dk($val['fixed']) . ' ' . $cur;
                         $fixed_display = ''; // Samlet i rate_display for overskuelighed
                     } elseif ($val['model'] === 'relative') {
-                        $rate_display = ($val['rate'] * 100) . '%';
+                        $rate_display = fmt_dk($val['rate'] * 100, 2) . ' %';
                     } elseif ($val['model'] === 'fixed') {
-                        $rate_display = number_format($val['fixed'], 2) . ' ' . $cur;
+                        $rate_display = fmt_dk($val['fixed']) . ' ' . $cur;
                     }
 
-                    // NB: lang('@'.ucfirst($val['model'])) kan frase-skanneren ikke selv
-                    // opdage - de faktiske nøgler nævnes derfor bevidst som streng-
-                    // literaler herunder: '@Fixed', '@Relative', '@Mixed'
+                    // RETTET: lang('@'.ucfirst(model)) gav engelsk "Fixed"/"Relative" (tomme oversættelser) - samme tekster som valglisten
+                    $model_lbl = ['fixed' => lang('@Fixed amount'), 'relative' => lang('@Percentage'), 'mixed' => lang('@Mixed')][$val['model']] ?? htmlspecialchars((string)$val['model']);
                     echo '<tr style="border-bottom:1px solid #f9f9f9;">
-                            <td style="padding:12px; font-weight:bold;">' . ucfirst($source) . '</td>
-                            <td style="padding:12px;">'. lang('@'. ucfirst($val['model'])) . '</td>
+                            <td style="padding:12px; font-weight:bold;">' . htmlspecialchars(ucfirst($source)) . '</td>
+                            <td style="padding:12px;">'. $model_lbl . '</td>
                             <td style="padding:12px; color: var(--text-muted);">' . $rate_display . '</td>
                             <td style="padding:12px; text-align:right;">';
                     
                     htm_ConfirmLink(
                         icon: 'fa-trash-can',
-                        link: "?delete=".$r['setting_key'],
+                        // RETTET: kildenavnet blev hverken URL-kodet her eller HTML-escapet ovenfor - en kilde med fx
+                        // "&" eller "#" i navnet kunne ikke slettes (linket ramte en anden nøgle), og navnet kunne
+                        // indeholde HTML/script der kørte hos den næste administrator der åbnede siden.
+                        link: "?delete=" . urlencode($r['setting_key']),
                         mess: '@Are you sure?',
                         type: 'danger',
                         styl: 'padding: 4px 8px; font-size: 12px;',

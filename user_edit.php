@@ -27,22 +27,14 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
 }
 $msg = ""; $err = "";
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): findes
-// is_active-kolonnen (db-setup/migrate_user_active_status.php)? Samme
-// "stille degradering hvis ikke migreret endnu"-mønster som andre nyere
-// kolonner - beregnes altid, også ved GET, da visnings-feltet nedenfor
+// NYT: findes is_active-kolonnen (db-setup/migrate_user_active_status.php)? Samme "stille degradering hvis ikke
+// migreret endnu"-mønster som andre nyere kolonner - beregnes altid, også ved GET, da visnings-feltet nedenfor
 // ligger uden for POST-blokken.
-$has_active_col = false;
-if (DB::is_sqlite()) {
-    $uac = DB::query($conn, "PRAGMA table_info(users)");
-    if ($uac) { while ($uacr = DB::fetch_assoc($uac)) { if ($uacr['name'] === 'is_active') { $has_active_col = true; break; } } }
-} else {
-    $uac = DB::query($conn, "SHOW COLUMNS FROM users LIKE 'is_active'");
-    $has_active_col = ($uac && DB::num_rows($uac) > 0);
-}
+$has_active_col = db_has_column($conn, 'users', 'is_active');
 
 // 1. Gem-logik
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_user'])) {
+    $_POST['username'] = trim((string)($_POST['username'] ?? ''));
     $username = DB::escape($conn, $_POST['username']);
     $role     = DB::escape($conn, $_POST['user_role']);
     $level    = role_to_level($_POST['user_role']);
@@ -55,16 +47,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_user'])) {
     $before_res = DB::query($conn, "SELECT username, user_role, user_level, is_active FROM users WHERE user_id = $edit_id");
     $before_row = $before_res ? DB::fetch_assoc($before_res) : null;
 
-    // NYT: deaktiver bruger - to selvstændige værn, uafhængige af den
-    // eksisterende "kan ikke slette sig selv"-beskyttelse (user_actions.php),
-    // som slet ikke dækker deaktivering. Ved egen konto er selve
-    // afkrydsningsfeltet allerede disabled i formularen (se visningen
-    // nedenfor) - en disabled checkbox sendes ALDRIG med af browseren,
-    // uanset dens checked-tilstand, så $_POST['is_active'] ville ellers
-    // fejlagtigt tolkes som et forsøg på at afkrydse feltet FRA hver eneste
-    // gang en admin blot redigerer sin egen profil (fx kun brugernavnet).
-    // Beholder derfor bevidst den EKSISTERENDE værdi uændret for egen konto,
-    // i stedet for at stole på om feltet indgik i denne konkrete request.
+    // NYT: deaktiver bruger - to selvstændige værn, uafhængige af den eksisterende "kan ikke slette sig
+    // selv"-beskyttelse (user_actions.php), som slet ikke dækker deaktivering. Beholder derfor bevidst den
+    // EKSISTERENDE værdi uændret for egen konto, i stedet for at stole på om feltet indgik i denne konkrete
+    // request.
     $is_own_account = ($edit_id === (int)($_SESSION['user_id'] ?? 0));
     if ($is_own_account) {
         $requested_active = (int)($before_row['is_active'] ?? 1);
@@ -96,11 +82,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_user'])) {
         }
     }
 
-    // RETTET: manglede at opdatere user_level i takt med user_role -
-    // rollen ("Administrator" osv.) blev gemt, men det egentlige numeriske
-    // adgangsniveau, som alt $rLev-tjek i appen reelt bruger, forblev
-    // urørt (typisk fastlåst på 1 siden brugeren blev oprettet). Se
-    // role_to_level() i inc/db_connect.inc.php for baggrunden.
+    // RETTET: en bruger kunne omdøbes til et brugernavn der allerede fandtes (eller til tomt) - to brugere med samme
+    // navn, hvor login kun finder den ene. Navnet beholdes da uændret (samme mønster som rolle-tjekket ovenfor).
+    $dup_user = $_POST['username'] === '' ? true
+        : (bool)DB::fetch_assoc(DB::query($conn, "SELECT user_id FROM users WHERE LOWER(username) = LOWER('$username') AND user_id <> $edit_id"));
+    if ($dup_user && !empty($before_row)) {
+        $err = lang('@Username already exists');
+        $username = DB::escape($conn, (string)$before_row['username']);
+        $_POST['username'] = $before_row['username'];
+    }
+
+    // RETTET: manglede at opdatere user_level i takt med user_role - rollen ("Administrator" osv.) blev gemt, men
+    // det egentlige numeriske adgangsniveau, som alt $rLev-tjek i appen reelt bruger, forblev urørt (typisk
+    // fastlåst på 1 siden brugeren blev oprettet). Se role_to_level i inc/db_connect.inc.php for baggrunden.
     $sql = "UPDATE users SET username='$username', user_role='$role', user_level=$level"
          . ($has_active_col ? ", is_active = $requested_active" : "") . "
            WHERE user_id=$edit_id";
@@ -136,17 +130,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_user'])) {
 // 2. Hent data
 $res = DB::query($conn, "SELECT * FROM users WHERE user_id = $edit_id");
 $u = DB::fetch_assoc($res);
-if (!$u) { die(lang("@User not found.")); }
+if (!$u) redirect('user_list.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: hvid side uden menu
 
 htm_Header(capt: '@Edit User');
 showMenu();
 
-// NYT (bruger-anmodet): samme højreklik-skjul-mønster som menuen selv, nu
-// for enkelte felter (se inc/field_visibility.inc.php). BEMÆRK: denne side
-// er allerede fuldt admin-only (linje 24) - at skjule et felt her for L1/L2
-// har derfor ingen praktisk effekt i dag, da de aldrig kan nå siden
-// overhovedet. Bygget alligevel for konsistens, jf. brugerens eksplicitte
-// godkendelse af denne side som ét af de tre mål-felter.
+// NYT: samme højreklik-skjul-mønster som menuen selv, nu for enkelte felter (se inc/field_visibility.inc.php).
+// BEMÆRK: denne side er allerede fuldt admin-only (linje 24) - at skjule et felt her for L1/L2 har derfor ingen
+// praktisk effekt i dag, da de aldrig kan nå siden overhovedet.
 $fv_overrides = get_field_visibility_overrides($conn);
 $fv_is_admin  = true; // siden er allerede spærret til admin ovenfor
 $fv_uLev      = (int)($_SESSION['user_level'] ?? 1);
@@ -180,13 +171,9 @@ htm_Field(icon: 'fa-user', labl: '@Username', name: 'username', valu: $u['userna
         opti: $role_options
     );
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): en admin kunne
-    // FØR kun slette en bruger helt (ofte slet ikke muligt, hvis brugeren er
-    // refereret i ledger/audit_log/expenses/time_entries) eller ændre
-    // kodeordet (blokerer kun NYE logins - en allerede aktiv session
-    // forblev fuldt gyldig, se inc/auth.inc.php's nye tjek). Deaktivering
-    // dræber nu en aktiv session med det samme. Egen konto og den sidste
-    // aktive administrator er begge beskyttet server-side (se ovenfor).
+    // NYT: en admin kunne FØR kun slette en bruger helt (ofte slet ikke muligt, hvis brugeren er refereret i
+    // ledger/audit_log/expenses/time_entries) eller ændre kodeordet. Deaktivering dræber nu en aktiv session med
+    // det samme.
     if ($has_active_col) {
         render_hideable_field($fv_overrides, 'user_edit.is_active', $fv_is_admin, $fv_uLev, function() use ($edit_id, $u) {
             $is_self = ($edit_id === (int)($_SESSION['user_id'] ?? 0));

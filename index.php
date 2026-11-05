@@ -30,15 +30,12 @@ $total_expenses = 0.0;
 $is_demo_data = false;
 
 if (isset($conn) && $conn) {
-    // RETTET: inkluderede før kladder ('draft') som rigtigt salg - kun
-    // 'void' blev udelukket. En ubogført kladde er ikke en reel handel
-    // endnu (intet fakturanummer, ingen postering) og skal ikke tælle med
-    // i "Total Sales". Fundet ved gennemgangen af pengestrøms-grafen.
+    // RETTET: inkluderede før kladder ('draft') som rigtigt salg - kun 'void' blev udelukket. En ubogført kladde
+    // er ikke en reel handel endnu (intet fakturanummer, ingen postering) og skal ikke tælle med i "Total Sales".
     // RETTET: salget var SUM(antal × pris) - uden linjerabat og uden valutakurs (en EUR-faktura talte som kroner),
     // og udgifterne var SUM(expenses.amount) - INKL. moms, inkl. ubogførte kladder og inkl. indtægtsposter
-    // (exp_type 'income'). Resultatet sammenlignede altså salg ekskl. moms med udgifter inkl. moms. Begge tal kommer
-    // nu fra hovedbogen (indtægts- og udgiftskonti, uden årsafslutningens lukkepostering) - samme tal som
-    // resultatopgørelsen.
+    // (exp_type 'income'). Begge tal kommer nu fra hovedbogen (indtægts- og udgiftskonti, uden årsafslutningens
+    // lukkepostering) - samme tal som resultatopgørelsen.
     $sales_query = "SELECT SUM(-l.amount) FROM ledger l JOIN journal j ON j.jou_id = l.jou_id JOIN accounts a ON a.acc_id = l.acc_id
                     WHERE a.acc_type = 'income' AND (j.trans_type IS NULL OR j.trans_type != 'year_end_close')";
     $res = @DB::query($conn, $sales_query);
@@ -60,45 +57,38 @@ if (isset($conn) && $conn) {
     }
 }
 
-// Vis demo hvis ingen reel omsætning (under 100 kr. total)
-if ($total_sales < 100.0) {
+// Vis demo kun når hovedbogen er HELT tom. RETTET: betingelsen var "omsætning under 100 kr" - et nystartet firma
+// med udgifter men intet salg endnu (eller salg udlignet af kreditnotaer) fik opdigtede nøgletal (45.000 / 18.500)
+// og beskeden "Databasen er tom".
+$idx_has_postings = isset($conn) && $conn && (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM ledger"))[0] ?? 0) > 0;
+if (!$idx_has_postings) {
     $total_sales = 45000.00;
     $total_expenses = 18500.00;
     $is_demo_data = true;
 }
 
+// Dag + dansk/oversat månedsforkortelse til grafernes akse (date('M') gav altid engelsk: Oct, Dec ...)
+function idx_day_mon(int $ts): string { return date('d', $ts) . '. ' . tc_month_name((int)date('n', $ts), true); }
+
 $net_profit = $total_sales - $total_expenses;
 $profit_color = $net_profit >= 0 ? 'var(--theme-success, #2ecc71)' : 'var(--theme-danger, #e74c3c)';
 
-// --- 2b. "MINE OPGAVER" - hvad venter på bogholderen lige nu ---
-// NY WIDGET (bruger-anmodet, fra §revisor/bogholder-behov-gennemgangen):
-// forsiden viste FØR udelukkende bagudskuende grafer (saldo-udvikling/
-// pengestrøm) - intet sted samlede den de ting der reelt venter på at blive
+// --- 2b. "MINE OPGAVER" - hvad venter på bogholderen lige nu --- NY WIDGET: forsiden viste FØR udelukkende
+// bagudskuende grafer (saldo-udvikling/pengestrøm) - intet sted samlede den de ting der reelt venter på at blive
 // gjort. Al data herunder findes allerede andre steder i systemet
-// (sales_hub.php/expense_list.php/reconcile_list.php/reminders.php) - denne
-// widget samler blot de fire tælletal ét sted med direkte links, i stedet
-// for at bogholderen selv skal huske at tjekke fire forskellige sider hver
-// dag. Genbruger BEVIDST samme WHERE-formel som reminders.php for "forfalden
-// faktura" (inv_status='sent' AND forfaldsdato overskredet AND stadig
-// udestående efter fratræk af invoice_payments), så tallet her aldrig kan
-// afvige fra hvad reminders.php selv ville vise.
+// (sales_hub.php/expense_list.php/reconcile_list.php/reminders.php) - denne widget samler blot de fire tælletal ét
+// sted med direkte links, i stedet for at bogholderen selv skal huske at tjekke fire forskellige sider hver dag.
 $todo_draft_invoices = 0;
 $todo_draft_expenses = 0;
 $todo_unreconciled_bank = 0;
 $todo_overdue_invoices = 0;
-// RETTET (bruger-anmodet, "kan bogholderen ønske sig mere"): widgeten var
-// blevet forældet af to funktioner bygget senere samme session
-// ([[bookkeeper-wishlist-round2]]'s bulk "Betal nu", [[bookkeeper-wishlist-
-// round3]]'s tilbud-opfølgning) - begge datakilder fandtes allerede, men
-// var aldrig koblet på forsiden.
+// RETTET: widgeten var blevet forældet af to funktioner bygget senere samme session ('s bulk "Betal nu",'s
+// tilbud-opfølgning) - begge datakilder fandtes allerede, men var aldrig koblet på forsiden.
 $todo_bills_due_soon    = 0;
 $todo_quotes_followup   = 0;
-// RETTET (bruger-anmodet, "kan bogholderen ønske sig mere", 3. runde):
-// products.prod_min_stock findes allerede (udfyldes på product_edit.php),
-// men blev reelt ALDRIG brugt nogen steder i appen - end ikke på
-// inventory_status.php selv, se dens egen rettelse samme runde. Samme
-// "data findes, men er aldrig koblet på noget synligt"-mønster som de to
-// tællere ovenfor.
+// RETTET: products.prod_min_stock findes allerede (udfyldes på product_edit.php), men blev reelt ALDRIG brugt
+// nogen steder i appen - end ikke på inventory_status.php selv,. Samme "data findes, men er aldrig koblet på noget
+// synligt"-mønster som de to tællere ovenfor.
 $todo_low_stock = 0;
 $todo_missing_email = 0;
 
@@ -123,7 +113,7 @@ if (isset($conn) && $conn) {
              FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1) + " . invoice_credited_sql($conn) . " AS total,
             (SELECT COALESCE(SUM(amount), 0) FROM invoice_payments WHERE inv_id = i.inv_id) AS paid
         FROM invoices i
-        WHERE i.inv_status = 'sent' AND i.inv_due_date IS NOT NULL AND i.inv_due_date < '$today_iso'");
+        WHERE i.inv_status = 'sent' AND i.inv_due_date IS NOT NULL AND i.inv_due_date <> '' AND i.inv_due_date < '$today_iso'");
     if ($ov_res) {
         while ($ov_row = DB::fetch_assoc($ov_res)) {
             if ((float)$ov_row['total'] - (float)$ov_row['paid'] > 0.01) $todo_overdue_invoices++;
@@ -139,6 +129,7 @@ if (isset($conn) && $conn) {
     $due_soon_cutoff = date('Y-m-d', strtotime('+7 days'));
     $r = @DB::query($conn, "SELECT COUNT(*) FROM expenses
         WHERE is_cancelled = 0 AND voucher_no IS NOT NULL AND paid_date IS NULL
+          AND (exp_type IS NULL OR exp_type != 'income')      -- RETTET: et indtægtsbilag er ikke en regning der skal betales
           AND due_date IS NOT NULL AND due_date <= '$due_soon_cutoff'");
     $r = $r ? DB::fetch_row($r) : null;
     $todo_bills_due_soon = $r ? (int)$r[0] : 0;
@@ -150,16 +141,17 @@ if (isset($conn) && $conn) {
     // igennem. quotes-tabellen findes ikke nødvendigvis endnu - stille
     // degradering til 0.
     $r = @DB::query($conn, "SELECT COUNT(*) FROM quotes q JOIN customers c ON q.cust_id = c.cust_id
-        WHERE q.status = 'sent' AND q.valid_until IS NOT NULL AND q.valid_until <= '$due_soon_cutoff'
+        WHERE q.status = 'sent' AND q.valid_until IS NOT NULL AND q.valid_until <> '' AND q.valid_until <= '$due_soon_cutoff'
           AND c.cust_email IS NOT NULL AND c.cust_email != ''");
     $r = $r ? DB::fetch_row($r) : null;
     $todo_quotes_followup = $r ? (int)$r[0] : 0;
 
-    // "Lavt lager" - samme sammenligning (stock <= min_stock, fallback 5)
-    // som inventory_status.php's nye advarselsvisning bruger. products-
-    // tabellen findes altid (kernetabel, ikke et valgfrit modul), så intet
+    // "Lavt lager" - samme sammenligning (stock <= min_stock, fallback 5) som inventory_status.php's nye
+    // advarselsvisning bruger. products-tabellen findes altid (kernetabel, ikke et valgfrit modul), så intet
     // stille-degraderings-tjek nødvendigt her.
-    $r = @DB::query($conn, "SELECT COUNT(*) FROM products WHERE prod_stock <= COALESCE(prod_min_stock, 5)");
+    // RETTET: en vare med minimumslager 0 ("ingen grænse" - typisk en ydelse uden lager) og 0 på lager talte ALTID
+    // som lavt lager (0 <= 0), så tælleren aldrig kunne nå 0. Kun varer med en reel grænse (> 0) tælles.
+    $r = @DB::query($conn, "SELECT COUNT(*) FROM products WHERE COALESCE(prod_min_stock, 5) > 0 AND prod_stock <= COALESCE(prod_min_stock, 5)");
     $r = $r ? DB::fetch_row($r) : null;
     $todo_low_stock = $r ? (int)$r[0] : 0;
 
@@ -172,13 +164,10 @@ if (isset($conn) && $conn) {
     $r = $r ? DB::fetch_row($r) : null;
     $todo_missing_email = $r ? (int)$r[0] : 0;
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 25): et
-    // bogholder-indtastet "næste momsfrist"-felt (company_settings.php) -
-    // ikke en selv-udregnet SKAT-formel (se dens egen kommentar for hvorfor).
-    // Tælles med her når fristen er inden for 14 dage ELLER allerede
-    // overskredet - forbliver bevidst "1" indtil bogholderen selv opdaterer
-    // datoen, samme "reminder der ikke forsvinder af sig selv"-idé som PSD2-
-    // udløbsadvarslen fra runde 23.
+    // NYT: et bogholder-indtastet "næste momsfrist"-felt (company_settings.php) - ikke en selv-udregnet
+    // SKAT-formel (. Tælles med her når fristen er inden for 14 dage ELLER allerede overskredet - forbliver
+    // bevidst "1" indtil bogholderen selv opdaterer datoen, samme "reminder der ikke forsvinder af sig selv"-idé
+    // som PSD2- udløbsadvarslen fra runde 23.
     $todo_vat_deadline = 0;
     $vat_deadline_raw = $global_settings['next_vat_deadline'] ?? '';
     if (!empty($vat_deadline_raw)) {
@@ -186,25 +175,13 @@ if (isset($conn) && $conn) {
         if ($vat_days_left <= 14) $todo_vat_deadline = 1;
     }
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 28):
-    // budget-vs-faktisk (§bookkeeper-wishlist-round21) fandtes hidtil KUN på
-    // report_income.php - krævede at man aktivt gik ind og valgte året for
-    // overhovedet at opdage et overforbrug. Tæller nu proaktivt, hvor mange
-    // udgiftskonti der allerede har overskredet DERES EGET årsbudget for
-    // indeværende år - samme forespørgsler (ledger+journal, acc_type=
-    // 'expense', årsafgrænset) som report_income.php's $res_costs, for at
-    // undgå at de to nogensinde kan give forskelligt svar på "er vi over
-    // budget". Stille degraderet til 0 hvis account_budgets ikke findes
-    // endnu (samme mønster som report_income.php).
+    // NYT: budget-vs-faktisk fandtes hidtil KUN på report_income.php - krævede at man aktivt gik ind og valgte
+    // året for overhovedet at opdage et overforbrug. Tæller nu proaktivt, hvor mange udgiftskonti der allerede har
+    // overskredet DERES EGET årsbudget for indeværende år - samme forespørgsler (ledger+journal, acc_type=
+    // 'expense', årsafgrænset) som report_income.php's $res_costs, for at undgå at de to nogensinde kan give
+    // forskelligt svar på "er vi over budget".
     $todo_over_budget = 0;
-    $has_budget_table_idx = false;
-    if (DB::is_sqlite()) {
-        $btchk_idx = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='account_budgets'");
-        $has_budget_table_idx = ($btchk_idx && DB::fetch_assoc($btchk_idx));
-    } else {
-        $btchk_idx = DB::query($conn, "SHOW TABLES LIKE 'account_budgets'");
-        $has_budget_table_idx = ($btchk_idx && DB::num_rows($btchk_idx) > 0);
-    }
+    $has_budget_table_idx = db_has_table($conn, 'account_budgets');
     if ($has_budget_table_idx) {
         $cur_year_idx = (int)date('Y');
         $bud_res_idx = @DB::query($conn, "SELECT acc_id, budget_amount FROM account_budgets WHERE year = $cur_year_idx AND budget_amount > 0");
@@ -215,6 +192,7 @@ if (isset($conn) && $conn) {
                 SELECT a.acc_id, SUM(l.amount) AS spent
                 FROM ledger l JOIN journal j ON l.jou_id = j.jou_id JOIN accounts a ON l.acc_id = a.acc_id
                 WHERE a.acc_type = 'expense' AND j.jou_date BETWEEN '$cur_year_idx-01-01' AND '$cur_year_idx-12-31'
+                  AND (j.trans_type IS NULL OR j.trans_type != 'year_end_close')      -- RETTET: lukkeposteringen nulstillede forbruget (som i report_income.php)
                 GROUP BY a.acc_id");
             if ($actual_res_idx) {
                 while ($ar = DB::fetch_assoc($actual_res_idx)) {
@@ -225,18 +203,11 @@ if (isset($conn) && $conn) {
         }
     }
 
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 29):
-    // gentagne fakturaer/udgifter kører kun når NOGEN rent faktisk besøger
-    // en side (hooket ind i htm_Footer(), se inc/recurring_invoices.inc.php's
-    // egen kommentar - "TinyCash har ingen rigtig cron-adgang på almindelig
-    // delt hosting"). Genererer desuden bevidst kun ÉN kladde pr. skabelon
-    // pr. sidevisning (indhenter sig selv gradvist, ikke i ét hug) - hvis
-    // ingen har besøgt systemet i en periode, kan next_run_date derfor falde
-    // markant bagud UDEN at nogen opdager det. Tæller skabeloner der er mere
-    // end 7 dage forfaldne (uafhængigt af interval_type - selv en årlig
-    // skabelon der er 7+ dage forfalden er værd at kigge på, da det typisk
-    // betyder systemet slet ikke er besøgt i en periode, ikke en fejl i
-    // selve intervalberegningen).
+    // NYT: gentagne fakturaer/udgifter kører kun når NOGEN rent faktisk besøger en side (hooket ind i htm_Footer,
+    // se inc/recurring_invoices.inc.php's egen kommentar - "TinyCash har ingen rigtig cron-adgang på almindelig
+    // delt hosting"). Genererer desuden bevidst kun ÉN kladde pr. skabelon pr. sidevisning (indhenter sig selv
+    // gradvist, ikke i ét hug) - hvis ingen har besøgt systemet i en periode, kan next_run_date derfor falde
+    // markant bagud UDEN at nogen opdager det.
     $todo_recur_overdue = 0;
     $recur_cutoff = date('Y-m-d', strtotime('-7 days'));
     $ri_res = @DB::query($conn, "SELECT COUNT(*) FROM recurring_invoices WHERE is_active = 1 AND next_run_date IS NOT NULL AND next_run_date <= '$recur_cutoff'");
@@ -254,10 +225,9 @@ $chart_dates = [];
 $chart_balance = [];
 
 if (isset($conn) && $conn && !$is_demo_data) {
-    // RETTET: "NOW" var hårdkodet til en fast dato (2026-06-24) i stedet for
-    // at bruge den faktiske aktuelle dato - grafens "sidste N måneder" endte
-    // derfor et stykke i fortiden i stedet for i dag, uanset hvornår siden
-    // reelt blev besøgt. Fundet ved gennemgangen af pengestrøms-grafen.
+    // RETTET: "NOW" var hårdkodet til en fast dato (2026-06-24) i stedet for at bruge den faktiske aktuelle dato -
+    // grafens "sidste N måneder" endte derfor et stykke i fortiden i stedet for i dag, uanset hvornår siden reelt
+    // blev besøgt. Fundet ved gennemgangen af pengestrøms-grafen.
     $target_date = date('Y-m-d', strtotime("-$months_selected months"));
     // RETTET: kurven summerede de IMPORTEREDE banklinjer (bank_statement_temp) fra 0 - den startede altid i 0 i
     // stedet for den faktiske saldo, viste fx et minus selvom banken stod i plus, talte ubehandlede og allerede
@@ -275,21 +245,25 @@ if (isset($conn) && $conn && !$is_demo_data) {
     $res3 = @DB::query($conn, "SELECT j.jou_date AS d, SUM(l.amount) AS amt FROM ledger l JOIN journal j ON j.jou_id = l.jou_id
                                WHERE l.acc_id IN ($bank_in) AND j.jou_date >= '$td_esc' GROUP BY j.jou_date ORDER BY j.jou_date ASC");
     if ($res3 && DB::num_rows($res3) > 0) {
-        $chart_dates[]   = date("d. M", strtotime($target_date));
+        $chart_dates[]   = idx_day_mon(strtotime($target_date));
         $chart_balance[] = $running_balance;
         while ($row3 = DB::fetch_assoc($res3)) {
             $running_balance = round($running_balance + (float)$row3['amt'], 2);
-            $chart_dates[] = date("d. M", strtotime($row3['d']));
+            $chart_dates[] = idx_day_mon(strtotime($row3['d']));
             $chart_balance[] = $running_balance;
         }
     } elseif (abs($running_balance) >= 0.005) {
         // ingen bevægelser i perioden: en flad linje med saldoen (ikke opdigtede tal)
-        $chart_dates     = [date("d. M", strtotime($target_date)), date("d. M")];
+        $chart_dates     = [idx_day_mon(strtotime($target_date)), idx_day_mon(time())];
         $chart_balance   = [$running_balance, $running_balance];
     }
 }
 
-if (empty($chart_dates)) {
+if (empty($chart_dates) && $idx_has_postings) {
+    // RETTET: posteringer men ingen bankbevægelser (fx kun fakturaer) gav opdigtede tal og beskeden "Databasen er tom"
+    $chart_dates   = [idx_day_mon(strtotime("-$months_selected months")), idx_day_mon(time())];
+    $chart_balance = [0, 0];
+} elseif (empty($chart_dates)) {
     $is_demo_data = true; // Ingen banktransaktioner — vis demo-info
     $start_ts = strtotime("-$months_selected months");
     $end_ts = time();
@@ -303,18 +277,16 @@ if (empty($chart_dates)) {
     ];
 
     for ($i = 0; $i < 10; $i++) {
-        $chart_dates[] = date("d. M", $start_ts + ($i * $step));
+        $chart_dates[] = idx_day_mon($start_ts + ($i * $step));
         $chart_balance[] = $fake_trends[$months_selected][$i];
     }
 }
 
 // --- 4. HENT DATA TIL GRAF 2 (PENGESTRØM) - RIGTIGE PERIODE-TAL ---
-// RETTET: viste FØR altid en kunstig procentvis opdeling af den ALT-TIDS
-// totalsalg/-udgift (fx "salesBase * 0.2, * 0.3, * 0.25, * 0.25" for
-// kvartaler) - simulerede tal, aldrig hvad der reelt skete i den valgte
-// periode, uanset om databasen indeholdt rigtige data eller ej. Erstattet
-// med rigtige, dato-afgrænsede summer pr. bucket. Samme "ekskludér kladder"-
-// rettelse som KPI-kortet ovenfor er anvendt her.
+// RETTET: viste FØR altid en kunstig procentvis opdeling af den ALT-TIDS totalsalg/-udgift (fx "salesBase * 0.2, *
+// 0.3, * 0.25, * 0.25" for kvartaler) - simulerede tal, aldrig hvad der reelt skete i den valgte periode, uanset
+// om databasen indeholdt rigtige data eller ej. Samme "ekskludér kladder"- rettelse som KPI-kortet ovenfor er
+// anvendt her.
 $flow_labels = [];
 $flow_sales = [];
 $flow_expenses = [];
@@ -337,8 +309,8 @@ if (isset($conn) && $conn) {
         $from = $boundaries[$i];
         $to   = $boundaries[$i + 1];
 
-        $label_start = date('M', strtotime($from));
-        $label_end   = date('M', strtotime($to . ' -1 day'));
+        $label_start = tc_month_name((int)date('n', strtotime($from)), true);      // RETTET: date('M') var altid engelsk
+        $label_end   = tc_month_name((int)date('n', strtotime($to . ' -1 day')), true);
         $flow_labels[] = ($label_start === $label_end) ? $label_start : "$label_start-$label_end";
 
         // RETTET (selv-fanget, runde 24 - samme fejlklasse som §bookkeeper-
@@ -385,14 +357,8 @@ if ($flow_is_demo) {
 }
 
 // --- 5. HENT DATA TIL GRAF 3 (LIKVIDITETSPROGNOSE, FREMADSKUENDE) ---
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 24): graf 2
-// herover er udelukkende HISTORISK (allerede bogførte, forgangne perioder) -
-// der fandtes ingen fremadskuende prognose noget sted i systemet. Bruger
-// PRÆCIS samme åbne-faktura- og ubetalt-udgift-forespørgsler som
-// aging_report.php/subledger_reconciliation.php (samme etablerede,
-// allerede-reviderede beløbslogik, inkl. invoice_discount_sql()/exch_rate) -
-// to steder der begge viser "hvad der skyldes" må aldrig kunne regne det ud
-// forskelligt. Kreditorsiden degraderer stille (tom outgoing-serie) hvis
+// NYT: graf 2 herover er udelukkende HISTORISK (allerede bogførte, forgangne perioder) - der fandtes ingen
+// fremadskuende prognose noget sted i systemet. Kreditorsiden degraderer stille (tom outgoing-serie) hvis
 // leverandørmodulets due_date-kolonne ikke er migreret endnu, samme mønster.
 $fc_labels   = [lang('@Overdue'), lang('@This week'), lang('@Week 2'), lang('@Week 3'), lang('@Week 4'), lang('@Later')];
 $fc_incoming = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
@@ -458,11 +424,9 @@ $fc_has_data = (array_sum($fc_incoming) > 0.01 || array_sum($fc_outgoing) > 0.01
 </style>
 
 <?php
-// RETTET (bruger-anmodet): det fælles banner herover er fjernet - samme
-// besked vises nu direkte på begge udviklingsgrafer længere nede (se
-// [[topnav-backup-warning-overlap]]s opfølgning), hvor øjet rent faktisk
-// er når de opdigtede tal skal fortolkes. At vise den BÅDE her øverst OG
-// nede ved graferne var overflødigt dobbelt op.
+// RETTET: det fælles banner herover er fjernet - samme besked vises nu direkte på begge udviklingsgrafer længere
+// nede (ses opfølgning), hvor øjet rent faktisk er når de opdigtede tal skal fortolkes. At vise den BÅDE her
+// øverst OG nede ved graferne var overflødigt dobbelt op.
 
 // "Mine opgaver" - placeret FØR KPI-tallene, da handlinger der venter er
 // mere presserende end historiske nøgletal for den daglige bogholder-brug.
@@ -511,15 +475,15 @@ $todo_items = [
 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; width: 1000px; max-width: 100%; box-sizing: border-box; margin: 0 auto 20px auto;">
     <div class="kpi-card" style="padding: 20px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 8px dotted #2ecc71;">
         <div class="kpi-title" style="font-size: 12px; text-transform: uppercase; font-weight: bold;"><?php echo lang('@Total Sales'); ?></div>
-        <div style="font-size: 24px; font-weight: bold; margin-top: 5px;"><?php echo number_format($total_sales, 2, ',', '.'); ?> kr.</div>
+        <div style="font-size: 24px; font-weight: bold; margin-top: 5px;"><?php echo fmt_dk($total_sales); ?> kr.</div>
     </div>
     <div class="kpi-card" style="padding: 20px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 8px dotted #e74c3c;">
         <div class="kpi-title" style="font-size: 12px; text-transform: uppercase; font-weight: bold;"><?php echo lang('@Total Expenses'); ?></div>
-        <div style="font-size: 24px; font-weight: bold; margin-top: 5px;"><?php echo number_format($total_expenses, 2, ',', '.'); ?> kr.</div>
+        <div style="font-size: 24px; font-weight: bold; margin-top: 5px;"><?php echo fmt_dk($total_expenses); ?> kr.</div>
     </div>
     <div class="kpi-card" style="padding: 20px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 8px dotted <?php echo $profit_color; ?>;">
         <div class="kpi-title" style="font-size: 12px; text-transform: uppercase; font-weight: bold;"><?php echo lang('@Net Profit / Balance'); ?></div>
-        <div style="font-size: 24px; font-weight: bold; color: <?php echo $profit_color; ?>; margin-top: 5px;"><?php echo number_format($net_profit, 2, ',', '.'); ?> kr.</div>
+        <div style="font-size: 24px; font-weight: bold; color: <?php echo $profit_color; ?>; margin-top: 5px;"><?php echo fmt_dk($net_profit); ?> kr.</div>
     </div>
 </div>
 
@@ -559,12 +523,10 @@ $period_selector_flow = '
 
 htm_Card_(capt: '@Account Balance Trend', wdth: 1000, info: '', form: false, echo: true, tool: $period_selector_balance);
 if ($is_demo_data) {
-    // RETTET (bruger-anmodet): det fælles "Databasen er tom"-banner
-    // øverst på siden var den ENESTE demo-data-markering - efter at have
-    // scrollet forbi Mine opgaver og de tre nøgletalskort er det let at
-    // glemme, at grafen herunder også viser opdigtede tal, ikke rigtig
-    // udvikling. Samme notits-stil som den fælles banner, blot lokalt på
-    // selve grafkortet, hvor øjet rent faktisk er når tallene aflæses.
+    // RETTET: det fælles "Databasen er tom"-banner øverst på siden var den ENESTE demo-data-markering - efter at
+    // have scrollet forbi Mine opgaver og de tre nøgletalskort er det let at glemme, at grafen herunder også viser
+    // opdigtede tal, ikke rigtig udvikling. Samme notits-stil som den fælles banner, blot lokalt på selve
+    // grafkortet, hvor øjet rent faktisk er når tallene aflæses.
     echo "<div style='background: var(--theme-info-bg, #eaf2f8); border-left: 5px dotted var(--theme-primary, #3498db); color: var(--theme-info-text, #2980b9); padding: 10px 12px; margin-bottom: 12px; font-size: 12px; border-radius: 4px;'>"
         . "ℹ️ " . lang('@The database is empty. Simulated demo data is displayed.') . "</div>";
 }
@@ -575,10 +537,8 @@ htm_Card_end();
 echo '<div style="margin-top: 20px;"></div>';
 htm_Card_(capt: '@Financial Performance (Cash Flow)', wdth: 1000, info: '', form: false, echo: true, tool: $period_selector_flow);
 if ($is_demo_data) {
-    // RETTET (bruger-anmodet, samme begrundelse som graf 1 ovenfor): vises
-    // nu ALTID lokalt på grafen når HELE siden er i demo-tilstand, i
-    // stedet for at stole på at brugeren husker det fælles banner langt
-    // oppe i toppen af siden.
+    // RETTET: vises nu ALTID lokalt på grafen når HELE siden er i demo-tilstand, i stedet for at stole på at
+    // brugeren husker det fælles banner langt oppe i toppen af siden.
     echo "<div style='background: var(--theme-info-bg, #eaf2f8); border-left: 5px dotted var(--theme-primary, #3498db); color: var(--theme-info-text, #2980b9); padding: 10px 12px; margin-bottom: 12px; font-size: 12px; border-radius: 4px;'>"
         . "ℹ️ " . lang('@The database is empty. Simulated demo data is displayed.') . "</div>";
 } elseif ($flow_is_demo) {
@@ -597,9 +557,7 @@ if ($is_demo_data) {
 <div style="margin-top: 20px;"></div>
 <?php
 htm_Card_(capt: '@Cash Flow Forecast (Next 4 Weeks)', wdth: 1000, info: '', form: false, echo: true);
-echo '<p style="color:var(--text-muted); font-size:0.85em; margin-top:-5px;">'
-    . lang('@Based on open invoice due dates and unpaid expense due dates - not yet booked income/expenses are not included.')
-    . '</p>';
+htm_Note(lang('@Based on open invoice due dates and unpaid expense due dates - not yet booked income/expenses are not included.'), 'font-size:0.85em; margin-top:-5px;');
 ?>
 <div style="width: 100%; height: 250px; position: relative; padding: 5px 0;"><canvas id="cashFlowForecastChart"></canvas></div>
 <?php htm_Card_end(); ?>

@@ -15,12 +15,7 @@ require_once 'inc/audit.inc.php';
 // migrate_*.php er kørt - samme "stille degradering hvis ikke migreret
 // endnu"-mønster som resten af appen (se fx aging_report.php).
 function pa_table_exists($conn, $name) {
-    if (DB::is_sqlite()) {
-        $res = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='$name'");
-        return ($res && $res->fetch());
-    }
-    $res = DB::query($conn, "SHOW TABLES LIKE '$name'");
-    return ($res && DB::num_rows($res) > 0);
+    return db_has_table($conn, (string)$name);
 }
 
 $action = $_GET['action'] ?? '';
@@ -37,19 +32,23 @@ switch ($action) {
         $is_active = (int)($_POST['is_active'] ?? 1);
 
         if (empty($proj_no)) {
-            header("Location: project_edit.php?id=0&err=missing_code"); exit;
+            redirect('project_edit.php?id=0', '@Project Code is required', 'error');
         }
-        // RETTET (produkt-/projekt-gennemgang, se [[project-bugs-review]]):
-        // proj_no har ingen UNIQUE-begrænsning i skemaet, og der var intet
-        // applikationstjek heller - to projekter kunne trivielt få samme
-        // projektkode, hvilket er den primære måde et projekt genkendes på
-        // i resten af appen (fakturaer, udgifter, oversigtstabellen).
+        // Start/slut blev ikke kontrolleret - "2026-02-31" og en slutdato før starten blev gemt
+        if (($start !== '' && !tc_is_date($start)) || ($stop !== '' && !tc_is_date($stop))) redirect('project_edit.php?id=0', '@Please enter a valid date.', 'error');
+        if ($start !== '' && $stop !== '' && $stop < $start) redirect('project_edit.php?id=0', '@The end date cannot be before the start date.', 'error');
+        $is_active = $is_active ? 1 : 0;
+        // RETTET: proj_no har ingen UNIQUE-begrænsning i skemaet, og der var intet applikationstjek heller - to
+        // projekter kunne trivielt få samme projektkode, hvilket er den primære måde et projekt genkendes på i
+        // resten af appen (fakturaer, udgifter, oversigtstabellen).
         if (DB::num_rows(DB::query($conn, "SELECT proj_id FROM projects WHERE proj_no = '$proj_no'")) > 0) {
-            header("Location: project_edit.php?id=0&err=duplicate_code"); exit;
+            redirect('project_edit.php?id=0', '@This project code is already in use by another project.', 'error');
         }
 
         $start_sql   = $start   ? "'$start'"   : 'NULL';
         $stop_sql    = $stop    ? "'$stop'"    : 'NULL';
+        // RETTET: kunden blev ikke kontrolleret - et projekt kunne knyttes til en kunde der ikke findes (fx -1)
+        if ($cust_id !== 0 && !tc_customer_ok($conn, $cust_id, $cust_id)) redirect('project_edit.php?id=0', '@Please choose a customer from the list.', 'error');
         $cust_sql    = $cust_id ? $cust_id     : 'NULL';
 
         DB::query($conn, "INSERT INTO projects
@@ -57,7 +56,7 @@ switch ($action) {
             VALUES ('$proj_no', $cust_sql, $start_sql, $stop_sql, '$desc', '$concept', $is_active)");
 
         $new_id = DB::insert_id($conn);
-        header("Location: project_view.php?id=$new_id&msg=created"); exit;
+        redirect("project_view.php?id=$new_id", '@Project created');
 
     case 'update_project':
         $proj_id   = (int)($_POST['proj_id'] ?? 0);
@@ -70,16 +69,21 @@ switch ($action) {
         $is_active = (int)($_POST['is_active'] ?? 1);
 
         if ($proj_id <= 0 || empty($proj_no)) {
-            header("Location: project_edit.php?id=$proj_id&err=missing_code"); exit;
+            redirect("project_edit.php?id=$proj_id", '@Project Code is required', 'error');
         }
+        // Start/slut blev ikke kontrolleret - "2026-02-31" og en slutdato før starten blev gemt
+        if (($start !== '' && !tc_is_date($start)) || ($stop !== '' && !tc_is_date($stop))) redirect('project_edit.php?id=' . $proj_id, '@Please enter a valid date.', 'error');
+        if ($start !== '' && $stop !== '' && $stop < $start) redirect('project_edit.php?id=' . $proj_id, '@The end date cannot be before the start date.', 'error');
+        $is_active = $is_active ? 1 : 0;
         // Samme dublet-tjek som create_project, men udelukker projektets egen
         // række (ellers ville "gem uden at ændre koden" altid fejle).
         if (DB::num_rows(DB::query($conn, "SELECT proj_id FROM projects WHERE proj_no = '$proj_no' AND proj_id != $proj_id")) > 0) {
-            header("Location: project_edit.php?id=$proj_id&err=duplicate_code"); exit;
+            redirect("project_edit.php?id=$proj_id", '@This project code is already in use by another project.', 'error');
         }
 
         $start_sql = $start   ? "'$start'"   : 'NULL';
         $stop_sql  = $stop    ? "'$stop'"    : 'NULL';
+        if ($cust_id !== 0 && !tc_customer_ok($conn, $cust_id, $cust_id)) redirect("project_edit.php?id=$proj_id", '@Please choose a customer from the list.', 'error');
         $cust_sql  = $cust_id ? $cust_id     : 'NULL';
 
         DB::query($conn, "UPDATE projects SET
@@ -92,7 +96,7 @@ switch ($action) {
             is_active = $is_active
             WHERE proj_id = $proj_id");
 
-        header("Location: project_view.php?id=$proj_id&msg=saved"); exit;
+        redirect("project_view.php?id=$proj_id", '@Changes saved successfully');
 
     case 'delete_project':
         $proj_id = (int)($_GET['id'] ?? 0);
@@ -100,41 +104,38 @@ switch ($action) {
             // Hent projektets data FØR sletning, til revisionssporet.
             $old_res = DB::query($conn, "SELECT proj_id, proj_no, cust_id FROM projects WHERE proj_id = $proj_id");
             $old_row = $old_res ? DB::fetch_assoc($old_res) : null;
+            if (!$old_row) redirect('project_view.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: meldte succes, selv om intet fandtes (dobbeltklik, en anden fane)
 
             // RETTET: et projekt med BOGFØRTE fakturaer, udgifter eller posteringer kunne slettes - projektet blev
             // så fjernet fra selve bogføringen (journal.proj_id m.fl.), og projektregnskabet kunne ikke længere
-            // dokumenteres. Og fakturerbare timer der endnu IKKE var faktureret, blev stille gjort ikke-fakturerbare
-            // (tabt omsætning). Sådan et projekt afsluttes nu i stedet (Aktiv: nej) - kun et ubrugt projekt slettes.
+            // dokumenteres. Sådan et projekt afsluttes nu i stedet (Aktiv: nej) - kun et ubrugt projekt slettes.
             $pa_used = (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM invoices WHERE proj_id = $proj_id AND LOWER(inv_status) <> 'draft'"))[0] ?? 0)
                      + (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM expenses WHERE proj_id = $proj_id AND voucher_no IS NOT NULL"))[0] ?? 0)
-                     + (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM journal WHERE proj_id = $proj_id"))[0] ?? 0);
+                     + (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM journal WHERE proj_id = $proj_id"))[0] ?? 0)
+                     // RETTET: kun fakturaHOVEDETS projekt blev tjekket - en bogført faktura med projektet på en LINJE (andet
+                     // projekt i hovedet, eller intet) fik bagefter projektet fjernet fra sin bogførte linje nedenfor, og
+                     // projektets omsætning forsvandt stille fra projektregnskabet
+                     + (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM invoice_lines il JOIN invoices i ON i.inv_id = il.inv_id
+                                                              WHERE il.proj_id = $proj_id AND LOWER(i.inv_status) <> 'draft'"))[0] ?? 0);
             if (pa_table_exists($conn, 'time_entries')) {
                 $pa_used += (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM time_entries WHERE proj_id = $proj_id AND is_billable = 1 AND is_invoiced = 0"))[0] ?? 0);
             }
             if ($pa_used > 0) {
-                header("Location: project_edit.php?id=$proj_id&err=in_use"); exit;
+                redirect("project_edit.php?id=$proj_id", '@This project has posted invoices, expenses or entries, or hours not yet invoiced, and cannot be deleted - set it to inactive instead.', 'error');
             }
             if (pa_table_exists($conn, 'recurring_expenses')) {      // (manglede i listen herunder)
                 DB::query($conn, "UPDATE recurring_expenses SET proj_id = NULL WHERE proj_id = $proj_id");
             }
 
             // Nulstil proj_id referencer i stedet for at slette data.
-            // RETTET (se [[project-bugs-review]]): denne liste dækkede kun 4
-            // af de 7 tabeller i skemaet der reelt har en proj_id-kolonne -
-            // recurring_invoices/recurring_invoice_lines/transactions blev
-            // aldrig ryddet, og fik derfor en løs reference til et projekt-ID
-            // der ikke længere findes (bl.a. relevant for en gentagen faktura
-            // der stadig kører videre efter det tilknyttede projekt er slettet).
-            //
-            // NYT (§bugs-batch-30-review): samme fejlklasse gentaget - endnu
-            // tre tabeller med en proj_id-kolonne (fixed_assets, quotes/
-            // quote_lines, time_entries) er alle kommet til SIDEN sidste
-            // gennemgang af netop denne liste, og blev aldrig tilføjet. Et
-            // slettet projekt efterlod et anlægsaktiv, et tilbud eller en
-            // timeregistrering med en løs reference til et projekt-ID der
-            // ikke længere findes. For time_entries tvinges is_billable=0
-            // samtidig - uden et projekt er der ingen kunde at fakturere til,
-            // så "fakturerbar" ville være meningsløst og kunne aldrig reelt
+            // RETTET: denne liste dækkede kun 4 af de 7 tabeller i skemaet der reelt har en proj_id-kolonne -
+            // recurring_invoices/recurring_invoice_lines/transactions blev aldrig ryddet, og fik derfor en løs
+            // reference til et projekt-ID der ikke længere findes (bl.a. relevant for en gentagen faktura der
+            // stadig kører videre efter det tilknyttede projekt er slettet).
+            // NYT: samme fejlklasse gentaget - endnu tre tabeller med en proj_id-kolonne (fixed_assets,
+            // quotes/quote_lines, time_entries) er alle kommet til SIDEN sidste gennemgang af netop denne liste,
+            // og blev aldrig tilføjet. For time_entries tvinges is_billable=0 samtidig - uden et projekt er der
+            // ingen kunde at fakturere til, så "fakturerbar" ville være meningsløst og kunne aldrig reelt
             // konverteres til en faktura via time_actions.php alligevel.
             DB::query($conn, "UPDATE invoices                SET proj_id = NULL WHERE proj_id = $proj_id");
             DB::query($conn, "UPDATE invoice_lines           SET proj_id = NULL WHERE proj_id = $proj_id");
@@ -157,18 +158,16 @@ switch ($action) {
                 log_action($conn, 'DELETE_PROJECT', 'projects', $proj_id, $old_row, null);
             }
         }
-        header("Location: project_view.php?msg=deleted"); exit;
+        redirect('project_view.php', '@Project deleted');
 
     case 'toggle_module':
         // Slå projekt-modulet til/fra fra settings-siden
         $val = ($_POST['module_projects'] ?? '0') === '1' ? '1' : '0';
-        // RETTET (se [[project-bugs-review]]): et rent UPDATE ramte 0 rækker
-        // og fejlede derfor helt tavst, hvis module_projects-nøglen aldrig
-        // var oprettet endnu (fx en frisk installation, hvor Firmaindstillinger
-        // aldrig er gemt én eneste gang) - bekræftet direkte: at slå modulet
-        // til fra denne side gjorde reelt ingenting i den situation.
-        // company_settings.php's egen gem-logik bruger allerede korrekt
-        // upsert for samme nøgle - samme mønster her.
+        // RETTET: et rent UPDATE ramte 0 rækker og fejlede derfor helt tavst, hvis module_projects-nøglen aldrig
+        // var oprettet endnu (fx en frisk installation, hvor Firmaindstillinger aldrig er gemt én eneste gang) -
+        // bekræftet direkte: at slå modulet til fra denne side gjorde reelt ingenting i den situation.
+        // company_settings.php's egen gem-logik bruger allerede korrekt upsert for samme nøgle - samme mønster
+        // her.
         if (DB::is_sqlite()) {
             DB::query($conn, "INSERT INTO settings (setting_key, setting_value) VALUES ('module_projects', '$val')
                               ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value");
@@ -187,9 +186,9 @@ switch ($action) {
         if (!preg_match('#^[A-Za-z0-9_][A-Za-z0-9_\-./?=&]*$#', $return_to) || str_starts_with($return_to, '//')) {
             $return_to = 'project_view.php';
         }
-        header("Location: " . $return_to); exit;
+        redirect($return_to);
 
     default:
-        header("Location: project_view.php"); exit;
+        redirect("project_view.php");
 }
 ?>

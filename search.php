@@ -43,13 +43,22 @@ if (strlen($q) < 2) {
     exit;
 }
 
-$like = '%' . DB::escape($conn, $q) . '%';
+// RETTET: % og _ i søgeteksten virkede som jokertegn - "AB_12" fandt også "ABX12", og "%" fandt alt. De matches nu
+// bogstaveligt (backslash som escape-tegn; SQLite skal have ESCAPE angivet, MySQL bruger backslash som standard).
+$like_q = DB::escape($conn, $q);
+if (DB::is_sqlite()) $like_q = str_replace('\\', '\\\\', $like_q);      // (MySQL's escape fordobler allerede backslash)
+$like = '%' . str_replace(['%', '_'], ['\%', '\_'], $like_q) . '%';
+$lesc = DB::is_sqlite() ? " ESCAPE '\'" : '';
+// Uden hensyn til store/små bogstaver - også æ/ø/å: SQLite's LIKE kender kun A-Z ("ælling" fandt ikke "Ælling");
+// tc_lower() er registreret i inc/db_connect.inc.php. MySQL's utf8mb4-sortering klarer det selv.
+$like_lc = mb_strtolower($like, 'UTF-8');
+$L = fn(string $col): string => DB::is_sqlite() ? "tc_lower($col) LIKE '$like_lc'$lesc" : "$col LIKE '$like'";
 $any_results = false;
 
 // --- KUNDER ---
 // RETTET: kunder og leverandører i papirkurven blev fundet og åbnet som almindelige, aktive poster
 $cust_res = DB::query($conn, "SELECT cust_id, cust_name, cust_email, cust_cvr FROM customers
-    WHERE (cust_name LIKE '$like' OR cust_email LIKE '$like' OR cust_cvr LIKE '$like') AND " . customers_active_filter($conn) . "
+    WHERE ({$L('cust_name')} OR {$L('cust_email')} OR {$L('cust_cvr')}) AND " . customers_active_filter($conn) . "
     ORDER BY cust_name LIMIT $RESULT_LIMIT");
 $cust_rows = [];
 if ($cust_res) { while ($r = DB::fetch_assoc($cust_res)) { $cust_rows[] = $r; } }
@@ -70,9 +79,14 @@ if (!empty($cust_rows)) {
 }
 
 // --- FAKTURAER ---
-$inv_res = DB::query($conn, "SELECT i.inv_id, i.invoice_no, i.inv_status, i.inv_date, c.cust_name
+// RETTET: kreditnotaer (intet invoice_no) stod som "Kladde" og kunne ikke findes på deres eget nummer (KN-000003)
+require_once __DIR__ . '/inc/invoice_layouts.inc.php';
+$sr_has_cn = il_column_exists($conn, 'invoices', 'credit_note_no');
+$sr_cn_no  = (int)preg_replace('/\D/', '', preg_replace('/^\s*KN-?/i', '', $q));
+$sr_cn_sql = ($sr_has_cn && $sr_cn_no > 0 && preg_match('/^\s*(KN-?)?\d+\s*$/i', $q)) ? " OR i.credit_note_no = $sr_cn_no" : '';
+$inv_res = DB::query($conn, "SELECT i.inv_id, i.invoice_no, i.inv_status, i.inv_date, i.credit_ref" . ($sr_has_cn ? ", i.credit_note_no" : "") . ", c.cust_name
     FROM invoices i JOIN customers c ON i.cust_id = c.cust_id
-    WHERE i.invoice_no LIKE '$like' OR c.cust_name LIKE '$like' OR i.cust_reference LIKE '$like'
+    WHERE {$L('i.invoice_no')} OR {$L('c.cust_name')} OR {$L('i.cust_reference')}$sr_cn_sql
     ORDER BY i.inv_date DESC LIMIT $RESULT_LIMIT");
 $inv_rows = [];
 if ($inv_res) { while ($r = DB::fetch_assoc($inv_res)) { $inv_rows[] = $r; } }
@@ -82,7 +96,8 @@ if (!empty($inv_rows)) {
     htm_Card_(sprintf(lang('@Invoices (%d)'), count($inv_rows)), 1000);
     $data = [];
     foreach ($inv_rows as $r) {
-        $label = !empty($r['invoice_no']) ? '#' . $r['invoice_no'] : lang('@Draft');
+        $label = !empty($r['invoice_no']) ? '#' . $r['invoice_no']
+               : (!empty($r['credit_ref']) ? lang('@Credit Note') . ' KN-' . str_pad((string)($r['credit_note_no'] ?? ''), 6, '0', STR_PAD_LEFT) : lang('@Draft'));
         $data[] = [
             '<a href="invoice_view.php?id=' . (int)$r['inv_id'] . '">' . htmlspecialchars($label) . '</a>',
             htmlspecialchars($r['cust_name']),
@@ -95,8 +110,11 @@ if (!empty($inv_rows)) {
 }
 
 // --- UDGIFTER ---
-$exp_res = DB::query($conn, "SELECT exp_id, exp_date, supplier, description, amount, voucher_no FROM expenses
-    WHERE supplier LIKE '$like' OR description LIKE '$like'
+// RETTET: en udgift kunne ikke findes på sit bilagsnummer (bogholderens mest almindelige opslag: "bilag 117"), og en
+// annulleret udgift stod som "Bogført". Et rent tal søges nu også som bilagsnummer; annullerede vises som annulleret.
+$exp_voucher_sql = preg_match('/^\d{1,9}$/', $q) ? " OR voucher_no = " . (int)$q : '';
+$exp_res = DB::query($conn, "SELECT exp_id, exp_date, supplier, description, amount, voucher_no, is_cancelled FROM expenses
+    WHERE {$L('supplier')} OR {$L('description')}$exp_voucher_sql
     ORDER BY exp_date DESC LIMIT $RESULT_LIMIT");
 $exp_rows = [];
 if ($exp_res) { while ($r = DB::fetch_assoc($exp_res)) { $exp_rows[] = $r; } }
@@ -110,8 +128,9 @@ if (!empty($exp_rows)) {
             '<a href="expense_edit.php?id=' . (int)$r['exp_id'] . '">' . htmlspecialchars($r['supplier']) . '</a>',
             htmlspecialchars($r['description']),
             date(CONF_DATE_FORMAT, strtotime($r['exp_date'])),
-            number_format((float)$r['amount'], 2, ',', '.'),
-            empty($r['voucher_no']) ? '<span style="color:var(--text-muted);">' . lang('@Draft') . '</span>' : lang('@Posted'),
+            fmt_dk((float)$r['amount']),
+            !empty($r['is_cancelled']) ? '<span style="color:var(--color-danger);">' . lang('@Cancelled') . '</span>'
+                : (empty($r['voucher_no']) ? '<span style="color:var(--text-muted);">' . lang('@Draft') . '</span>' : lang('@Posted') . ' (' . lang('@Voucher') . ' ' . (int)$r['voucher_no'] . ')'),
         ];
     }
     htm_Table(['@Supplier', '@Description', '@Date', '@Amount', '@Status'], $data, 'search_exp_tbl', 100);
@@ -120,7 +139,7 @@ if (!empty($exp_rows)) {
 
 // --- LEVERANDØRER (leverandørmodul kan mangle - degraderer stille) ---
 $sup_res = @DB::query($conn, "SELECT supplier_id, supplier_name, cvr FROM suppliers
-    WHERE supplier_name LIKE '$like' AND " . suppliers_active_filter($conn) . " ORDER BY supplier_name LIMIT $RESULT_LIMIT");
+    WHERE {$L('supplier_name')} AND " . suppliers_active_filter($conn) . " ORDER BY supplier_name LIMIT $RESULT_LIMIT");
 if ($sup_res !== false) {
     $sup_rows = [];
     while ($r = DB::fetch_assoc($sup_res)) { $sup_rows[] = $r; }
@@ -141,7 +160,7 @@ if ($sup_res !== false) {
 
 // --- PRODUKTER ---
 $prod_res = DB::query($conn, "SELECT prod_id, prod_sku, prod_name, prod_price, prod_stock FROM products
-    WHERE prod_name LIKE '$like' OR prod_sku LIKE '$like'
+    WHERE {$L('prod_name')} OR {$L('prod_sku')}
     ORDER BY prod_name LIMIT $RESULT_LIMIT");
 $prod_rows = [];
 if ($prod_res) { while ($r = DB::fetch_assoc($prod_res)) { $prod_rows[] = $r; } }
@@ -154,7 +173,7 @@ if (!empty($prod_rows)) {
         $data[] = [
             '<a href="product_edit.php?id=' . (int)$r['prod_id'] . '">' . htmlspecialchars($r['prod_name']) . '</a>',
             htmlspecialchars($r['prod_sku'] ?? ''),
-            number_format((float)$r['prod_price'], 2, ',', '.'),
+            fmt_dk((float)$r['prod_price']),
             $r['prod_stock'],
         ];
     }
@@ -162,19 +181,14 @@ if (!empty($prod_rows)) {
     htm_Card_end();
 }
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): søgningen dækkede
-// kun de fem oprindelige moduler - Tilbud/Anlægsaktiver/Timeregistrering
-// (alle tre bygget SENERE end selve global-søgningen) blev aldrig koblet
-// på. En søgning på et firmanavn fandt derfor ikke et tilbud lavet til dem,
-// selvom tilbuddet er et fuldgyldigt dokument på lige fod med en faktura.
-// Samme "stille degradering hvis ikke migreret endnu"-mønster som
-// leverandørsøgningen ovenfor for alle tre - ingen af de tre tabeller findes
-// nødvendigvis på en frisk installation.
+// NYT: søgningen dækkede kun de fem oprindelige moduler - Tilbud/Anlægsaktiver/Timeregistrering (alle tre bygget
+// SENERE end selve global-søgningen) blev aldrig koblet på. En søgning på et firmanavn fandt derfor ikke et tilbud
+// lavet til dem, selvom tilbuddet er et fuldgyldigt dokument på lige fod med en faktura.
 
 // --- TILBUD ---
 $quote_res = @DB::query($conn, "SELECT q.quote_id, q.quote_no, q.status, q.quote_date, c.cust_name
     FROM quotes q JOIN customers c ON q.cust_id = c.cust_id
-    WHERE q.quote_no LIKE '$like' OR c.cust_name LIKE '$like' OR q.cust_reference LIKE '$like'
+    WHERE {$L('q.quote_no')} OR {$L('c.cust_name')} OR {$L('q.cust_reference')}
     ORDER BY q.quote_date DESC LIMIT $RESULT_LIMIT");
 if ($quote_res !== false) {
     $quote_rows = [];
@@ -198,7 +212,7 @@ if ($quote_res !== false) {
 
 // --- ANLÆGSAKTIVER ---
 $asset_res = @DB::query($conn, "SELECT asset_id, asset_name, description, acquisition_date, status FROM fixed_assets
-    WHERE asset_name LIKE '$like' OR description LIKE '$like'
+    WHERE {$L('asset_name')} OR {$L('description')}
     ORDER BY acquisition_date DESC LIMIT $RESULT_LIMIT");
 if ($asset_res !== false) {
     $asset_rows = [];
@@ -223,7 +237,7 @@ if ($asset_res !== false) {
 // --- TIMEREGISTRERING ---
 $time_res = @DB::query($conn, "SELECT t.entry_id, t.entry_date, t.description, t.hours, p.proj_no
     FROM time_entries t LEFT JOIN projects p ON t.proj_id = p.proj_id
-    WHERE t.description LIKE '$like' OR p.proj_no LIKE '$like'
+    WHERE {$L('t.description')} OR {$L('p.proj_no')}
     ORDER BY t.entry_date DESC LIMIT $RESULT_LIMIT");
 if ($time_res !== false) {
     $time_rows = [];
@@ -237,7 +251,7 @@ if ($time_res !== false) {
                 '<a href="time_entry_edit.php?id=' . (int)$r['entry_id'] . '">' . htmlspecialchars($r['description'] ?? '') . '</a>',
                 htmlspecialchars($r['proj_no'] ?? ''),
                 date(CONF_DATE_FORMAT, strtotime($r['entry_date'])),
-                number_format((float)$r['hours'], 2, ',', '.'),
+                fmt_dk((float)$r['hours']),
             ];
         }
         htm_Table(['@Description', '@Project', '@Date', '@Hours'], $data, 'search_time_tbl', 100);

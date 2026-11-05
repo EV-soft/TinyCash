@@ -27,50 +27,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $file_path   = ($upload_base && $candidate && strpos($candidate, $upload_base . DIRECTORY_SEPARATOR) === 0)
         ? $candidate : null;
     $delimiter = $_POST['delimiter'] ?? ',';
-    // RETTET (§bugs-batch-24-review): intet isset/array-tjek her - manglede
-    // map[] helt (se bank_import_step1.php's rettelse), gav en PHP-advarsel
-    // og en effektivt tom mapping i stedet for en tydelig fejl. Falder nu
-    // eksplicit tilbage til et tomt array (ingen kolonner mappes - alle
-    // rækker importeres med tomme/0-værdier, men uden en runtime-advarsel).
+    // RETTET: intet isset/array-tjek her - manglede map[] helt (se bank_import_step1.php's rettelse), gav en
+    // PHP-advarsel og en effektivt tom mapping i stedet for en tydelig fejl. Falder nu eksplicit tilbage til et
+    // tomt array (ingen kolonner mappes - alle rækker importeres med tomme/0-værdier, men uden en
+    // runtime-advarsel).
     $mapping   = is_array($_POST['map'] ?? null) ? $_POST['map'] : [];
     $source    = DB::real_escape_string($conn, $_POST['import_source'] ?? 'bank');
     $d_sep     = $_POST['decimal_sep']  ?? ',';
     $t_sep     = ($d_sep == ',') ? '.' : ','; // Automatic thousands separator
 
+    // RETTET: uden en datokolonne fik ALLE linjer stille dags dato, og uden en beløbskolonne blev alle beløb 0
+    if (!in_array('trans_date', $mapping, true) || !array_intersect(['amount', 'net_amount'], $mapping)) {
+        redirect('bank_import_step1.php', '@Choose which column holds the date and which holds the amount before importing.', 'error');
+    }
     if (!$file_path || !file_exists($file_path)) {
-        die(lang('@Error: File not found'));
+        redirect('bank_import_step1.php', '@Error: File not found', 'error');      // (var en hvid side)
     }
 
     $handle = fopen($file_path, "r");
     $importCount = 0;
     $dateWarnCount = 0;
-    // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): dublet-tjekket
-    // nedenfor fandtes allerede (samme dato+tekst+beløb importeres ikke to
-    // gange), men var STUMT - genimporterer man ved en fejl den samme
-    // periode, ser man bare et lavere antal importerede rækker end forventet,
-    // uden nogen forklaring på hvorfor, hvilket let ligner en fejl i stedet
-    // for at være den beskyttelse der reelt virkede. Tælles nu og vises i
-    // succesbeskeden på reconcile_list.php.
+    // NYT: dublet-tjekket nedenfor fandtes allerede (samme dato+tekst+beløb importeres ikke to gange), men var
+    // STUMT - genimporterer man ved en fejl den samme periode, ser man bare et lavere antal importerede rækker end
+    // forventet, uden nogen forklaring på hvorfor, hvilket let ligner en fejl i stedet for at være den beskyttelse
+    // der reelt virkede. Tælles nu og vises i succesbeskeden på reconcile_list.php.
     $duplicateCount = 0;
     $seen_in_file = [];       // dato|tekst|beløb => antal gange set i DENNE fil (se dublet-tjekket nedenfor)
 
-    // RETTET (§bugs-batch-24-review): sprang altid PRÆCIS én linje over,
-    // uanset hvad brugeren valgte i bank_import_step1.php's "Spring linjer
-    // over"-felt (skip_lines) - det felt blev aldrig læst her overhovedet.
-    // De fleste bankeksporter har kun én header-linje, så det sjældent blev
-    // bemærket, men en fil med fx en indledende "Kontoudtog for konto
-    // XXXX"-linje FØR selve kolonneoverskrifterne ville få den rigtige
-    // header-linje fejlagtigt tolket som en transaktionsrække.
+    // RETTET: sprang altid PRÆCIS én linje over, uanset hvad brugeren valgte i bank_import_step1.php's "Spring
+    // linjer over"-felt (skip_lines) - det felt blev aldrig læst her overhovedet. De fleste bankeksporter har kun
+    // én header-linje, så det sjældent blev bemærket, men en fil med fx en indledende "Kontoudtog for konto
+    // XXXX"-linje FØR selve kolonneoverskrifterne ville få den rigtige header-linje fejlagtigt tolket som en
+    // transaktionsrække.
     $skip_lines = max(0, (int)($_POST['skip_lines'] ?? 1));
     for ($i = 0; $i < $skip_lines; $i++) {
-        if (fgetcsv($handle, 1000, $delimiter) === false) break;
+        if (fgetcsv($handle, 0, $delimiter) === false) break;
     }
 
     // RETTET: tegnsættet blev ikke håndteret - mange danske bankers CSV er i Windows-1252/ISO-8859-1. Tekster med
     // æøå blev gemt som ugyldig UTF-8 (htmlspecialchars() gør dem TOMME i afstemningen), og et UTF-8-BOM foran første
     // felt fik den første dato til at fejle. Nu: BOM fjernes, og et felt der ikke er gyldig UTF-8, omkodes.
     $bom_done = false;
-    while (($data = fgetcsv($handle, 1000, $delimiter)) !== FALSE) {
+    // RETTET: længde 1000 delte en linje med lang posteringstekst i to - resten blev importeret som en ny banklinje
+    while (($data = fgetcsv($handle, 0, $delimiter)) !== FALSE) {
         if (!$bom_done && isset($data[0])) { $data[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$data[0]);  $bom_done = true; }
         foreach ($data as $di => $dv) {
             if ($dv !== null && !mb_check_encoding((string)$dv, 'UTF-8')) $data[$di] = mb_convert_encoding((string)$dv, 'UTF-8', 'Windows-1252');
@@ -178,6 +177,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     fclose($handle);
     @unlink($file_path);
 
-    header("Location: reconcile_list.php?msg=imported&count=$importCount&date_warnings=$dateWarnCount&duplicates=$duplicateCount");
-    exit;
+    flash(sprintf(lang('@%d transaction(s) imported.'), $importCount));
+    if ($dateWarnCount > 0) flash(sprintf(lang("@%d row(s) had a date that could not be read and were set to today's date instead - marked in the text field below, please correct manually."), $dateWarnCount), 'warning');
+    // (dublet-tjekket ovenfor: forklarer hvorfor færre end forventet blev importeret)
+    if ($duplicateCount > 0) flash(sprintf(lang('@%d row(s) were skipped because a transaction with the same date, text and amount was already imported previously.'), $duplicateCount), 'info');
+    redirect('reconcile_list.php');
 }

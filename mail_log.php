@@ -16,7 +16,7 @@ require_once 'inc/php2htm.lib.php';
 htm_Header('@Sent Mail Log');
 showMenu();
 
-$table_exists = @DB::query($conn, "SELECT 1 FROM mail_log LIMIT 1") !== false;
+$table_exists = db_has_table($conn, 'mail_log');
 if (!$table_exists) {
     htm_Card_(capt: '@Sent Mail Log', wdth: 1100);
     htm_Banner('<i class="fa fa-triangle-exclamation"></i> ' . lang('@The mail log database structure has not been set up yet. Run the migration under System -> Maintenance -> Database migration.'), 'warning');
@@ -33,7 +33,9 @@ $f_from   = trim($_GET['date_from'] ?? '');
 $f_to_dt  = trim($_GET['date_to'] ?? '');
 
 $where = [];
-if ($f_to     !== '') $where[] = "to_email LIKE '%" . DB::escape($conn, $f_to) . "%'";
+// Tekstsøgning - LIKE gjorde % og _ i søgeteksten til jokertegn ("%" fandt alt, "a_b" også "axb")
+$f_to_esc = DB::escape($conn, mb_strtolower($f_to, 'UTF-8'));
+if ($f_to     !== '') $where[] = DB::is_sqlite() ? "instr(tc_lower(to_email), '$f_to_esc') > 0" : "LOCATE('$f_to_esc', to_email) > 0";
 if ($f_status === 'success') $where[] = "success = 1";
 if ($f_status === 'failed')  $where[] = "success = 0";
 if ($f_from  !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f_from))  $where[] = "sent_at >= '" . db_ts_param("$f_from 00:00:00") . "'";
@@ -48,9 +50,7 @@ $status_options = [
 
 htm_Card_(capt: '@Sent Mail Log', wdth: 1100);
 
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">' .
-    lang('@A read-only record of every outgoing email the system has sent - invoices, reminders, account statements, quote follow-ups and more - captured automatically wherever mail is sent, no matter which page triggered it.') .
-    '</p>';
+htm_Note(lang('@A read-only record of every outgoing email the system has sent - invoices, reminders, account statements, quote follow-ups and more - captured automatically wherever mail is sent, no matter which page triggered it.'), 'font-size:0.9em; margin-top:-5px;');
 
 // --- Opsummering: fejlede afsendelser de sidste 7 dage - hurtig "er der
 // noget der ikke virker"-indikator, uden at skulle læse hele tabellen. ---
@@ -80,7 +80,7 @@ $headers = ['@Date', '@Recipient', '@Subject', '@Status'];
 $data = [];
 
 if (!$res) {
-    echo htm_Alert("SQL Error: " . DB::error($conn), "error");
+    echo htm_Alert(lang('@Error:') . ' ' . htmlspecialchars((string)DB::error($conn)), "error");
 } else {
     while ($row = DB::fetch_assoc($res)) {
         $when = date(CONF_DATE_FORMAT . ' H:i', strtotime(db_ts_local($row['sent_at'])));
@@ -102,7 +102,7 @@ if (empty($data) && $res) {
     echo "<p style='padding:30px; text-align:center; color:var(--text-muted);'>" . lang('@No sent mail found for the selected filters.') . "</p>";
 } elseif (!empty($data)) {
     htm_Table($headers, $data, 'mailLogTbl', 300, '', true, [], '600px', 'mail_log_export.csv');
-    echo '<p style="color:var(--text-muted); font-size:0.8em; margin-top:10px;">' . lang('@Showing the 300 most recent matching entries.') . '</p>';
+    htm_Note(lang('@Showing the 300 most recent matching entries.'), 'font-size:0.8em; margin-top:10px;');
 }
 
 htm_Card_end();

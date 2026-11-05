@@ -177,5 +177,245 @@
         "<li><strong>Identificazione dinamica dei ruoli:<\/strong> i ruoli degli utenti vengono valutati direttamente dagli array del database. I profili identificati come <em>amministratori<\/em> ricevono un badge dal layout distintivo e ben visibile, mentre i profili secondari vengono contrassegnati come operatori standard.<\/li>",
         "<li><strong>Meccanismi di protezione basati su criteri logici:<\/strong> il profilo utente attivo è protetto da condizioni logiche. Gli amministratori non possono eliminare o declassare i propri account attivi, evitando così l&#x27;esclusione accidentale e totale dai privilegi di gestione.<\/li>",
         "<p>Esaminate sistematicamente le tabelle degli utenti per garantire la tenuta di registri accurati delle responsabilità in tutta la vostra rete operativa locale.<\/p>"
+    ],
+    "account_card.php": [
+        "<h3>Carta dell'Account<\/h3>",
+        "<p>Tutti i movimenti su un account in ordine di data con un saldo corrente.<\/p>",
+        "<ul><li><strong>Periodo:<\/strong> i movimenti precedenti al periodo sono sommati in una riga di apertura.<\/li><li><strong>Buoni:<\/strong> ogni riga si collega al buono da cui proviene.<\/li><\/ul>"
+    ],
+    "account_edit.php": [
+        "<h3>Creare\/Modificare Aiuto Account<\/h3>",
+        "<p>Questo modulo crea un nuovo account o modifica uno esistente nel tuo Piano dei Conti.<\/p>",
+        "<ul><li><strong>Numero di Account:<\/strong> Non può essere cambiato una volta creato - è l'identificativo permanente dell'account utilizzato in tutto il libro mastro.<\/li><li><strong>Tipo di Account:<\/strong> Determina come si comporta l'account nei report e nelle registrazioni: Reddito, Spesa, Banca\/Contante, IVA, Attivo, Passivo o Patrimonio Netto. Scegliere il tipo sbagliato può misclassificare i tuoi report.<\/li><li><strong>Mappatura Standard degli Account:<\/strong> Collega facoltativamente questo account a una categoria di riferimento standard, utilizzata per la reportistica fiscale\/statistica aggregata.<\/li><li><strong>Codice e Aliquota IVA:<\/strong> Allegare un codice IVA dai tuoi codici esistenti (o digitane uno nuovo) per applicare automaticamente quella aliquota IVA alle registrazioni su questo account.<\/li><\/ul>",
+        "<p>Gli account speciali utilizzati per registrazioni automatiche (Banca, Debitori, Vendite, IVA) sono configurati separatamente nelle Impostazioni Aziendali - modificarli qui cambia solo il loro nome\/tipo, non il loro ruolo speciale.<\/p>"
+    ],
+    "account_manage.php": [
+        "<h3>Registri<\/h3>",
+        "<p>Più registri in una sola installazione - ognuno con il proprio database.<\/p>",
+        "<ul><li><strong>Crea:<\/strong> un nuovo registro demo, o registra un database esistente.<\/li><li><strong>Converti:<\/strong> un registro demo viene svuotato dai dati di prova e diventa un registro reale.<\/li><li><strong>Disattiva:<\/strong> nasconde un registro dall'elenco di accesso; il suo database viene mantenuto.<\/li><\/ul>"
+    ],
+    "account_std_mapping.php": [
+        "<h3>Mappa ai Conti Standard<\/h3>",
+        "<p>Collega ogni conto a un conto del piano dei conti standard danese - utilizzato per l'esportazione SAF-T.<\/p>",
+        "<ul><li><strong>Suggerimenti:<\/strong> i suggerimenti contrassegnati non vengono salvati fino a quando non premi Salva.<\/li><\/ul>"
+    ],
+    "aging_report.php": [
+        "<h3>Rapporto di Invecchiamento<\/h3>",
+        "<p>Crediti e debiti aperti in base a quanti giorni sono scaduti.<\/p>",
+        "<ul><li><strong>Debitori:<\/strong> fatture pubblicate non pagate.<\/li><li><strong>Creditori:<\/strong> spese pubblicate non pagate con una data di scadenza.<\/li><\/ul>"
+    ],
+    "annual_report.php": [
+        "<h3>Guida al Rapporto Annuale<\/h3>",
+        "<p>Questa pagina compila una bozza del rapporto annuale (bilancio, conto economico e note) per un anno fiscale selezionato, in un layout A4 stampabile con download PDF.<\/p>",
+        "<ul><li><strong>Solo Bozza:<\/strong> Questo documento è una bozza, non una registrazione. I rapporti annuali ufficiali per le aziende devono essere presentati digitalmente tramite XBRL tramite virk.dk, non come PDF - utilizza questo come punto di partenza per quel processo o per il tuo commercialista.<\/li><li><strong>Nota sulla Politica Contabile:<\/strong> Una nota di testo libero che descrive i tuoi principi contabili, modificabile e salvata per installazione.<\/li><li><strong>Selezione dell'Anno Fiscale:<\/strong> Scegli quale anno fiscale riportare dal menu a discesa - solo gli anni registrati sotto Chiusura Anno Fiscale sono disponibili.<\/li><\/ul>",
+        "<p>Destinato a regnskabsklasse B (piccole aziende) - la revisione della gestione è intenzionalmente omessa, poiché è esente per questa classe.<\/p>"
+    ],
+    "audit_log.php": [
+        "<h3>Aiuto del Registro di Audit<\/h3>",
+        "<p>Questa pagina mostra una traccia di sola lettura delle azioni sensibili - cancellazioni, eliminazioni e pubblicazioni - nel sistema: chi lo ha fatto, quando e esattamente cosa è cambiato.<\/p>",
+        "<ul><li><strong>Filtri:<\/strong> Riduci l'elenco per azione, tabella, utente o intervallo di date - combina quanti più ne hai bisogno.<\/li><li><strong>Dettagli:<\/strong> Passa il mouse sul testo sottolineato nella colonna Dettagli per vedere i valori completi prima\/dopo registrati al momento.<\/li><li><strong>Non Tutto è Registrato:<\/strong> Solo azioni sensibili specifiche scrivono in questo registro (ad es. cancellare una spesa, pubblicare una fattura, eliminare una registrazione di diario) - non è un registro completo di ogni clic.<\/li><\/ul>",
+        "<p>Solo gli amministratori possono vedere questa pagina, poiché le voci possono includere dettagli dei record di altri utenti.<\/p>"
+    ],
+    "balance_sheet.php": [
+        "<h3>Guida del Bilancio<\/h3>",
+        "<p>Questo mostra un rapporto istantaneo delle tue Attività, Passività e Patrimonio in una data scelta, calcolato direttamente dalla tua contabilità.<\/p>",
+        "<ul><li><strong>Stato al:<\/strong> Scegli una data - il bilancio si ricalcola per quel punto preciso nel tempo.<\/li><li><strong>Controllo del Saldo:<\/strong> Un messaggio verde conferma che le Attività equivalgono a Passività + Patrimonio. Un avviso rosso significa che qualcosa è stato registrato al di fuori dei normali flussi e necessita di indagine.<\/li><li><strong>Solo Bozza:<\/strong> Come il Rapporto Annuale, questa è una bozza per revisione interna o il tuo commercialista - non adatta per la presentazione diretta.<\/li><\/ul>",
+        "<p>Usa questo per controllare la salute della tua contabilità in qualsiasi momento dell'anno, non solo a fine anno.<\/p>"
+    ],
+    "bank_balance_check.php": [
+        "<h3>Controllo del Saldo Bancario<\/h3>",
+        "<p>Confronta il saldo del conto bancario nei registri con il saldo estratto conto bancario in una data.<\/p>",
+        "<ul><li><strong>Inserisci:<\/strong> il saldo estratto conto bancario e la data.<\/li><li><strong>Differenza:<\/strong> righe bancarie non riconciliate o registrazioni al di fuori dei flussi bancari.<\/li><\/ul>"
+    ],
+    "bank_integration.php": [
+        "<p><strong>Integrazione Bancaria (PSD2):<\/strong> Collega TinyCash direttamente al tuo banco tramite Enable Banking (Open Banking) - un'alternativa all'esportazione e all'importazione manuale di un file CSV. Richiede un account Enable Banking e chiavi API configurate in inc\/data\/env.ini. (GoCardless, precedentemente utilizzato qui, ha smesso di accettare nuove iscrizioni nel luglio 2025.)<\/p>",
+        "<p>Collegare una banca ti porta alla pagina di accesso della tua banca per dare consenso - TinyCash non vede mai la tua password di internet banking, solo dati di account\/transazione in sola lettura una volta approvato.<\/p>",
+        "<p><strong>Sincronizza Ora<\/strong> recupera le transazioni recenti e le inserisce nella stessa coda utilizzata dall'importazione CSV - apri <strong>Reconciliazione Bancaria<\/strong> in seguito per abbinarle e pubblicarle, esattamente come con un'importazione manuale.<\/p>",
+        "<p>L'accesso è concesso dalla tua banca per un periodo limitato - quando scade, la connessione appare come \"Scaduta\" e deve essere riconnessa.<\/p>",
+        "<p><strong>Nota:<\/strong> I prezzi di Enable Banking per un utilizzo reale in produzione non sono pubblicati e richiedono di contattare il loro team commerciale - un'applicazione e un sandbox possono essere creati senza una conversazione di vendita, in modo da poter testare il flusso di connessione prima di impegnarti.<\/p>"
+    ],
+    "bank_rules.php": [
+        "<h3>Regole Bancarie<\/h3>",
+        "<p>\"Se il testo contiene X, pubblica sul conto Y\" - suggerito automaticamente nella riconciliazione bancaria.<\/p>",
+        "<ul><li><strong>Creare:<\/strong> qui, o con \"Ricorda questa regola\" quando riconcili una linea bancaria.<\/li><li><strong>Riordinare:<\/strong> elimina le regole di cui non hai più bisogno.<\/li><\/ul>"
+    ],
+    "budget_edit.php": [
+        "<h3>Budget degli Account<\/h3>",
+        "<p>Un importo di budget annuale per ogni account di reddito e spesa.<\/p>",
+        "<ul><li><strong>Confronto:<\/strong> il conto economico mostra il budget e la deviazione per lo stesso anno.<\/li><li><strong>Campo vuoto:<\/strong> nessun budget per l'account (non è lo stesso di 0).<\/li><\/ul>"
+    ],
+    "chart_switch.php": [
+        "<h3>Cambia al Piano dei Conti Standard<\/h3>",
+        "<p>Sostituisci i tuoi conti con conti standard a partire da una data. Le voci registrate non vengono mai spostate.<\/p>",
+        "<ul><li><strong>Sostituzioni:<\/strong> ciascuno dei tuoi conti riceve un conto standard suggerito (ruolo, mappatura SAF-T o nome) - cambialo nell'elenco o mantieni il conto.<\/li><li><strong>Conflitti:<\/strong> un tuo conto su un numero standard: spostalo (senza registrazioni), lascialo diventare il conto standard (stessa tipologia), importa il conto standard sotto un numero libero, o non fare nulla.<\/li><li><strong>Il piano:<\/strong> \"Mostra il piano\" elenca i saldi che vengono trasferiti con un'unica ricevuta alla data di cambio - nulla è registrato prima che tu confermi.<\/li><li><strong>Dopo:<\/strong> impostazioni, codici IVA, prodotti, regole bancarie, negozi online, beni strumentali, budget e bozze puntano alle sostituzioni; i vecchi conti vengono disattivati e mantengono la loro storia.<\/li><\/ul>",
+        "<p>Scegli il primo giorno di un anno fiscale, dopo la chiusura di fine anno, in modo che l'anno non sia suddiviso tra conti vecchi e nuovi.<\/p>"
+    ],
+    "company_settings.php": [
+        "<h3>Guida alle Impostazioni Aziendali<\/h3>",
+        "<p>Questa pagina controlla il profilo della tua azienda, i dettagli bancari, i conti predefiniti e le preferenze a livello di sistema.<\/p>",
+        "<ul><li><strong>Dettagli Aziendali:<\/strong> Il tuo nome legale, indirizzo, numero CVR e informazioni di contatto - utilizzati sulle fatture e nel rapporto annuale.<\/li><li><strong>Bancario:<\/strong> La registrazione della tua banca e il numero di conto, mostrati sulle fatture per aiutare i clienti a pagarti correttamente.<\/li><li><strong>Conti Predefiniti:<\/strong> Scegli quali conti nel tuo piano dei conti dovrebbero ricevere automaticamente le registrazioni bancarie, dei debitori, delle vendite e dell'IVA. Modificare questi influisce su tutte le registrazioni automatiche future.<\/li><li><strong>Formato Data e Valuta:<\/strong> Imposta come le date vengono visualizzate nel sistema e la tua valuta aziendale principale. Cambiare valuta può influenzare come vengono visualizzati i dati storici.<\/li><li><strong>Corpo Email Predefinito:<\/strong> Il testo standard utilizzato quando si inviano fatture via email ai clienti, a meno che non venga sovrascritto per fattura.<\/li><li><strong>Esportazione SAF-T:<\/strong> Esporta la tua contabilità completa nel formato standardizzato SAF-T per le verifiche fiscali.<\/li><\/ul>",
+        "<p>Esamina attentamente le tue modifiche prima di salvare - queste impostazioni influenzano le fatture, i rapporti e le registrazioni automatiche in tutto il sistema.<\/p>"
+    ],
+    "customer_statement.php": [
+        "<p><strong>Estratto conto:<\/strong> Un elenco cronologico delle fatture registrate e dei pagamenti effettuati da questo cliente, con un saldo corrente - la classica vista \"kontoudtog\". Le fatture in bozza non vengono mostrate, poiché non sono ancora transazioni reali.<\/p>",
+        "<p>Ogni fattura aumenta il saldo (ciò che il cliente deve); ogni pagamento lo diminuisce. Le note di credito vengono mostrate come fatture negative, poiché sono archiviate con importi di riga negativi.<\/p>",
+        "<p><strong>Filtri periodo:<\/strong> Restringere l'intervallo di date non cambia il calcolo del saldo corrente - una riga \"Saldo iniziale\" mostra cosa era dovuto poco prima dell'inizio del periodo selezionato, quindi i numeri rimangono sempre corretti.<\/p>",
+        "<p>Utilizza il pulsante di esportazione CSV nella tabella o il pulsante Stampa per salvare o distribuire una copia dell'estratto conto.<\/p>"
+    ],
+    "customer_statements.php": [
+        "<h3>Estratti conto clienti<\/h3>",
+        "<p>Invia un estratto conto a tutti i clienti con un saldo aperto in una sola volta.<\/p>",
+        "<ul><li><strong>Scegli:<\/strong> seleziona i clienti - uno senza un indirizzo e-mail viene mostrato ma non può essere inviato.<\/li><li><strong>Registro:<\/strong> ogni e-mail è registrata nel registro delle e-mail.<\/li><\/ul>"
+    ],
+    "entry_balance_check.php": [
+        "<h3>Controllo del Saldo dei Voucher<\/h3>",
+        "<p>Controlla che ogni singolo voucher bilanci a zero.<\/p>",
+        "<ul><li><strong>Voucher sbilanciati:<\/strong> elencati con la loro differenza - due errori possono altrimenti nascondersi l'uno con l'altro nei totali.<\/li><li><strong>Conti mancanti:<\/strong> le registrazioni sui conti che non sono nel piano dei conti vengono mostrate anch'esse.<\/li><\/ul>"
+    ],
+    "error_log.php": [
+        "<h3>Documentazione: Registri di sistema e codici di stato HTTP<\/h3>",
+        "<p>Quando il sistema mostra un comportamento imprevisto, elementi dell'interfaccia utente bloccati o pulsanti di layout mancanti, la causa principale viene registrata nei registri del server. Il debug richiede di fare riferimento a questi tre ambienti distinti:<\/p>",
+        "<ol style='padding-left: 20px; margin-bottom: 15px;'>",
+        "<li><strong>Registro degli errori di sistema (Registro errori PHP):<\/strong> Cattura errori critici del server backend (ad es., <em>Errore fatale: chiamata a funzione non definita lang()<\/em>). Se una pagina smette di essere renderizzata durante l'esecuzione, si interrompe o mostra una schermata bianca, il nome del file esatto e il numero di riga PHP vengono registrati qui. <span style='color: #2b6cb0; font-weight: bold;'>Come visualizzare: Stai visualizzando questo registro direttamente su questa pagina (error_log.php).<\/span><\/li>",
+        "<li><strong>Registro accessi Apache:<\/strong> Registra tutte le richieste di rete HTTP in arrivo in tempo reale. Usa questo per verificare se le chiamate AJAX asincrone del browser stanno raggiungendo il server e per controllare il codice di risposta esatto restituito. <span style='color: #2b6cb0; font-weight: bold;'>Come visualizzare: Accessibile tramite il pannello di controllo del tuo web hosting (ad es., cPanel\/Plesk sotto 'Registri') o tramite FTP\/SSH in \/var\/log\/apache2\/access.log.<\/span><\/li>",
+        "<li><strong>Console del browser (F12):<\/strong> Cattura errori lato client che vengono eseguiti direttamente nel browser dell'utente (ad es., JavaScript <em>ReferenceError: isNotepadMaximized non è definito<\/em>). Se un modulo non può essere trascinato o un clic su un pulsante fallisce senza ricaricare la pagina, controlla questo registro. <span style='color: #2b6cb0; font-weight: bold;'>Come visualizzare: Fai clic con il tasto destro ovunque su questa pagina web, seleziona 'Ispeziona' e fai clic sulla scheda 'Console'.<\/span><\/li>",
+        "<\/ol>",
+        "<p style='font-weight: bold; color: #1e3a8a; margin-bottom: 5px;'>Come interpretare i codici di stato nel registro accessi \/ scheda rete:<\/p>",
+        "<ul style='padding-left: 20px;'>",
+        "<li><strong>Stato 200 (OK):<\/strong> La richiesta è stata elaborata con successo e i dati sono stati scambiati correttamente (ad es., quando lo script del notepad restituisce 'salvato').<\/li>",
+        "<li><strong>Stato 403 (Forbidden):<\/strong> Accesso negato. Tipicamente attivato da regole di sicurezza rigorose nel file .htaccess o perché la tua sessione PHP (auth.inc.php) ha rifiutato la richiesta a causa di un timeout.<\/li>",
+        "<li><strong>Stato 404 (Not Found):<\/strong> Il percorso del file è errato. Questo accade se uno script tenta di invocare un file incluso da una directory non esistente o utilizzando un nome file errato.<\/li>",
+        "<li><strong>Stato 500\/503 (Errore interno):<\/strong> Il server si è bloccato durante l'esecuzione dello script. Questo indica sempre un errore fatale nel codice PHP e la descrizione esatta dell'errore deve essere recuperata dal registro errori PHP del server.<\/li>",
+        "<\/ul>",
+        "<p style='margin-top: 10px; font-style: italic; color: #4b5563;'>Nota: Quando modifichi i file sorgente, forzare sempre un ricaricamento completo del browser (<strong>Ctrl + F5<\/strong> o <strong>Cmd + Shift + R<\/strong>) per cancellare la logica JavaScript memorizzata nella cache dalla memoria locale del browser.<\/p>"
+    ],
+    "fixed_asset_edit.php": [
+        "<h3>Attivo Fisso<\/h3>",
+        "<p>Registrare un attivo - l'acquisizione viene contabilizzata immediatamente (conto attivo contro banca).<\/p>",
+        "<ul><li><strong>Bloccato:<\/strong> una volta registrati, i campi finanziari non possono essere modificati - dismettere l'attivo e registrarlo nuovamente.<\/li><\/ul>"
+    ],
+    "fixed_asset_list.php": [
+        "<h3>Attività Fisse<\/h3>",
+        "<p>Il registro delle attività: costo, ammortamento accumulato e valore contabile.<\/p>",
+        "<ul><li><strong>Esegui ammortamento:<\/strong> contabilizza l'ammortamento dovuto per tutte le attività attive fino ad oggi in un colpo solo.<\/li><\/ul>"
+    ],
+    "invoice_view.php": [
+        "<h3>Anteprima e Spedizione Fattura<\/h3>",
+        "<p>Qui puoi visualizzare l'intero layout della fattura prima di finalizzarlo.<\/p>",
+        "<ul><li>Clicca <i class='fa-solid fa-pencil-ruler'><\/i> <b>Modalità Progettazione<\/b> per sbloccare gli elementi e personalizzarne le posizioni nella pagina.<\/li>",
+        "<li>Trascina liberamente gli elementi per regolare lo spazio visivo del layout della tua fattura.<\/li>",
+        "<li>Ridimensiona gli elementi trascinando il loro bordo destro per adattarli al tuo modello ufficiale di business.<\/li>",
+        "<li>Le tue modifiche vengono salvate automaticamente nel database ogni volta che rilasci un elemento.<\/li>",
+        "<li>Inserisci un testo personalizzato nel campo <b>Messaggio Email<\/b> per personalizzare la tua spedizione digitale.<\/li>",
+        "<li>Clicca <i class='fa-solid fa-envelope'><\/i> <b>Invia via Email<\/b> per generare automaticamente un PDF e inviarlo direttamente al cliente.<\/li>",
+        "<li>Utilizza il pulsante <i class='fa-solid fa-file-code'><\/i> <b>OIOUBL XML<\/b> per esportare una e-fattura danese conforme per NemHandel.<\/li>",
+        "<li>Clicca <i class='fa-solid fa-print'><\/i> <b>Stampa<\/b> per aprire la finestra di dialogo del browser; tutti i pulsanti del sistema vengono automaticamente nascosti sulla carta.<\/li>",
+        "<li>Clicca <i class='fa-solid fa-door-open'><\/i> <b>Esci<\/b> per tornare in sicurezza al hub delle vendite quando hai finito.<\/li><\/ul>",
+        "<p><strong>Fatture in Valuta Estera:<\/strong> Se la fattura è stata creata in una valuta estera, viene visualizzata e stampata in quella valuta qui - la tua contabilità registra comunque l'importo convertito in DKK dietro le quinte.<\/p>",
+        "<p><strong>Storico Pagamenti:<\/strong> Se sono stati registrati pagamenti tramite riconciliazione bancaria, verranno elencati qui insieme al saldo rimanente - o una conferma di \"Completamente pagato\" una volta ricevuto l'importo totale.<\/p>"
+    ],
+    "journal_entry.php": [
+        "<h3>Inserimento Manuale di Spese<\/h3>",
+        "<p>Un inserimento libero in partita doppia - accantonamenti, correzioni e il saldo di apertura quando si inizia a metà anno.<\/p>",
+        "<ul><li><strong>Saldo:<\/strong> le righe devono sommarsi a zero prima di poter essere registrate.<\/li><li><strong>Convenzione:<\/strong> riceve il proprio numero di convenzione; la data non deve essere in un periodo bloccato.<\/li><\/ul>"
+    ],
+    "mail_inbox.php": [
+        "<h3>Aiuto della Posta in Arrivo<\/h3>",
+        "<p>Questa pagina legge la posta in arrivo direttamente dalle caselle di posta configurate, in modo da poter elaborare gli allegati senza lasciare TinyCash.<\/p>",
+        "<ul><li><strong>Tre Caselle di Posta:<\/strong> Passa tra <em>Buoni &amp; Ricevute<\/em>, <em>Fatture Fornitori<\/em> e <em>Copie Fattura (Vendite)<\/em> - ognuna legge una casella di posta configurata separatamente.<\/li><li><strong>Allegati:<\/strong> Fai clic su un allegato per visualizzarlo in anteprima o scaricalo direttamente.<\/li><li><strong>Registrazione Rapida:<\/strong> Nelle caselle di posta Buoni\/Fornitori, fai clic su <em>Registra<\/em> su un allegato per passare direttamente a una nuova spesa con quel documento allegato.<\/li><\/ul>",
+        "<p>Le credenziali della casella di posta sono configurate nel file env.ini del server - contatta il tuo amministratore se una casella di posta non si carica.<\/p>"
+    ],
+    "mail_log.php": [
+        "<h3>Registro Email<\/h3>",
+        "<p>Tutte le email inviate da TinyCash - fatture, promemoria, estratti conto, follow-up.<\/p>",
+        "<ul><li><strong>Filtra:<\/strong> per tipo, destinatario e periodo.<\/li><\/ul>"
+    ],
+    "menu_visibility.php": [
+        "<p><strong>Visibilità del Menu:<\/strong> Un elenco completo di ogni elemento del menu, con una casella di controllo per ogni livello utente (1 Principiante, 2 Esperto, 3 Sviluppatore) che controlla se appare nel menu per quel livello.<\/p>",
+        "<p><strong>Questo è uno strumento di decluttering, non di controllo accessi.<\/strong> Nascondere un elemento qui rimuove solo il suo apparire nel menu - non impedisce a qualcuno di digitare direttamente l'indirizzo della pagina, a meno che la pagina stessa non abbia anche una propria restrizione di accesso per quel livello. Usalo per mantenere il menu semplice per i principianti, non per proteggere le pagine sensibili.<\/p>",
+        "<p>Gli elementi senza righe salvate utilizzano i valori predefiniti originali integrati (mostrati precompilati). <strong>Ripristina tutto ai valori predefiniti<\/strong> cancella ogni impostazione salvata e ritorna a quei valori predefiniti integrati.<\/p>"
+    ],
+    "my_2fa.php": [
+        "<p><strong>Login con due fattori (2FA):<\/strong> Aggiunge un secondo passo al login - dopo la tua password, devi anche inserire un codice di 6 cifre proveniente da un'app di autenticazione sul tuo telefono (Google Authenticator, Authy, 1Password, Bitwarden, ecc.). Questo è per account: ciascun utente lo attiva per sé stesso, non può essere attivato per qualcun altro.<\/p>",
+        "<p>Quando lo attivi, ti viene mostrata una chiave segreta da inserire manualmente nella tua app (niente codice QR - l'inserimento manuale è completamente supportato da ogni app di autenticazione ed evita di fare affidamento su un servizio di terze parti per generare un'immagine contenente il tuo segreto). Poi confermi con un codice reale dall'app prima che il 2FA venga effettivamente attivato, quindi non puoi mai bloccarti fuori digitando erroneamente la chiave.<\/p>",
+        "<p><strong>I codici di recupero<\/strong> vengono mostrati una sola volta quando attivi il 2FA (o li rigeneri) - ognuno può essere utilizzato invece di un codice dell'app, solo una volta, se perdi l'accesso al tuo telefono. Conservali in un luogo sicuro.<\/p>",
+        "<p>Disabilitare il 2FA, o generare nuovi codici di recupero, richiede di reinserire la tua password - questo impedisce a qualcuno con una sessione rubata ma non sorvegliata di disabilitare la protezione del tuo account.<\/p>"
+    ],
+    "project_edit.php": [
+        "<h3>Crea\/Modifica Aiuto Progetto<\/h3>",
+        "<p>Questo modulo crea un nuovo progetto o modifica uno esistente.<\/p>",
+        "<ul><li><strong>Codice Progetto:<\/strong> Un identificatore unico e obbligatorio per il progetto - utilizzato per contrassegnare spese e fatture ad esso.<\/li><li><strong>Cliente:<\/strong> Collega facoltativamente il progetto a un cliente specifico.<\/li><li><strong>Data Inizio\/Fine:<\/strong> Date facoltative mostrate nei report e nella panoramica del progetto.<\/li><li><strong>Concetto di Fatturazione:<\/strong> Un testo di fatturazione suggerito che puoi riutilizzare quando fatturi questo progetto.<\/li><li><strong>Interruttore Modulo Progetto:<\/strong> Una scheda separata in cima ti consente di attivare o disattivare l'intero modulo Progetto, che controlla se il campo Codice Progetto appare nei moduli di spesa e fattura.<\/li><\/ul>",
+        "<p>Eliminare un progetto non può essere annullato - non elimina le spese o le fatture collegate, solo il record del progetto stesso.<\/p>"
+    ],
+    "project_view.php": [
+        "<h3>Assistenza sul Progetto<\/h3>",
+        "<p>Questa pagina elenca tutti i tuoi progetti e, quando ne apri uno, mostra i dettagli finanziari: spese collegate, altri redditi e fatture.<\/p>",
+        "<ul><li><strong>Elenco Progetti:<\/strong> Mostra codice, cliente, stato, date di inizio\/fine e un saldo corrente (entrate meno spese) per ciascun progetto.<\/li><li><strong>Dettaglio Progetto:<\/strong> Fai clic su un progetto per vedere le singole righe di spesa, reddito e fattura, oltre al saldo complessivo.<\/li><li><strong>Richiede il Modulo Progetto:<\/strong> Abilitare dalla pagina Nuovo\/Modifica Progetto per mostrare il campo Codice Progetto nei moduli di spesa e fattura.<\/li><\/ul>",
+        "<p>Utilizza questo per monitorare la redditività per progetto o per coinvolgimento del cliente, non solo in generale.<\/p>"
+    ],
+    "quote_edit.php": [
+        "<h3>Modifica preventivo<\/h3>",
+        "<p>Linee, prezzi e validità di un preventivo - solo una bozza può essere modificata.<\/p>",
+        "<ul><li><strong>Linee:<\/strong> lo stesso selettore di prodotto e gestione IVA delle fatture.<\/li><li><strong>Validità:<\/strong> la data fino alla quale l'offerta è vincolante.<\/li><\/ul>"
+    ],
+    "quote_followup.php": [
+        "<h3>Follow-up sul Preventivo<\/h3>",
+        "<p>Preventivi inviati che sono scaduti o scadranno presto senza risposta.<\/p>",
+        "<ul><li><strong>Invia:<\/strong> un'e-mail di follow-up a uno o più clienti - al massimo uno per preventivo al giorno.<\/li><\/ul>"
+    ],
+    "quote_list.php": [
+        "<h3>Preventivi<\/h3>",
+        "<p>Tutti i preventivi con stato: bozza, inviato, accettato, rifiutato, convertito.<\/p>",
+        "<ul><li><strong>Scaduto:<\/strong> un preventivo inviato oltre la sua data di validità è contrassegnato - estendilo prima che possa essere accettato.<\/li><li><strong>Converti:<\/strong> un preventivo accettato diventa una fattura in bozza con le stesse righe.<\/li><\/ul>"
+    ],
+    "quote_view.php": [
+        "<h3>Preventivo<\/h3>",
+        "<p>Il preventivo stampabile \/ conferma dell'ordine per il cliente.<\/p>",
+        "<ul><li><strong>Stampa o invia per email:<\/strong> stampalo, salvalo come PDF o invialo per email.<\/li><\/ul>"
+    ],
+    "recurring_expense_edit.php": [
+        "<h3>Modello di Spesa Ricorrente<\/h3>",
+        "<p>Fornitore, conto, importo, intervallo e la prossima data di una spesa ricorrente.<\/p>",
+        "<ul><li><strong>Prossima data:<\/strong> la data in cui viene effettuato il prossimo addebito.<\/li><li><strong>Importo:<\/strong> l'importo lordo inclusa IVA, come sul voucher.<\/li><\/ul>"
+    ],
+    "recurring_expenses.php": [
+        "<h3>Spese Ricorrenti<\/h3>",
+        "<p>Modelli per spese che si ripetono - affitto, abbonamenti, assicurazione.<\/p>",
+        "<ul><li><strong>Generazione:<\/strong> quando un modello è in scadenza, TinyCash crea una spesa NON REGISTRATA (bozza) - la controlli, aggiungi il voucher e la salvi per registrarla.<\/li><li><strong>Azioni:<\/strong> pausa \/ riprendi, salta un periodo, genera ora, modifica o elimina un modello.<\/li><\/ul>"
+    ],
+    "recurring_invoice_edit.php": [
+        "<p><strong>Modello di Fattura Ricorrente:<\/strong> Imposta il cliente, l'intervallo di ripetizione e la data della prossima esecuzione, oltre alle righe di fattura che saranno copiate in ogni bozze generate.<\/p>",
+        "<p><strong>Giorni di Pagamento<\/strong> vengono compilati automaticamente in base ai termini di pagamento del cliente quando li selezioni, ma possono essere modificati solo per questo modello. La valuta straniera non è supportata per le fatture ricorrenti - le bozze generate sono sempre in DKK.<\/p>"
+    ],
+    "recurring_invoices.php": [
+        "<p><strong>Fatture Ricorrenti:<\/strong> Modelli per fatture che si ripetono automaticamente - ad es. affitto mensile, un abbonamento o una tariffa fissa. Ogni modello ha un cliente, un intervallo di ripetizione (mensile\/trimestrale\/annuale) e le proprie righe di fattura.<\/p>",
+        "<p>Una nuova fattura in <strong>bozza<\/strong> viene generata automaticamente quando arriva la data programmata - viene controllata su ogni pagina che visiti mentre sei connesso (non c'è un vero scheduler in background su un hosting web tipico). La bozza non viene mai pubblicata automaticamente; devi comunque rivederla e pubblicarla tu stesso, esattamente come qualsiasi fattura creata manualmente.<\/p>",
+        "<p>Usa <strong>Genera Ora<\/strong> per creare immediatamente la prossima fattura, senza aspettare la data programmata. Usa <strong>Fermo<\/strong> per interrompere temporaneamente la generazione di fatture di un modello, senza eliminarlo.<\/p>"
+    ],
+    "reminders.php": [
+        "<h3>Aiuto sui Promemoria di Pagamento<\/h3>",
+        "<p>Questa pagina elenca le fatture inviate (stato \"inviato\") la cui scadenza è trascorsa e che non sono ancora contrassegnate come pagate.<\/p>",
+        "<ul><li><strong>Giorni Scaduti:<\/strong> Mostrato in arancione dopo 7 giorni e in rosso dopo 14 - un rapido senso visivo di quanto sia urgente ciascuna.<\/li><li><strong>Invia Promemoria:<\/strong> Invia un'email direttamente al cliente utilizzando l'indirizzo di contatto della fattura, con l'importo, la data di scadenza e i giorni scaduti compilati automaticamente.<\/li><li><strong>Ultimo Promemoria:<\/strong> Mostra quando è stato inviato l'ultimo promemoria per questa fattura e quante volte - così puoi vedere a colpo d'occhio chi è già stato avvisato.<\/li><\/ul>",
+        "<p>Solo le fatture con una reale data di scadenza e stato \"inviato\" appaiono qui - le bozze e le fatture già pagate sono escluse automaticamente.<\/p>"
+    ],
+    "saft_import.php": [
+        "<h3>Importazione SAF-T<\/h3>",
+        "<p>Leggi un file SAF-T da un altro sistema e esaminane i contenuti - portabilità dei dati.<\/p>",
+        "<ul><li><strong>Solo lettura:<\/strong> il file viene mostrato e archiviato; non viene registrato nella tua contabilità.<\/li><\/ul>"
+    ],
+    "search.php": [
+        "<h3>Ricerca<\/h3>",
+        "<p>Cerca tra clienti, fatture, spese, fornitori, prodotti, preventivi, beni immobili e registrazioni temporali.<\/p>",
+        "<ul><li><strong>Almeno 2 caratteri:<\/strong> ogni risultato è un link diretto al record.<\/li><\/ul>"
+    ],
+    "segregation_audit.php": [
+        "<h3>Separazione dei Doveri<\/h3>",
+        "<p>Mostra chi ha creato e chi ha pubblicato ciascuna spesa e fattura - e dove era la stessa persona.<\/p>",
+        "<ul><li><strong>Solo lettura:<\/strong> un rapporto di controllo; non blocca nulla.<\/li><li><strong>Stesso utente:<\/strong> un segno rosso dove una persona ha fatto entrambi - il principio delle quattro occhi non è stato utilizzato.<\/li><\/ul>"
+    ],
+    "sequence_check.php": [
+        "<h3>Controllo Sequenza<\/h3>",
+        "<p>Verifica che i numeri dei voucher e i numeri delle fatture formino serie ininterrotte.<\/p>",
+        "<ul><li><strong>Gap:<\/strong> un numero mancante è elencato - la prima cosa che un revisore cerca.<\/li><li><strong>Solo lettura:<\/strong> nulla viene modificato.<\/li><\/ul>"
     ]
 }

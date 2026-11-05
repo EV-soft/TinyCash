@@ -155,6 +155,15 @@ if (bootstrap_users_exist($conn)) {
     echo "\n";
     require __DIR__ . '/db-setup/create_all_tables.core.php';
     create_all_tables_for($conn, $db_type);
+    // Udvidede demodata (fakturaer i alle tilstande, tilbud, udgifter, banklinjer ...) - et scenarie hvis tabel ikke
+    // findes på en frisk installation, springes over. En fejl her må aldrig stoppe selve installationen.
+    echo "\nUdvidede demodata:\n";
+    try {
+        require __DIR__ . '/db-setup/demo_data_extended.core.php';
+        seed_demo_data_extended($conn, function (string $t) { echo htmlspecialchars($t) . "\n"; });
+    } catch (\Throwable $e) {
+        echo 'Sprunget over: ' . htmlspecialchars($e->getMessage()) . "\n";
+    }
 }
 
 // De to scripts ovenfor sætter selv Content-Type: text/plain - gendan html

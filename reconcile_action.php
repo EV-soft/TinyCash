@@ -31,14 +31,10 @@ require_once 'inc/audit.inc.php';
 // hvorfor - denne fils bundlogik (nedenfor) er uændret.
 require_once 'inc/reconcile.inc.php';
 
-// --- BULK: bekræft flere foreslåede match på én gang (bruger-anmodet) ---
-// Bevidst begrænset til scenarie A (fakturamatch) - kun der findes et
-// entydigt, allerede validerede forslag (reconcile_list.php's
-// $match_candidates-tjek: PRÆCIS én kandidat). Scenarie B (fri kontering)
-// har ingen tilsvarende pålidelig auto-gæt at bulk-bekræfte - at gætte forkert
-// dér ville poste et beløb på en vilkårlig konto uden reelt grundlag. Ingen
-// gebyr-/FX-justering i bulk-tilstand (samme neutrale standardværdier som et
-// enkelt-match uden ekstra input fra brugeren).
+// --- BULK: bekræft flere foreslåede match på én gang --- Bevidst begrænset til scenarie A (fakturamatch) - kun
+// der findes et entydigt, allerede validerede forslag (reconcile_list.php's $match_candidates-tjek: PRÆCIS én
+// kandidat). Ingen gebyr-/FX-justering i bulk-tilstand (samme neutrale standardværdier som et enkelt-match uden
+// ekstra input fra brugeren).
 if (isset($_POST['bulk_pairs']) && is_array($_POST['bulk_pairs'])) {
     $sent = 0; $failed = 0;
     foreach ($_POST['bulk_pairs'] as $pair) {
@@ -48,7 +44,9 @@ if (isset($_POST['bulk_pairs']) && is_array($_POST['bulk_pairs'])) {
         $result = reconcile_one_bank_line($conn, $global_settings, $p_tmp, $p_target, 0, 0.0, 2320, 0, false);
         if ($result['ok']) { $sent++; } else { $failed++; }
     }
-    header("Location: reconcile_list.php?msg=bulk&sent=$sent&failed=$failed");
+    redirect('reconcile_list.php', $failed > 0
+        ? sprintf(lang('@%d transaction(s) matched and posted. %d could not be posted (already processed in the meantime, or a posting error) - please check them individually.'), $sent, $failed)
+        : sprintf(lang('@%d transaction(s) matched and posted successfully.'), $sent), $failed > 0 ? 'warning' : 'success');
     ob_end_flush();
     exit;
 }
@@ -59,9 +57,9 @@ $tmp_id     = isset($_POST['tmp_id'])     ? (int)$_POST['tmp_id']     : 0;
 if (preg_match('/^shop:(\d+)$/', (string)($_POST['target_id'] ?? ''), $sm)) {
     $p_res = reconcile_shop_payout($conn, $global_settings, $tmp_id, (int)$sm[1],
         isset($_POST['fee_amount']) ? parse_dk_number($_POST['fee_amount']) : 0.0, (int)($_POST['fee_acc_id'] ?? 0));
-    if (!empty($p_res['ok'])) { header("Location: reconcile_list.php?msg=success"); }
-    elseif (!empty($p_res['already_processed'])) { header("Location: reconcile_list.php?msg=already_processed"); }
-    else { $_SESSION['flash_error'] = $p_res['message'] ?? lang('@Error:'); header("Location: reconcile_list.php"); }
+    if (!empty($p_res['ok'])) { redirect('reconcile_list.php', '@Transaction Processed Successfully'); }
+    elseif (!empty($p_res['already_processed'])) { redirect('reconcile_list.php', '@This transaction was already processed (possibly by a duplicate click) - nothing was posted twice.', 'info'); }
+    else { redirect('reconcile_list.php', htmlspecialchars((string)($p_res['message'] ?? lang('@Error:'))), 'error'); }
     ob_end_flush();
     exit;
 }
@@ -70,27 +68,18 @@ $acc_id     = isset($_POST['acc_id'])     ? (int)$_POST['acc_id']     : 0;
 $fee_amount = isset($_POST['fee_amount']) ? parse_dk_number($_POST['fee_amount']) : 0;
 $fee_acc_id = isset($_POST['fee_acc_id']) ? (int)$_POST['fee_acc_id'] : 2320;
 $proj_id    = isset($_POST['proj_id'])    ? (int)$_POST['proj_id']    : 0;
+if (!tc_project_ok($conn, $proj_id, $proj_id)) $proj_id = 0;      // RETTET: et projekt-id der ikke findes, blev gemt (løs henvisning i projektregnskabet)
 $close_fx_invoice = isset($_POST['close_fx_invoice']) && $_POST['close_fx_invoice'] === '1';
 
 $result = reconcile_one_bank_line($conn, $global_settings, $tmp_id, $target_id, $acc_id, $fee_amount, $fee_acc_id, $proj_id, $close_fx_invoice);
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 33): "Husk
-// denne regel"-afkrydsningsfeltet på reconcile_list.php - gemmer et
-// "beskrivelse indeholder X -> konto Y"-mønster, som fremover foreslås
-// automatisk for tilsvarende banklinjer. Kun relevant for udgiftslinjer
-// (target_id=0, direkte kontering) - en fakturamatch har intet konto-valg
-// at gemme en regel for. Stille degradering hvis migrationen ikke er kørt.
+// NYT: "Husk denne regel"-afkrydsningsfeltet på reconcile_list.php - gemmer et "beskrivelse indeholder X -> konto
+// Y"-mønster, som fremover foreslås automatisk for tilsvarende banklinjer. Stille degradering hvis migrationen
+// ikke er kørt.
 if ($result['ok'] && $target_id === 0 && $acc_id > 0 && isset($_POST['save_rule']) && $_POST['save_rule'] === '1') {
     $rule_pattern = trim($_POST['rule_pattern'] ?? '');
     if ($rule_pattern !== '') {
-        $has_rules_table = false;
-        if (DB::is_sqlite()) {
-            $brt = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='bank_match_rules'");
-            $has_rules_table = ($brt && DB::fetch_assoc($brt));
-        } else {
-            $brt = DB::query($conn, "SHOW TABLES LIKE 'bank_match_rules'");
-            $has_rules_table = ($brt && DB::num_rows($brt) > 0);
-        }
+        $has_rules_table = db_has_table($conn, 'bank_match_rules');
         if ($has_rules_table) {
             $dup = DB::fetch_assoc(DB::query($conn, "SELECT rule_id FROM bank_match_rules WHERE pattern = '" . DB::escape($conn, $rule_pattern) . "' AND acc_id = $acc_id"));
             if (!$dup) {
@@ -106,9 +95,9 @@ if ($result['ok'] && $target_id === 0 && $acc_id > 0 && isset($_POST['save_rule'
 }
 
 if (!empty($result['already_processed'])) {
-    header("Location: reconcile_list.php?msg=already_processed");
+    redirect('reconcile_list.php', '@This transaction was already processed (possibly by a duplicate click) - nothing was posted twice.', 'info');
 } elseif ($result['ok']) {
-    header("Location: reconcile_list.php?msg=success");
+    redirect('reconcile_list.php', '@Transaction Processed Successfully');
 } else {
     die($result['message']);
 }

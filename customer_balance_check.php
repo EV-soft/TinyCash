@@ -29,22 +29,11 @@ if (!$stmt) {
 
 $s = get_settings($conn);
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): udvider dette
-// allerede eksisterende endepunkt med et ANDET, uafhængigt tjek - en
-// konfigurerbar kreditgrænse for kundens SAMLEDE udestående saldo (ikke kun
-// forfaldne fakturaer, som "overdue" ovenfor allerede dækker). En kunde der
-// altid betaler til tiden kan sagtens vokse forbi en fornuftig kreditgrænse
-// uden nogensinde at udløse "overdue" - de to advarsler er bevidst adskilte,
-// begge kan være sande på samme tid. Samme "stille degradering hvis ikke
-// migreret endnu"-mønster som andre nyere kolonner.
-$has_credit_limit_col = false;
-if (DB::is_sqlite()) {
-    $clc = DB::query($conn, "PRAGMA table_info(customers)");
-    if ($clc) { while ($clcr = DB::fetch_assoc($clc)) { if ($clcr['name'] === 'credit_limit') { $has_credit_limit_col = true; break; } } }
-} else {
-    $clc = DB::query($conn, "SHOW COLUMNS FROM customers LIKE 'credit_limit'");
-    $has_credit_limit_col = ($clc && DB::num_rows($clc) > 0);
-}
+// NYT: udvider dette allerede eksisterende endepunkt med et ANDET, uafhængigt tjek - en konfigurerbar kreditgrænse
+// for kundens SAMLEDE udestående saldo (ikke kun forfaldne fakturaer, som "overdue" ovenfor allerede dækker). En
+// kunde der altid betaler til tiden kan sagtens vokse forbi en fornuftig kreditgrænse uden nogensinde at udløse
+// "overdue" - de to advarsler er bevidst adskilte, begge kan være sande på samme tid.
+$has_credit_limit_col = db_has_column($conn, 'customers', 'credit_limit');
 $credit_limit = null;
 if ($has_credit_limit_col) {
     $cl_row = DB::fetch_assoc(DB::query($conn, "SELECT credit_limit FROM customers WHERE cust_id = $cust_id"));

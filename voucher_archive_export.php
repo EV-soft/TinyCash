@@ -65,7 +65,7 @@ if (isset($_GET['download']) && $_GET['download'] == '1') {
                 csv_safe($e['voucher_no'] ?? ''),
                 $e['exp_date'],
                 csv_safe($e['supplier'] ?? ''),
-                number_format((float)$e['amount'], 2, ',', ''),
+                fmt_dk_input((float)$e['amount']),
                 $has_file ? lang('@Included in ZIP') : ($e['no_attachment_reason'] ? lang('@Exempt') . ': ' . csv_safe($e['no_attachment_reason']) : lang('@Missing')),
             ];
         }
@@ -76,9 +76,11 @@ if (isset($_GET['download']) && $_GET['download'] == '1') {
     // RETTET: fakturaerne og kreditnotaerne HAR nu en fil - den arkiverede PDF (inc/invoice_pdf_archive.inc.php,
     // BEK 811/2026: opbevaring af bilag) - men den kom ikke med i årets bilagsarkiv. Den lægges nu i ZIP'en.
     require_once __DIR__ . '/inc/invoice_pdf_archive.inc.php';
+    // RETTET: en faktura i fremmed valuta stod med sit valutabeløb uden kurs - oversigtens øvrige beløb (udgifterne)
+    // er i bogføringsvalutaen, så kolonnen blandede valutaer. Nu omregnet med fakturaens kurs, som i hovedbogen.
     $res_i = DB::query($conn, "SELECT i.inv_id, i.invoice_no, i.credit_ref, i.credit_note_no, i.inv_date, c.cust_name,
             (SELECT COALESCE(SUM(quantity * price_each " . invoice_discount_sql($conn) . " * (100 + line_vat_rate) / 100.0), 0)
-             FROM invoice_lines WHERE inv_id = i.inv_id) AS total
+             FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1) AS total
         FROM invoices i JOIN customers c ON i.cust_id = c.cust_id
         WHERE LOWER(i.inv_status) != 'draft' AND i.inv_date BETWEEN '$ys' AND '$ye'
         ORDER BY i.inv_date ASC");
@@ -93,7 +95,7 @@ if (isset($_GET['download']) && $_GET['download'] == '1') {
                 csv_safe($is_cn ? (!empty($i['credit_note_no']) ? 'KN-' . $i['credit_note_no'] : '') : ($i['invoice_no'] ?? '')),
                 $i['inv_date'],
                 csv_safe($i['cust_name'] ?? ''),
-                number_format((float)$i['total'], 2, ',', ''),
+                fmt_dk_input((float)$i['total']),
                 $pdf_ok ? lang('@Included in ZIP') : lang('@View/print from Invoice View in the system'),
             ];
         }
@@ -128,9 +130,7 @@ htm_Header('@Voucher Archive Export');
 showMenu();
 
 htm_Card_('@Voucher Archive Export', 700);
-echo '<p style="color:var(--text-muted); font-size:0.9em; margin-top:-5px;">' .
-    lang('@Download a ZIP bundle of all expense attachments and a full CSV index of every voucher (expenses and non-draft invoices) for a chosen year - useful for handing off to an accountant/auditor, or for the bookkeeping law\'s 5-year retention requirement.') .
-    '</p>';
+htm_Note(lang('@Download a ZIP bundle of all expense attachments and a full CSV index of every voucher (expenses and non-draft invoices) for a chosen year - useful for handing off to an accountant/auditor, or for the bookkeeping law\'s 5-year retention requirement.'), 'font-size:0.9em; margin-top:-5px;');
 echo '<form method="get" style="display:flex; gap:10px; align-items:flex-end;">';
 echo '<input type="hidden" name="download" value="1">';
 echo '<div><label style="font-size:0.85em; font-weight:bold; display:block;">' . lang('@Year') . '</label>';

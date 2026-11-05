@@ -35,11 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['profile_name'])) {
     // bruger (ikke kun admin) kunne udnytte det. Rettet ved at escape $val
     // på samme måde som $key, jf. det indrapporterede forslag.
     $val = DB::escape($conn, json_encode($setup));
-    // RETTET 2026-08-19: "ON DUPLICATE KEY UPDATE" er ren MySQL-syntaks og
-    // fejlede stille på SQLite (bekræftet: SQLSTATE[HY000] syntax error) -
-    // DB::query() fangede fejlen og returnerede false, men resultatet blev
-    // aldrig tjekket, så "gemt"-beskeden vistes uanset. Følger nu samme
-    // mønster som annual_report.php/company_settings.php.
+    // RETTET 2026-08-19: "ON DUPLICATE KEY UPDATE" er ren MySQL-syntaks og fejlede stille på SQLite (bekræftet:
+    // SQLSTATE[HY000] syntax error) - DB::query fangede fejlen og returnerede false, men resultatet blev aldrig
+    // tjekket, så "gemt"-beskeden vistes uanset. Følger nu samme mønster som
+    // annual_report.php/company_settings.php.
     $upsert_sql = DB::is_sqlite()
         ? "INSERT INTO settings (setting_key, setting_value) VALUES ('$key', '$val')
            ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value"
@@ -53,10 +52,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['profile_name'])) {
 
 // --- 2. HENT PROFIL LOGIK ---
 if (isset($_GET['load_profile']) && !empty($_GET['load_profile'])) {
-    $p_key = 'import_profile_' . DB::real_escape_string($conn, $_GET['load_profile']);
-    $res = DB::query($conn, "SELECT setting_value FROM settings WHERE setting_key = '$p_key'");
-    if ($r = DB::fetch_assoc($res)) {
-        $p_data = json_decode($r['setting_value'], true);
+    $p_json = setting('import_profile_' . (string)$_GET['load_profile']);
+    if ($p_json !== '') {
+        $p_data = json_decode($p_json, true);
         $suggested['date']   = $p_data['col_date'];
         $suggested['text']   = $p_data['col_text'];
         $suggested['amount'] = $p_data['col_amount'];
@@ -69,16 +67,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
     if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
     $original_filename = basename($_FILES['csv_file']['name']);
 
-    // RETTET (§bugs-batch-20-review): KRITISK - det uploadede filnavn kom
-    // FØR direkte fra klienten, ubeskåret og med endelsen ukontrolleret, lige
-    // ind i stien i uploads/ (offentligt tilgængelig uden login). Et
-    // håndlavet (ikke browser-genereret) POST kunne sætte filnavnet til fx
-    // "../../../shell.php" (filsti-gennembrud UD AF uploads/) eller blot
-    // "shell.php" (direkte kørbar PHP-fil i uploads/) forklædt som en
-    // "CSV-fil". basename() ovenfor fjerner ethvert stikomponent, og denne
-    // hvidliste tillader kun .csv - samme sårbarhedsklasse som lige rettet i
-    // expense_edit.php, se den for uddybning. uploads/.htaccess blokerer nu
-    // også farlige endelser direkte på Apache-niveau som endnu et lag.
+    // RETTET: KRITISK - det uploadede filnavn kom FØR direkte fra klienten, ubeskåret og med endelsen
+    // ukontrolleret, lige ind i stien i uploads/ (offentligt tilgængelig uden login). uploads/.htaccess blokerer
+    // nu også farlige endelser direkte på Apache-niveau som endnu et lag.
     $ext = strtolower(pathinfo($original_filename, PATHINFO_EXTENSION));
     if ($ext !== 'csv') {
         die(lang('@Error: Only CSV files can be imported.'));
@@ -95,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
         $delimiter = (strpos($first_line, ';') !== false) ? ';' : ',';
         rewind($handle);
 
-        while (($data = fgetcsv($handle, 1000, $delimiter, '"')) !== FALSE) {
+        while (($data = fgetcsv($handle, 0, $delimiter, '"')) !== FALSE) {
             // (samme omkodning som bank_import_process.php - ellers var forhåndsvisningen af æøå-tekster tom)
             if (empty($preview_data) && isset($data[0])) $data[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$data[0]);
             foreach ($data as $di => $dv) if ($dv !== null && !mb_check_encoding((string)$dv, 'UTF-8')) $data[$di] = mb_convert_encoding((string)$dv, 'UTF-8', 'Windows-1252');

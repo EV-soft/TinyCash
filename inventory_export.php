@@ -3,6 +3,7 @@
 # forklaring. Fundet ved en rapport-/eksportgennemgang.
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
+require_once 'inc/php2htm.lib.php';      // redirect()
 
 // Foranstiller et anførselstegn på celler der starter med =/+/-/@, så
 // Excel/LibreOffice aldrig fortolker fritekst-indhold som en formel.
@@ -21,9 +22,7 @@ $sql = "SELECT p.*, a.acc_name
         ORDER BY p.prod_sku ASC";
 $res = DB::query($conn, $sql);
 
-if (!$res) {
-    die("@Error retrieving data");
-}
+if (!$res) redirect('inventory_status.php', '@Error retrieving data', 'error');      // (var en hvid side med en uoversat nøgle)
 
 // 3. CSV Headers - Fortæller browseren at dette er en download
 $filename = "inventory_export_" . date('Y-m-d') . ".csv";
@@ -41,22 +40,25 @@ fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
 // Kolonneoverskrifter (Vi bruger ltrim($key, '@') hvis lang() ikke er indlæst, 
 // eller indlæs biblioteket uden at bruge htm_Header)
 // $headers = ['SKU', 'Varenavn', 'Konto', 'Pris', 'På lager', 'Samlet værdi'];
-$headers = [lang('@SKU'), lang('@ItemName'), lang('@Account'), lang('@Price'), lang('@In Stock'), lang('@Total Value')];
+$headers = [lang('@SKU'), lang('@ItemName'), lang('@Account'), lang('@Price'), lang('@Cost Price'), lang('@In Stock'), lang('@Stock value (cost price)')];
 fputcsv($output, $headers, ';');
 
 // 5. Skriv rækkerne
 while ($row = DB::fetch_assoc($res)) {
     $price = (float)($row['prod_price'] ?? 0);
-    $stock = (int)($row['prod_stock'] ?? 0);
-    $total_val = $price * $stock;
+    $stock = (float)($row['prod_stock'] ?? 0);      // RETTET: (int) skar decimaler af (fx 7,5 kg -> 7) - også i lagerværdien
+    // Lageret værdiansættes til kostpris, ikke salgspris (salgsprisen overvurderede lageret med hele avancen).
+    // Ukendt kostpris = tom værdi, ikke et gæt.
+    $cost = isset($row['prod_cost_price']) && $row['prod_cost_price'] !== null && $row['prod_cost_price'] !== '' ? (float)$row['prod_cost_price'] : null;
 
     $line = [
         csv_safe($row['prod_sku']),
         csv_safe($row['prod_name']),
         csv_safe($row['acc_name']),
-        number_format($price, 2, ',', ''),
-        $stock,
-        number_format($total_val, 2, ',', '')
+        fmt_dk_input($price),
+        $cost === null ? '' : fmt_dk_input($cost),
+        rtrim(rtrim(fmt_dk_input($stock, 3), '0'), ','),
+        $cost === null ? '' : fmt_dk_input($cost * $stock)
     ];
     fputcsv($output, $line, ';');
 }

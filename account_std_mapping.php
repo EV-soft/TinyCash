@@ -50,17 +50,15 @@ $type_labels = [
 // (uafklaret). Juster regex/kolonnetolkningen nedenfor hvis en rigtig fil
 // viser sig at afvige fra antagelsen.
 if (isset($_POST['import_std_csv'])) {
-    // NYT: eksplicit lokalt CSRF-tjek, samme "defense in depth"-mønster som
-    // fx customer_contact_action.php/bank_rules.php - inc/auth.inc.phps
-    // globale POST-gate (se [[csrf-protection-added]]) beskytter allerede
-    // ALLE POST-kald i hele appen, så dette er reelt aldrig falsk i praksis,
-    // men gør det eksplicit og selvstændigt dokumenteret netop her, fordi
-    // handleren er usædvanligt destruktiv (sletter HELE std_accounts-
-    // tabellen og nulstiller alle eksisterende kontomapninger).
+    // NYT: eksplicit lokalt CSRF-tjek, samme "defense in depth"-mønster som fx
+    // customer_contact_action.php/bank_rules.php - inc/auth.inc.phps globale POST-gate beskytter allerede ALLE
+    // POST-kald i hele appen, så dette er reelt aldrig falsk i praksis, men gør det eksplicit og selvstændigt
+    // dokumenteret netop her, fordi handleren er usædvanligt destruktiv (sletter HELE std_accounts-tabellen og
+    // nulstiller alle eksisterende kontomapninger).
     if (!csrf_verify()) {
-        $import_message = htm_Alert(lang('@Security check failed (CSRF). Please reload the page and try again.'), 'error', 0, true);
+        $import_message = htm_Alert(lang('@Security check failed (CSRF). Please reload the page and try again.'), 'error', 700, false);
     } elseif (empty($_FILES['std_csv']['name']) || $_FILES['std_csv']['error'] !== UPLOAD_ERR_OK) {
-        $import_message = htm_Alert(lang('@Error: Could not read the uploaded file.'), 'error', 0, true);
+        $import_message = htm_Alert(lang('@Error: Could not read the uploaded file.'), 'error', 700, false);
     } else {
         $raw = file_get_contents($_FILES['std_csv']['tmp_name']);
         $lines = preg_split('/\r\n|\r|\n/', trim($raw));
@@ -75,7 +73,7 @@ if (isset($_POST['import_std_csv'])) {
         }
 
         if ($col_num === null) {
-            $import_message = htm_Alert(lang('@Error: Could not recognize this file as a standard chart of accounts CSV (expected a KONTONUMMER column).'), 'error', 0, true);
+            $import_message = htm_Alert(lang('@Error: Could not recognize this file as a standard chart of accounts CSV (expected a KONTONUMMER column).'), 'error', 700, false);
         } else {
             $parsed = [];
             foreach ($lines as $line) {
@@ -98,7 +96,7 @@ if (isset($_POST['import_std_csv'])) {
             }
 
             if (empty($parsed)) {
-                $import_message = htm_Alert(lang('@Error: No valid rows found in the uploaded file.'), 'error', 0, true);
+                $import_message = htm_Alert(lang('@Error: No valid rows found in the uploaded file.'), 'error', 700, false);
             } else {
                 DB::begin_transaction($conn);
                 $new_ids = array_keys($parsed);
@@ -122,8 +120,11 @@ if (isset($_POST['import_std_csv'])) {
                 DB::commit($conn);
 
                 log_action($conn, 'IMPORT_STD_ACCOUNTS_CSV', 'std_accounts', 0, null, ['count' => count($parsed), 'reset_mappings' => $reset_count]);
-                header("Location: account_std_mapping.php?msg=csv_imported&n=" . count($parsed) . "&r=" . $reset_count . "&f=" . $finance_count);
-                exit;
+                $txt = lang('@Imported') . ' ' . count($parsed) . ' ' . lang('@standard accounts.');
+                if ($reset_count > 0) $txt .= ' ' . $reset_count . ' ' . lang('@existing mappings were reset and need to be reassigned below.');
+                // (de finansielle konti 3000-4999 får std_type 'finance' og kan aldrig foreslås automatisk - siges nu eksplicit)
+                if ($finance_count > 0) $txt .= ' ' . sprintf(lang('@%d of these are financial accounts and will never be auto-suggested below (ambiguous income/expense direction) - they must be mapped manually.'), $finance_count);
+                redirect('account_std_mapping.php', $txt);
             }
         }
     }
@@ -149,9 +150,9 @@ if (isset($_POST['save_mappings'])) {
     // ovenfor - se dens kommentar for hvorfor (inc/auth.inc.phps globale
     // POST-gate beskytter allerede reelt denne handler).
     if (!csrf_verify()) {
-        $message = htm_Alert(lang('@Security check failed (CSRF). Please reload the page and try again.'), 'error', 0, true);
+        $message = htm_Alert(lang('@Security check failed (CSRF). Please reload the page and try again.'), 'error', 700, false);
     } else {
-        $posted = $_POST['std_ref'] ?? [];
+        $posted = (array)($_POST['std_ref'] ?? []);
         $changed = 0;
 
         $cur_res = DB::query($conn, "SELECT acc_id, std_ref_id FROM accounts");
@@ -184,11 +185,10 @@ if (isset($_POST['save_mappings'])) {
 
         if ($ok) {
             DB::commit($conn);
-            header("Location: account_std_mapping.php?msg=updated&n=" . $changed);
-            exit;
+            redirect('account_std_mapping.php', lang('@Standard account mappings updated') . " ($changed)");
         } else {
             DB::rollback($conn);
-            $message = htm_Alert(lang('@Error saving account') . ": " . DB::error($conn), 'error', 0, true);
+            $message = htm_Alert(lang('@Error saving account') . ": " . htmlspecialchars((string)DB::error($conn)), 'error', 700, false);
         }
     }
 }
@@ -208,33 +208,13 @@ htm_Header('@Bulk Map to Standard Accounts');
 showMenu();
 
 echo "<div style='max-width:900px; margin:0 auto; padding:10px;'>";
-if (isset($_GET['msg']) && $_GET['msg'] === 'updated') {
-    $n = (int)($_GET['n'] ?? 0);
-    htm_Alert(lang('@Standard account mappings updated') . " ($n)", 'success', 700);
-}
-if (isset($_GET['msg']) && $_GET['msg'] === 'csv_imported') {
-    $n = (int)($_GET['n'] ?? 0);
-    $r = (int)($_GET['r'] ?? 0);
-    $f = (int)($_GET['f'] ?? 0);
-    $txt = lang('@Imported') . " $n " . lang('@standard accounts.');
-    if ($r > 0) $txt .= ' ' . $r . ' ' . lang('@existing mappings were reset and need to be reassigned below.');
-    // RETTET (find-fem-fejl-gennemgang): de finansielle konti (3000-4999) får
-    // en std_type ('finance'), der bevidst ikke matcher nogen rigtig
-    // kontotype (income/expense/bank/vat/asset/liability/equity) - en
-    // renteindtægt/renteudgift kan være begge dele, og en forkert automatisk
-    // forslået type ville være værre end slet intet forslag. "Foreslå
-    // automatisk"-logikken nedenfor kan derfor ALDRIG forslå disse konti -
-    // tidligere stille og uden varsel, nu eksplicit nævnt her.
-    if ($f > 0) $txt .= ' ' . sprintf(lang('@%d of these are financial accounts and will never be auto-suggested below (ambiguous income/expense direction) - they must be mapped manually.'), $f);
-    htm_Alert($txt, 'success', 700);
-}
+flash_render();
+
 if (isset($message)) echo $message;
 if (isset($import_message)) echo $import_message;
 
 htm_Card_('@Import Official Standard Chart of Accounts', 900, '', 'stdCsvImportForm');
-echo '<p style="color:var(--text-muted); margin-top:0; font-size:0.9em;">'
-    . lang('@Upload Erhvervsstyrelsen\'s official "standardkontoplan" CSV file (search for "standardkontoplan" on erhvervsstyrelsen.dk) to replace the list below with the real, official account numbers. This is optional - the bulk mapping below already works with the built-in list.')
-    . '</p>';
+htm_Note(lang('@Upload Erhvervsstyrelsen\'s official "standardkontoplan" CSV file (search for "standardkontoplan" on erhvervsstyrelsen.dk) to replace the list below with the real, official account numbers. This is optional - the bulk mapping below already works with the built-in list.'), 'margin-top:0; font-size:0.9em;');
 echo '<form method="post" enctype="multipart/form-data" style="display:flex; gap:10px; align-items:flex-end;">';
 csrf_field();
 echo '<div><label style="display:block; font-size:0.85em; color:var(--text-muted); margin-bottom:4px;">' . lang('@Standardkontoplan CSV') . '</label>';
@@ -244,10 +224,8 @@ echo '</form>';
 htm_Card_end();
 
 htm_Card_('@Bulk Map to Standard Accounts', 900, '', 'stdMapForm');
-if (!empty($n_hidden_off)) echo '<p style="color:var(--text-muted); font-size:0.85em;">' . sprintf(lang('@%d switched-off accounts are not shown - switch an account on in the chart of accounts to map it here.'), $n_hidden_off) . '</p>';
-echo '<p style="color:var(--text-muted); margin-top:0;">'
-    . lang('@Map all your accounts to the Danish standard chart of accounts (used for SAF-T reporting) from one page. Fields marked as a suggestion are pre-filled based on account type - review and adjust before saving.')
-    . '</p>';
+if (!empty($n_hidden_off)) htm_Note(sprintf(lang('@%d switched-off accounts are not shown - switch an account on in the chart of accounts to map it here.'), $n_hidden_off), 'font-size:0.85em;');
+htm_Note(lang('@Map all your accounts to the Danish standard chart of accounts (used for SAF-T reporting) from one page. Fields marked as a suggestion are pre-filled based on account type - review and adjust before saving.'), 'margin-top:0;');
 
 if (empty($accounts)) {
     echo "<p style='padding:20px; text-align:center; color:var(--text-muted);'>" . lang('@No accounts found') . "</p>";

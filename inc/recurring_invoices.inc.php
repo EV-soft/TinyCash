@@ -38,24 +38,17 @@ function recurring_invoices_check($conn) {
 function generate_recurring_invoice($conn, int $recur_id, bool $auto = false): ?int {
     $tmpl = DB::fetch_assoc(DB::query($conn, "SELECT * FROM recurring_invoices WHERE recur_id = $recur_id"));
     if (!$tmpl) return null;
+    // RETTET: "Generér nu" dannede en kladde til en kunde i papirkurven (det automatiske tjek springer dem over)
+    if (!tc_customer_ok($conn, (int)$tmpl['cust_id'])) return null;
 
     $today = date('Y-m-d');
 
-    // RETTET (§bugs-batch-19-review): recurring_invoices_check() køres ved
-    // HVER sidevisning (htm_Footer(), se filens header) - to næsten-samtidige
-    // sidevisninger (fx to faner, eller to brugere online samtidig, mens en
-    // skabelon er forfalden) kunne begge bestå det automatiske tjeks SELECT
-    // (linje ~22) FØR nogen af dem nåede at behandle den, og dermed begge
-    // generere en dublet-kladdefaktura for samme periode. Kun det automatiske
-    // tjek ($auto=true) kapløbssikres her - "Generér nu"-knappen skal
-    // bevidst kunne kaldes flere gange samme dag (se kommentaren nedenfor om
-    // et tidligt manuelt tryk), så den må ikke låses af samme tjek. Bruger en
-    // atomisk "compare-and-swap" på next_run_date's PRÆCISE gamle værdi - kun
-    // den forespørgsel der reelt vinder kapløbet, får next_run_date != den
-    // gamle værdi til at matche 0 rækker for taberen (målt via reelt
-    // berørte rækker, DB::affected_rows() - ikke en efterfølgende SELECT,
-    // som ville vise vinderens allerede-committede resultat for begge, se
-    // [[db_connect.inc.php]]s affected_rows()-kommentar for baggrunden).
+    // RETTET: recurring_invoices_check køres ved HVER sidevisning (htm_Footer, se filens header) - to
+    // næsten-samtidige sidevisninger (fx to faner, eller to brugere online samtidig, mens en skabelon er
+    // forfalden) kunne begge bestå det automatiske tjeks SELECT (linje ~22) FØR nogen af dem nåede at behandle
+    // den, og dermed begge generere en dublet-kladdefaktura for samme periode. Kun det automatiske tjek
+    // ($auto=true) kapløbssikres her - "Generér nu"-knappen skal bevidst kunne kaldes flere gange samme dag (se
+    // kommentaren nedenfor om et tidligt manuelt tryk), så den må ikke låses af samme tjek.
     if ($auto) {
         if (empty($tmpl['next_run_date']) || !strtotime((string)$tmpl['next_run_date']) || $tmpl['next_run_date'] < '1990-01-01' || $today < $tmpl['next_run_date']) return null;      // (en ugyldig dato kører aldrig)
         $claim_next = recurring_next_date($tmpl['next_run_date'], $tmpl['interval_type']);
@@ -68,18 +61,16 @@ function generate_recurring_invoice($conn, int $recur_id, bool $auto = false): ?
         }
     }
 
-    $due_days = (int)($tmpl['inv_due_days'] ?? 8);
+    $due_days = max(0, (int)($tmpl['inv_due_days'] ?? 8));
     $due_date = date('Y-m-d', strtotime("+$due_days days"));
     $proj_sql = !empty($tmpl['proj_id']) ? (int)$tmpl['proj_id'] : 'NULL';
 
     $cust_ref = DB::escape($conn, $tmpl['cust_reference'] ?? '');
     $note     = DB::escape($conn, $tmpl['inv_note'] ?? '');
     $deliv    = DB::escape($conn, $tmpl['delivery_address'] ?? '');
-    // RETTET: hardkodede 'DKK' ignorerede virksomhedens faktisk konfigurerede
-    // basisvaluta (Firmaindstillinger -> Valuta) - en automatisk genereret
-    // gentagen faktura ville altid blive tagget som DKK, uanset hvad
-    // virksomheden reelt har sat op. Samme fejlklasse som quote_actions.php's
-    // konverterings-flow og denne sessions §currency-gainloss-feature-sweep.
+    // RETTET: hardkodede 'DKK' ignorerede virksomhedens faktisk konfigurerede basisvaluta (Firmaindstillinger ->
+    // Valuta) - en automatisk genereret gentagen faktura ville altid blive tagget som DKK, uanset hvad
+    // virksomheden reelt har sat op. Samme fejlklasse som quote_actions.php's konverterings-flow og denne sessions
     $settings     = get_settings($conn);
     $inv_currency = DB::escape($conn, $settings['currency'] ?? 'DKK');
 
@@ -133,13 +124,10 @@ function generate_recurring_invoice($conn, int $recur_id, bool $auto = false): ?
     return $inv_id;
 }
 
-// Beregner næste kørselsdato UD FRA den seneste planlagte dato (ikke fra
-// "i dag") - undgår datodrift, hvis systemet fx ikke besøges i nogle dage
-// efter forfald.
-// RETTET: strtotime('+1 month') fra den 31. januar gav den 3. marts - februar blev sprunget HELT over (ingen
-// faktura / udgift for februar), og datoen blev derefter hængende på den 3. Nu: samme dag i måneden, højst
-// månedens sidste dag - og er datoen den sidste i sin måned, er den næste også den sidste (31/1 -> 28/2 -> 31/3 ...).
-// (Forhåndsvisningen i recurring_invoice_edit.php / recurring_expense_edit.php regner på samme måde.)
+// Beregner næste kørselsdato UD FRA den seneste planlagte dato (ikke fra "i dag") - undgår datodrift, hvis
+// systemet fx ikke besøges i nogle dage efter forfald.
+// RETTET: strtotime('+1 month') fra den 31. Nu: samme dag i måneden, højst månedens sidste dag - og er datoen den
+// sidste i sin måned, er den næste også den sidste (31/1 -> 28/2 -> 31/3...).
 function recurring_next_date(string $from_date, string $interval_type): string {
     $months = $interval_type === 'quarterly' ? 3 : ($interval_type === 'yearly' ? 12 : 1);
     $t = strtotime($from_date);

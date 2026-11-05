@@ -9,6 +9,7 @@ require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/mail_handler.lib.php';
 require_once 'inc/audit.inc.php';
+require_once 'inc/invoice_layouts.inc.php';  // il_column_exists()
 
 /**
  * Sender én opfølgning for tilbuddet med id $id. Returnerer status som en
@@ -19,7 +20,7 @@ function send_single_followup($conn, array $s, int $id): string {
     if ($id <= 0) return 'error';
 
     $sql = "SELECT q.quote_id, q.quote_no, q.valid_until, q.status, q.followup_count, q.followup_sent_at,
-                   c.cust_name, c.cust_email,
+                   c.cust_name, c.cust_email" . (il_column_exists($conn, 'customers', 'cust_language') ? ", c.cust_language" : "") . ",
                    (SELECT COALESCE(SUM(quantity * price_each * (100 + line_vat_rate) / 100.0), 0) FROM quote_lines WHERE quote_id = q.quote_id) AS total
             FROM quotes q JOIN customers c ON q.cust_id = c.cust_id WHERE q.quote_id = $id";
     $q = DB::fetch_assoc(DB::query($conn, $sql));
@@ -45,10 +46,13 @@ function send_single_followup($conn, array $s, int $id): string {
         return 'already_sent_today';
     }
 
+    // RETTET: opfølgningen blev skrevet på den indloggede brugers sprog, ikke kundens - se reminder_action.php
+    $fu_lang_orig = $_SESSION['lang'] ?? 'da';
+    if (!empty($q['cust_language'])) $_SESSION['lang'] = $q['cust_language'];
     $cur = $s['currency'] ?? 'DKK';
     $q_no = 'T-' . str_pad((string)$q['quote_no'], 6, '0', STR_PAD_LEFT);
     $valid_until_fmt = date(CONF_DATE_FORMAT, strtotime($q['valid_until']));
-    $total_fmt = number_format((float)$q['total'], 2, ',', '.') . ' ' . $cur;
+    $total_fmt = fmt_dk((float)$q['total']) . ' ' . $cur;
     $is_expired = $q['valid_until'] < date('Y-m-d');
 
     $subject = lang('@Quote Follow-up') . ' - ' . $q_no;
@@ -56,6 +60,7 @@ function send_single_followup($conn, array $s, int $id): string {
         ? "@Hi %s,\n\nWe haven't heard back from you regarding quote %s (total %s), which expired on %s.\n\nIf you are still interested, please let us know and we will be happy to issue an updated quote.\n\nBest regards,"
         : "@Hi %s,\n\nJust a friendly reminder that quote %s (total %s) is valid until %s.\n\nPlease let us know if you have any questions or would like to proceed.\n\nBest regards,";
     $body = nl2br(htmlspecialchars(sprintf(lang($body_key), $q['cust_name'], $q_no, $total_fmt, $valid_until_fmt)));
+    $_SESSION['lang'] = $fu_lang_orig;
 
     $result = sendTinyMail($q['cust_email'], $q['cust_name'], $subject, $body);
 
@@ -85,22 +90,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ids']) && is_array($_
         $status = send_single_followup($conn, $s, (int)$raw_id);
         if ($status === 'sent') { $sent++; } else { $failed++; }
     }
-    header("Location: quote_followup.php?msg=bulk&sent=$sent&failed=$failed");
+    redirect('quote_followup.php', $failed > 0
+        ? sprintf(lang('@%d follow-up(s) sent. %d could not be sent (already followed up today, no longer eligible, or a mail error) - please check them individually.'), $sent, $failed)
+        : sprintf(lang('@%d follow-up(s) sent successfully.'), $sent), $failed > 0 ? 'warning' : 'success');
     ob_end_flush();
     exit;
 }
 
 // --- ENKELT-FLOW ---
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if ($id <= 0) { header("Location: quote_followup.php"); exit; }
+if ($id <= 0) { redirect("quote_followup.php"); }
 
 $status = send_single_followup($conn, $s, $id);
 if ($status === 'sent') {
-    header("Location: quote_followup.php?msg=sent");
+    redirect('quote_followup.php', '@Follow-up sent successfully.');
 } elseif ($status === 'already_sent_today') {
-    header("Location: quote_followup.php?msg=already_sent_today");
+    redirect('quote_followup.php', '@A follow-up was already sent for this quote today - please wait until tomorrow to send another.', 'warning');
 } else {
-    header("Location: quote_followup.php?msg=error");
+    redirect('quote_followup.php', '@Could not send the follow-up. Check your mail settings.', 'error');
 }
 ob_end_flush();
 exit;

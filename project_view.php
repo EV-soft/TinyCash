@@ -17,11 +17,11 @@ require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
+require_once 'inc/invoice_layouts.inc.php';  // il_column_exists()
 
 $s   = get_settings($conn);
 $cur = $s['currency'] ?? 'DKK';
 $id  = (int)($_GET['id'] ?? 0);
-$msg = $_GET['msg'] ?? '';
 
 // --- GEM NOTER via POST ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_notes']) && $id > 0) {
@@ -33,16 +33,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_notes']) && $id 
         note_income   = '$n_inc',
         note_general  = '$n_gen'
         WHERE proj_id = $id");
-    header("Location: project_view.php?id=$id&msg=saved");
-    exit;
+    redirect("project_view.php?id=$id", '@Changes saved successfully');
 }
 
 htm_Header('@Projects');
 showMenu();
 
-if ($msg === 'saved')   htm_Alert(lang('@Changes saved successfully'), 'success');
-if ($msg === 'created') htm_Alert(lang('@Project created'), 'success');
-if ($msg === 'deleted') htm_Alert(lang('@Project deleted'), 'success');
+flash_render();
 
 // =========================================================
 // ØVERST: Oversigtstabel
@@ -66,7 +63,7 @@ $res_all = DB::query($conn, "
             WHERE e3.proj_id = p.proj_id AND e3.is_cancelled = 0 AND e3.voucher_no IS NOT NULL AND e3.exp_type = 'income')  AS total_other_inc,
            (SELECT COALESCE(SUM(il.quantity * il.price_each $pv_disc * (100 + il.line_vat_rate) / 100.0 * COALESCE(NULLIF(iv.exch_rate, 0), 1)),0)
             FROM invoice_lines il JOIN invoices iv ON il.inv_id = iv.inv_id
-            WHERE il.proj_id = p.proj_id AND LOWER(iv.inv_status) != 'draft') AS total_inv
+            WHERE COALESCE(NULLIF(il.proj_id, 0), iv.proj_id) = p.proj_id AND LOWER(iv.inv_status) != 'draft') AS total_inv      -- (linjens projekt, ellers fakturaens)
     FROM projects p
     LEFT JOIN customers c ON p.cust_id = c.cust_id
     ORDER BY p.is_active DESC, p.proj_no ASC
@@ -95,9 +92,9 @@ while ($p = DB::fetch_assoc($res_all)) {
         $active_badge,
         $p['proj_start'] ? date(CONF_DATE_FORMAT, strtotime($p['proj_start'])) : '—',
         $p['proj_stop']  ? date(CONF_DATE_FORMAT, strtotime($p['proj_stop']))  : '—',
-        number_format((float)$p['total_exp'], 2, ',', '.') . ' ' . $cur,
-        number_format($total_inc, 2, ',', '.') . ' ' . $cur,
-        '<span style="font-weight:bold; color:'.$bal_col.';">' . number_format($balance, 2, ',', '.') . ' ' . $cur . '</span>',
+        fmt_dk((float)$p['total_exp']) . ' ' . $cur,
+        fmt_dk($total_inc) . ' ' . $cur,
+        '<span style="font-weight:bold; color:'.$bal_col.';">' . fmt_dk($balance) . ' ' . $cur . '</span>',
         $actions,
     ];
 }
@@ -142,7 +139,7 @@ while ($e = DB::fetch_assoc($exp_res)) {
         htmlspecialchars($e['supplier']),
         htmlspecialchars($e['description'] ?? ''),
         htmlspecialchars($e['acc_name'] ?? ''),
-        number_format((float)$e['amount'], 2, ',', '.') . ' ' . $cur,
+        fmt_dk((float)$e['amount']) . ' ' . $cur,
         htm_ActionButtons([['icon'=>'fa-edit','type'=>'secondary','link'=>'expense_edit.php?id='.$e['exp_id'],'hint'=>'@Edit this expense']], false),
     ];
 }
@@ -163,20 +160,15 @@ while ($e = DB::fetch_assoc($inc_res)) {
         htmlspecialchars($e['supplier']),
         htmlspecialchars($e['description'] ?? ''),
         htmlspecialchars($e['acc_name'] ?? ''),
-        number_format((float)$e['amount'], 2, ',', '.') . ' ' . $cur,
+        fmt_dk((float)$e['amount']) . ' ' . $cur,
         htm_ActionButtons([['icon'=>'fa-edit','type'=>'secondary','link'=>'expense_edit.php?id='.$e['exp_id'],'hint'=>'@Edit this income entry']], false),
     ];
 }
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): ufaktureret,
-// fakturerbar tid på PRÆCIS dette projekt - time_list.php viser allerede
-// dette på tværs af alle projekter, men et enkelt projekts egen side (denne)
-// viste intet om det, selvom tidsregistrerings-modulet findes netop for at
-// kunne fakturere timer videre. En projektleder der kun kigger her (ikke på
-// den separate time_list.php) havde ingen måde at se uafregnet arbejde på.
-// Samme kriterium/forespørgsel som time_list.php's egen (is_billable=1,
-// is_invoiced=0) - @-hæmmet, da time_entries kun findes efter
-// db-setup/migrate_time_tracking.php er kørt (se [[fresh-install-schema]]).
+// NYT: ufaktureret, fakturerbar tid på PRÆCIS dette projekt - time_list.php viser allerede dette på tværs af alle
+// projekter, men et enkelt projekts egen side (denne) viste intet om det, selvom tidsregistrerings-modulet findes
+// netop for at kunne fakturere timer videre. Samme kriterium/forespørgsel som time_list.php's egen (is_billable=1,
+// is_invoiced=0) - @-hæmmet, da time_entries kun findes efter db-setup/migrate_time_tracking.php er kørt.
 $unbilled_row = @DB::fetch_assoc(DB::query($conn,
     "SELECT COUNT(*) AS cnt, COALESCE(SUM(hours * hourly_rate),0) AS total
      FROM time_entries WHERE proj_id = $id AND is_billable = 1 AND is_invoiced = 0"));
@@ -187,29 +179,32 @@ $unbilled_total = (float)($unbilled_row['total'] ?? 0);
 // manglede), og ubogførte udgiftskladder talte med i omkostningerne. Nu omregnet og kun bogførte udgifter.
 // Fakturaer
 $inv_res = DB::query($conn, "
-    SELECT i.inv_id, i.invoice_no, i.inv_date, i.inv_status, i.inv_due_date,
+    SELECT i.inv_id, i.invoice_no, i.inv_date, i.inv_status, i.inv_due_date, i.credit_ref" . (il_column_exists($conn, 'invoices', 'credit_note_no') ? ", i.credit_note_no" : "") . ",
            COALESCE((SELECT SUM(il.quantity * il.price_each $pv_disc * (100 + il.line_vat_rate) / 100.0)
-                     FROM invoice_lines il WHERE il.inv_id = i.inv_id), 0) * COALESCE(NULLIF(i.exch_rate, 0), 1) AS total
-    FROM invoices i WHERE i.proj_id = $id ORDER BY i.inv_date DESC
+                     FROM invoice_lines il WHERE il.inv_id = i.inv_id AND COALESCE(NULLIF(il.proj_id, 0), i.proj_id) = $id), 0) * COALESCE(NULLIF(i.exch_rate, 0), 1) AS total
+    FROM invoices i WHERE i.proj_id = $id OR i.inv_id IN (SELECT inv_id FROM invoice_lines WHERE proj_id = $id) ORDER BY i.inv_date DESC
 ");
 $inv_rows = []; $inv_total = 0;
 while ($i = DB::fetch_assoc($inv_res)) {
     // Case-ufølsom: status kan være 'draft' (backend) eller 'DRAFT' (ældre data).
     $status_map = ['draft'=>'secondary','sent'=>'primary','paid'=>'success','void'=>'danger','credited'=>'warning'];
     $st = strtolower($i['inv_status'] ?? '');
-    // RETTET (§bugs-batch-22-review): kladder skal stadig VISES i listen
-    // herunder (så brugeren kan se/redigere dem), men må ikke tælles med i
-    // $inv_total, som fødes ind i selve projektets samlede balance
-    // ($total_income/$balance nedenfor) - se den øverste sql-forespørgsels
-    // samme rettelse for baggrunden.
+    // RETTET: kladder skal stadig VISES i listen herunder (så brugeren kan se/redigere dem), men må ikke tælles
+    // med i $inv_total, som fødes ind i selve projektets samlede balance ($total_income/$balance nedenfor) - se
+    // den øverste sql-forespørgsels samme rettelse for baggrunden.
     if ($st !== 'draft') { $inv_total += (float)$i['total']; }
+    // RETTET: en kreditnota (arver projektet, har intet invoice_no) stod som "#" og linkede til redigering af en
+    // bogført kreditnota - nu "KN-NNNNNN" og et link til visningen
+    $pv_is_cn = !empty($i['credit_ref']);
     $inv_rows[] = [
-        '#' . $i['invoice_no'],
+        $pv_is_cn ? 'KN-' . str_pad((string)($i['credit_note_no'] ?? ''), 6, '0', STR_PAD_LEFT) : '#' . $i['invoice_no'],
         date(CONF_DATE_FORMAT, strtotime($i['inv_date'])),
-        date(CONF_DATE_FORMAT, strtotime($i['inv_due_date'])),
+        !empty($i['inv_due_date']) ? date(CONF_DATE_FORMAT, strtotime($i['inv_due_date'])) : '-',
         htm_Badge('@'.ucfirst($st), $status_map[$st] ?? 'secondary', false),
-        number_format((float)$i['total'], 2, ',', '.') . ' ' . $cur,
-        htm_ActionButtons([['icon'=>'fa-edit','type'=>'secondary','link'=>'invoice_edit.php?id='.$i['inv_id'],'hint'=>'@Edit this invoice']], false),
+        fmt_dk((float)$i['total']) . ' ' . $cur,
+        htm_ActionButtons([$pv_is_cn || $st !== 'draft'
+            ? ['icon'=>'fa-eye','type'=>'secondary','link'=>'invoice_view.php?id='.$i['inv_id'],'hint'=>'@View Invoice']
+            : ['icon'=>'fa-edit','type'=>'secondary','link'=>'invoice_edit.php?id='.$i['inv_id'],'hint'=>'@Edit this invoice']], false),
     ];
 }
 
@@ -267,19 +262,17 @@ function render_section_tools() {
 // --- Sektion: Udgifter ---
 htm_SectionStart('fa-receipt', '@Expenses / Receipts', false, show_toggle: true);
 if (empty($exp_rows)) {
-    echo '<p style="color:var(--text-muted);">' . lang('@No expenses registered for this project') . '</p>';
+    htm_Note(lang('@No expenses registered for this project'));
 } else {
     htm_Table(['@Date','@Supplier','@Description','@Account','@Amount',''], $exp_rows, 'exp_tbl', 0, '', true,
         ['width:10%','width:20%','width:25%','width:20%','width:15%; text-align:right','width:10%']);
     echo '<div style="text-align:right; font-weight:bold; padding:8px 0;">'
-        . lang('@Total') . ': ' . number_format($exp_total, 2, ',', '.') . ' ' . $cur . '</div>';
+        . lang('@Total') . ': ' . fmt_dk($exp_total) . ' ' . $cur . '</div>';
 }
 echo '<div style="margin-top:10px;">';
-// RETTET (se [[project-bugs-review]]): knappen sendte ikke projektet med,
-// selvom man allerede står inde på netop dette projekts side - brugeren
-// skulle selv huske at vælge det samme projekt igen på den nye
-// udgiftsside, ellers bliver udgiften reelt ikke sporet på projektet, som
-// hele formålet med at klikke herfra ellers er.
+// RETTET: knappen sendte ikke projektet med, selvom man allerede står inde på netop dette projekts side - brugeren
+// skulle selv huske at vælge det samme projekt igen på den nye udgiftsside, ellers bliver udgiften reelt ikke
+// sporet på projektet, som hele formålet med at klikke herfra ellers er.
 htm_Button('fa-plus', '@Register Expense', 'primary', 'expense_edit.php?id=0&proj_id='.$id, '', 'data-hint="'.lang('@Register a new expense for this project').'"');
 echo '</div>';
 render_note_field('note_expenses', $proj['note_expenses'] ?? '', '@Notes on expenses');
@@ -303,33 +296,33 @@ $income_total = $inv_total + $inc_total;
 
 htm_SectionStart('fa-coins', '@Income / Invoices', false, show_toggle: true);
 if (empty($income_rows)) {
-    echo '<p style="color:var(--text-muted);">' . lang('@No income registered for this project') . '</p>';
+    htm_Note(lang('@No income registered for this project'));
 } else {
     if (!empty($inv_rows)) {
         echo '<p style="font-weight:bold; margin:0 0 4px 0; font-size:0.9em; color:var(--text-muted);">📄 ' . lang('@Invoices') . '</p>';
         htm_Table(['@Invoice','@Date','@Due','@Status','@Amount',''], $inv_rows, 'inv_tbl', 0, '', true,
             ['width:10%','width:12%','width:12%','width:12%','width:15%; text-align:right','width:10%']);
         echo '<div style="text-align:right; font-size:0.9em; padding:4px 0; color:var(--text-muted);">'
-            . lang('@Subtotal') . ': ' . number_format($inv_total, 2, ',', '.') . ' ' . $cur . '</div>';
+            . lang('@Subtotal') . ': ' . fmt_dk($inv_total) . ' ' . $cur . '</div>';
     }
     if (!empty($inc_rows)) {
         echo '<p style="font-weight:bold; margin:10px 0 4px 0; font-size:0.9em; color:var(--text-muted);">💰 ' . lang('@Other Income') . '</p>';
         htm_Table(['@Date','@Source','@Description','@Account','@Amount',''], $inc_rows, 'inc_tbl', 0, '', true,
             ['width:10%','width:20%','width:25%','width:20%','width:15%; text-align:right','width:10%']);
         echo '<div style="text-align:right; font-size:0.9em; padding:4px 0; color:var(--text-muted);">'
-            . lang('@Subtotal') . ': ' . number_format($inc_total, 2, ',', '.') . ' ' . $cur . '</div>';
+            . lang('@Subtotal') . ': ' . fmt_dk($inc_total) . ' ' . $cur . '</div>';
     }
     echo '<div style="text-align:right; font-weight:bold; padding:8px 0; border-top:1px solid var(--border-subtle); margin-top:4px;">'
-        . lang('@Total Income') . ': ' . number_format($income_total, 2, ',', '.') . ' ' . $cur . '</div>';
+        . lang('@Total Income') . ': ' . fmt_dk($income_total) . ' ' . $cur . '</div>';
 }
 if ($unbilled_cnt > 0) {
     echo '<div style="margin-top:10px; padding:12px 15px; background:var(--bg-panel); border-radius:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">';
     echo '<div><i class="fa-solid fa-clock" style="color:var(--color-warning);"></i> '
-        . sprintf(lang('@%d unbilled, billable hour entries for this project, totaling %s.'), $unbilled_cnt, number_format($unbilled_total, 2, ',', '.') . ' ' . $cur)
+        . sprintf(lang('@%d unbilled, billable hour entries for this project, totaling %s.'), $unbilled_cnt, fmt_dk($unbilled_total) . ' ' . $cur)
         . '</div>';
     htm_Button(icon: 'fa-file-invoice', labl: '@Create Invoice from Hours', type: 'success',
         link: 'time_actions.php?action=invoice&proj_id='.$id,
-        attr: 'onclick="return confirm(\''.addslashes(lang('@Create a draft invoice with one line per unbilled hour entry for this project?')).'\');" data-hint="'.lang('@Generate a draft invoice from all unbilled hours on this project').'"');
+        attr: 'onclick="' . htm_confirm_js('@Create a draft invoice with one line per unbilled hour entry for this project?') . '" data-hint="'.lang('@Generate a draft invoice from all unbilled hours on this project').'"');
     echo '</div>';
 }
 echo '<div style="margin-top:10px; display:flex; gap:8px;">';
@@ -354,7 +347,7 @@ foreach ([
     echo '<div style="background:var(--bg-panel); padding:20px; border-radius:8px;">';
     echo '<div style="font-size:0.85em; color:var(--text-muted); margin-bottom:6px;">' . lang($lbl) . '</div>';
     echo '<div style="font-size:1.6em; font-weight:bold; color:var(--color-'.$type.');">'
-        . number_format($val, 2, ',', '.') . ' ' . $cur . '</div>';
+        . fmt_dk($val) . ' ' . $cur . '</div>';
     echo '</div>';
 }
 echo '</div>';

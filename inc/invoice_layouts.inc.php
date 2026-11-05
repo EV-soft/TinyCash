@@ -40,25 +40,11 @@ function il_block_hidden(array $blocks, string $element_id): bool {
 }
 
 function il_table_exists($conn, string $table, ?bool $is_sqlite = null): bool {
-    $is_sqlite = $is_sqlite ?? DB::is_sqlite();
-    $t = DB::escape($conn, $table);
-    if ($is_sqlite) {
-        $r = DB::query($conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='$t'");
-        return (bool)($r && DB::fetch_assoc($r));
-    }
-    $r = DB::query($conn, "SHOW TABLES LIKE '$t'");
-    return $r && DB::num_rows($r) > 0;
+    return db_has_table($conn, $table);
 }
 
 function il_column_exists($conn, string $table, string $column, ?bool $is_sqlite = null): bool {
-    $is_sqlite = $is_sqlite ?? DB::is_sqlite();
-    if ($is_sqlite) {
-        $r = DB::query($conn, "PRAGMA table_info($table)");
-        if ($r) while ($row = DB::fetch_assoc($r)) if (strtolower($row['name']) === strtolower($column)) return true;
-        return false;
-    }
-    $r = DB::query($conn, "SHOW COLUMNS FROM $table LIKE '" . DB::escape($conn, $column) . "'");
-    return $r && DB::num_rows($r) > 0;
+    return db_has_column($conn, $table, $column);
 }
 
 // Er migrationen kørt (begge tabeller + begge kolonner)? Husket pr. forespørgsel.
@@ -82,13 +68,15 @@ function il_ensure_schema($conn, bool $is_sqlite): array {
                    layout_id INTEGER PRIMARY KEY AUTOINCREMENT,
                    name TEXT NOT NULL,
                    is_default INTEGER DEFAULT 0,
-                   created_at TEXT
+                   created_at TEXT,
+                   doc_type TEXT DEFAULT 'invoice'
                )"
             : "CREATE TABLE invoice_layouts (
                    layout_id INT AUTO_INCREMENT PRIMARY KEY,
                    name VARCHAR(100) NOT NULL,
                    is_default TINYINT DEFAULT 0,
-                   created_at DATETIME
+                   created_at DATETIME,
+                   doc_type VARCHAR(10) NOT NULL DEFAULT 'invoice'
                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         $out[] = $ok ? "[OK] Tabellen 'invoice_layouts' oprettet." : "[FEJL] invoice_layouts: " . DB::error($conn);
     } else {
@@ -118,6 +106,16 @@ function il_ensure_schema($conn, bool $is_sqlite): array {
     } else {
         $out[] = "[SPRUNGET OVER] Tabellen 'invoice_layout_blocks' findes allerede.";
     }
+    // Tilbud/ordrebekræftelser har deres egne layouts (doc_type 'quote') - eksisterende layouts er fakturalayouts
+    if (il_table_exists($conn, 'invoice_layouts', $is_sqlite)) {
+        if (il_column_exists($conn, 'invoice_layouts', 'doc_type', $is_sqlite)) {
+            $out[] = "[SPRUNGET OVER] Kolonnen 'doc_type' findes allerede på invoice_layouts.";
+        } else {
+            $ok = DB::query($conn, "ALTER TABLE invoice_layouts ADD COLUMN doc_type " . ($is_sqlite ? "TEXT DEFAULT 'invoice'" : "VARCHAR(10) NOT NULL DEFAULT 'invoice'"));
+            if ($ok) DB::query($conn, "UPDATE invoice_layouts SET doc_type = 'invoice' WHERE doc_type IS NULL OR doc_type = ''");
+            $out[] = $ok ? "[OK] Kolonnen 'doc_type' tilføjet til invoice_layouts - tilbud kan nu få deres egne layouts." : "[FEJL] invoice_layouts.doc_type: " . DB::error($conn);
+        }
+    }
     foreach ([['customers', 'cust_layout_id'], ['invoices', 'inv_layout_id']] as [$table, $col]) {
         if (!il_table_exists($conn, $table, $is_sqlite)) continue;
         if (il_column_exists($conn, $table, $col, $is_sqlite)) {
@@ -128,7 +126,7 @@ function il_ensure_schema($conn, bool $is_sqlite): array {
         }
     }
     // Det hidtidige ene layout bliver "Standard" (kun når der endnu ingen layouts er)
-    $cnt = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM invoice_layouts"));
+    $cnt = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM invoice_layouts WHERE 1=1" . il_doc_sql($conn, 'invoice')));
     if ($cnt && (int)$cnt[0] === 0) {
         $id = il_create_default($conn);
         $moved = 0;
@@ -157,33 +155,66 @@ function il_ensure_schema($conn, bool $is_sqlite): array {
     return $out;
 }
 
-function il_create_default($conn): int {
-    if (!DB::insert($conn, 'invoice_layouts', ['name' => 'Standard', 'is_default' => 1, 'created_at' => date('Y-m-d H:i:s')])) return 0;
-    return (int)DB::insert_id($conn);
+// LAYOUTTYPER: fakturaer (og kreditnotaer) og tilbud/ordrebekræftelser har hver deres sæt layouts (doc_type), så
+// et tilbud kan designes uden at flytte fakturaens blokke. Uden kolonnen (ikke migreret) findes kun fakturalayouts.
+const IL_DOC_TYPES = ['invoice', 'quote', 'reminder', 'statement'];
+function il_doc_ready($conn): bool {
+    return il_ready($conn) && db_has_column($conn, 'invoice_layouts', 'doc_type');
+}
+// SQL-betingelse for en layouttype (' AND ...'); uden doc_type-kolonnen er alle layouts fakturalayouts
+function il_doc_sql($conn, string $doc, string $alias = ''): string {
+    if (!in_array($doc, IL_DOC_TYPES, true)) $doc = 'invoice';
+    if (!db_has_column($conn, 'invoice_layouts', 'doc_type')) return $doc === 'invoice' ? '' : ' AND 1 = 0';
+    return " AND COALESCE({$alias}doc_type, 'invoice') = '$doc'";
+}
+// Layouttypen for et layout ('invoice' hvis ukendt)
+function il_layout_doc($conn, int $id): string {
+    if ($id <= 0 || !db_has_column($conn, 'invoice_layouts', 'doc_type')) return 'invoice';
+    $r = DB::fetch_row(DB::query($conn, "SELECT doc_type FROM invoice_layouts WHERE layout_id = $id"));
+    return in_array((string)($r[0] ?? ''), IL_DOC_TYPES, true) ? (string)$r[0] : 'invoice';
 }
 
-// Alle layouts: [layout_id => ['layout_id', 'name', 'is_default']] - standarden først, så efter navn
-function il_list($conn): array {
+function il_create_default($conn, string $doc = 'invoice'): int {
+    $row = ['name' => 'Standard', 'is_default' => 1, 'created_at' => date('Y-m-d H:i:s')];
+    if ($doc !== 'invoice') {
+        if (!il_doc_ready($conn)) return 0;
+        $row['doc_type'] = $doc;
+    }
+    if (!DB::insert($conn, 'invoice_layouts', $row)) return 0;
+    $id = (int)DB::insert_id($conn);
+    // Tilbuddets første layout starter som en kopi af fakturaens standardlayout - samme udseende fra dag ét
+    if ($doc !== 'invoice' && $id > 0) {
+        foreach (il_blocks($conn, il_default_id($conn, 'invoice')) as $b) {
+            DB::insert($conn, 'invoice_layout_blocks', ['layout_id' => $id, 'element_id' => $b['element_id'], 'pos_x' => (float)$b['pos_x'],
+                'pos_y' => (float)$b['pos_y'], 'width_mm' => (float)$b['width_mm'], 'is_visible' => (int)($b['is_visible'] ?? 1)]);
+        }
+    }
+    return $id;
+}
+
+// Alle layouts af en type: [layout_id => ['layout_id', 'name', 'is_default']] - standarden først, så efter navn
+function il_list($conn, string $doc = 'invoice'): array {
     $list = [];
-    $res = DB::query($conn, "SELECT layout_id, name, is_default FROM invoice_layouts ORDER BY is_default DESC, name ASC");
+    $res = DB::query($conn, "SELECT layout_id, name, is_default FROM invoice_layouts WHERE 1=1" . il_doc_sql($conn, $doc) . " ORDER BY is_default DESC, name ASC");
     if ($res) while ($r = DB::fetch_assoc($res)) $list[(int)$r['layout_id']] = $r;
     return $list;
 }
 
-// Standardlayoutets id - mangler der et (fx et nyt regnskab hvor tabellerne er tømt), laves "Standard"
-function il_default_id($conn): int {
-    $r = DB::fetch_assoc(DB::query($conn, "SELECT layout_id FROM invoice_layouts WHERE is_default = 1 ORDER BY layout_id LIMIT 1"));
+// Standardlayoutets id for en type - mangler der et (fx et nyt regnskab, eller det første tilbud), laves "Standard"
+function il_default_id($conn, string $doc = 'invoice'): int {
+    $w = il_doc_sql($conn, $doc);
+    $r = DB::fetch_assoc(DB::query($conn, "SELECT layout_id FROM invoice_layouts WHERE is_default = 1$w ORDER BY layout_id LIMIT 1"));
     if ($r) return (int)$r['layout_id'];
-    $r = DB::fetch_assoc(DB::query($conn, "SELECT layout_id FROM invoice_layouts ORDER BY layout_id LIMIT 1"));
+    $r = DB::fetch_assoc(DB::query($conn, "SELECT layout_id FROM invoice_layouts WHERE 1=1$w ORDER BY layout_id LIMIT 1"));
     if ($r) { DB::query($conn, "UPDATE invoice_layouts SET is_default = 1 WHERE layout_id = " . (int)$r['layout_id']);  return (int)$r['layout_id']; }
-    return il_create_default($conn);
+    return il_create_default($conn, $doc);
 }
 
-// $id hvis layoutet findes - ellers 0
-function il_valid_id($conn, $id): int {
+// $id hvis layoutet findes og er af typen $doc (null = enhver type) - ellers 0
+function il_valid_id($conn, $id, ?string $doc = 'invoice'): int {
     $id = (int)$id;
     if ($id <= 0) return 0;
-    $r = DB::fetch_assoc(DB::query($conn, "SELECT layout_id FROM invoice_layouts WHERE layout_id = $id"));
+    $r = DB::fetch_assoc(DB::query($conn, "SELECT layout_id FROM invoice_layouts WHERE layout_id = $id" . ($doc !== null ? il_doc_sql($conn, $doc) : '')));
     return $r ? $id : 0;
 }
 
@@ -213,9 +244,9 @@ function il_clean_name($name): string {
     return mb_substr($name, 0, IL_NAME_MAX);
 }
 
-// Er navnet taget af et andet layout (store/små bogstaver ens)?
-function il_name_taken($conn, string $name, int $except_id = 0): bool {
-    foreach (il_list($conn) as $id => $l) {
+// Er navnet taget af et andet layout af samme type (store/små bogstaver ens)?
+function il_name_taken($conn, string $name, int $except_id = 0, string $doc = 'invoice'): bool {
+    foreach (il_list($conn, $doc) as $id => $l) {
         if ($id !== $except_id && mb_strtolower($l['name']) === mb_strtolower($name)) return true;
     }
     return false;

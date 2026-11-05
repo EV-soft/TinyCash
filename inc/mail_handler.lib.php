@@ -17,15 +17,10 @@ require_once __DIR__ . '/mail_config.inc.php';
 
 // generateInvoicePDF() ER SLETTET, DA BROWSEREN (html2pdf.js) NU GENERERER FILEN
 
-// NYT (§bugs-batch-31-review): $doc_label var FØR hardkodet til "Faktura" -
-// vedhæftningens filnavn blev derfor ALTID "Faktura_<nr>.pdf", selv når
-// send_quote_action.php (se [[quotes-feature]]) sendte et TILBUD, ikke en
-// faktura. En kunde der modtog et tilbud pr. mail ville se en vedhæftning
-// der påstod at være "Faktura_1.pdf" - forvirrende i sig selv, og i værste
-// fald risiko for at modtagerens eget bogholderi fejlagtigt registrerede et
-// tilbud som en rigtig faktura, blot fordi filnavnet sagde det. Tilføjet et
-// valgfrit $doc_label-parameter, med "Faktura" som standard - eksisterende
-// kald (send_invoice_action.php/reminder_action.php) er derfor 100% uændrede.
+// NYT: $doc_label var FØR hardkodet til "Faktura" - vedhæftningens filnavn blev derfor ALTID "Faktura_<nr>.pdf",
+// selv når send_quote_action.php sendte et TILBUD, ikke en faktura. Tilføjet et valgfrit $doc_label-parameter, med
+// "Faktura" som standard - eksisterende kald (send_invoice_action.php/reminder_action.php) er derfor 100%
+// uændrede.
 function sendTinyMail($toEmail, $toName, $subject, $body, $attachment = null, $invoice_no = '', $doc_label = 'Faktura') {
     $mail = new PHPMailer(true);
     try {
@@ -70,19 +65,16 @@ function sendTinyMail($toEmail, $toName, $subject, $body, $attachment = null, $i
     }
 }
 
-// NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): logger AL udgående
-// post ét sted (db-setup/migrate_mail_log.php's mail_log-tabel) - sendTinyMail()
-// er den ENESTE funktion i hele kodebasen der reelt sender mail (bekræftet
-// ved en fuld gennemsøgning), så et hook her fanger automatisk fakturaer/
-// rykkere/kontoudtog/tilbudsopfølgning/backup-testmail uden at hvert enkelt
-// afsendelsesflow selv skal huske at logge. Samme "stille degradering hvis
-// ikke migreret endnu"-mønster som resten af kodebasens nyere tabeller -
-// $GLOBALS['conn'] bruges direkte (sendTinyMail() har ingen $conn-parameter),
-// ingen fejl her må nogensinde afbryde selve mailafsendelsen ovenfor.
+// NYT: logger AL udgående post ét sted (db-setup/migrate_mail_log.php's mail_log-tabel) - sendTinyMail er den
+// ENESTE funktion i hele kodebasen der reelt sender mail (bekræftet ved en fuld gennemsøgning), så et hook her
+// fanger automatisk fakturaer/rykkere/kontoudtog/tilbudsopfølgning/backup-testmail uden at hvert enkelt
+// afsendelsesflow selv skal huske at logge. Samme "stille degradering hvis ikke migreret endnu"-mønster som resten
+// af kodebasens nyere tabeller - $GLOBALS['conn'] bruges direkte (sendTinyMail har ingen $conn-parameter), ingen
+// fejl her må nogensinde afbryde selve mailafsendelsen ovenfor.
 function _mail_log_entry($to_email, $subject, bool $success, ?string $error): void {
     if (empty($GLOBALS['conn'])) return;
     $conn = $GLOBALS['conn'];
-    $exists = @DB::query($conn, "SELECT 1 FROM mail_log LIMIT 1") !== false;
+    $exists = db_has_table($conn, 'mail_log');
     if (!$exists) return;
     @DB::insert($conn, 'mail_log', [
         'to_email'      => $to_email,
