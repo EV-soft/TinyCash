@@ -244,7 +244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // (den offentligt tilgængelige mappe), skal endelsen være en reel bilagstype, uanset hvad der måtte
             // være havnet i voucher_depot/.
             if (!in_array($ext, $allowed_ext, true)) {
-                die(lang('@Error: This file type is not allowed as an attachment.'));
+                redirect('expense_edit.php?id=' . (int)$id, '@Error: This file type is not allowed as an attachment.', 'error');      // (var en hvid side)
             }
             // RETTET: uniqid er UDEN "more_entropy" blot en hex-kodning af serverens præcise ur-tidspunkt
             // (sekund+mikrosekund) på kaldetidspunktet - PHP's egen dokumentation advarer eksplicit mod at bruge
@@ -310,6 +310,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $post_orig_currency = strtoupper(preg_replace('/[^A-Z]/', '', $_POST['orig_currency'] ?? ''));
     $post_orig_amount   = parse_dk_number($_POST['orig_amount'] ?? '');
     $post_exch_rate     = parse_dk_number($_POST['exch_rate']   ?? '');
+    // (valutabeløb og kurs blev læst uden kontrol - "1.000 EUR" gav 1,00, og en ugyldig kurs gjorde udgiften stille dansk)
+    foreach (['orig_amount', 'exch_rate'] as $fx_f) if (trim((string)($_POST[$fx_f] ?? '')) !== '' && tc_num($_POST[$fx_f], 0) === null) $fx_err = lang('@Please enter a valid amount.');
 
     // Hvis fremmed valuta er valgt: beregn/gem kursdata
     // RETTET: "fremmed" afgøres nu mod $base_currency, og selve bogføringen sker i $base_currency - ikke en
@@ -332,7 +334,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($use_ai_scan === 1 && $file_to_scan && file_exists($file_to_scan)) {
         $ai_data = scanBilagMedOpenAI($file_to_scan);
-        if (isset($ai_data['error'])) { echo "<pre>OpenAI Error: "; print_r($ai_data['error']); echo "</pre>"; die(); }
+        // En fejl fra AI-tjenesten vises som en almindelig fejl over formularen - før gav den en hvid side (die()) med
+        // den rå, uescapede fejltekst, og det indtastede gik tabt
+        if (isset($ai_data['error'])) {
+            $ai_err = is_array($ai_data['error']) ? (string)($ai_data['error']['message'] ?? json_encode($ai_data['error'])) : (string)$ai_data['error'];
+            $err = lang('@The AI scan failed:') . ' ' . htmlspecialchars(mb_substr($ai_err, 0, 300));
+            error_log('[ai scan] ' . $ai_err);
+            $ai_data = null;
+        }
         if ($ai_data) {
             $is_scan_action = isset($_POST['action_scan_only']);
             if ($is_scan_action || empty($_POST['exp_date']) || $_POST['exp_date'] === date('Y-m-d')) {
@@ -390,7 +399,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $has_attachment   = ($final_file !== '' && $final_file !== null);
         $bilag_err        = '';
         if (!$has_attachment && $db_amount >= $attachment_limit) {
-            $bilag_err = sprintf(lang('@An attachment is required for amounts of %s kr or more.'), fmt_dk($attachment_limit, 0));
+            $bilag_err = sprintf(lang('@An attachment is required for amounts of %s or more.'), fmt_dk($attachment_limit, 0) . ' ' . tc_cur_label());
         } elseif (!$has_attachment && $reason_raw === '') {
             $bilag_err = lang('@Please state a reason for the missing attachment (the amount is under the limit).');
         }
@@ -450,7 +459,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        if ($bilag_err !== '') {
+        if (!empty($fx_err)) {
+            $err = $fx_err;
+        } elseif ($bilag_err !== '') {
             $err = $bilag_err;
         } elseif ($attachment_lock_err !== '') {
             $err = $attachment_lock_err;
@@ -464,6 +475,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $err = $financial_lock_err;
         } elseif ($lines_err !== '') {
             $err = $lines_err;
+        } elseif (!$expense_already_posted && ($rc_err = expense_rc_check($conn, $use_split ? array_column($submitted_lines, 'account_id') : [(int)$acc], $exp_type === 'income')) !== '') {
+            $err = $rc_err;
         } elseif (!$expense_already_posted && ($ee_missing = ledger_accounts_missing($conn, array_merge(
                       $use_split ? array_column($submitted_lines, 'account_id') : [(int)$acc],
                       [($exp_type === 'income') ? (int)($s['conf_acc_vat'] ?? 6900) : (int)($s['conf_acc_purchase_vat'] ?? 6910),
@@ -540,7 +553,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // og den stabile journal-kobling afhænger af det.
             if ($final_voucher === '' || $final_voucher === null || (int)$final_voucher === 0) {
                 $final_voucher = next_voucher_no($conn);
-                DB::query($conn, "UPDATE expenses SET voucher_no = $final_voucher WHERE exp_id = $expense_id");
+                // Kun den forespørgsel der faktisk tildeler nummeret, bogfører: to samtidige "Gem" på samme kladde (dobbeltklik,
+                // to faner) gav hver sit bilagsnummer - udgiften blev bogført to gange, og den første journal stod forældreløs
+                $ve_claim = DB::query($conn, "UPDATE expenses SET voucher_no = $final_voucher WHERE exp_id = $expense_id AND (voucher_no IS NULL OR voucher_no = 0)");
+                if (!$ve_claim || DB::affected_rows($conn, $ve_claim) < 1) {
+                    DB::rollback($conn);
+                    redirect('expense_edit.php?id=' . (int)$expense_id, '@This expense was posted by another, simultaneous request - it was not posted again.', 'error');
+                }
+                // En kladde (fast udgift, bilagsindbakken) bogføres her mod banken - den er dermed betalt. Uden en
+                // betalingsdato stod den som "---" i udgiftslisten (paid_date sættes ellers kun ved oprettelsen)
+                if ($supplier_module_ready && $exp_type === 'expense') {
+                    DB::query($conn, "UPDATE expenses SET paid_date = '$db_date' WHERE exp_id = $expense_id AND paid_date IS NULL AND due_date IS NULL");
+                }
             }
 
             $journal_text = "Udgift: " . $db_supp . ($db_desc ? " - " . $db_desc : "");
@@ -592,10 +616,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ? (int)($s['conf_acc_creditor'] ?? 4000)
                     : $acc_bank;
 
+                $rc_by_acc = [];
+                $plain_vat = 0.0;
                 foreach ($exp_lines as $line) {
+                    $plain_vat += $line['vat'];
                     ledger_post($conn, $jou_id, $line['account_id'], $sign * $line['net']); // udgifts-/indtægtskonto (netto) pr. linje
                     $gross     += $line['gross'];
                     $vat_total += $line['vat'];
+                    if (!empty($line['rc_vat'])) $rc_by_acc[$line['rc_acc']] = ($rc_by_acc[$line['rc_acc']] ?? 0) + $line['rc_vat'];
+                }
+                // Omvendt betalingspligt: den beregnede moms er både fradrag (købsmoms) og skyldig (fx 7700) - betalingen er uændret
+                foreach ($rc_by_acc as $rc_acc => $rc_vat) {
+                    $vat_total += $rc_vat;
+                    ledger_post($conn, $jou_id, (int)$rc_acc, -round($rc_vat, 2));
                 }
                 if ($vat_total != 0) ledger_post($conn, $jou_id, $vat_acc, $sign * round($vat_total, 2)); // moms (køb 6910 / salg 6900), samlet
                 ledger_post($conn, $jou_id, $bank_or_creditor, -$sign * round($gross, 2));    // bank ELLER kreditorkonto (brutto, modpost)
@@ -607,6 +640,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // log_action()-kald, da dette er den hyppigste finansielle
                 // handling i systemet, men parallel til det der allerede
                 // logges for fakturaer. Bruger-anmodet.
+                // En leverandør i et andet land opkræver ikke dansk moms - købsmoms fratrukket på en almindelig konto er
+                // næsten altid en fejl (det er omvendt betalingspligt: en konto med en EU-/udlandskøbskode)
+                if (!$is_income && $plain_vat > 0 && !empty($post_supplier_id) && db_has_column($conn, 'suppliers', 'country')) {
+                    $sup_cc = strtoupper(trim((string)(DB::fetch_row(DB::query($conn, "SELECT country FROM suppliers WHERE supplier_id = " . (int)$post_supplier_id))[0] ?? '')));
+                    if ($sup_cc !== '' && $sup_cc !== strtoupper((string)tc_country_pack('iso', 'DK'))) {
+                        flash(sprintf(lang('@The supplier is in %s, but %s of input VAT was deducted. A foreign supplier does not charge your VAT - use an account with a reverse charge VAT code (EU or non-EU purchase), unless the invoice really shows your country\'s VAT.'),
+                            htmlspecialchars($sup_cc), fmt_dk($plain_vat) . ' ' . tc_cur_label()), 'warning');
+                    }
+                }
                 log_action($conn, 'POST_EXPENSE', 'expenses', $expense_id, null,
                     ['voucher_no' => $final_voucher, 'amount' => $gross, 'exp_type' => $db_exp_type]);
             }
@@ -789,7 +831,7 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
 
             // Info-linje
             echo '<div id="fc-info" style="display:'.($fc_checked ? 'block' : 'none').'; margin-top:8px; font-size:11px; color:var(--text-muted); background:var(--bg-card); padding:6px 10px; border-radius:4px; border-left:3px solid var(--color-primary);">';
-            echo '<i class="fa fa-info-circle"></i> '.sprintf(lang('@%s amount is calculated automatically. Exchange rate is saved with the voucher per Danish bookkeeping law.'), htmlspecialchars($base_currency));
+            echo '<i class="fa fa-info-circle"></i> '.sprintf(lang(tc_country() === 'dk' ? '@%s amount is calculated automatically. Exchange rate is saved with the voucher per Danish bookkeeping law.' : '@%s amount is calculated automatically. The exchange rate is saved with the voucher.'), htmlspecialchars($base_currency));
             echo '</div>';
             echo '</div>'; // currency-section
             } // if currency_module
@@ -838,7 +880,7 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
             require_once __DIR__ . '/inc/accounts.inc.php';     // slukkede konti udeladt (den valgte beholdes), dæmpede nederst og nedtonet
             $a_res = DB::query($conn, "SELECT acc_id, acc_name" . acc_status_col($conn) . " FROM accounts WHERE acc_type = 'expense' AND " . acc_visible_sql($conn, '', [(int)$acc]) . " ORDER BY " . acc_order_sql($conn) . "acc_id");
             while ($account = DB::fetch_assoc($a_res)) {
-                $acc_id_val = $account['acc_id']; $full_name = $acc_id_val." - ".acc_label($account['acc_name'], $account['acc_status'] ?? null);
+                $acc_id_val = $account['acc_id']; $full_name = $acc_id_val." - ".acc_label($account['acc_name'], $account['acc_status'] ?? null) . (tc_vat_rc_info($conn, (int)$acc_id_val) ? ' (' . lang('@reverse charge') . ')' : '');
                 echo '<label class="radio-card-btn '.($acc == $acc_id_val ? 'active-radio-btn' : '').'" title="'.htmlspecialchars($full_name).'"><input type="radio" name="account_id" value="'.$acc_id_val.'" '.($acc == $acc_id_val ? 'checked' : '').' onchange="highlightSelectedRadio(this)" required><span>'.$full_name.'</span></label>';
             }
             echo '</div></div>';
@@ -849,7 +891,7 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
             if (expense_lines_has_table($conn) && !$expense_already_posted) {
                 $split_acc_opts = [];
                 $sa_res = DB::query($conn, "SELECT acc_id, acc_name" . acc_status_col($conn) . " FROM accounts WHERE acc_type = 'expense' AND " . acc_visible_sql($conn, '', array_column($existing_expense_lines, 'account_id')) . " ORDER BY " . acc_order_sql($conn) . "acc_id");
-                while ($sa = DB::fetch_assoc($sa_res)) { $split_acc_opts[(int)$sa['acc_id']] = $sa['acc_id'] . ' - ' . acc_label($sa['acc_name'], $sa['acc_status'] ?? null); }
+                while ($sa = DB::fetch_assoc($sa_res)) { $split_acc_opts[(int)$sa['acc_id']] = $sa['acc_id'] . ' - ' . acc_label($sa['acc_name'], $sa['acc_status'] ?? null) . (tc_vat_rc_info($conn, (int)$sa['acc_id']) ? ' (' . lang('@reverse charge') . ')' : ''); }
 
                 echo '<div style="margin:10px 5px 15px;">';
                 echo '<label style="display:flex; align-items:center; gap:8px; font-weight:bold; font-size:13px; cursor:pointer; margin-bottom:8px;">';
@@ -891,9 +933,9 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
                     document.querySelectorAll('#split_lines_tbl input[name^="line_amount"]').forEach(function(inp) {
                         sum += tcNum(inp.value);
                     });
-                    document.getElementById('split_sum').textContent = sum.toLocaleString('da-DK', {minimumFractionDigits:2, maximumFractionDigits:2});
+                    document.getElementById('split_sum').textContent = sum.toLocaleString(window.tcLocale || 'da-DK', {minimumFractionDigits:2, maximumFractionDigits:2});
                     var target = tcNum(document.querySelector('input[name="amount"]').value);
-                    document.getElementById('split_target').textContent = target.toLocaleString('da-DK', {minimumFractionDigits:2, maximumFractionDigits:2});
+                    document.getElementById('split_target').textContent = target.toLocaleString(window.tcLocale || 'da-DK', {minimumFractionDigits:2, maximumFractionDigits:2});
                     document.getElementById('split_sum').style.color = (Math.abs(sum - target) < 0.01) ? 'var(--color-success)' : 'var(--color-danger)';
                 }
                 function toggleExpenseSplit(on) {
@@ -933,7 +975,7 @@ echo '<div style="display:flex; gap:10px; max-width:1400px; margin:0 auto; paddi
             echo '<div id="no-att-reason-wrap" style="margin-bottom:15px;">';
             echo '<label style="display:block; font-size:12px; font-weight:bold; color:#4a5568; margin-bottom:4px;">'
                . lang('@Reason for missing attachment') . ' <span style="font-weight:normal; color:#7f8c8d;">('
-               . sprintf(lang('@only for amounts under %s kr'), fmt_dk($__att_limit, 0)) . ')</span></label>';
+               . sprintf(lang('@only for amounts under %s'), fmt_dk($__att_limit, 0) . ' ' . htmlspecialchars(tc_cur_label())) . ')</span></label>';
             echo '<input type="text" name="no_attachment_reason" value="'.htmlspecialchars($no_attachment_reason).'" '
                . 'placeholder="'.lang('@E.g. small cash purchase, receipt lost').'" '
                . 'style="width:100%; box-sizing:border-box; padding:8px; border:1px solid #cbd5e0; border-radius:4px; font-size:13px;">';

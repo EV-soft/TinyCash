@@ -136,7 +136,7 @@ while ($e = DB::fetch_assoc($exp_res)) {
     $exp_total += (float)$e['amount'];
     $exp_rows[] = [
         date(CONF_DATE_FORMAT, strtotime($e['exp_date'])),
-        htmlspecialchars($e['supplier']),
+        htmlspecialchars($e['supplier'] ?? ''),
         htmlspecialchars($e['description'] ?? ''),
         htmlspecialchars($e['acc_name'] ?? ''),
         fmt_dk((float)$e['amount']) . ' ' . $cur,
@@ -157,7 +157,7 @@ while ($e = DB::fetch_assoc($inc_res)) {
     $inc_total += (float)$e['amount'];
     $inc_rows[] = [
         date(CONF_DATE_FORMAT, strtotime($e['exp_date'])),
-        htmlspecialchars($e['supplier']),
+        htmlspecialchars($e['supplier'] ?? ''),
         htmlspecialchars($e['description'] ?? ''),
         htmlspecialchars($e['acc_name'] ?? ''),
         fmt_dk((float)$e['amount']) . ' ' . $cur,
@@ -221,7 +221,7 @@ $edit_btn .= ' ' . htm_Button('fa-file-invoice-dollar', '@Account Card', 'info',
 // RETTET (§bugs-batch-13-review): htm_Card_() escaper nu selv sit $capt-
 // argument centralt (se dens egen kommentar) - den htmlspecialchars() der
 // tidligere stod her ville nu blive anvendt DOBBELT (fx "&" -> "&amp;amp;").
-htm_Card_(htmlspecialchars($proj['proj_no'] . ' — ' . ($proj['cust_name'] ?? '')), 1200, tool: $edit_btn);      // RETTET: uescapet kundenavn (kan komme fra en webbutik)
+htm_Card_($proj['proj_no'] . ' — ' . ($proj['cust_name'] ?? ''), 1200, tool: $edit_btn);      // (htm_Card_ escaper selv titlen - en ekstra escaping viste "&" som "&amp;")
 
 echo '<div style="display:flex; gap:30px; flex-wrap:wrap; font-size:0.95em; color:var(--text-muted); margin-bottom:10px;">';
 if ($proj['proj_start']) echo '<span><i class="fa fa-calendar"></i> ' . lang('@Start') . ': <b>' . date(CONF_DATE_FORMAT, strtotime($proj['proj_start'])) . '</b></span>';

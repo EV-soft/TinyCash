@@ -15,7 +15,7 @@ require_once 'inc/audit.inc.php';
 
 $has_table = db_has_table($conn, 'account_budgets');
 
-$year = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
+$year = isset($_GET['year']) ? (int)$_GET['year'] : (int)substr(tc_fiscal_year_bounds($conn)[1], 0, 4);      // (det igangværende regnskabsår, opkaldt efter sit slutår)
 $msg = ''; $err = '';
 
 if ($has_table && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_budgets'])) {

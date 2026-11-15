@@ -123,17 +123,16 @@ $inv_options = ['' => '-- ' . lang('@Select Invoice') . ' --'];
 // auto-foreslås (ufarlig fejlretning i sig selv - intet forkert gæt - men stadig en reel fejl i selve tallet), og
 // selve visningen i dropdown'en ($cur er allerede firmaets DKK-baserede indstilling, ikke fakturaens egen valuta)
 // viste et vildledende blandet tal.
-$rl_disc = invoice_discount_sql($conn);
-$res_inv = DB::query($conn, "SELECT i.inv_id, i.invoice_no, i.exch_rate, c.cust_name,
-    (SELECT SUM(quantity * price_each $rl_disc * (100 + line_vat_rate) / 100.0) FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1) + " . invoice_credited_sql($conn) . "
-    - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE inv_id = i.inv_id), 0) as total
-    FROM invoices i JOIN customers c ON i.cust_id = c.cust_id WHERE i.inv_status NOT IN ('paid', 'draft', 'credited')
+// (restbeløbet: den fælles definition invoice_open_sql() i inc/db_connect.inc.php - for en kreditnota er det dens eget, negative beløb)
+$res_inv = DB::query($conn, "SELECT i.inv_id, i.invoice_no, i.exch_rate, c.cust_name, " . invoice_open_sql($conn) . " as total
+    FROM invoices i JOIN customers c ON i.cust_id = c.cust_id WHERE (i.inv_status NOT IN ('paid', 'draft', 'credited') OR (LOWER(i.inv_status) = 'credited' AND i.credit_ref IS NULL AND " . invoice_open_sql($conn) . " > 0.01))
       AND NOT (i.credit_ref IS NOT NULL AND EXISTS (SELECT 1 FROM invoices o WHERE o.inv_id = i.credit_ref AND o.inv_status <> 'credited'))");
       // (en DELVIS kreditnota er allerede trukket fra fakturaens åbne beløb ovenfor - ikke en post for sig)      // (RETTET: en fuldt krediteret faktura blev foreslået med hele sit beløb)
 
 $invoices = [];
 $fx_invoice_map = [];
 while($row = DB::fetch_assoc($res_inv)) {
+    $row['pay_ref'] = ((float)$row['total'] > 0 && !empty($row['invoice_no'])) ? tc_payment_ref($row['invoice_no']) : null;
     $invoices[] = $row;
     $inv_options[$row['inv_id']] = "#{$row['invoice_no']} - {$row['cust_name']} (" . fmt_dk($row['total'] ?? 0) . " $cur)";
     $fx_invoice_map[$row['inv_id']] = ((float)($row['exch_rate'] ?? 0) > 0);
@@ -271,7 +270,9 @@ function submitBulkReconcile() {
         // match. Foreslår nu kun en faktura, hvis PRÆCIS én matcher beløbet - er der flere kandidater, er det
         // tryggere slet ikke at gætte end at gætte forkert med skråsikkert udseende.
         $match_candidates = [];
-        foreach($invoices as $inv) { if(abs($inv['total'] - $b['amount']) < 0.01) $match_candidates[] = $inv['inv_id']; }
+        // Står én fakturas betalingsreference (KID/OCR/RF ...) i bankteksten, er den forslaget uanset beløbet (delbetaling)
+        if ($is_inc) foreach($invoices as $inv) { if (tc_payment_ref_in_text($inv['pay_ref'], (string)$b['text_val'])) $match_candidates[] = $inv['inv_id']; }
+        if (!$match_candidates) foreach($invoices as $inv) { if(abs($inv['total'] - $b['amount']) < 0.01) $match_candidates[] = $inv['inv_id']; }
         $match_id = (count($match_candidates) === 1) ? $match_candidates[0] : 0;
         // Ingen faktura passer: nævner teksten en webbutik (og dækker dens mellemregning beløbet), foreslås udbetalingen
         $target_sel = $match_id;
@@ -289,7 +290,13 @@ function submitBulkReconcile() {
             <?php endif; ?>
         </td>
         <td style="padding:10px;"><?php echo date(CONF_DATE_FORMAT, strtotime($b['trans_date'])); ?></td>
-        <td style="padding:10px;"><?php echo htmlspecialchars($b['text_val']); ?></td>
+        <td style="padding:10px;"><?php echo htmlspecialchars($b['text_val']);
+            // Hvilken bankkonto linjen bogføres på (en bankforbindelse eller et udtog importeret til en anden konto end
+            // standard-bankkontoen) - før kunne man ikke se forskel på linjer fra fx drifts- og opsparingskontoen
+            $rl_acc = (int)($b['acc_id'] ?? 0);
+            if ($rl_acc > 0 && $rl_acc !== (int)($s['conf_acc_bank'] ?? 5000)) {
+                echo '<div style="font-size:0.8em; color:var(--text-muted);"><i class="fa fa-building-columns"></i> ' . htmlspecialchars($acc_options[$rl_acc] ?? (string)$rl_acc) . '</div>';
+            } ?></td>
         <td style="padding:10px; text-align:right; font-weight:bold; color:<?php echo $is_inc?'green':'red';?>">
             <?php echo fmt_dk($b['amount']); ?>
         </td>
@@ -333,9 +340,11 @@ function submitBulkReconcile() {
                     // NYT (runde 33): findes der ingen allerede-kendt konto (PSD2),
                     // foreslå en ud fra en gemt bank_match_rules-regel i stedet for
                     // altid at starte tomt.
+                    // (banklinjens acc_id er den BANKkonto linjen kom fra - ikke modkontoen. Forvalgt her blev en
+                    // PSD2-linje bogført mod sin egen bankkonto, og bankreglerne kom aldrig i spil for sådanne linjer.)
                     $matched_rule = null;
-                    $acc_preselect = (string)($b['acc_id'] ?? '');
-                    if ($acc_preselect === '' && !empty($bank_rules)) {
+                    $acc_preselect = '';
+                    if (!empty($bank_rules)) {
                         $matched_rule = find_matching_bank_rule($bank_rules, $b['text_val']);
                         if ($matched_rule) $acc_preselect = (string)$matched_rule['acc_id'];
                     }
@@ -345,17 +354,6 @@ function submitBulkReconcile() {
                         <div style="display:flex; gap:8px; align-items:center;">
                             <div style="flex:2;">
                                 <?php
-                                // RETTET (§bugs-batch-17-review): dropdown'en var altid tom
-                                // ('' som valgt værdi), selv når bank_statement_temp.acc_id
-                                // rent faktisk allerede kender den rigtige bankkonto -
-                                // bank_integration_sync.php udfylder den korrekt for hver
-                                // hentet PSD2-transaktion (se dens INSERT), men dette felt
-                                // blev aldrig læst her (kun brugt af den ældre, rene CSV-
-                                // import, som ikke kender kontoen på forhånd og derfor
-                                // altid sætter den til NULL). Brugeren skulle derfor altid
-                                // vælge kontoen manuelt igen, selv når systemet allerede
-                                // vidste svaret - og et forkert valg her poster beløbet på
-                                // en forkert bankkonto.
                                 $acc_select_style = 'width:100%; padding:6px; height:38px;' . ($matched_rule ? ' border:2px solid #2ecc71;' : '');
                                 htm_Select('acc_id', $acc_options, $acc_preselect, $acc_select_style);
                                 ?>

@@ -106,9 +106,10 @@ if (isset($_POST['create_zip'])) {
         $sql = "REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)";
         DB::prepare_and_execute($conn, $sql, [$key, $now]);
         
+        // (linket gik direkte til backups/, som .htaccess spærrer - 403; filbrowseren henter filen bag login)
         $msg = lang('@Full ZIP-Backup created successfully!') . 
             '<span style="text-align:right; width: 50%; display: inline-block;"> 
-            <a href="'. $zipPath . '" style="display:inline-block; background:#16a34a; color:white; 
+            <a href="storage_browser.php?folder=backups&download='. urlencode($zipName) . '" style="display:inline-block; background:#16a34a; color:white; 
             padding:8px 15px; text-decoration:none; border-radius:4px; font-weight:bold;" 
             download>💾 ' . lang('@Download archive now') . "</a></span>";
     } else {

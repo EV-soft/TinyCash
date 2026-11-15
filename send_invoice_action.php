@@ -41,6 +41,8 @@ try {
         echo json_encode(['success' => false, 'error' => lang('@Invoice or customer not found')]);
         exit;
     }
+    require_once __DIR__ . '/inc/doc_paper.inc.php';
+    if ($has_cust_lang_col_si) $inv['cust_language'] = doc_customer_lang($conn, (int)$inv['cust_id']);      // (udenlandsk kunde uden valgt sprog: engelsk)
 
     // KRITISK: en kladde-faktura (aldrig bogført - intet fakturanummer,
     // ingen posteringer, intet lagertræk) kunne før mailes til kunden og
@@ -79,9 +81,11 @@ try {
         doc_lang_push((string)$inv['cust_language']);
         $subject = lang($doc_key) . ' ' . $f_no;
         $default_text = sprintf(lang($text_key), $inv['cust_name']);
+        $si_label = tc_mail_doc_label($is_credit_note ? 'Kreditnota' : 'Faktura', $doc_key);
         doc_lang_pop();
     } else {
         $subject = lang($doc_key) . ' ' . $f_no;
+        $si_label = tc_mail_doc_label($is_credit_note ? 'Kreditnota' : 'Faktura', $doc_key);
         $default_text = sprintf(lang($text_key), $inv['cust_name']);
     }
 
@@ -99,7 +103,7 @@ try {
     }
 
     // KØR SELVE AFSENDELSEN
-    $result = sendTinyMail($inv['cust_email'], $inv['cust_name'], $subject, $body, $pdfPath, $invoice_number);
+    $result = sendTinyMail($inv['cust_email'], $inv['cust_name'], $subject, $body, $pdfPath, $invoice_number, $si_label ?? 'Faktura');
 
     // ANALYSER REEL STATUS FRA MAIL-HANDLEREN
     if (isset($result['success']) && $result['success'] == true) {
@@ -112,7 +116,8 @@ try {
         // tilbage til "afventer betaling" i alle lister/rapporter, selvom betalingen og posteringerne stod urørt.
         // (RETTET: også en kreditnota - status 'credit' - blev sat til 'sent' og lignede så en ubetalt faktura)
         if (!in_array(strtolower($inv['inv_status']), ['paid', 'credited', 'credit'], true)) {
-            DB::query($conn, "UPDATE invoices SET inv_status = 'sent' WHERE inv_id = $id");
+            // (statussen tjekkes også i selve UPDATE: mailen tager tid, og en betaling registreret imens blev rullet tilbage til 'sent')
+            DB::query($conn, "UPDATE invoices SET inv_status = 'sent' WHERE inv_id = $id AND LOWER(inv_status) NOT IN ('paid', 'credited', 'credit', 'draft')");
             log_action($conn, 'MARK_INVOICE_SENT', 'invoices', $id,
                 ['status' => $inv['inv_status']], ['status' => 'sent', 'to' => $inv['cust_email']]);
         }

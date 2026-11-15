@@ -12,6 +12,7 @@ require_once 'inc/db_connect.inc.php';
 require_once 'inc/auth.inc.php';
 require_once 'inc/php2htm.lib.php';
 require_once 'inc/menu.inc.php';
+require_once 'inc/invoice_post.inc.php';     // invoice_is_written_off() (kreditnota-knappen)
 
 $current_status = isset($_GET['status']) ? $_GET['status'] : 'all';
 $current_cust   = (int)($_GET['cust'] ?? 0);      // Fakturalisten for én kunde (knappen "Vis kundens fakturaer" i kundelisten)
@@ -324,8 +325,9 @@ echo '<div style="flex:3;">';
     $sh_cn_no_select = $has_cn_no_col ? ", i.credit_note_no" : "";
     $query  = "SELECT i.inv_id, i.invoice_no, i.credit_ref$sh_cn_no_select, i.inv_date, c.cust_name, i.inv_status,
                       SUM(l.quantity * l.price_each $sh_disc2 * (100 + l.line_vat_rate) / 100.0 * COALESCE(NULLIF(i.exch_rate, 0), 1)) as total_amount,
-                      COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE inv_id = i.inv_id), 0) as amount_paid,
+                      " . invoice_paid_sql() . " as amount_paid,
                       " . invoice_credited_sql($conn) . " as amount_credited,
+                      " . invoice_open_sql($conn) . " as amount_open,
                       (SELECT COUNT(*) FROM invoices x WHERE x.credit_ref = i.inv_id) as n_credit_notes
                FROM invoices i
                LEFT JOIN customers c ON i.cust_id = c.cust_id
@@ -343,8 +345,11 @@ echo '<div style="flex:3;">';
             // helt ubetalt.
             $paid_so_far = (float)($rowi['amount_paid'] ?? 0);
             $credited_so_far = (float)($rowi['amount_credited'] ?? 0);      // (negativ: en delvis kreditnota)
-            if (strtolower($rowi['inv_status']) === 'sent' && ($paid_so_far > 0.01 || $credited_so_far < -0.01)) {
-                $remaining = max(0, (float)($rowi['total_amount'] ?? 0) + $credited_so_far - $paid_so_far);
+            // Restbeløbet (invoice_open_sql(): med kreditnotaer OG bogførte rykkergebyrer) vises, når det afviger fra fakturabeløbet -
+            // også for en krediteret faktura der stadig skylder et gebyr. Kreditnotaerne selv (credit_ref) har intet restbeløb her.
+            $remaining = (float)($rowi['amount_open'] ?? 0);
+            if (empty($rowi['credit_ref']) && in_array(strtolower($rowi['inv_status']), ['sent', 'credited'], true) && $remaining > 0.01
+                && ($paid_so_far > 0.01 || $credited_so_far < -0.01 || abs($remaining - (float)($rowi['total_amount'] ?? 0)) > 0.01)) {
                 $amou .= '<br><small style="color:var(--color-warning); font-weight:normal;">' . lang('@Remaining:') . ' ' . fmt_dk($remaining) . '</small>';
             }
             $row_actions = [
@@ -357,7 +362,8 @@ echo '<div style="flex:3;">';
                 $row_actions[] = ['icon' => 'fa-pencil', 'link'    => 'invoice_edit.php?id='.$rowi['inv_id'], 'hint' => '@Edit',                        'type' => 'primary'];
                 $row_actions[] = ['icon' => 'fa-gavel',  'onclick' => 'postInv('.$rowi['inv_id'].')',          'hint' => '@Post Invoice (Assign No.)',    'type' => 'success'];
                 $row_actions[] = ['icon' => 'fa-trash',  'onclick' => 'delInv('.$rowi['inv_id'].')',           'hint' => '@Delete',                       'type' => 'danger'];
-            } elseif (!in_array(strtolower($rowi['inv_status']), ['credited', 'credit'], true) && (int)($rowi['n_credit_notes'] ?? 0) === 0) {     // (én kreditnota pr. faktura - også en delvis)
+            } elseif (!in_array(strtolower($rowi['inv_status']), ['credited', 'credit'], true) && (int)($rowi['n_credit_notes'] ?? 0) === 0
+                      && !(strtolower($rowi['inv_status']) === 'paid' && invoice_is_written_off($conn, (int)$rowi['inv_id']))) {     // (en afskrevet faktura kan ikke krediteres - som i invoice_view.php)     // (én kreditnota pr. faktura - også en delvis)
                 // RETTET: knappen blev vist for ALLE ikke-kladde-fakturaer, inkl. allerede krediterede fakturaer
                 // og kreditnota-rækkerne selv - samme "vis aldrig en knap der bare bliver afvist"-princip som
                 // Slet-knappen ovenfor allerede følger, nu udvidet til denne.

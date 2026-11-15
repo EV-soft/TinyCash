@@ -113,12 +113,13 @@ function calc_closing_lines($conn, $period_start, $period_end) {
     $lines = []; $net_result = 0.0;
     if ($res) {
         while ($row = DB::fetch_assoc($res)) {
-            $bal = (float)$row['balance'];
+            $bal = round((float)$row['balance'], 2);      // (float-støj må ikke give 0,00-linjer i lukkeposteringen)
+            if ($bal == 0.0) continue;
             $lines[] = ['acc_id' => (int)$row['acc_id'], 'acc_name' => $row['acc_name'], 'acc_type' => $row['acc_type'], 'balance' => $bal];
             $net_result += $bal;
         }
     }
-    return ['lines' => $lines, 'net_result' => $net_result];
+    return ['lines' => $lines, 'net_result' => round($net_result, 2)];
 }
 
 // -------------------------------------------------------------------------
@@ -198,8 +199,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['preview'])) {
     } elseif (($period_err = year_end_validate_period($conn, $posted_period_start, $posted_period_end, $posted_year_id)) !== null) {
         $err = $period_err;
     } else {
+        // Et år uden resultatposteringer (fx et hvilende selskab) skal også kunne lukkes - ellers kan intet senere
+        // år lukkes ("luk det ældste åbne år først"). Der bogføres så ingen lukkepostering, kun lås + nyt år.
         $preview = calc_closing_lines($conn, $ps, $pe);
-        if (empty($preview['lines'])) {
+        if (empty($preview['lines']) && $posted_year_id <= 0) {
             $err = lang('@No income or expense postings found in the selected period - nothing to close.');
             $preview = null;
         }
@@ -226,7 +229,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_close'])) {
         $closing_lines = array_map(fn($l) => ['acc_id' => $l['acc_id'], 'amount' => -$l['balance']], $calc['lines']);
         $net_result = $calc['net_result'];
 
-        if (empty($closing_lines)) {
+        $jou_id = 0;
+        if (empty($closing_lines) && $year_id <= 0) {
             $err = lang('@No income or expense postings found in the selected period - nothing to close.');
         } else {
           // RETTET: KRITISK - hele denne flerdelte bogføring (ny journalpost + N ledger-linjer + ny lock-dato +
@@ -250,6 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_close'])) {
             // (manglede FØR helt - årsafslutningen var dermed usporbar i
             // bilagsrækken, OG ville forblive hård-sletbar under den nyere
             // regel i ledger_view.php der kun beskytter poster MED voucher_no).
+            if (!empty($closing_lines)) {
             $voucher_no = next_voucher_no($conn);
             // RETTET (§currency-setting-is-cosmetic-label): journal.currency
             // blev altid sat til hardkodet 'DKK', uanset firmaets faktisk
@@ -280,6 +285,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_close'])) {
             // Bogfør nettoresultatet over på egenkapitalkontoen (modsat fortegn,
             // så hele posteringen går i nul - dobbelt bogføring)
             ledger_post($conn, $jou_id, $equity_acc, $net_result);
+            }
 
             // Opdater lock-dato, så det afsluttede år ikke kan rettes bagudrettet
             DB::query($conn, "DELETE FROM settings WHERE setting_key = 'accounting_lock_date'");
@@ -292,7 +298,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_close'])) {
                 $sql_close = DB::is_sqlite()
                     ? "UPDATE fiscal_years SET closed_at = CURRENT_TIMESTAMP, closed_by = ?, closing_jou_id = ?, equity_acc_id = ?, net_result = ? WHERE year_id = ?"
                     : "UPDATE fiscal_years SET closed_at = NOW(), closed_by = ?, closing_jou_id = ?, equity_acc_id = ?, net_result = ? WHERE year_id = ?";
-                DB::prepare_and_execute($conn, $sql_close, [$_SESSION['user_id'], $jou_id, $equity_acc, $net_result, $year_id]);
+                DB::prepare_and_execute($conn, $sql_close, [$_SESSION['user_id'], $jou_id ?: null, $equity_acc, $net_result, $year_id]);
             }
 
             // RETTET 2026-08-20: brugte før et hånd-rullet, direkte INSERT INTO audit_log i stedet for den fælles
@@ -300,7 +306,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_close'])) {
             // ellers konsekvente STORE_BOGSTAVER-navngivning (CANCEL_EXPENSE, POST_INVOICE osv.), og var reelt den
             // eneste log_action-uafhængige logskrivning i hele kodebasen. Fundet under en
             // revisionsspor-gennemgang.
-            log_action($conn, 'YEAR_END_CLOSE', 'journal', $jou_id, null,
+            log_action($conn, 'YEAR_END_CLOSE', $jou_id ? 'journal' : 'fiscal_years', $jou_id ?: $year_id, null,
                 ['period' => "$period_start - $period_end", 'net_result' => $net_result, 'equity_acc' => $equity_acc]);
 
             // RETTET: det NÆSTE regnskabsår blev aldrig oprettet - regnskabsår oprettes ellers kun af installations-
@@ -323,7 +329,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_close'])) {
         if ($err === '') {
             $msg = lang('@Fiscal year closed successfully.') . ' '
                  . lang('@Net result:') . ' ' . fmt_dk($net_result) . ' ' . htmlspecialchars($global_settings['currency'] ?? 'DKK') . '. '
-                 . lang('@Journal entry:') . ' #' . $jou_id;
+                 . ($jou_id ? lang('@Journal entry:') . ' #' . $jou_id : lang('@No closing entry was needed.'));
         }
     }
 }

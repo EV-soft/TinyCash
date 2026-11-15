@@ -45,9 +45,12 @@ if ($qcr_res) {
         if (isset($qcr_counts[$qcr_row['status']])) $qcr_counts[$qcr_row['status']] = (int)$qcr_row['n'];
     }
 }
+// Et sendt tilbud hvis gyldighed er udløbet uden svar (listen nedenfor viser det som udløbet) er tabt, ikke "afventer"
+$qcr_exp_row = @DB::query($conn, "SELECT COUNT(*) FROM quotes WHERE status = 'sent' AND valid_until IS NOT NULL AND valid_until <> '' AND valid_until < '" . date('Y-m-d') . "'");
+$qcr_expired = $qcr_exp_row ? (int)(DB::fetch_row($qcr_exp_row)[0] ?? 0) : 0;
 $qcr_won     = $qcr_counts['accepted'] + $qcr_counts['converted'];
-$qcr_lost    = $qcr_counts['rejected'];
-$qcr_pending = $qcr_counts['sent'];
+$qcr_lost    = $qcr_counts['rejected'] + $qcr_expired;
+$qcr_pending = $qcr_counts['sent'] - $qcr_expired;
 $qcr_decided = $qcr_won + $qcr_lost;
 if ($qcr_decided > 0) {
     $qcr_rate = round($qcr_won / $qcr_decided * 100, 1);

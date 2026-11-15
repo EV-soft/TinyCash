@@ -30,7 +30,7 @@ echo '<div style="display:flex; flex-wrap:wrap; gap:25px; align-items:flex-start
 echo '<div style="flex:1; min-width:220px;">';
 echo '<strong style="font-size:1.1em;">' . htmlspecialchars($sup['supplier_name']) . '</strong><br>';
 echo nl2br(htmlspecialchars($sup['address'] ?? '')) . '<br>';
-if (!empty($sup['cvr'])) echo lang('@CVR') . ': ' . htmlspecialchars($sup['cvr']) . '<br>';
+if (!empty($sup['cvr'])) echo tc_company_id_short() . ': ' . htmlspecialchars($sup['cvr']) . '<br>';
 echo '</div>';
 echo '<div style="flex:1; min-width:220px;">';
 if (!empty($sup['email'])) echo lang('@Email') . ': ' . htmlspecialchars($sup['email']) . '<br>';

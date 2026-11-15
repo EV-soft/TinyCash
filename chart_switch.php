@@ -142,7 +142,8 @@ $by_family = [];
 foreach ($std as $no => $s) $by_family[cs_family((string)$s['acc_type'])][$no] = $no . ' - ' . $s['acc_name']
     . ((int)$s['std_no'] !== $no ? ' (' . sprintf(lang('@standard %d'), $s['std_no']) . ')' : '');
 $role_txt = ['conf_acc_bank' => lang('@Bank'), 'conf_acc_debitor' => lang('@Debitors'), 'conf_acc_creditor' => lang('@Creditors'), 'conf_acc_sales' => lang('@Sales'),
-             'conf_acc_vat' => lang('@Output VAT'), 'conf_acc_purchase_vat' => lang('@Input VAT'), 'conf_acc_fx' => lang('@Currency Gain/Loss'), 'conf_acc_bad_debt' => lang('@Bad debt')];
+             'conf_acc_vat' => lang('@Output VAT'), 'conf_acc_purchase_vat' => lang('@Input VAT'), 'conf_acc_fx' => lang('@Currency Gain/Loss'), 'conf_acc_bad_debt' => lang('@Bad debt'), 'conf_acc_reminder_fee' => lang('@Reminder fees'), 'conf_acc_inventory' => lang('@Inventory'), 'conf_acc_stock_adjust' => lang('@Stock adjustment'),
+             'conf_acc_oss_sales' => lang('@EU-OSS Sales Account'), 'conf_acc_oss_vat' => lang('@EU-OSS VAT Account'), 'conf_acc_ioss_sales' => lang('@IOSS Sales Account'), 'conf_acc_ioss_vat' => lang('@IOSS VAT Account')];
 echo '<form method="post">' . csrf_field(false);
 echo '<div style="display:flex; gap:10px; align-items:center; margin:8px 0 12px;"><label style="font-weight:bold;">' . lang('@Switch date') . ':</label>'
    . '<input type="date" name="switch_date" value="' . htmlspecialchars($date) . '" required style="padding:6px; border:1px solid var(--border-color); border-radius:4px;">'

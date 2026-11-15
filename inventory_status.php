@@ -123,7 +123,7 @@ if ($res && DB::num_rows($res) > 0) {
         $stk_txt = rtrim(rtrim(fmt_dk($stk, 3), '0'), ',');
         $min = (float)($r['prod_min_stock'] ?? 5);
         
-        $sku = !empty($r['prod_sku']) ? $r['prod_sku'] : $r['prod_id'];
+        $sku = htmlspecialchars(!empty($r['prod_sku']) ? (string)$r['prod_sku'] : (string)$r['prod_id']);      // (htm_Table escaper ikke cellerne - et varenummer med "<" blev til markup)
         // RETTET: produktnavnet blev før skrevet direkte ind i markup'en - htm_Table escaper IKKE cellernes
         // indhold selv (den understøtter bevidst rå HTML i celler, fx knapper), så det er hvert kaldested der selv
         // skal escape ren tekst. product_list.php gjorde det allerede korrekt for samme felt.

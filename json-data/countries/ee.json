@@ -1,0 +1,313 @@
+{
+    "code": "ee",
+    "iso": "EE",
+    "name": "Eesti",
+    "name_en": "Estonia",
+    "language": "et",
+    "locale": "et-EE",
+    "currency": "EUR",
+    "currency_symbol": "€",
+    "timezone": "Europe/Tallinn",
+    "date_format": "d.m.Y",
+    "number": {
+        "dec": ",",
+        "thou": " "
+    },
+    "company_id": {
+        "label": "@Registry code (registrikood)",
+        "short": "Reg.kood",
+        "regex": "^[0-9]{8}$",
+        "registry": null,
+        "checksum": "ee_mod11"
+    },
+    "vat_id": {
+        "prefix": "EE",
+        "regex": "^EE[0-9]{9}$"
+    },
+    "zip": {
+        "regex": "^[0-9]{5}$",
+        "prefix": "EE-"
+    },
+    "vat_portal": "e-MTA (käibedeklaratsioon KMD)",
+    "vat": {
+        "standard_rate": 24,
+        "period": "month",
+        "codes": [
+            {
+                "id": "K24",
+                "name": "Käibemaks 24%",
+                "rate": 24,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "K13",
+                "name": "Käibemaks 13%",
+                "rate": 13,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "K9",
+                "name": "Käibemaks 9%",
+                "rate": 9,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "S24",
+                "name": "Sisendkäibemaks 24%",
+                "rate": 24,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "S13",
+                "name": "Sisendkäibemaks 13%",
+                "rate": 13,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "S9",
+                "name": "Sisendkäibemaks 9%",
+                "rate": 9,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "EUK",
+                "name": "Kauba ühendusesisene käive (0%)",
+                "rate": 0,
+                "type": "eu_goods_sale"
+            },
+            {
+                "id": "EUT",
+                "name": "Teenuse osutamine teise liikmesriigi maksukohustuslasele",
+                "rate": 0,
+                "type": "eu_services_sale"
+            },
+            {
+                "id": "EKS",
+                "name": "Kauba eksport (0%)",
+                "rate": 0,
+                "type": "export"
+            },
+            {
+                "id": "P41",
+                "name": "Käive KMS § 41¹ alusel (pöördmaksustamine)",
+                "rate": 0,
+                "type": "reverse_domestic"
+            },
+            {
+                "id": "MV",
+                "name": "Maksuvaba käive",
+                "rate": 0,
+                "type": "exempt"
+            },
+            {
+                "id": "EUS24",
+                "name": "Kauba ühendusesisene soetamine 24%",
+                "rate": 24,
+                "type": "eu_goods_purchase"
+            },
+            {
+                "id": "EUTS24",
+                "name": "Teenuse saamine teisest liikmesriigist 24%",
+                "rate": 24,
+                "type": "eu_services_purchase"
+            },
+            {
+                "id": "VTS24",
+                "name": "Teenuse saamine väljastpoolt EL-i 24%",
+                "rate": 24,
+                "type": "noneu_services_purchase"
+            }
+        ],
+        "std_account_codes": []
+    },
+    "reminders": {
+        "fee_from_reminder": 99,
+        "fee_until_reminder": 99,
+        "min_days_between": 14,
+        "max_fee": 0,
+        "max_fee_currency": "EUR",
+        "law": "Võlaõigusseadus § 113 (viivis); ettevõtjalt 40 € hüvitis § 113 lg 8"
+    },
+    "einvoice": [
+        "peppol_bis3"
+    ],
+    "payment_ref": "ee_ref",
+    "legal": {
+        "annual_report": null,
+        "cvr_lock": false,
+        "oss": true,
+        "ioss": true,
+        "eu_sales_list": {
+            "name": "@VD declaration (e-MTA)",
+            "boxes": {
+                "goods": "3.1.1",
+                "all": "3.1"
+            }
+        }
+    },
+    "vat_return": [
+        {
+            "box": "1",
+            "label": "@1: Taxable supplies at 24 %",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                24
+            ]
+        },
+        {
+            "box": "2.1",
+            "label": "@2.1: Taxable supplies at 13 %",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                13
+            ]
+        },
+        {
+            "box": "2",
+            "label": "@2: Taxable supplies at 9 %",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                9
+            ]
+        },
+        {
+            "box": "3",
+            "label": "@3: Supplies at 0 %, total",
+            "rule": "net",
+            "types": [
+                "eu_goods_sale",
+                "eu_services_sale",
+                "export"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "3.1",
+            "label": "@3.1: Intra-Community supplies of goods and services",
+            "rule": "net",
+            "types": [
+                "eu_goods_sale",
+                "eu_services_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "3.1.1",
+            "label": "@3.1.1: Intra-Community supplies of goods",
+            "rule": "net",
+            "types": [
+                "eu_goods_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "3.2",
+            "label": "@3.2: Exports of goods",
+            "rule": "net",
+            "types": [
+                "export"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "4",
+            "label": "@4: VAT on taxable supplies (ledger)",
+            "rule": "setting_acc",
+            "sign": -1,
+            "setting": "conf_acc_vat",
+            "payable": 1
+        },
+        {
+            "box": "4.1",
+            "label": "@4.1: VAT on acquisitions in lines 6 and 7",
+            "rule": "rc_vat",
+            "types": [
+                "eu_goods_purchase",
+                "eu_services_purchase",
+                "noneu_services_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "5",
+            "label": "@5: Deductible input VAT",
+            "rule": "setting_acc",
+            "sign": 1,
+            "setting": "conf_acc_purchase_vat",
+            "payable": -1
+        },
+        {
+            "box": "6",
+            "label": "@6: Intra-Community acquisitions of goods and services",
+            "rule": "net",
+            "types": [
+                "eu_goods_purchase",
+                "eu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "6.1",
+            "label": "@6.1: Intra-Community acquisitions of goods",
+            "rule": "net",
+            "types": [
+                "eu_goods_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "7",
+            "label": "@7: Other acquisitions with reverse charge",
+            "rule": "net",
+            "types": [
+                "noneu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "8",
+            "label": "@8: Exempt supplies",
+            "rule": "net",
+            "types": [
+                "exempt"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "9",
+            "label": "@9: Supplies under the special arrangement of section 41 1",
+            "rule": "net",
+            "types": [
+                "reverse_domestic"
+            ],
+            "sign": -1
+        }
+    ],
+    "peppol": {
+        "endpoint_scheme": "0191",
+        "legal_scheme": "0191"
+    },
+    "chart": null,
+    "chart_classes": null,
+    "saft": null,
+    "draft": true
+}

@@ -20,7 +20,7 @@ $s = get_settings($conn);
 $currency = $s['currency'] ?? 'DKK';
 
 $as_of = $_GET['as_of'] ?? date('Y-m-d');
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $as_of)) $as_of = date('Y-m-d');
+if (!tc_is_date((string)$as_of)) $as_of = date('Y-m-d');      // (tc_is_date: "2026-02-31" bestod formattjekket)
 
 $bs = arl_balance_sheet($conn, $as_of);
 
@@ -38,10 +38,11 @@ echo '</form>';
 // intern statusopgørelse beregnet direkte fra bogføringen - ikke en officielt
 // indberettet balance. Genbruger samme oversættelsesnøgle for konsistens.
 echo '<div style="margin-bottom:16px; padding:10px 14px; background:#fbeaea; border-left:4px solid #c0392b; border-radius:4px; color:#c0392b; font-size:0.85em; font-weight:bold;">'
-   . lang('@DRAFT - not suitable for direct filing with the Danish Business Authority. Requires digital XBRL submission via virk.dk or an accountant.')
+   . (tc_country() === 'dk' ? lang('@DRAFT - not suitable for direct filing with the Danish Business Authority. Requires digital XBRL submission via virk.dk or an accountant.')
+                             : lang('@DRAFT - not suitable for direct filing with the authorities. Have the annual accounts prepared or checked by an accountant.'))      // (den danske henvisning stod i alle lande)
    . '</div>';
 
-if (abs($bs['diff']) > 0.01) {
+if (abs(round($bs['diff'], 2)) >= 0.005) {      // (> 0.01 lod en difference på præcis 1 øre passere)
     htm_Alert(sprintf(lang('@Balance does not match: Assets and Liabilities+Equity differ by %s %s. This may indicate a posting outside the normal flows.'), fmt_dk($bs['diff']), $currency), 'error');
 } else {
     htm_Alert(lang('@Assets equal Liabilities + Equity. The balance is correct.'), 'success');

@@ -761,6 +761,16 @@ require_once __DIR__ . '/../inc/invoice_layouts.inc.php';
 foreach (il_ensure_schema($conn, $is_sqlite) as $il_line) {
     if (strpos($il_line, '[SPRUNGET OVER]') !== 0) echo $il_line . "\n";
 }
+// Lager - samme skema som db-setup/migrate_stock.php (stock_ensure_schema(), inc/stock.inc.php)
+require_once __DIR__ . '/../inc/stock.inc.php';
+foreach (stock_ensure_schema($conn, $is_sqlite) as $st_line) {
+    if (strpos($st_line, '[SPRUNGET OVER]') !== 0) echo $st_line . PHP_EOL;
+}
+// Rykkergebyrer - samme skema som db-setup/migrate_reminder_fees.php (rf_ensure_schema(), inc/reminder.inc.php)
+require_once __DIR__ . '/../inc/reminder.inc.php';
+foreach (rf_ensure_schema($conn, $is_sqlite) as $rf_line) {
+    if (strpos($rf_line, '[SPRUNGET OVER]') !== 0) echo $rf_line . "\n";
+}
 
 $trg_result = create_append_only_triggers($conn);
 if ($trg_result['created'] > 0) {

@@ -28,9 +28,29 @@ if (!function_exists('tc_utf8')) {
     }
 }
 
+// Sproget uden et valg i sessionen: landepakkens sprog, når brugerfladen har det - ellers engelsk (Danmark og Grønland:
+// dansk). Før var det altid dansk: login-siden og alt uden en session (webhooks, webbutikkens ordrer) var dansk i fx Tyskland.
+if (!function_exists('tc_default_lang')) {
+    function tc_default_lang(): string {
+        static $memo = null;
+        if ($memo !== null) return $memo;
+        if (!function_exists('tc_country_pack') || !function_exists('setting')) return 'da';      // (regnskabet ikke indlæst endnu - huskes ikke)
+        $memo = 'da';
+        $want = (string)tc_country_pack('language', 'da');
+        if ($want === 'da' || !preg_match('/^[a-z]{2}$/', $want)) return $memo;
+        // Kun et sprog der er (næsten) fuldt oversat - ellers blev brugerfladen en blanding af fx 10 % tysk og 90 %
+        // engelsk. Så er engelsk (altid komplet - nøglerne er engelske) bedre; i Grønland er dansk administrationssproget.
+        $d = json_decode((string)@file_get_contents(dirname(__DIR__) . '/json-data/languages.json'), true);
+        $cnt = [];
+        foreach ((array)($d['language'] ?? []) as $l) $cnt[(string)($l['code'] ?? '')] = count(array_filter((array)($l['translation'] ?? []), fn($v) => is_string($v) && $v !== ''));
+        if (($cnt[$want] ?? 0) >= 0.8 * max(1, $cnt['da'] ?? 1)) $memo = $want;
+        elseif ($want !== 'kl') $memo = 'en';
+        return $memo;
+    }
+}
 if (!function_exists('lang')) {
     function lang($key, $echo=false) {
-        $current_lang = isset($_SESSION['lang']) ? $_SESSION['lang'] : 'da';
+        $current_lang = isset($_SESSION['lang']) ? $_SESSION['lang'] : tc_default_lang();
         static $tr = null;
         static $loaded_lang = null; // Holder øje med, hvilket sprog der ligger i cachen
         // Hvis vi ikke har indlæst noget endnu, ELLER hvis sproget har ændret sig undervejs:

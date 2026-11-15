@@ -21,14 +21,14 @@ require_once 'inc/cvr_lookup.inc.php';
 require_once 'inc/audit.inc.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !csrf_verify()) {
-    redirect('company_settings.php', lang('@CVR lookup failed:') . ' ' . lang('@Security check failed (CSRF). Please reload the page and try again.'), 'error');
+    redirect('company_settings.php', lang('@The company register lookup failed:') . ' ' . lang('@Security check failed (CSRF). Please reload the page and try again.'), 'error');
 }
 
 $cvr = preg_replace('/\D/', '', $_POST['cvr'] ?? '');
-$lookup = cvr_lookup_by_number($conn, $cvr);
+$lookup = tc_registry_lookup($conn, $cvr);      // landets firmaregister (inc/country.inc.php)
 
 if (empty($lookup['success'])) {
-    redirect('company_settings.php', lang('@CVR lookup failed:') . ' ' . htmlspecialchars((string)($lookup['error'] ?? lang('@CVR lookup failed. Please fill in the details manually.'))), 'error');
+    redirect('company_settings.php', lang('@The company register lookup failed:') . ' ' . htmlspecialchars((string)($lookup['error'] ?? lang('@The company register lookup failed. Please fill in the details manually.'))), 'error');
 }
 
 $before = get_settings($conn);
@@ -62,4 +62,6 @@ foreach ($locked_fields as $key => $val) {
 
 log_action($conn, 'UPDATE_COMPANY_CVR_SYNC', 'settings', 0, $old, $new);
 
-redirect('company_settings.php', '@Company name and address fetched and locked from the official CVR register.');
+redirect('company_settings.php', ($before['cvr_master_data_lock'] ?? '0') === '1'
+    ? '@Company name and address fetched and locked from the official CVR register.'
+    : (tc_registry() === 'dk_cvr' ? '@Company name and address fetched from the official CVR register.' : '@Company name and address fetched from the official company register.'));      // (også Norges og Finlands register)

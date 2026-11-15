@@ -70,7 +70,7 @@ if (!$res) {
         // ikke et reelt login).
         $last_login_row = DB::fetch_assoc(DB::query($conn,
             "SELECT MAX(login_time) AS t FROM login_log WHERE user_id = " . (int)$row['user_id'] . " AND status = 'Success'"));
-        $last_login = $last_login_row['t'] ?? null;
+        $last_login = !empty($last_login_row['t']) ? db_ts_local($last_login_row['t']) : null;      // (login_time er databasens egen tid - UTC på SQLite; vist som lokal tid som i loginhistorikken)
         if ($last_login) {
             $days_ago = days_between(date('Y-m-d', strtotime($last_login)), date('Y-m-d'));
             $login_cell = date(CONF_DATE_FORMAT . ' H:i', strtotime($last_login));

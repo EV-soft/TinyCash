@@ -137,13 +137,17 @@ function seed_demo_data_extended($conn, ?callable $log = null): array {
     });
 
     // 2. Kunder med særtilfælde + kontaktpersoner
-    $step('Kunder (engelsk, uden rykkere, kreditgrænse) og kontaktpersoner', function () use ($conn, &$ids) {
+    $step('Kunder (engelsk, uden rykkere, kreditgrænse, offentlig med EAN) og kontaktpersoner', function () use ($conn, &$ids) {
         $ids['mermaid'] = dx_insert($conn, 'customers', ['cust_name' => 'The Little Mermaid Ltd', 'cust_email' => 'ariel@mermaid.example',
             'cust_address' => "Langelinie 1\n2100 København Ø", 'cust_cvr' => 'GB123456789', 'cust_payment_days' => 14, 'cust_language' => 'en']);
         $ids['snow'] = dx_insert($conn, 'customers', ['cust_name' => 'Snedronningens Isslot', 'cust_email' => 'is@snedronningen.example',
             'cust_address' => "Isvej 1\n9990 Skagen", 'cust_payment_days' => 8, 'cust_no_reminders' => 1, 'cust_notes' => 'Vil ikke have rykkere - ring i stedet.']);
         $ids['tin'] = dx_insert($conn, 'customers', ['cust_name' => 'Den Standhaftige Tinsoldat', 'cust_email' => 'tin@soldat.example',
             'cust_address' => "Legetøjsgade 7\n5000 Odense C", 'cust_payment_days' => 14, 'credit_limit' => 5000]);
+        // Offentlig kunde: e-fakturaen (OIOUBL) adresseres til EAN-nummeret, ikke CVR
+        $ids['public'] = dx_insert($conn, 'customers', ['cust_name' => 'Eventyrkommunen, Børneforvaltningen', 'cust_email' => 'faktura@eventyrkommunen.example',
+            'cust_address' => "Rådhuspladsen 1
+5000 Odense C", 'cust_cvr' => '29189919', 'cust_ean' => '5798000000018', 'cust_contact_person' => 'Kirsten Klog', 'cust_payment_days' => 30]);
         $ids['nomail'] = dx_insert($conn, 'customers', ['cust_name' => 'Klods-Hans (uden e-mail)', 'cust_address' => "Mudderhullet 3\n4000 Roskilde", 'cust_payment_days' => 8]);
         $c = (int)(DB::fetch_row(DB::query($conn, "SELECT MIN(cust_id) FROM customers WHERE cust_email IS NOT NULL AND cust_email <> ''"))[0] ?? 0);
         dx_insert($conn, 'customer_contacts', ['cust_id' => $c, 'contact_name' => 'Bogholderiet', 'contact_email' => 'faktura@eventyr.example', 'contact_note' => 'Fakturamodtager', 'created_at' => date('Y-m-d H:i:s')]);
@@ -202,6 +206,11 @@ function seed_demo_data_extended($conn, ?callable $log = null): array {
     $step('Forfalden faktura til kunde uden rykkere', function () use ($conn, $pline, &$ids) {
         if (empty($ids['snow'])) throw new Exception('kunden mangler');
         invoice_post($conn, dx_invoice($conn, $ids['snow'], dx_date(-30), dx_date(-22), [$pline(5, 1)]));
+    });
+    $step('E-faktura til offentlig kunde (EAN + ordrereference)', function () use ($conn, $pline, &$ids) {
+        if (empty($ids['public'])) throw new Exception('kunden mangler');
+        invoice_post($conn, dx_invoice($conn, $ids['public'], dx_date(-5), dx_date(25), [$pline(5, 2), ['Kursus i eventyrfortælling', 3, 1200, 25, 0, 0]],
+            ['cust_reference' => 'BF-4711']));
     });
     $step('EUR-faktura til engelsk kunde (kundens sprog på papiret)', function () use ($conn, $pline, &$ids) {
         if (empty($ids['mermaid'])) throw new Exception('kunden mangler');

@@ -1,0 +1,46 @@
+/* /assets/tc-menuctx.css v:1.3.1 d:2026-09-15 i:evs */
+/* Admins højreklik-menu til at skjule menupunkter/felter for L1/L2. */
+        /* RETTET (bruger-rapporteret: "ses ikke på sort baggrund"): manglede
+           en EKSPLICIT lys tekstfarve - arvede i stedet body's --text-main,
+           som i lys-temaet er MØRK tekst (#333) på selve --bg-submenu, der
+           bevidst ER en mørk baggrundsfarve i alle temaer (samme farve som
+           .dropdown-item/.nav-main-link allerede bruger --text-light til,
+           se disse klassers egen definition). */
+        #tc-menu-ctx { position:fixed; z-index:99999; background:var(--bg-submenu); color:var(--text-light);
+            border:1px solid var(--border-subtle); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+            min-width:270px; padding:6px; display:none; font-size:13px; }
+        #tc-menu-ctx label { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:4px;
+            cursor:pointer; color:var(--text-light); }
+        #tc-menu-ctx label:hover { background:rgba(255,255,255,0.1); }
+        #tc-menu-ctx input[type="checkbox"] { width:16px; height:16px; cursor:pointer; }
+        #tc-menu-ctx button { display:block; width:100%; text-align:left; background:none; border:none; color:var(--text-light);
+            padding:8px 10px; border-radius:4px; cursor:pointer; font-size:inherit; margin-top:4px; }
+        #tc-menu-ctx button:hover { background:rgba(255,255,255,0.1); }
+        #tc-menu-ctx hr { border:0; border-top:1px solid rgba(255,255,255,0.15); margin:6px 0; }
+        #tc-menu-ctx .tc-menu-ctx-label { padding:6px 10px 4px; font-size:11px; color:var(--text-light); opacity:0.7;
+            text-transform:uppercase; font-weight:bold; }
+        /* NYT (bruger-anmodet): markerer et højreklik-skjulbart FELT (ikke et
+           menupunkt) - samme kontekstmenu genbruges, se JS'en nedenfor. Kun
+           synlig for admins (hele denne blok er allerede admin-only).
+           RETTET (bruger-rapporteret, to runder):
+           1) "jeg ser ikke stiplet blå ramme" - brugte FØR var(--color-info),
+              som er en mørk gråblå (#34495e) i lys-temaet og en lysegrå
+              (#c4c6c8) i dark-temaet til badge-/tekstbrug, hverken tydeligt
+              "blå" eller kraftig nok. Erstattet med en FAST, tema-uafhængig
+              blå (#2196f3, altid blå uanset tema).
+           2) "det var ikke meningen at tilføje en ramme men at den
+              eksisterende blot ændrede udseende" - et almindeligt htm_Field()
+              har allerede sin egen <fieldset>-kant; at pakke DEN ind i endnu
+              en boks med sin egen kant gav en dobbelt/indlejret ramme-effekt.
+              ".tc-hideable-field fieldset" omfarver nu den EKSISTERENDE
+              fieldset-kant i stedet for at tilføje en ny udenom. Kun felter
+              der slet IKKE har nogen boks i forvejen (klassen "tc-no-
+              existing-box", se inc/field_visibility.inc.php's $has_own_box)
+              får en helt ny ramme tilføjet. */
+        .tc-hideable-field { display:inline-block; vertical-align:top; position:relative; max-width:100%; }
+        /* RETTET (bruger-anmodet, runde 28-opfølgning): fjernet den blålige
+           baggrundstoning på tillægsfelter - kun den stiplede blå kant er nu
+           tilbage som markering. */
+        .tc-hideable-field fieldset { border:2px dashed #2196f3 !important; }
+        .tc-hideable-field.tc-no-existing-box { border:2px dashed #2196f3; border-radius:6px; padding:6px 8px;
+            margin:3px; }

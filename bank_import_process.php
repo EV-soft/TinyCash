@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $candidate   = realpath(__DIR__ . '/' . ($_POST['file_path'] ?? ''));
     $file_path   = ($upload_base && $candidate && strpos($candidate, $upload_base . DIRECTORY_SEPARATOR) === 0)
         ? $candidate : null;
-    $delimiter = $_POST['delimiter'] ?? ',';
+    $delimiter = in_array($_POST['delimiter'] ?? ',', [',', ';', "\t", '|'], true) ? $_POST['delimiter'] : ',';      // (fgetcsv kræver ét tegn - ellers en fatal fejl)
     // RETTET: intet isset/array-tjek her - manglede map[] helt (se bank_import_step1.php's rettelse), gav en
     // PHP-advarsel og en effektivt tom mapping i stedet for en tydelig fejl. Falder nu eksplicit tilbage til et
     // tomt array (ingen kolonner mappes - alle rækker importeres med tomme/0-værdier, men uden en
@@ -35,6 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $source    = DB::real_escape_string($conn, $_POST['import_source'] ?? 'bank');
     $d_sep     = $_POST['decimal_sep']  ?? ',';
     $t_sep     = ($d_sep == ',') ? '.' : ','; // Automatic thousands separator
+    // Bankkontoen udtoget hører til (bank_import_step1.php) - kun en eksisterende bankkonto; ellers NULL = standard-bankkontoen
+    $imp_acc   = (int)($_POST['import_acc'] ?? 0);
+    if ($imp_acc > 0 && !DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = $imp_acc AND acc_type = 'bank'"))) $imp_acc = 0;
+    $imp_acc_sql = $imp_acc > 0 ? (string)$imp_acc : 'NULL';
 
     // RETTET: uden en datokolonne fik ALLE linjer stille dags dato, og uden en beløbskolonne blev alle beløb 0
     if (!in_array('trans_date', $mapping, true) || !array_intersect(['amount', 'net_amount'], $mapping)) {
@@ -47,6 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $handle = fopen($file_path, "r");
     $importCount = 0;
     $dateWarnCount = 0;
+    $emptyCount = 0;
     // NYT: dublet-tjekket nedenfor fandtes allerede (samme dato+tekst+beløb importeres ikke to gange), men var
     // STUMT - genimporterer man ved en fejl den samme periode, ser man bare et lavere antal importerede rækker end
     // forventet, uden nogen forklaring på hvorfor, hvilket let ligner en fejl i stedet for at være den beskyttelse
@@ -61,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // transaktionsrække.
     $skip_lines = max(0, (int)($_POST['skip_lines'] ?? 1));
     for ($i = 0; $i < $skip_lines; $i++) {
-        if (fgetcsv($handle, 0, $delimiter) === false) break;
+        if (fgetcsv($handle, 0, $delimiter, '"', '') === false) break;
     }
 
     // RETTET: tegnsættet blev ikke håndteret - mange danske bankers CSV er i Windows-1252/ISO-8859-1. Tekster med
@@ -69,18 +74,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // felt fik den første dato til at fejle. Nu: BOM fjernes, og et felt der ikke er gyldig UTF-8, omkodes.
     $bom_done = false;
     // RETTET: længde 1000 delte en linje med lang posteringstekst i to - resten blev importeret som en ny banklinje
-    while (($data = fgetcsv($handle, 0, $delimiter)) !== FALSE) {
+    while (($data = fgetcsv($handle, 0, $delimiter, '"', '')) !== FALSE) {
         if (!$bom_done && isset($data[0])) { $data[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$data[0]);  $bom_done = true; }
         foreach ($data as $di => $dv) {
             if ($dv !== null && !mb_check_encoding((string)$dv, 'UTF-8')) $data[$di] = mb_convert_encoding((string)$dv, 'UTF-8', 'Windows-1252');
         }
+        // En helt tom linje (typisk sidst i bankens fil; fgetcsv giver [null]) er ingen transaktion - før blev den til 0 kr. med dagens dato
+        if (!array_filter($data, fn($v) => trim((string)$v) !== '')) { $emptyCount++;  continue; }
         $raw = ['date' => date('Y-m-d'), 'text' => '', 'net' => 0.0, 'fee' => 0.0, 'gross' => 0.0, 'date_ok' => true];
         $has_net = false;
         $has_gross = false;
 
         foreach ($mapping as $index => $db_field) {
             if ($db_field == 'ignore' || !isset($data[$index])) continue;
-            $val = trim($data[$index]);
+            $val = trim((string)$data[$index]);
 
             if (in_array($db_field, ['amount', 'net_amount', 'fee_amount'])) {
                 // --- Robust numeric cleaning ---
@@ -149,6 +156,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $raw['text'] = $warn_prefix . $raw['text'];
         }
 
+        // En linje uden beløb (fx en saldo- eller overskriftslinje i bunden af filen) er heller ingen transaktion
+        if (abs($raw['gross']) < 0.005 && abs($raw['fee']) < 0.005) { $emptyCount++;  continue; }
         $d = $raw['date'];
         $t = $raw['text'];
         $a = $raw['gross']; // Gross amount is used for bank matching
@@ -162,13 +171,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $nth = ($seen_in_file[$dup_key]['seen'] ?? 0) + 1;                       // den n'te ens linje i denne fil
         $ins = $seen_in_file[$dup_key]['inserted'] ?? 0;                          // heraf allerede indsat fra denne fil
         $seen_in_file[$dup_key] = ['seen' => $nth, 'inserted' => $ins];
-        $check = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM bank_statement_temp WHERE trans_date='$d' AND text_val='$t' AND amount=$a"));
+        // (kun på SAMME bankkonto - en ens linje på en anden konto, fx et gebyr samme dag, blev afvist som dublet)
+        $check = DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM bank_statement_temp WHERE trans_date='$d' AND text_val='$t' AND amount=$a AND " . tc_bank_dup_acc_sql($imp_acc)));
         $before = (int)($check[0] ?? 0) - $ins;                                    // fra tidligere importer
 
         if ($before < $nth) {
             $seen_in_file[$dup_key]['inserted']++;
-            $sql = "INSERT INTO bank_statement_temp (trans_date, text_val, amount, fee_amount, import_source)
-                    VALUES ('$d', '$t', $a, $f, '$source')";
+            $sql = "INSERT INTO bank_statement_temp (trans_date, text_val, amount, fee_amount, import_source, acc_id)
+                    VALUES ('$d', '$t', $a, $f, '$source', $imp_acc_sql)";
             if (DB::query($conn, $sql)) $importCount++;
         } else {
             $duplicateCount++;
@@ -178,6 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     @unlink($file_path);
 
     flash(sprintf(lang('@%d transaction(s) imported.'), $importCount));
+    if (!empty($emptyCount)) flash(sprintf(lang('@%d empty line(s) or line(s) without an amount were skipped.'), $emptyCount), 'info');
     if ($dateWarnCount > 0) flash(sprintf(lang("@%d row(s) had a date that could not be read and were set to today's date instead - marked in the text field below, please correct manually."), $dateWarnCount), 'warning');
     // (dublet-tjekket ovenfor: forklarer hvorfor færre end forventet blev importeret)
     if ($duplicateCount > 0) flash(sprintf(lang('@%d row(s) were skipped because a transaction with the same date, text and amount was already imported previously.'), $duplicateCount), 'info');

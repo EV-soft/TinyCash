@@ -32,7 +32,7 @@ $bad_res = DB::query($conn, "
     FROM journal j
     LEFT JOIN ledger l ON l.jou_id = j.jou_id
     GROUP BY j.jou_id, j.jou_date, j.jou_text, j.voucher_no, j.trans_type
-    HAVING line_count = 0 OR ABS(ROUND(net, 2)) > 0.01
+    HAVING line_count = 0 OR ABS(ROUND(net, 2)) >= 0.005
     ORDER BY j.jou_date ASC, j.jou_id ASC
 ");
 
@@ -42,7 +42,7 @@ if ($bad_res) {
         $lines = [];
         if ((int)$r['line_count'] > 0) {
             // RETTET: LEFT JOIN - også linjer på en konto der ikke findes i kontoplanen vises
-            $lres = DB::query($conn, "SELECT l.acc_id, a.acc_name, l.amount
+            $lres = DB::query($conn, "SELECT l.acc_id, COALESCE(a.acc_name, '" . DB::escape($conn, '⚠ ' . lang('@not in the chart of accounts')) . "') AS acc_name, l.amount
                 FROM ledger l LEFT JOIN accounts a ON l.acc_id = a.acc_id
                 WHERE l.jou_id = " . (int)$r['jou_id'] . " ORDER BY l.led_id ASC");
             if ($lres) { while ($lr = DB::fetch_assoc($lres)) $lines[] = $lr; }

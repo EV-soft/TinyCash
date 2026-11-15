@@ -66,8 +66,15 @@ $session = eb_create_session($code);
 
 if (!empty($session['session_id']) && !empty($session['accounts'][0]['uid'])) {
     $account_uid = DB::escape($conn, $session['accounts'][0]['uid']);
-    DB::query($conn, "UPDATE bank_connections SET status = 'LN', gc_account_id = '$account_uid', requisition_id = '" . DB::escape($conn, $session['session_id']) . "' WHERE conn_id = " . (int)$bc['conn_id']);
-    log_action($conn, 'BANK_CONNECTION_LINKED', 'bank_connections', (int)$bc['conn_id'], ['status' => $bc['status']], ['status' => 'LN']);
+    // state_token ryddes: det er en engangsnøgle (fejlteksten ovenfor siger "allerede brugt"), men blev liggende, så
+    // samme tilbage-link kunne bruges igen og overskrive forbindelsens session
+    DB::query($conn, "UPDATE bank_connections SET status = 'LN', state_token = NULL, gc_account_id = '$account_uid', requisition_id = '" . DB::escape($conn, $session['session_id']) . "' WHERE conn_id = " . (int)$bc['conn_id']);
+    log_action($conn, 'BANK_CONNECTION_LINKED', 'bank_connections', (int)$bc['conn_id'], ['status' => $bc['status']], ['status' => 'LN', 'accounts' => count($session['accounts'])]);
+    // Kun den første konto hentes (forbindelsen er knyttet til én bogføringskonto) - valgte man flere hos banken, blev
+    // de øvrige stille ignoreret
+    if (count($session['accounts']) > 1) {
+        redirect('bank_integration.php', sprintf(lang('@Bank connected - but you chose %d accounts at the bank, and only the first one is fetched. Connect each account separately, linked to its own bank account in the chart of accounts.'), count($session['accounts'])), 'warning');
+    }
     redirect('bank_integration.php', '@Bank connected successfully! You can now sync transactions.');
 }
 

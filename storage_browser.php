@@ -33,7 +33,7 @@ $allowed_folders = [
     'invoices'   => 'storage/invoices/' . tc_account_storage_subdir(),
     'einvoices'  => 'storage/einvoices/' . tc_account_storage_subdir(),
     'saf-t'      => 'storage/saf-t/' . tc_account_storage_subdir(),
-    'saft-import'=> 'storage/saft_import/',
+    'saft-import'=> 'storage/saft_import/' . tc_account_storage_subdir(),
     'doc'        => 'doc/',
     'images'     => 'images/',
     'uploads'    => 'uploads/',
@@ -136,7 +136,8 @@ function storage_file_is_locked_attachment($conn, $folder_key, $filename) {
         // fakturanummer bliver låst selvom filen reelt ikke er arkivet -
         // aldrig omvendt.
         // Arkiverede kreditnotaer (inc/invoice_pdf_archive.inc.php): creditnote_<kreditnotanr>.pdf / creditnote_id<inv_id>.pdf
-        if (preg_match('/^creditnote_(id)?(\d+)\.pdf$/i', $filename, $cm)) {
+        // og e-kreditnotaer (export_oioubl.php): OIOUBL_CreditNote_KN-<kreditnotanr>.xml
+        if (preg_match('/^creditnote_(id)?(\d+)\.pdf$/i', $filename, $cm) || preg_match('/^OIOUBL_CreditNote_KN-()(\d+)\.xml$/', $filename, $cm)) {
             $where = $cm[1] !== '' ? "inv_id = " . (int)$cm[2] : "credit_note_no = " . (int)$cm[2];
             $row = @DB::fetch_assoc(DB::query($conn, "SELECT inv_id FROM invoices WHERE $where AND credit_ref IS NOT NULL LIMIT 1"));
             return !empty($row);
@@ -156,7 +157,11 @@ function storage_file_is_locked_attachment($conn, $folder_key, $filename) {
 if (isset($_GET['delete']) && !empty($_GET['delete'])) {
     $filename = basename($_GET['delete']);
     $target_file = $storage_dir . $filename;
-    if (in_array($current_key, $readonly_folders, true)) {
+    // Skjulte filer (.htaccess) vises ikke i listen, men kunne slettes med ?delete=.htaccess - og så var backups/ og
+    // uploads/ (fulde databasedumps, bilag) åbne for alle på nettet
+    if ($filename === '' || $filename[0] === '.') {
+        $msg_html = htm_Alert(text: lang('@The files of this folder belong to the program and cannot be deleted here.'), type: 'danger');
+    } elseif (in_array($current_key, $readonly_folders, true)) {
         $msg_html = htm_Alert(text: lang('@The files of this folder belong to the program and cannot be deleted here.'), type: 'danger');
     } elseif (storage_file_is_locked_attachment($conn, $current_key, $filename)) {
         $msg_html = htm_Alert(text: lang('@This file is linked to a posted expense or invoice and cannot be deleted (bookkeeping retention).'), type: 'danger');
@@ -178,7 +183,7 @@ if (isset($_GET['delete']) && !empty($_GET['delete'])) {
 if (isset($_GET['download']) && !empty($_GET['download'])) {
     $filename = basename($_GET['download']);
     $target_file = $storage_dir . $filename;
-    if (file_exists($target_file)) {
+    if ($filename !== '' && $filename[0] !== '.' && is_file($target_file)) {
         ob_clean();
         header('Content-Description: File Transfer');
         header('Content-Type: application/octet-stream');
@@ -447,7 +452,7 @@ function openFileViewer(filename) {
     document.getElementById('imageContainer').style.display = "none";
     document.getElementById('pdfContainer').style.display = "none";
     document.getElementById('wrapToggleContainer').style.display = "none";
-    document.getElementById('codeContainer').innerHTML = "Indlæser...";
+    document.getElementById('codeContainer').textContent = <?php echo json_encode(lang('@Loading...')); ?>;      // (stod fast på dansk)
     document.getElementById('viewerImage').src = "";
     document.getElementById('viewerPdf').src = "";
     document.getElementById('viewerModal').style.display = "block";

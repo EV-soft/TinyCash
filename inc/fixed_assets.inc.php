@@ -85,7 +85,8 @@ function fa_calculate_due_depreciation(array $asset, string $today): ?array {
  * 'accumulated'=>float, 'book_value'=>float] - én række pr. kalenderår
  * aktivet afskrives i, fra anskaffelsesåret til det år scrapværdien nås.
  */
-function fa_build_full_schedule(array $asset): array {
+// $year_of: dato -> år-etiket (standard kalenderåret; anlægskortet giver regnskabsåret, se tc_fiscal_year_bounds)
+function fa_build_full_schedule(array $asset, ?callable $year_of = null): array {
     $cost = (float)$asset['acquisition_cost'];
     $residual = (float)$asset['residual_value'];
     $depreciable_base = round($cost - $residual, 2);
@@ -96,34 +97,25 @@ function fa_build_full_schedule(array $asset): array {
     $monthly_dep = round($depreciable_base / $life_months, 2);
     if ($monthly_dep <= 0) return $schedule;
 
-    $acq = new DateTime($asset['acquisition_date']);
-    $accumulated = 0.0;
-    $months_left = $life_months;
-    $cursor = clone $acq;
-
-    while ($months_left > 0) {
-        $year = (int)$cursor->format('Y');
-        $months_in_year = min(12 - ((int)$cursor->format('n') - 1), $months_left);
-        $year_dep = round($monthly_dep * $months_in_year, 2);
-
-        // Sidste rate (uanset om det er midt i eller ved slutningen af et
-        // kalenderår) afkortes til reelt at ramme scrapværdien præcist -
-        // samme afrundingsprincip som fa_calculate_due_depreciation().
-        $remaining = round($depreciable_base - $accumulated, 2);
-        if ($year_dep >= $remaining || $months_in_year >= $months_left) { $year_dep = $remaining; $months_left = $months_in_year; }
-
-        $accumulated = round($accumulated + $year_dep, 2);
-        $schedule[] = [
-            'year' => $year,
-            'months' => $months_in_year,
-            'depreciation' => $year_dep,
-            'accumulated' => $accumulated,
-            'book_value' => round($cost - $accumulated, 2),
-        ];
-
-        $months_left -= $months_in_year;
-        $cursor->modify("+$months_in_year months");
+    // En måned hører til det år, hvor den bliver HEL (fa_add_months fra anskaffelsen) - samme regel som bogføringen
+    // (fa_calculate_due_depreciation). Før talte anskaffelsesmåneden med som hel: anskaffet 15/3 gav 10 måneder i
+    // planen, men kun 9 bogført pr. 31/12.
+    $per_year = [];
+    for ($k = 1; $k <= $life_months; $k++) {
+        $md = fa_add_months($asset['acquisition_date'], $k);
+        $y = $year_of ? (int)$year_of($md) : (int)substr($md, 0, 4);
+        $per_year[$y] = ($per_year[$y] ?? 0) + 1;
     }
-
+    $accumulated = 0.0;  $done = 0;
+    foreach ($per_year as $year => $months_in_year) {
+        $done += $months_in_year;
+        $year_dep = round($monthly_dep * $months_in_year, 2);
+        // Sidste rate afkortes/forlænges til præcis at ramme scrapværdien - samme princip som fa_calculate_due_depreciation()
+        $remaining = round($depreciable_base - $accumulated, 2);
+        if ($year_dep >= $remaining || $done >= $life_months) $year_dep = $remaining;
+        $accumulated = round($accumulated + $year_dep, 2);
+        $schedule[] = ['year' => $year, 'months' => $months_in_year, 'depreciation' => $year_dep, 'accumulated' => $accumulated, 'book_value' => round($cost - $accumulated, 2)];
+        if ($accumulated >= $depreciable_base) break;
+    }
     return $schedule;
 }

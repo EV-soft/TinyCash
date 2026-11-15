@@ -33,14 +33,16 @@ function gdpr_collect_customer_data($conn, int $cust_id): ?array {
     $cn_col  = il_column_exists($conn, 'invoices', 'credit_note_no') ? 'credit_note_no, ' : '';
     $inv_res = DB::query($conn, "SELECT invoice_no, {$cn_col}credit_ref, inv_date, inv_due_date, inv_status, currency, delivery_address, cust_reference, inv_note,
             (SELECT COALESCE(SUM(quantity * price_each $disc * (100 + line_vat_rate) / 100.0), 0)
-             FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1) AS total
+             FROM invoice_lines WHERE inv_id = i.inv_id) AS total      -- (i fakturaens egen valuta, som står ved siden af - ikke omregnet til kroner)
         FROM invoices i WHERE cust_id = $cust_id ORDER BY inv_date DESC");
     while ($r = DB::fetch_assoc($inv_res)) { $data['invoices'][] = $r; }
 
-    $q_res = @DB::query($conn, "SELECT quote_no, quote_date, valid_until, status FROM quotes WHERE cust_id = $cust_id ORDER BY quote_date DESC");
+    // (som fakturaerne: leveringsadresse, kundens reference og note er også personoplysninger - de manglede for tilbud og
+    // faste fakturaer)
+    $q_res = @DB::query($conn, "SELECT quote_no, quote_date, valid_until, status, delivery_address, cust_reference, quote_note FROM quotes WHERE cust_id = $cust_id ORDER BY quote_date DESC");
     if ($q_res) { while ($r = DB::fetch_assoc($q_res)) { $data['quotes'][] = $r; } }
 
-    $ri_res = @DB::query($conn, "SELECT interval_type, next_run_date, is_active FROM recurring_invoices WHERE cust_id = $cust_id");
+    $ri_res = @DB::query($conn, "SELECT interval_type, next_run_date, is_active, delivery_address, cust_reference, inv_note FROM recurring_invoices WHERE cust_id = $cust_id");
     if ($ri_res) { while ($r = DB::fetch_assoc($ri_res)) { $data['recurring_invoices'][] = $r; } }
 
     // RETTET: kun mails til kundens egen adresse kom med - mails til kontaktpersonernes adresser manglede
@@ -71,7 +73,7 @@ function gdpr_collect_customer_data($conn, int $cust_id): ?array {
 
 if (isset($_GET['download']) && $cust_id > 0) {
     $data = gdpr_collect_customer_data($conn, $cust_id);
-    if ($data === null) { die(lang('@Customer not found')); }
+    if ($data === null) redirect('customer_data_export.php', '@Customer not found', 'error');      // (var en hvid side)
 
     if (ob_get_level()) ob_end_clean();
     $safe_name = preg_replace('/[^A-Za-z0-9_-]/', '_', $data['customer']['cust_name']);

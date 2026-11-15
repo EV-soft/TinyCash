@@ -30,7 +30,10 @@ function mark_expense_paid($conn, array $s, int $id): string {
     if ($id <= 0) return 'not_eligible';
 
     $exp = DB::fetch_assoc(DB::query($conn, "SELECT * FROM expenses WHERE exp_id = $id AND is_cancelled = 0"));
-    if (!$exp || empty($exp['voucher_no']) || $exp['exp_type'] !== 'expense') {
+    // Kun en udgift bogført som GÆLD (forfaldsdato = ført på kreditorkontoen) kan betales her - samme betingelse som
+    // "Betal nu"-knappen ($is_payable i expense_list.php). En udgift betalt direkte fra banken (eller oprettet før
+    // leverandørmodulet) har ingen forfaldsdato, og en "betaling" ville trække pengene fra banken en gang til.
+    if (!$exp || empty($exp['voucher_no']) || $exp['exp_type'] !== 'expense' || empty($exp['due_date'])) {
         return 'not_eligible';
     }
 
@@ -135,6 +138,16 @@ if ($stmt) {
         $filename = $expense['attachment'];
         $is_already_cancelled = (int)$expense['is_cancelled'];
     }
+    // En udgift ført som gæld og SIDEN betalt kan ikke blot annulleres: modposteringen tilbagefører kun gælden, mens
+    // betalingen (et eget bilag) står tilbage - kreditorkontoen fik en debetsaldo uden nogen udgift bag. Pengene
+    // skal tilbage fra leverandøren: bogfør leverandørens kreditnota (en negativ udgift) i stedet.
+    if ($expense && $voucher_no && db_has_column($conn, 'expenses', 'paid_date') && db_has_column($conn, 'expenses', 'due_date')) {
+        $pd = DB::fetch_assoc(DB::query($conn, "SELECT due_date, paid_date FROM expenses WHERE exp_id = " . (int)$id));
+        if (!empty($pd['due_date']) && !empty($pd['paid_date'])) {
+            DB::rollback($conn);
+            redirect('expense_list.php', '@This expense has already been paid to the supplier and cannot be cancelled - post the supplier\'s credit note (a negative expense) instead.', 'error');
+        }
+    }
 }
 
 // Hvis posten ikke findes, eller den allerede ER annulleret, afbryd
@@ -211,11 +224,16 @@ if ($voucher_no !== null) {
         redirect('expense_list.php', '@The expense has been cancelled (a reversing entry was posted) or the draft deleted.');
     } else {
         DB::rollback($conn);
-        die(lang('@Error marking cancellation in database:') . " " . DB::error($conn));
+        redirect('expense_list.php', lang('@Error marking cancellation in database:') . ' ' . htmlspecialchars((string)DB::error($conn)), 'error');      // (var en hvid side)
     }
 } else {
     // SCENARIE B: Posten er en ubehandlet kladde -> Slet permanent (Fjern fil og DB-række)
-    $success = DB::prepare_and_execute($conn, "DELETE FROM expenses WHERE exp_id = ?", [$id]);
+    // (kun en ubogført kladde - blev den bogført i en anden fane efter opslaget ovenfor, slettede en ubetinget DELETE et bogført bilag)
+    $success = DB::prepare_and_execute($conn, "DELETE FROM expenses WHERE exp_id = ? AND voucher_no IS NULL AND is_cancelled = 0", [$id]);
+    if ($success && DB::affected_rows($conn, $success) < 1) {
+        DB::rollback($conn);
+        redirect('expense_list.php', '@This expense was changed by another, simultaneous request - nothing was deleted.', 'error');
+    }
 
     if ($success) {
         // REVISIONSLOG FOR SLETNING AF KLADDE (Før commit)
@@ -233,7 +251,7 @@ if ($voucher_no !== null) {
         redirect('expense_list.php', '@The expense has been cancelled (a reversing entry was posted) or the draft deleted.');
     } else {
         DB::rollback($conn);
-        die(lang('@Error deleting draft from database:') . " " . DB::error($conn));
+        redirect('expense_list.php', lang('@Error deleting draft from database:') . ' ' . htmlspecialchars((string)DB::error($conn)), 'error');      // (var en hvid side)
     }
 }
 

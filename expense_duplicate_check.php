@@ -21,9 +21,13 @@ if ($supplier === '' || $amount <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $ex
     exit;
 }
 
+// Uden hensyn til store/små bogstaver - også æøå: SQLite's LOWER() kender kun A-Z ("Ørsted" og "ørsted" var to
+// leverandører); tc_lower() er registreret i inc/db_connect.inc.php. Udgifter fra før typekolonnen (NULL) tæller med.
+$sup_lc = DB::escape($conn, mb_strtolower($supplier, 'UTF-8'));
+$sup_sql = DB::is_sqlite() ? "tc_lower(TRIM(supplier)) = '$sup_lc'" : "LOWER(TRIM(supplier)) = '$sup_lc'";
 $sql = "SELECT exp_id, description, voucher_no FROM expenses
-        WHERE is_cancelled = 0 AND exp_type = 'expense'
-        AND LOWER(TRIM(supplier)) = LOWER(TRIM('" . DB::escape($conn, $supplier) . "'))
+        WHERE is_cancelled = 0 AND (exp_type = 'expense' OR exp_type IS NULL)
+        AND $sup_sql
         AND amount = " . $amount . "
         AND exp_date = '" . DB::escape($conn, $exp_date) . "'";
 if ($exclude_id > 0) $sql .= " AND exp_id != $exclude_id";

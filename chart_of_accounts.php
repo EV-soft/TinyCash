@@ -49,8 +49,11 @@ if (!$st_ready) {
     htm_Banner('<i class="fa fa-info-circle"></i> ' . lang('@Only the accounts you use can be shown in the lists - this needs a database update:') . ' <a href="run_migrate.php">' . lang('@Database migration') . '</a>', 'info');
 }
 
+// (standardkontoplanens knapper kun når landepakken har en standardkontoplan - den danske; ellers import fra fil)
+$has_std_chart = (string)tc_country_pack('chart', '') !== '';
 $top_btn = htm_Button('fa-plus', '@Add New Account', 'success', 'account_edit.php?id=0', '', 'data-hint="'.lang('@Create a new account in the chart of accounts').'"', '', false)
-    . ' ' . htm_Button('fa-random', '@Bulk Map to Standard Accounts', 'secondary', 'account_std_mapping.php', '', 'data-hint="'.lang('@Map all accounts to the Danish standard chart of accounts (used for SAF-T reporting) from one page').'"', '', false)
+    . ' ' . htm_Button('fa-file-import', '@Import Chart of Accounts', 'secondary', 'chart_import.php', '', 'data-hint="'.lang('@Import accounts from an Excel or CSV file, e.g. the BAS chart of accounts').'"', '', false);
+if ($has_std_chart) $top_btn .= ' ' . htm_Button('fa-random', '@Bulk Map to Standard Accounts', 'secondary', 'account_std_mapping.php', '', 'data-hint="'.lang('@Map all accounts to the Danish standard chart of accounts (used for SAF-T reporting) from one page').'"', '', false)
     . ' ' . htm_Button('fa-right-left', '@Switch to the Standard Chart of Accounts', 'secondary', 'chart_switch.php', '', 'data-hint="'.lang('@Replace your accounts by standard accounts from a date - balances are transferred, settings and references follow').'"', '', false)
     . ' ' . htm_Button('fa-eye', '@View the Standard Chart of Accounts', 'secondary', 'setup_chart.php?tpl=official', '', 'data-hint="'.lang('@Look through the official standard chart of accounts before you import it or switch to it').'"', '', false);
 htm_Card_('@Chart of Accounts', 1000, '', 'acc_card', true, $top_btn);
@@ -95,7 +98,7 @@ if ($st_ready) {
 }
 $data = [];
 
-$sql = "SELECT a.*, v.vat_name, v.vat_rate
+$sql = "SELECT a.*, v.vat_name, a.vat_rate AS acc_vat_rate
         FROM accounts a
         LEFT JOIN vat_codes v ON a.vat_code = v.vat_id
         $st_where
@@ -103,11 +106,15 @@ $sql = "SELECT a.*, v.vat_name, v.vat_rate
 $res = DB::query($conn, $sql);
 
 if (!$res) {
-    echo htm_Alert("@SQL Error: " . DB::error($conn), "danger");
+    echo htm_Alert(lang('@SQL Error:') . ' ' . htmlspecialchars((string)DB::error($conn)), "danger");
 } else {
     while ($row = DB::fetch_assoc($res)) {
         $vat_txt = $row['vat_name'] ?: lang('@None');
-        $rate_txt = (isset($row['vat_rate']) && $row['vat_rate'] > 0) ? fmt_pct($row['vat_rate']) . "%" : "-";
+        // Kontoens egen sats (den der bogføres med) - før stod momskodens sats (v.vat_rate overskrev a.vat_rate), og en konto
+        // med sats men uden kode viste "-". En salgskonto uden sats har landets standardsats.
+        $acc_rate = $row['acc_vat_rate'];
+        if ($acc_rate === null && $row['acc_type'] === 'income') $rate_txt = fmt_pct(tc_vat_std_rate()) . '% (' . lang('@standard') . ')';
+        else $rate_txt = ((float)$acc_rate > 0) ? fmt_pct($acc_rate) . '%' : '-';
         $id = (int)$row['acc_id'];
 
         $accRowActions = [

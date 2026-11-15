@@ -54,7 +54,7 @@ htm_Note(lang('@A read-only record of every outgoing email the system has sent -
 
 // --- Opsummering: fejlede afsendelser de sidste 7 dage - hurtig "er der
 // noget der ikke virker"-indikator, uden at skulle læse hele tabellen. ---
-$week_ago = date('Y-m-d H:i:s', strtotime('-7 days'));
+$week_ago = db_ts_param(date('Y-m-d H:i:s', strtotime('-7 days')));     // (sent_at er databasens egen tid - som login_history.php)
 $fail_row = DB::fetch_assoc(DB::query($conn, "SELECT COUNT(*) AS c FROM mail_log WHERE success = 0 AND sent_at >= '$week_ago'"));
 $recent_fails = (int)($fail_row['c'] ?? 0);
 if ($recent_fails > 0) {

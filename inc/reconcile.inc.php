@@ -11,6 +11,13 @@
 # har brug for selve funktionen uden resten af filen. Denne fil indeholder
 # KUN funktionen - reconcile_action.php kræver den nu i stedet for at
 # definere den selv, ingen ekstern adfærdsændring for reconcile_list.php.
+// Bankkontoen for en banklinje: den konto linjen er hentet fra (en bankforbindelse er knyttet til en bestemt konto, fx
+// opsparingen), ellers standard-bankkontoen. Før gik alt på standard-bankkontoen, og begge kontis saldi blev forkerte.
+function tc_bank_line_account($conn, array $bank, array $s): int {
+    $line_acc = (int)($bank['acc_id'] ?? 0);
+    return ($line_acc > 0 && tc_account_ok($conn, $line_acc)) ? $line_acc : (int)($s['conf_acc_bank'] ?? 5000);
+}
+
 function reconcile_one_bank_line($conn, $global_settings, int $tmp_id, int $target_id, int $acc_id, float $fee_amount, int $fee_acc_id, int $proj_id, bool $close_fx_invoice): array {
     if ($tmp_id === 0) return ['ok' => false, 'message' => lang('@No transaction selected.')];
 
@@ -42,7 +49,7 @@ function reconcile_one_bank_line($conn, $global_settings, int $tmp_id, int $targ
     // 1000 er "Salg af eventyrvarer" i standard-kontoplanen, en SALGSKONTO -
     // tidligere bogførte hver bankafstemning derfor bankbeløbet som salg i
     // stedet for på bankkontoen. Rettet 2026-08-15, se posting-accounts.
-    $acc_bank = (int)($s['conf_acc_bank'] ?? 5000);
+    $acc_bank = tc_bank_line_account($conn, $bank, $s);
 
     // Debitorkontoen - bruges nu (2026-08-20) til at nedbringe tilgodehavendet,
     // når en faktura betales. Se ALVORLIGT FUND lige nedenfor.
@@ -59,6 +66,11 @@ function reconcile_one_bank_line($conn, $global_settings, int $tmp_id, int $targ
     // en konto der ikke findes.
     if ($fee_amount > 0 && ($fee_acc_id <= 0 || !tc_account_ok($conn, $fee_acc_id))) {
         return ['ok' => false, 'message' => lang('@Please choose an existing account for the fee.')];
+    }
+    // Modkontoen = linjens egen bankkonto gav en postering der gik i nul (debet og kredit på samme konto) - banklinjen
+    // stod som afstemt, men intet var bogført
+    if ($target_id <= 0 && $acc_id > 0 && $acc_id === $acc_bank) {
+        return ['ok' => false, 'message' => lang('@The counter account cannot be the bank account the line belongs to - choose the account the amount should be posted to.')];
     }
 
     // KRITISK: en kladde-faktura (aldrig bogført) kunne før markeres 'paid'
@@ -108,8 +120,10 @@ function reconcile_one_bank_line($conn, $global_settings, int $tmp_id, int $targ
         $jou_currency = DB::escape($conn, $global_settings['currency'] ?? 'DKK');
         // NYT (BEK 811/2026-gennemgang, [[digital-standard-bookkeeping-registration-goal]]).
         $cb = journal_created_by_sql($conn);
-        DB::query($conn, "INSERT INTO journal (jou_date, jou_text, proj_id, voucher_no, currency{$cb['col']})
-                          VALUES ('$bank_date', '$journal_text', $proj_sql, $voucher_no, '$jou_currency'{$cb['val']})");
+        // (en direkte bankpostering - uden faktura - får typen bank_direct: momsafstemningen kender så dens moms)
+        $jou_type_sql = $target_id > 0 ? 'NULL' : "'bank_direct'";
+        DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, proj_id, voucher_no, currency{$cb['col']})
+                          VALUES ('$bank_date', '$journal_text', $jou_type_sql, $proj_sql, $voucher_no, '$jou_currency'{$cb['val']})");
         $jou_id = DB::insert_id($conn);
 
         // --- 2. BOGFØR SELVE TRANSAKTIONEN ---
@@ -135,7 +149,7 @@ function reconcile_one_bank_line($conn, $global_settings, int $tmp_id, int $targ
             // invoice_post_action.php selv bogførte til), så sammenligningen nedenfor giver mening for både DKK-
             // og udenlandske fakturaer.
             $inv_totals = invoice_dkk_totals($conn, $target_id);
-            $inv_total    = round($inv_totals['incl'] + invoice_credited_dkk($conn, $target_id), 2);    // (minus en delvis kreditnota)
+            $inv_total    = round($inv_totals['incl'] + invoice_credited_dkk($conn, $target_id) + invoice_fees_dkk($conn, $target_id), 2);      // (+ bogførte rykkergebyrer)    // (minus en delvis kreditnota)
             $is_fx_invoice = ($inv_totals['exch_rate'] > 0);
 
             $paid_row = DB::fetch_assoc(DB::query($conn,
@@ -155,9 +169,9 @@ function reconcile_one_bank_line($conn, $global_settings, int $tmp_id, int $targ
                 }
             }
             $fully_paid = ($total_paid >= $inv_total - 0.01) || ($close_fx_invoice && $is_fx_invoice);
-            $new_status = $fully_paid ? 'paid' : $target_status['inv_status'];
-
-            if ($fully_paid) {
+            // (en krediteret faktura forbliver 'credited', når et resterende rykkergebyr betales - kun 'sent' bliver 'paid')
+            $new_status = ($fully_paid && strtolower($target_status['inv_status']) === 'sent') ? 'paid' : $target_status['inv_status'];
+            if ($new_status === 'paid') {
                 DB::query($conn, "UPDATE invoices SET inv_status = 'paid' WHERE inv_id = $target_id");
             }
             log_action($conn, 'RECORD_INVOICE_PAYMENT', 'invoices', $target_id,
@@ -175,6 +189,10 @@ function reconcile_one_bank_line($conn, $global_settings, int $tmp_id, int $targ
                 $acc_fx = (int)($s['conf_acc_fx'] ?? 7200);
                 ledger_post($conn, $jou_id, $acc_debitor, $fx_residual * -1);
                 ledger_post($conn, $jou_id, $acc_fx, $fx_residual);
+                // Kursdifferencen registreres også på fakturaen (som en afskrivning) - ellers stod en "betalt" faktura med
+                // et restbeløb: kontoudtoget sagde at kunden skyldte differencen, og debitorafstemningen fik en difference
+                DB::query($conn, "INSERT INTO invoice_payments (inv_id, payment_date, amount, note, created_by)
+                    VALUES ($target_id, '$bank_date', " . round($fx_residual, 2) . ", '" . DB::escape($conn, lang('@Currency exchange difference')) . "', " . (int)($_SESSION['user_id'] ?? 0) . ")");
             }
 
             if ($fee_amount > 0) {
@@ -189,12 +207,25 @@ function reconcile_one_bank_line($conn, $global_settings, int $tmp_id, int $targ
             // STEG. Banken følger nu bankens eget fortegn, modkontoen det modsatte.
             $b_acc   = DB::fetch_assoc(DB::query($conn, "SELECT acc_type, vat_rate FROM accounts WHERE acc_id = $acc_id"));
             $b_pl    = $b_acc && in_array($b_acc['acc_type'], ['income', 'expense'], true);
-            $b_rate  = $b_pl ? (float)($b_acc['vat_rate'] ?? 0) : 0.0;
+            // En salgskonto uden sats (fx importeret fra en kontoplanfil) har landets standardsats - som på fakturaen
+            // (invoice_edit.php); før blev salgsmomsen ikke udskilt, når et salg blev bogført direkte fra banken
+            $b_rate  = !$b_pl ? 0.0 : (($b_acc['vat_rate'] === null && $b_acc['acc_type'] === 'income') ? tc_vat_std_rate() : (float)($b_acc['vat_rate'] ?? 0));
             $b_gross = round(-$bank_amount, 2);                                   // modkontoens side (positiv = debet)
             $b_vat   = $b_rate > 0 ? round($b_gross * $b_rate / (100 + $b_rate), 2) : 0.0;
+            // Omvendt betalingspligt (EU-køb m.m.): beløbet er uden moms; momsen beregnes oven i og bogføres som
+            // både købsmoms og skyldig moms - samme regel som expense_get_lines()
+            $b_rc = ($b_acc['acc_type'] ?? '') === 'expense' ? tc_vat_rc_info($conn, $acc_id) : null;
+            if ($b_rc) {
+                $b_vat = 0.0;
+                $b_rc_vat = round($b_gross * $b_rc['rate'] / 100, 2);
+                ledger_post($conn, $jou_id, (int)($s['conf_acc_purchase_vat'] ?? 6910), $b_rc_vat);
+                ledger_post($conn, $jou_id, $b_rc['acc'], -$b_rc_vat);
+            }
             ledger_post($conn, $jou_id, $acc_id, round($b_gross - $b_vat, 2));
             if (abs($b_vat) >= 0.005) {
-                $b_vat_acc = $bank_amount < 0 ? (int)($s['conf_acc_purchase_vat'] ?? 6910) : (int)($s['conf_acc_vat'] ?? 6900);
+                // Momskontoen følger KONTOTYPEN, ikke pengenes retning: en refusion fra en leverandør (penge ind på en udgiftskonto)
+                // nedsætter købsmomsen - før landede den på salgsmomsen, i den forkerte rubrik på momsangivelsen (og omvendt)
+                $b_vat_acc = $b_acc['acc_type'] === 'expense' ? (int)($s['conf_acc_purchase_vat'] ?? 6910) : (int)($s['conf_acc_vat'] ?? 6900);
                 ledger_post($conn, $jou_id, $b_vat_acc, $b_vat);
             }
             ledger_post($conn, $jou_id, $acc_bank, $bank_amount);
@@ -218,12 +249,14 @@ function reconcile_one_bank_line($conn, $global_settings, int $tmp_id, int $targ
             // bilagsnummer (= bogført, kan annulleres som andre udgifter), beløbet som et positivt brutto, typen
             // efter retningen og den momssats der blev brugt.
             if ($b_pl) {
-                $b_type = $bank_amount < 0 ? 'expense' : 'income';
+                // (typen følger kontoen; en refusion på en udgiftskonto er en negativ udgift - som en leverandørkreditnota)
+                $b_type = $b_acc['acc_type'] === 'expense' ? 'expense' : 'income';
+                $b_amount_row = $b_type === 'expense' ? $b_gross : -$b_gross;
                 DB::query($conn, "INSERT INTO expenses
                                     (exp_date, supplier, account_id, amount, description, voucher_no, exp_type, vat_rate,
                                      proj_id,     created_by, created_at$paid_date_col_sql)
                                   VALUES
-                                    ('$bank_date', '$supplier_esc', $acc_id, " . abs($b_gross) . ", '$bank_text', $voucher_no, '$b_type', $b_rate,
+                                    ('$bank_date', '$supplier_esc', $acc_id, " . round($b_amount_row, 2) . ", '$bank_text', $voucher_no, '$b_type', $b_rate,
                                      $exp_proj_sql, $created_by, CURRENT_TIMESTAMP$paid_date_val_sql)");
             }
         }
@@ -282,10 +315,10 @@ function reconcile_shop_payout($conn, $global_settings, int $tmp_id, int $shop_i
     $bal   = shop_clearing_balance($conn, $clear);
     if ($gross > $bal + 0.01) {
         return ['ok' => false, 'message' => sprintf(lang('@The payout plus fee (%1$s) is more than the clearing account of %2$s holds (%3$s) - are all orders received, and is it the right shop?'),
-            fmt_dk($gross), $shop['name'], fmt_dk($bal))];
+            fmt_dk($gross), htmlspecialchars((string)$shop['name']), fmt_dk($bal))];      // (beskeden vises som HTML)
     }
     $s = get_settings($conn);
-    $acc_bank = (int)($s['conf_acc_bank'] ?? 5000);
+    $acc_bank = tc_bank_line_account($conn, $bank, $s);
     if (ledger_accounts_missing($conn, [$acc_bank])) return ['ok' => false, 'message' => sprintf(lang('@The account %d does not exist in the chart of accounts - check Company Settings (posting accounts) or the chart of accounts. Nothing was posted.'), $acc_bank)];
     DB::begin_transaction($conn);
     try {

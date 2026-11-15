@@ -80,11 +80,11 @@ function webhook_key_generate(string $label, ?string $account_id = null): string
         'last_used_at' => null,
         'revoked'      => false,
     ];
-    _webhook_keys_update_all(function (array $all) use ($entry) {
+    $ok = _webhook_keys_update_all(function (array $all) use ($entry) {
         $all[] = $entry;
         return $all;
     });
-    return $plain;
+    return $ok ? $plain : '';      // (kunne filen ikke skrives, virker nøglen ikke - den må ikke vises som oprettet)
 }
 
 function webhook_key_revoke(string $id): bool {

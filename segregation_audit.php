@@ -79,7 +79,18 @@ if ($exp_res) {
 }
 
 // --- FAKTURAER ---
-$inv_creator_map = sod_build_actor_map($conn, 'invoices', 'CREATE_DRAFT_INVOICE');
+// Kladder opstår flere steder end på fakturasiden - kun CREATE_DRAFT_INVOICE gav "Ukendt" opretter på kopier, faste
+// fakturaer, webhook-kladder, konverterede tilbud og fakturerede timer (og et "samme bruger"-tilfælde blev ikke fanget)
+$inv_creator_map = [];
+foreach (['CREATE_DRAFT_INVOICE', 'DUPLICATE_INVOICE', 'GENERATE_RECURRING_INVOICE', 'CREATE_DRAFT_INVOICE_WEBHOOK'] as $sod_act) {
+    $inv_creator_map += sod_build_actor_map($conn, 'invoices', $sod_act);      // (+ beholder den første kilde pr. faktura)
+}
+$sod_res = DB::query($conn, "SELECT user_id, new_values FROM audit_log WHERE action_type IN ('CONVERT_QUOTE_TO_INVOICE', 'INVOICE_TIME_ENTRIES') ORDER BY log_id");
+while ($sod_res && ($sr = DB::fetch_assoc($sod_res))) {
+    $sod_nv = json_decode((string)$sr['new_values'], true);
+    $sod_inv = (int)($sod_nv['invoice_id'] ?? 0);
+    if ($sod_inv > 0 && !isset($inv_creator_map[$sod_inv])) $inv_creator_map[$sod_inv] = (int)$sr['user_id'];
+}
 $inv_poster_map  = sod_build_actor_map($conn, 'invoices', 'POST_INVOICE');
 $inv_res = DB::query($conn, "SELECT i.inv_id, i.invoice_no, i.inv_date, c.cust_name
     FROM invoices i JOIN customers c ON i.cust_id = c.cust_id

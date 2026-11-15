@@ -20,8 +20,12 @@ if ($has_rules_table && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['a
     if ($_POST['action'] === 'add') {
         $pattern = trim($_POST['pattern'] ?? '');
         $acc_id  = (int)($_POST['acc_id'] ?? 0);
+        // (et mønster på 1-2 tegn - fx "a" - findes i næsten hver banktekst og foreslog sin konto på alle linjer)
+        if (mb_strlen($pattern) < 3) redirect('bank_rules.php', '@The pattern must be at least 3 characters - a shorter one matches almost every bank line.', 'error');
         if ($pattern !== '' && $acc_id > 0 && tc_account_ok($conn, $acc_id)) {      // (en konto der ikke findes, gav et forslag der ikke kunne bogføres)
-            $dup = DB::fetch_assoc(DB::query($conn, "SELECT rule_id FROM bank_match_rules WHERE pattern = '" . DB::escape($conn, $pattern) . "' AND acc_id = $acc_id"));
+            // (matchningen ser bort fra store/små bogstaver - det skal dublettjekket også: "Netto" og "NETTO" er samme regel)
+            $dup = DB::fetch_assoc(DB::query($conn, "SELECT rule_id FROM bank_match_rules WHERE LOWER(pattern) = LOWER('" . DB::escape($conn, $pattern) . "')"));
+            if ($dup) redirect('bank_rules.php', '@A rule with this pattern already exists - delete it first if it should suggest another account.', 'info');
             if (!$dup) {
                 DB::insert($conn, 'bank_match_rules', [
                     'pattern'    => $pattern,

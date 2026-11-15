@@ -44,11 +44,12 @@ function sc_apply_roles($conn, array $roles): void {
         DB::query($conn, "DELETE FROM settings WHERE setting_key = '" . DB::escape($conn, $k) . "'");
         if (!DB::insert($conn, 'settings', ['setting_key' => $k, 'setting_value' => (string)(int)$acc])) throw new Exception(DB::error($conn));
     }
-    foreach (['S25' => ['Salgsmoms 25%', 'vat'], 'K25' => ['Købsmoms 25%', 'purchase_vat']] as $id => [$name, $role]) {
-        if (empty($roles[$role])) continue;
+    foreach (sc_pack_vat_codes() as $vc) {
+        $id = DB::escape($conn, $vc['id']);  $role = (string)($vc['role'] ?? '');
+        if ($role === '' || empty($roles[$role])) continue;
         if (DB::fetch_assoc(DB::query($conn, "SELECT vat_id FROM vat_codes WHERE vat_id = '$id'"))) {
             DB::query($conn, "UPDATE vat_codes SET vat_account = " . (int)$roles[$role] . " WHERE vat_id = '$id'");
-        } elseif (!DB::insert($conn, 'vat_codes', ['vat_id' => $id, 'vat_name' => $name, 'vat_rate' => 25, 'vat_account' => (int)$roles[$role]])) {
+        } elseif (!DB::insert($conn, 'vat_codes', sc_vat_code_row($conn, $vc, (int)$roles[$role]))) {
             throw new Exception(DB::error($conn));
         }
     }
@@ -60,11 +61,23 @@ function sc_apply_roles($conn, array $roles): void {
 
 // Momskoderne skal findes, før kontiene oprettes (en konto med en ukendt momskode får ingen)
 function sc_ensure_vat_codes($conn): void {
-    foreach (['S25' => 'Salgsmoms 25%', 'K25' => 'Købsmoms 25%'] as $id => $name) {
+    foreach (sc_pack_vat_codes() as $vc) {
+        if (empty($vc['role'])) continue;      // (EU-/eksportkoderne kommer efter kontiene - tc_apply_pack_vat_setup())
+        $id = DB::escape($conn, $vc['id']);
         if (!DB::fetch_assoc(DB::query($conn, "SELECT vat_id FROM vat_codes WHERE vat_id = '$id'"))) {
-            DB::insert($conn, 'vat_codes', ['vat_id' => $id, 'vat_name' => $name, 'vat_rate' => 25, 'vat_account' => null]);
+            DB::insert($conn, 'vat_codes', sc_vat_code_row($conn, $vc, null));
         }
     }
+}
+
+// Landepakkens momskoder (i Danmark S25/K25) - kontoplanens konti henviser til dem via accounts.vat_code
+function sc_pack_vat_codes(): array {
+    return array_values(array_filter((array)tc_country_pack('vat.codes', []), fn($vc) => is_array($vc) && preg_match('/^[A-Za-z0-9_]{1,10}$/', (string)($vc['id'] ?? ''))));
+}
+function sc_vat_code_row($conn, array $vc, ?int $account): array {
+    $row = ['vat_id' => (string)$vc['id'], 'vat_name' => (string)($vc['name'] ?? $vc['id']), 'vat_rate' => (float)($vc['rate'] ?? 0), 'vat_account' => $account];
+    if (db_has_column($conn, 'vat_codes', 'vat_type') && in_array($vc['type'] ?? '', TC_VAT_TYPES, true)) $row['vat_type'] = $vc['type'];
+    return $row;
 }
 
 $coaInUse = sc_count_accounts($conn) > 0;
@@ -91,6 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['template']) && !$coaI
                 $roles = [];
                 foreach (CS_ROLE_TARGETS as $k => $no) $roles[substr($k, strlen('conf_acc_'))] = $no;
                 sc_apply_roles($conn, $roles);
+                tc_apply_pack_vat_setup($conn);      // EU-/eksportkoder + omvendt betalingspligt på udlandskontiene
                 log_action($conn, 'SETUP_CHART', 'accounts', 0, null, ['template' => 'official', 'added' => $r['added']]);
                 DB::commit($conn);
             } catch (Throwable $e) { DB::rollback($conn); throw $e; }
@@ -120,6 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['template']) && !$coaI
                     foreach (array_filter(explode(',', (string)($acc['role'] ?? ''))) as $role) $roles[trim($role)] = (int)$acc['account_no'];
                 }
                 sc_apply_roles($conn, $roles);
+                tc_apply_pack_vat_setup($conn);
                 log_action($conn, 'SETUP_CHART', 'accounts', 0, null, ['template' => $template, 'added' => count($accounts)]);
                 DB::commit($conn);
             } catch (Throwable $e) { DB::rollback($conn); throw $e; }

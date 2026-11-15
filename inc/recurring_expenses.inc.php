@@ -49,7 +49,12 @@ function recurring_expenses_check($conn) {
 // og fra "Generér nu"-knappen i recurring_expenses.php ($auto=false). Samme
 // kapløbssikring (atomisk compare-and-swap på next_run_date) som
 // generate_recurring_invoice() - se dens kommentar for fuld begrundelse.
+// Atomisk som generate_recurring_invoice(): fejler indsættelsen, er perioden ikke brugt op
 function generate_recurring_expense($conn, int $recur_id, bool $auto = false): ?int {
+    try { return DB::transaction($conn, fn() => generate_recurring_expense_steps($conn, $recur_id, $auto)); }
+    catch (\Throwable $e) { error_log("[recurring expense $recur_id] " . $e->getMessage());  return null; }
+}
+function generate_recurring_expense_steps($conn, int $recur_id, bool $auto): ?int {
     $tmpl = DB::fetch_assoc(DB::query($conn, "SELECT * FROM recurring_expenses WHERE recur_id = $recur_id"));
     if (!$tmpl) return null;
 
@@ -105,7 +110,7 @@ function generate_recurring_expense($conn, int $recur_id, bool $auto = false): ?
         $vals = "$supplier_id_sql, $vals";
     }
     $ok = DB::query($conn, "INSERT INTO expenses ($cols) VALUES ($vals)");
-    if (!$ok) return null;
+    if (!$ok) throw new Exception('udgiften: ' . DB::error($conn));
     $exp_id = DB::insert_id($conn);
 
     // Samme "spring ikke den planlagte kørsel over ved et tidligt manuelt

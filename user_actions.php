@@ -40,7 +40,10 @@ if (!$target) {
 // liste blev skrevet og var aldrig med. @-hæmmet, da tabellen kun findes efter db-setup/migrate_time_tracking.php
 // er kørt.
 $in_use = false;
-$user_ref_checks = [['ledger','user_id'], ['audit_log','user_id'], ['expenses','created_by'], ['expenses','cancelled_by'], ['invoice_payments','created_by'], ['time_entries','user_id']];
+// (også journalens registrant, lagerbevægelser - optælling og varemodtagelse - og gemte bankafstemninger: de dokumenterer
+// hvem der gjorde hvad, og en slettet bruger efterlod dem uden identitet)
+$user_ref_checks = [['ledger','user_id'], ['audit_log','user_id'], ['expenses','created_by'], ['expenses','cancelled_by'], ['invoice_payments','created_by'], ['time_entries','user_id'],
+                    ['journal','created_by'], ['stock_movements','created_by'], ['bank_reconciliations','created_by']];
 foreach ($user_ref_checks as [$tbl, $col]) {
     $chk = @DB::query($conn, "SELECT 1 FROM $tbl WHERE $col = $id LIMIT 1");
     if ($chk && DB::num_rows($chk) > 0) { $in_use = true; break; }

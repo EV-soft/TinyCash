@@ -31,8 +31,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_rule'])) {
     // RETTET: modellen hedder "Procent", men feltet forventede en brøk (0,014) - "1,4" (for 1,4 %) blev gemt som 1,4, og
     // gebyrformlen beløb / (1 - sats) gav et negativt gebyr (ved 1: division med nul). Feltet er nu i procent (0-99),
     // og der gemmes stadig en brøk, så eksisterende regler er uændrede.
-    $rate_pct = tc_num($_POST['rate'] ?? '0', 0, 99.99);
-    $fixed    = tc_num($_POST['fixed'] ?? '0', 0);
+    // Et tomt felt er 0 - procentfeltet er tomt ved en regel med fast beløb, og den kunne så slet ikke gemmes
+    $fee_raw  = fn($k) => trim((string)($_POST[$k] ?? '')) === '' ? '0' : $_POST[$k];
+    $rate_pct = tc_num($fee_raw('rate'), 0, 99.99);
+    $fixed    = tc_num($fee_raw('fixed'), 0);
     if ($rate_pct === null || $fixed === null) redirect('settings_fees.php', '@Please enter a percentage between 0 and 99 and a fixed amount of 0 or more.', 'error');
     $data   = ['model' => $model, 'rate' => round($rate_pct / 100, 6), 'fixed' => $fixed];
     $value  = json_encode($data);

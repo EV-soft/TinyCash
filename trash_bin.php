@@ -21,9 +21,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     if ($type === 'customer' && $id > 0) {
         if ($_POST['action'] === 'restore') {
-            DB::query($conn, "UPDATE customers SET deleted_at = NULL WHERE cust_id = $id");
-            log_action($conn, 'RESTORE_CUSTOMER', 'customers', $id, null, null);
-            $msg = lang('@Restored successfully');
+            // Kun en post der faktisk ligger i papirkurven (som ved endelig sletning) - før meldte en dobbeltklik/anden fane
+            // "gendannet" og skrev en gendannelse i revisionssporet, selv om intet blev ændret
+            $rs_res = DB::query($conn, "UPDATE customers SET deleted_at = NULL WHERE cust_id = $id AND deleted_at IS NOT NULL");
+            if ($rs_res && DB::affected_rows($conn, $rs_res) > 0) {
+                log_action($conn, 'RESTORE_CUSTOMER', 'customers', $id, null, null);
+                $msg = lang('@Restored successfully');
+            } else {
+                $err = lang('@Not in the trash bin - it may already have been restored.');
+            }
         } elseif ($_POST['action'] === 'purge') {
             $check_inv = DB::num_rows(DB::query($conn, "SELECT inv_id FROM invoices WHERE cust_id = $id")) > 0;
             $check_proj = DB::num_rows(DB::query($conn, "SELECT proj_id FROM projects WHERE cust_id = $id")) > 0;
@@ -44,29 +50,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 while ($oc_res && ($oc = DB::fetch_assoc($oc_res))) $old_contacts[] = $oc;
                 if ($old_row) $old_row['contacts'] = $old_contacts;
                 $purge_res = $old_row ? DB::query($conn, "DELETE FROM customers WHERE cust_id = $id AND deleted_at IS NOT NULL") : false;
+                // (meldte "slettet endeligt" og skrev PURGE i revisionssporet, også når intet blev slettet - kunden lå
+                // ikke i papirkurven, eller en anden fane havde allerede slettet den)
                 if ($purge_res && DB::affected_rows($conn, $purge_res) > 0) {
                     @DB::query($conn, "DELETE FROM customer_contacts WHERE cust_id = $id");
+                    log_action($conn, 'PURGE_CUSTOMER', 'customers', $id, $old_row, null);
+                    $msg = lang('@Permanently deleted');
+                } else {
+                    $err = lang('@Not found - it may already have been deleted.');
                 }
-                log_action($conn, 'PURGE_CUSTOMER', 'customers', $id, $old_row, null);
-                $msg = lang('@Permanently deleted');
             }
         }
     } elseif ($type === 'supplier' && $id > 0) {
         if ($_POST['action'] === 'restore') {
-            DB::query($conn, "UPDATE suppliers SET deleted_at = NULL WHERE supplier_id = $id");
-            log_action($conn, 'RESTORE_SUPPLIER', 'suppliers', $id, null, null);
-            $msg = lang('@Restored successfully');
+            // Kun en post der faktisk ligger i papirkurven (som ved endelig sletning) - før meldte en dobbeltklik/anden fane
+            // "gendannet" og skrev en gendannelse i revisionssporet, selv om intet blev ændret
+            $rs_res = DB::query($conn, "UPDATE suppliers SET deleted_at = NULL WHERE supplier_id = $id AND deleted_at IS NOT NULL");
+            if ($rs_res && DB::affected_rows($conn, $rs_res) > 0) {
+                log_action($conn, 'RESTORE_SUPPLIER', 'suppliers', $id, null, null);
+                $msg = lang('@Restored successfully');
+            } else {
+                $err = lang('@Not in the trash bin - it may already have been restored.');
+            }
         } elseif ($_POST['action'] === 'purge') {
             $check_exp = DB::num_rows(DB::query($conn, "SELECT exp_id FROM expenses WHERE supplier_id = $id")) > 0;
             $rec_res = @DB::query($conn, "SELECT recur_id FROM recurring_expenses WHERE supplier_id = $id");      // RETTET: også faste udgifter
             if ($rec_res && DB::fetch_assoc($rec_res)) $check_exp = true;
+            // Også varemodtagelser: lagerbevægelsen er dokumentationen for hvem der leverede - leverandøren forsvandt fra den
+            $sm_res = @DB::query($conn, "SELECT move_id FROM stock_movements WHERE supplier_id = $id LIMIT 1");
+            if ($sm_res && DB::fetch_assoc($sm_res)) $check_exp = true;
             if ($check_exp) {
-                $err = lang('@Cannot permanently delete: this record is still linked to invoices, projects or quotes.');
+                $err = lang('@Cannot permanently delete: the supplier is still linked to expenses, recurring expenses or goods receipts.');
             } else {
                 $old_row = DB::fetch_assoc(DB::query($conn, "SELECT * FROM suppliers WHERE supplier_id = $id"));
-                DB::query($conn, "DELETE FROM suppliers WHERE supplier_id = $id AND deleted_at IS NOT NULL");  // kun fra papirkurven
-                log_action($conn, 'PURGE_SUPPLIER', 'suppliers', $id, $old_row, null);
-                $msg = lang('@Permanently deleted');
+                $purge_res = DB::query($conn, "DELETE FROM suppliers WHERE supplier_id = $id AND deleted_at IS NOT NULL");  // kun fra papirkurven
+                if ($purge_res && DB::affected_rows($conn, $purge_res) > 0) {
+                    log_action($conn, 'PURGE_SUPPLIER', 'suppliers', $id, $old_row, null);
+                    $msg = lang('@Permanently deleted');
+                } else {
+                    $err = lang('@Not found - it may already have been deleted.');
+                }
             }
         }
     }

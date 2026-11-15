@@ -55,8 +55,19 @@ function get_project_statement_data($conn, int $proj_id, string $from = '', stri
         WHERE (proj_id = $proj_id OR inv_id IN (SELECT inv_id FROM invoice_lines WHERE proj_id = $proj_id)) AND LOWER(inv_status) != 'draft'      -- (også linjer med projektet)
         ORDER BY inv_date ASC, inv_id ASC
     ");
+    $ps_disc = invoice_discount_sql($conn);  $ps_disc_il = invoice_discount_sql($conn, 'il.');
     while ($inv = DB::fetch_assoc($res_i)) {
-        $inv_total = invoice_dkk_totals($conn, $inv['inv_id'])['incl'];
+        $inv_full  = invoice_dkk_totals($conn, (int)$inv['inv_id'])['incl'];
+        // Kun projektets egne linjer (linjens projekt, ellers fakturaens - som project_view.php). Før talte HELE fakturaen
+        // med på hvert projekt der havde blot én linje på den, så en faktura delt mellem to projekter stod dobbelt.
+        // Gebyrer og betalinger fordeles i samme forhold.
+        $ps_part = DB::fetch_row(DB::query($conn, "SELECT COALESCE(SUM(il.quantity * il.price_each $ps_disc_il * (100 + il.line_vat_rate) / 100.0), 0)
+            FROM invoice_lines il JOIN invoices i ON i.inv_id = il.inv_id
+            WHERE il.inv_id = " . (int)$inv['inv_id'] . " AND COALESCE(NULLIF(il.proj_id, 0), i.proj_id) = $proj_id"));
+        $ps_all  = DB::fetch_row(DB::query($conn, "SELECT COALESCE(SUM(quantity * price_each $ps_disc * (100 + line_vat_rate) / 100.0), 0) FROM invoice_lines WHERE inv_id = " . (int)$inv['inv_id']));
+        $ps_share = abs((float)($ps_all[0] ?? 0)) >= 0.005 ? max(0.0, min(1.0, (float)($ps_part[0] ?? 0) / (float)$ps_all[0])) : 1.0;
+        if ($ps_share <= 0) continue;      // (projektet står kun i hovedet, alle linjer hører til et andet projekt)
+        $inv_total = round($inv_full * $ps_share, 2);
         $ps_label = !empty($inv['credit_ref'])
             ? lang('@Credit Note') . (!empty($inv['credit_note_no']) ? ' KN-' . str_pad((string)$inv['credit_note_no'], 6, '0', STR_PAD_LEFT) : '')
             : lang('@Invoice') . ' #' . str_pad((string)$inv['invoice_no'], 6, '0', STR_PAD_LEFT);
@@ -67,14 +78,24 @@ function get_project_statement_data($conn, int $proj_id, string $from = '', stri
             'amount' => $inv_total,
         ];
 
+        // Bogførte rykkergebyrer skyldes også (som på kundens kontoudtog) - før manglede de, mens kundens betaling af
+        // faktura + gebyr blev trukket fra, så saldoen blev for lav
+        if (empty($inv['credit_ref']) && db_has_table($conn, 'invoice_fees')) {
+            $fres = DB::query($conn, "SELECT fee_date, amount, reminder_no FROM invoice_fees WHERE inv_id = " . (int)$inv['inv_id'] . " ORDER BY fee_id");
+            while ($fres && ($f = DB::fetch_assoc($fres))) {
+                $events[] = ['date' => $f['fee_date'], 'label' => sprintf(lang('@Reminder fee, reminder no. %d, invoice #%s'), (int)$f['reminder_no'], str_pad((string)$inv['invoice_no'], 6, '0', STR_PAD_LEFT)),
+                             'link' => 'invoice_view.php?id=' . $inv['inv_id'], 'amount' => round((float)$f['amount'] * $ps_share, 2)];
+            }
+        }
         $pay_res = DB::query($conn, "SELECT payment_date, amount, note FROM invoice_payments
                                       WHERE inv_id = " . $inv['inv_id'] . " ORDER BY payment_date ASC, payment_id ASC");
         while ($p = DB::fetch_assoc($pay_res)) {
             $events[] = [
                 'date'   => $p['payment_date'],
-                'label'  => (cs_is_writeoff_note((string)($p['note'] ?? '')) ? lang('@Written off as bad debt') . ' - ' . lang('@Invoice') : lang('@Payment for invoice')) . ' #' . str_pad((string)$inv['invoice_no'], 6, '0', STR_PAD_LEFT),      // (afskrivning, se customer_statement.inc.php)
+                'label'  => !empty($inv['credit_ref']) ? lang('@Refund paid out') . ' - ' . $ps_label      // (kreditnotaen har intet fakturanummer)
+                          : (cs_is_writeoff_note((string)($p['note'] ?? '')) ? lang('@Written off as bad debt') . ' - ' . lang('@Invoice') : (cs_is_fx_note((string)($p['note'] ?? '')) ? lang('@Currency exchange difference') . ' - ' . lang('@Invoice') : lang('@Payment for invoice'))) . ' #' . str_pad((string)$inv['invoice_no'], 6, '0', STR_PAD_LEFT),      // (afskrivning, se customer_statement.inc.php)
                 'link'   => 'invoice_view.php?id=' . $inv['inv_id'],
-                'amount' => round((float)$p['amount'], 2) * -1,
+                'amount' => round((float)$p['amount'] * $ps_share, 2) * -1,
             ];
         }
     }
@@ -117,6 +138,8 @@ function get_project_statement_data($conn, int $proj_id, string $from = '', stri
         if ($to   !== '' && $e['date'] > $to)   { continue; }
         $visible_events[] = $e;
     }
+    // Med en til-dato skal saldoen være saldoen ved periodens slutning, ikke dagens (som kundekontoudtoget)
+    $closing_balance = $visible_events ? end($visible_events)['balance'] : $opening_balance;
 
     return [
         'proj'            => $proj,
@@ -124,5 +147,6 @@ function get_project_statement_data($conn, int $proj_id, string $from = '', stri
         'visible_events'  => $visible_events,
         'opening_balance' => $opening_balance,
         'total_balance'   => $total_balance,
+        'closing_balance' => round((float)$closing_balance, 2),
     ];
 }

@@ -120,7 +120,6 @@ function eb_request(string $method, string $path, ?array $body = null): array {
     // scanner-ocr-review/inc/help.lib.php for hvorfor.
     $raw    = curl_exec($ch);
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
 
     if ($raw === false) return ['error' => 'curl_error', '_status' => 0];
     $data = json_decode($raw, true);
@@ -183,7 +182,10 @@ function eb_get_balances(string $account_uid): array {
 // Henter ALLE transaktioner i perioden - følger continuation_key til der
 // ikke er flere sider (i modsætning til GoCardless, som returnerede alt i
 // ét svar).
-function eb_get_transactions(string $account_uid, ?string $date_from = null, ?string $date_to = null): array {
+// $error: bankens fejlsvar (fx et udløbet samtykke) - før blev en fejl til en tom liste, og synkroniseringen meldte
+// "0 transaktion(er) importeret" som en succes
+function eb_get_transactions(string $account_uid, ?string $date_from = null, ?string $date_to = null, ?array &$error = null): array {
+    $error = null;
     $all = [];
     $continuation_key = null;
     $guard = 0; // sikkerhedsnet mod en uendelig løkke, hvis API'et opfører sig uventet
@@ -195,6 +197,7 @@ function eb_get_transactions(string $account_uid, ?string $date_from = null, ?st
         $path = '/accounts/' . urlencode($account_uid) . '/transactions' . (!empty($qs) ? '?' . http_build_query($qs) : '');
 
         $r = eb_request('GET', $path);
+        if ((int)($r['_status'] ?? 0) === 0 || (int)$r['_status'] >= 400) { $error = $r;  break; }
         if (!empty($r['transactions']) && is_array($r['transactions'])) {
             $all = array_merge($all, $r['transactions']);
         }
@@ -211,6 +214,14 @@ function eb_signed_amount(array $transaction): float {
     $amount = abs((float)($transaction['transaction_amount']['amount'] ?? 0));
     $indicator = strtoupper($transaction['credit_debit_indicator'] ?? '');
     return ($indicator === 'DBIT') ? -$amount : $amount;
+}
+
+// Lukker sessionen hos Enable Banking (samtykket trækkes tilbage hos banken). Bedste forsøg: fejler kaldet, er den lokale
+// forbindelse alligevel væk, og samtykket udløber af sig selv.
+function eb_delete_session(string $session_id): bool {
+    if ($session_id === '') return false;
+    $r = eb_request('DELETE', '/sessions/' . urlencode($session_id));
+    return (int)($r['_status'] ?? 0) >= 200 && (int)$r['_status'] < 300;
 }
 
 function eb_redirect_base(): string {

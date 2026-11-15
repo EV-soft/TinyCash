@@ -1,0 +1,301 @@
+{
+    "code": "lv",
+    "iso": "LV",
+    "name": "Latvija",
+    "name_en": "Latvia",
+    "language": "lv",
+    "locale": "lv-LV",
+    "currency": "EUR",
+    "currency_symbol": "€",
+    "timezone": "Europe/Riga",
+    "date_format": "d.m.Y",
+    "number": {
+        "dec": ",",
+        "thou": " "
+    },
+    "company_id": {
+        "label": "@Registration number (reģistrācijas numurs)",
+        "short": "Reģ. nr.",
+        "regex": "^[4-9][0-9]{10}$",
+        "registry": null,
+        "checksum": "lv_mod11"
+    },
+    "vat_id": {
+        "prefix": "LV",
+        "regex": "^LV[0-9]{11}$"
+    },
+    "zip": {
+        "regex": "^(LV-)?[0-9]{4}$",
+        "prefix": "LV-"
+    },
+    "vat_portal": "VID EDS (PVN deklarācija)",
+    "vat": {
+        "standard_rate": 21,
+        "period": "month",
+        "codes": [
+            {
+                "id": "P21",
+                "name": "PVN 21%",
+                "rate": 21,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "P12",
+                "name": "PVN 12%",
+                "rate": 12,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "P5",
+                "name": "PVN 5%",
+                "rate": 5,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "PP21",
+                "name": "Priekšnodoklis 21%",
+                "rate": 21,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "PP12",
+                "name": "Priekšnodoklis 12%",
+                "rate": 12,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "PP5",
+                "name": "Priekšnodoklis 5%",
+                "rate": 5,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "ESP",
+                "name": "Preču piegāde citām ES dalībvalstīm (0%)",
+                "rate": 0,
+                "type": "eu_goods_sale"
+            },
+            {
+                "id": "ESPA",
+                "name": "Pakalpojumi citu ES dalībvalstu nodokļu maksātājiem",
+                "rate": 0,
+                "type": "eu_services_sale"
+            },
+            {
+                "id": "EKSP",
+                "name": "Preču eksports (0%)",
+                "rate": 0,
+                "type": "export"
+            },
+            {
+                "id": "RC",
+                "name": "Apgrieztā maksāšana (PVN likuma 143. pants)",
+                "rate": 0,
+                "type": "reverse_domestic"
+            },
+            {
+                "id": "NEAP",
+                "name": "Neapliekami darījumi",
+                "rate": 0,
+                "type": "exempt"
+            },
+            {
+                "id": "ESI21",
+                "name": "Preču iegāde no ES dalībvalstīm 21%",
+                "rate": 21,
+                "type": "eu_goods_purchase"
+            },
+            {
+                "id": "ESPS21",
+                "name": "Pakalpojumi no ES dalībvalstīm 21%",
+                "rate": 21,
+                "type": "eu_services_purchase"
+            },
+            {
+                "id": "TPS21",
+                "name": "Pakalpojumi no trešajām valstīm 21%",
+                "rate": 21,
+                "type": "noneu_services_purchase"
+            }
+        ],
+        "std_account_codes": []
+    },
+    "reminders": {
+        "fee_from_reminder": 99,
+        "fee_until_reminder": 99,
+        "min_days_between": 14,
+        "max_fee": 0,
+        "max_fee_currency": "EUR",
+        "law": "Civillikums 1765. pants (likumiskie procenti); komercdarījumos 40 € kompensācija (Komerclikums)"
+    },
+    "einvoice": [
+        "peppol_bis3"
+    ],
+    "payment_ref": "none",
+    "legal": {
+        "annual_report": null,
+        "cvr_lock": false,
+        "oss": true,
+        "ioss": true,
+        "eu_sales_list": {
+            "name": "@PVN 2 report (VID EDS)",
+            "boxes": {
+                "goods": "46",
+                "services": "48.2"
+            }
+        }
+    },
+    "vat_return": [
+        {
+            "box": "41",
+            "label": "@41: Taxable supplies at 21 %",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                21
+            ]
+        },
+        {
+            "box": "41.1",
+            "label": "@41.1: Taxable supplies at 12 %",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                12
+            ]
+        },
+        {
+            "box": "42",
+            "label": "@42: Taxable supplies at 5 %",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                5
+            ]
+        },
+        {
+            "box": "45",
+            "label": "@45: Exports and other supplies at 0 %",
+            "rule": "net",
+            "types": [
+                "export"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "46",
+            "label": "@46: Supplies of goods to other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_goods_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "48.2",
+            "label": "@48.2: Services to taxable persons in other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_services_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "49",
+            "label": "@49: Exempt supplies",
+            "rule": "net",
+            "types": [
+                "exempt"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "41.2",
+            "label": "@41.2: Supplies with reverse charge (section 143)",
+            "rule": "net",
+            "types": [
+                "reverse_domestic"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "50",
+            "label": "@50: Acquisitions of goods from other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_goods_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "48.1",
+            "label": "@48.1: Services received from other countries",
+            "rule": "net",
+            "types": [
+                "eu_services_purchase",
+                "noneu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "52",
+            "label": "@52-54: VAT on taxable supplies (ledger)",
+            "rule": "setting_acc",
+            "sign": -1,
+            "setting": "conf_acc_vat",
+            "payable": 1
+        },
+        {
+            "box": "55",
+            "label": "@55: VAT on acquisitions of goods from other EU countries",
+            "rule": "rc_vat",
+            "types": [
+                "eu_goods_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "56",
+            "label": "@56: VAT on services received from other countries",
+            "rule": "rc_vat",
+            "types": [
+                "eu_services_purchase",
+                "noneu_services_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "62",
+            "label": "@62: Deductible input VAT",
+            "rule": "setting_acc",
+            "sign": 1,
+            "setting": "conf_acc_purchase_vat",
+            "payable": -1
+        }
+    ],
+    "peppol": {
+        "endpoint_scheme": "0218",
+        "legal_scheme": "0218"
+    },
+    "chart": null,
+    "chart_classes": null,
+    "saft": null,
+    "draft": true
+}

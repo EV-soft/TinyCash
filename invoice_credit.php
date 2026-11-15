@@ -98,7 +98,7 @@ foreach ($orig_lines as $l) {
 
 $tools = htm_Button('fa-times', '@Cancel', 'secondary', 'sales_hub.php', '', 'data-hint="'.lang('@Discard the credit note and return to the sales hub').'"', '<div></div>', false);
 // RETTET: overskriften viste fakturaens interne id (#1000036) i stedet for dens fakturanummer (#1010)
-htm_Card_(lang('@Create Credit Note') . ' — ' . lang('@Invoice') . ' #' . htmlspecialchars((string)($orig['invoice_no'] ?: $credit_ref)), 900, '', '', true, $tools);
+htm_Card_(lang('@Create Credit Note') . ' — ' . lang('@Invoice') . ' #' . (string)($orig['invoice_no'] ?: $credit_ref), 900, '', '', true, $tools);
 
 if (isset($err)) htm_Alert($err, 'error');
 
@@ -194,11 +194,11 @@ function recalcCreditTotals() {
         sub += lt;
         vat += lt * (rate / 100);
         var totalCell = inp.closest('tr').querySelector('.credit-line-total');
-        if (totalCell) totalCell.textContent = lt.toLocaleString('da-DK', {minimumFractionDigits:2, maximumFractionDigits:2});
+        if (totalCell) totalCell.textContent = lt.toLocaleString(window.tcLocale || 'da-DK', {minimumFractionDigits:2, maximumFractionDigits:2});
     });
-    document.getElementById('credit_sub_display').textContent = sub.toLocaleString('da-DK', {minimumFractionDigits:2, maximumFractionDigits:2});
-    document.getElementById('credit_vat_display').textContent = vat.toLocaleString('da-DK', {minimumFractionDigits:2, maximumFractionDigits:2});
-    document.getElementById('credit_total_display').textContent = (sub + vat).toLocaleString('da-DK', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' <?php echo htmlspecialchars($orig['currency'], ENT_QUOTES); ?>';
+    document.getElementById('credit_sub_display').textContent = sub.toLocaleString(window.tcLocale || 'da-DK', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('credit_vat_display').textContent = vat.toLocaleString(window.tcLocale || 'da-DK', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('credit_total_display').textContent = (sub + vat).toLocaleString(window.tcLocale || 'da-DK', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' <?php echo htmlspecialchars($orig['currency'], ENT_QUOTES); ?>';
 }
 </script>
 <?php

@@ -51,7 +51,7 @@ echo '<div style="display:flex; flex-wrap:wrap; gap:25px; align-items:flex-start
 echo '<div style="flex:1; min-width:220px;">';
 echo '<strong style="font-size:1.1em;">' . htmlspecialchars($cust['cust_name']) . '</strong><br>';
 echo nl2br(htmlspecialchars($cust['cust_address'] ?? '')) . '<br>';
-if (!empty($cust['cust_cvr']))   echo lang('@CVR') . ': ' . htmlspecialchars($cust['cust_cvr']) . '<br>';
+if (!empty($cust['cust_cvr']))   echo tc_company_id_short() . ': ' . htmlspecialchars($cust['cust_cvr']) . '<br>';
 echo '</div>';
 echo '<div style="flex:1; min-width:220px;">';
 if (!empty($cust['cust_email'])) echo lang('@Email') . ': ' . htmlspecialchars($cust['cust_email']) . '<br>';

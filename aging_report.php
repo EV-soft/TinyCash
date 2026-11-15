@@ -45,18 +45,11 @@ htm_Card_end();
 // =============================================================================
 // 1. DEBITORER (kunder / ubetalte fakturaer)
 // =============================================================================
-// RETTET (§reel-multi-valuta-bogforing, §bugs-batch-32-review): "total"
-// ganges nu med exch_rate, ellers sammenlignes en udenlandsk fakturas EGEN
-// valuta (fx EUR) direkte mod "paid" (altid DKK) - samme fejlklasse fundet
-// og rettet samme runde i reconcile_action.php/invoice_view.php/sales_hub.
-// php/reminders.php.
-$aging_disc = invoice_discount_sql($conn);
+// Restbeløbet og hvilke fakturaer der kan have et: den fælles definition (invoice_open_sql(), inc/db_connect.inc.php)
 $res_i = DB::query($conn, "SELECT i.inv_id, i.invoice_no, COALESCE(NULLIF(i.inv_due_date, ''), i.inv_date) AS inv_due_date, c.cust_id, c.cust_name,
-        (SELECT COALESCE(SUM(quantity * price_each $aging_disc * (100 + line_vat_rate) / 100.0), 0)
-         FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1) + " . invoice_credited_sql($conn) . " AS total,
-        (SELECT COALESCE(SUM(amount), 0) FROM invoice_payments WHERE inv_id = i.inv_id) AS paid
+        " . invoice_total_sql($conn) . " AS total, " . invoice_paid_sql() . " AS paid
     FROM invoices i JOIN customers c ON i.cust_id = c.cust_id
-    WHERE LOWER(i.inv_status) = 'sent'");
+    WHERE " . invoice_open_where());
 
 $debtor_rows = []; // keyed by cust_id
 $debtor_totals = ['not_due' => 0, 'd30' => 0, 'd60' => 0, 'd90' => 0, 'd90p' => 0];

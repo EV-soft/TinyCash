@@ -51,6 +51,9 @@ if (in_array($status, ['sent','rejected'], true)) {
 }
 // NYT: "Dupliker tilbud" - altid tilgængelig uanset status, samme princip som "Dupliker faktura": en accepteret,
 // afvist eller udløbet tilbud er en lige så gyldig kilde til genbrug som en kladde.
+if (in_array($status, ['accepted', 'converted'], true)) {      // (følgesedlen hører til en ordre - ikke et tilbud)
+    htm_Button(icon:'fa-truck', labl:'@Delivery Note', type:'secondary', link:'delivery_note_view.php?quote='.$quote_id, attr:'data-hint="'.lang('@The delivery note for the goods - items and quantities without prices').'"');
+}
 htm_Button(icon:'fa-copy', labl:'@Duplicate Quote', type:'secondary', attr:'onclick="' . htm_confirm_js('@Create a new draft quote with the same customer and lines?', "tcPost('quote_duplicate.php?id=$quote_id')") . '" data-hint="'.lang('@Create a new draft with the same customer, lines and settings - useful for repeat quoting').'"');
 if ($lay['on']) {
     htm_Button(icon:'fa-pencil-ruler', labl:'@Design Mode', type:'secondary', attr:'onclick="docToggleDesign()" id="qDesignBtn" data-hint="'.lang('@Move, resize and hide the blocks of the quote - saved in the quote layout shown').'"');
@@ -69,6 +72,7 @@ if ($qv_lang !== '') $doc_title = in_array($q['status'], ['accepted', 'converted
 $co = doc_company($s);
 $layouts = $lay['blocks'];
 echo '<div class="doc-paper" id="quote-page">';
+echo doc_shapes_html(il_shapes($conn, (int)$lay['id']));      // (layoutets grafik - bag teksten)
 
 // Stempel (accepteret / afvist / konverteret) - nøglerne '@Accepted', '@Rejected', '@Converted'
 if (in_array($status, ['accepted', 'rejected', 'converted'], true)) {
@@ -109,6 +113,7 @@ while ($l = DB::fetch_assoc($res_l)) {
         . '<td align="right">' . fmt_dk((float)$l['price_each']) . '</td><td align="right" style="font-weight:bold;">' . fmt_dk($lt) . '</td></tr>';
 }
 $lines_html .= '</tbody></table>';
+$sub = round($sub, 2);  $vat = round($vat, 2);      // (som fakturaen: netto og moms afrundes hver for sig)
 doc_block('block-lines', $lines_html, $layouts);
 
 doc_block('block-totals', '<table style="width:98%; margin-left:2%; border-collapse:collapse;">'
@@ -164,6 +169,6 @@ function generateAndSendQuote(quoteId) {
 </script>
 <?php
 echo doc_pdf_js();
-if ($lay['on']) echo doc_design_js(['paper' => 'quote-page', 'layout' => $lay['id'], 'doc' => 'quote', 'btn' => 'qDesignBtn',
+if ($lay['on']) echo doc_design_js(['paper' => 'quote-page', 'layout' => $lay['id'], 'doc' => 'quote', 'shapes' => il_shapes_ready($conn), 'btn' => 'qDesignBtn',
     'url' => 'quote_view.php?id=' . $quote_id, 'names' => array_map(fn($l) => $l['name'], $lay['list'])]);
 htm_Footer(); ?>

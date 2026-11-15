@@ -116,6 +116,28 @@ function il_ensure_schema($conn, bool $is_sqlite): array {
             $out[] = $ok ? "[OK] Kolonnen 'doc_type' tilføjet til invoice_layouts - tilbud kan nu få deres egne layouts." : "[FEJL] invoice_layouts.doc_type: " . DB::error($conn);
         }
     }
+    // Grafik i et layout (linjer, rammer, flader) - se il_shapes()
+    if (!il_table_exists($conn, 'invoice_layout_shapes', $is_sqlite)) {
+        $ok = DB::query($conn, $is_sqlite
+            ? "CREATE TABLE invoice_layout_shapes (
+                   shape_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   layout_id INTEGER NOT NULL,
+                   shape_type TEXT NOT NULL,
+                   pos_x REAL, pos_y REAL, width_mm REAL, height_mm REAL,
+                   stroke_color TEXT, fill_color TEXT, stroke_mm REAL, radius_mm REAL DEFAULT 0
+               )"
+            : "CREATE TABLE invoice_layout_shapes (
+                   shape_id INT AUTO_INCREMENT PRIMARY KEY,
+                   layout_id INT NOT NULL,
+                   shape_type VARCHAR(10) NOT NULL,
+                   pos_x FLOAT, pos_y FLOAT, width_mm FLOAT, height_mm FLOAT,
+                   stroke_color VARCHAR(11), fill_color VARCHAR(11), stroke_mm FLOAT, radius_mm FLOAT DEFAULT 0,
+                   INDEX (layout_id)
+               ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $out[] = $ok ? "[OK] Tabellen 'invoice_layout_shapes' oprettet - layouts kan nu have linjer, rammer og flader." : "[FEJL] invoice_layout_shapes: " . DB::error($conn);
+    } else {
+        $out[] = "[SPRUNGET OVER] Tabellen 'invoice_layout_shapes' findes allerede.";
+    }
     foreach ([['customers', 'cust_layout_id'], ['invoices', 'inv_layout_id']] as [$table, $col]) {
         if (!il_table_exists($conn, $table, $is_sqlite)) continue;
         if (il_column_exists($conn, $table, $col, $is_sqlite)) {
@@ -157,7 +179,7 @@ function il_ensure_schema($conn, bool $is_sqlite): array {
 
 // LAYOUTTYPER: fakturaer (og kreditnotaer) og tilbud/ordrebekræftelser har hver deres sæt layouts (doc_type), så
 // et tilbud kan designes uden at flytte fakturaens blokke. Uden kolonnen (ikke migreret) findes kun fakturalayouts.
-const IL_DOC_TYPES = ['invoice', 'quote', 'reminder', 'statement'];
+const IL_DOC_TYPES = ['invoice', 'quote', 'reminder', 'statement', 'delivery'];
 function il_doc_ready($conn): bool {
     return il_ready($conn) && db_has_column($conn, 'invoice_layouts', 'doc_type');
 }
@@ -188,8 +210,44 @@ function il_create_default($conn, string $doc = 'invoice'): int {
             DB::insert($conn, 'invoice_layout_blocks', ['layout_id' => $id, 'element_id' => $b['element_id'], 'pos_x' => (float)$b['pos_x'],
                 'pos_y' => (float)$b['pos_y'], 'width_mm' => (float)$b['width_mm'], 'is_visible' => (int)($b['is_visible'] ?? 1)]);
         }
+        il_copy_shapes($conn, il_default_id($conn, 'invoice'), $id);
     }
     return $id;
+}
+
+// GRAFIK: simple elementer i et layout - vandret/lodret linje, ramme (med valgfrit fyld), flade. Mål i mm fra papirets
+// kant som blokkene; farver som #rrggbb ('' = ingen). Ligger bag teksten.
+const IL_SHAPE_TYPES = ['hline', 'vline', 'rect', 'fill'];
+function il_shapes_ready($conn): bool {
+    return il_table_exists($conn, 'invoice_layout_shapes');
+}
+function il_shapes($conn, int $layout_id): array {
+    if ($layout_id <= 0 || !il_shapes_ready($conn)) return [];
+    $out = [];
+    $res = DB::query($conn, "SELECT * FROM invoice_layout_shapes WHERE layout_id = $layout_id ORDER BY shape_id");
+    while ($res && ($r = DB::fetch_assoc($res))) $out[] = $r;
+    return $out;
+}
+// Grafikken fra ét layout kopieres til et andet (nyt layout = kopi af det viste). Returnerer false ved en fejl.
+function il_copy_shapes($conn, int $from, int $to): bool {
+    $ok = true;
+    foreach (il_shapes($conn, $from) as $sh) {
+        unset($sh['shape_id']);
+        $sh['layout_id'] = $to;
+        $ok = $ok && DB::insert($conn, 'invoice_layout_shapes', $sh);
+    }
+    return $ok;
+}
+// Et grafikelement fra en formular/JSON - kun gyldige værdier (typen, mål inden for papiret, farver som #rrggbb)
+function il_shape_clean(array $in, ?string $type = null): array {
+    $num = fn($k, $min, $max, $def) => is_numeric($in[$k] ?? null) ? max($min, min($max, round((float)$in[$k], 2))) : $def;
+    $col = fn($k, $def) => (isset($in[$k]) && preg_match('/^#[0-9a-f]{6}$/i', (string)$in[$k])) ? strtolower((string)$in[$k]) : ((isset($in[$k]) && $in[$k] === '') ? '' : $def);
+    $type = $type ?? (in_array($in['shape_type'] ?? '', IL_SHAPE_TYPES, true) ? $in['shape_type'] : 'rect');
+    return ['shape_type' => $type,
+            'pos_x' => $num('x', 0, 210, 15), 'pos_y' => $num('y', 0, 297, 120),
+            'width_mm' => $num('w', 0.2, 210, 60), 'height_mm' => $num('h', 0.2, 297, 20),
+            'stroke_color' => $col('stroke', '#333333'), 'fill_color' => $col('fill', ''),
+            'stroke_mm' => $num('stroke_mm', 0, 10, 0.5), 'radius_mm' => $num('radius_mm', 0, 50, 0)];
 }
 
 // Alle layouts af en type: [layout_id => ['layout_id', 'name', 'is_default']] - standarden først, så efter navn

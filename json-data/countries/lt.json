@@ -1,0 +1,302 @@
+{
+    "code": "lt",
+    "iso": "LT",
+    "name": "Lietuva",
+    "name_en": "Lithuania",
+    "language": "lt",
+    "locale": "lt-LT",
+    "currency": "EUR",
+    "currency_symbol": "€",
+    "timezone": "Europe/Vilnius",
+    "date_format": "Y-m-d",
+    "number": {
+        "dec": ",",
+        "thou": " "
+    },
+    "company_id": {
+        "label": "@Company code (įmonės kodas)",
+        "short": "Į. k.",
+        "regex": "^[0-9]{9}$",
+        "registry": null,
+        "checksum": "lt_mod11"
+    },
+    "vat_id": {
+        "prefix": "LT",
+        "regex": "^LT([0-9]{9}|[0-9]{12})$",
+        "derive": false
+    },
+    "zip": {
+        "regex": "^(LT-)?[0-9]{5}$",
+        "prefix": "LT-"
+    },
+    "vat_portal": "VMI Mano VMI (PVM deklaracija FR0600)",
+    "vat": {
+        "standard_rate": 21,
+        "period": "month",
+        "codes": [
+            {
+                "id": "PVM1",
+                "name": "PVM 21%",
+                "rate": 21,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "PVM2",
+                "name": "PVM 9%",
+                "rate": 9,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "PVM3",
+                "name": "PVM 5%",
+                "rate": 5,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "PPVM21",
+                "name": "Pirkimo PVM 21%",
+                "rate": 21,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "PPVM9",
+                "name": "Pirkimo PVM 9%",
+                "rate": 9,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "PPVM5",
+                "name": "Pirkimo PVM 5%",
+                "rate": 5,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "ESP",
+                "name": "Prekių tiekimas į kitas ES valstybes (0%)",
+                "rate": 0,
+                "type": "eu_goods_sale"
+            },
+            {
+                "id": "ESPP",
+                "name": "Paslaugos kitų ES valstybių apmokestinamiesiems asmenims",
+                "rate": 0,
+                "type": "eu_services_sale"
+            },
+            {
+                "id": "EKS",
+                "name": "Prekių eksportas (0%)",
+                "rate": 0,
+                "type": "export"
+            },
+            {
+                "id": "AA",
+                "name": "Atvirkštinis apmokestinimas (PVM įstatymo 96 str.)",
+                "rate": 0,
+                "type": "reverse_domestic"
+            },
+            {
+                "id": "NEAP",
+                "name": "PVM neapmokestinamos prekės ir paslaugos",
+                "rate": 0,
+                "type": "exempt"
+            },
+            {
+                "id": "ESI21",
+                "name": "Prekių įsigijimas iš ES 21%",
+                "rate": 21,
+                "type": "eu_goods_purchase"
+            },
+            {
+                "id": "ESPI21",
+                "name": "Paslaugos iš ES 21%",
+                "rate": 21,
+                "type": "eu_services_purchase"
+            },
+            {
+                "id": "TPI21",
+                "name": "Paslaugos iš trečiųjų šalių 21%",
+                "rate": 21,
+                "type": "noneu_services_purchase"
+            }
+        ],
+        "std_account_codes": []
+    },
+    "reminders": {
+        "fee_from_reminder": 99,
+        "fee_until_reminder": 99,
+        "min_days_between": 14,
+        "max_fee": 0,
+        "max_fee_currency": "EUR",
+        "law": "Civilinis kodeksas 6.210 str. (palūkanos); verslo sandoriuose 40 € kompensacija (Mokėjimų mokėjimo terminų įstatymas)"
+    },
+    "einvoice": [
+        "peppol_bis3"
+    ],
+    "payment_ref": "none",
+    "legal": {
+        "annual_report": null,
+        "cvr_lock": false,
+        "oss": true,
+        "ioss": true,
+        "eu_sales_list": {
+            "name": "@FR0564 report (Mano VMI)",
+            "boxes": {
+                "goods": "15",
+                "services": "17"
+            }
+        }
+    },
+    "vat_return": [
+        {
+            "box": "11",
+            "label": "@11: Supplies taxed at 21 %",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                21
+            ]
+        },
+        {
+            "box": "12",
+            "label": "@12: Supplies taxed at 9 %",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                9
+            ]
+        },
+        {
+            "box": "13",
+            "label": "@13: Supplies taxed at 5 %",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                5
+            ]
+        },
+        {
+            "box": "14",
+            "label": "@14: Exports and other supplies at 0 %",
+            "rule": "net",
+            "types": [
+                "export"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "15",
+            "label": "@15: Supplies of goods to other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_goods_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "17",
+            "label": "@17: Services supplied in other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_services_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "18",
+            "label": "@18: Supplies with reverse charge",
+            "rule": "net",
+            "types": [
+                "reverse_domestic"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "19",
+            "label": "@19: Exempt supplies",
+            "rule": "net",
+            "types": [
+                "exempt"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "20",
+            "label": "@20: Acquisitions of goods from other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_goods_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "22",
+            "label": "@22: Services received from other countries",
+            "rule": "net",
+            "types": [
+                "eu_services_purchase",
+                "noneu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "25",
+            "label": "@25: VAT on supplies (ledger)",
+            "rule": "setting_acc",
+            "sign": -1,
+            "setting": "conf_acc_vat",
+            "payable": 1
+        },
+        {
+            "box": "29",
+            "label": "@29: VAT on acquisitions of goods from other EU countries",
+            "rule": "rc_vat",
+            "types": [
+                "eu_goods_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "30",
+            "label": "@30: VAT on services received from other countries",
+            "rule": "rc_vat",
+            "types": [
+                "eu_services_purchase",
+                "noneu_services_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "31",
+            "label": "@31: Deductible input VAT",
+            "rule": "setting_acc",
+            "sign": 1,
+            "setting": "conf_acc_purchase_vat",
+            "payable": -1
+        }
+    ],
+    "peppol": {
+        "endpoint_scheme": "0200",
+        "legal_scheme": "0200"
+    },
+    "chart": null,
+    "chart_classes": null,
+    "saft": null,
+    "draft": true
+}

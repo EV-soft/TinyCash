@@ -72,20 +72,23 @@ if (isset($_GET['del']) && (int)$_GET['del'] > 0) {
         // Hent kundens data FØR sletning, til revisionssporet.
         $old_res = DB::query($conn, "SELECT cust_id, cust_name, cust_email, cust_cvr FROM customers WHERE cust_id = $del_id");
         $old_row = $old_res ? DB::fetch_assoc($old_res) : null;
+        // (meldte "flyttet til papirkurven" og skrev en sletning i revisionssporet, selv om kunden ikke fandtes - et
+        // dobbeltklik eller en anden fane der allerede havde slettet den endeligt; som leverandørlisten)
+        if (!$old_row) redirect('sales_hub.php', '@Not found - it may already have been deleted.', 'error');
 
         // RETTET: "Slet" var permanent og uigenkaldeligt - kun beskyttet mod at slette en kunde med
         // fakturaer/projekter/tilbud (tjekket ovenfor, uændret). Sætter nu blot deleted_at i stedet for at fjerne
         // rækken - se trash_bin.php for gendannelse.
         $has_trash_col = db_has_column($conn, 'customers', 'deleted_at');
         $del_sql = $has_trash_col
-            ? "UPDATE customers SET deleted_at = '" . date('Y-m-d H:i:s') . "' WHERE cust_id = $del_id"
+            ? "UPDATE customers SET deleted_at = '" . date('Y-m-d H:i:s') . "' WHERE cust_id = $del_id AND deleted_at IS NULL"      // (en kunde der allerede ligger i papirkurven, beholder sin dato)
             : "DELETE FROM customers WHERE cust_id = $del_id";
 
         if (DB::query($conn, $del_sql)) {
             if ($old_row) log_action($conn, 'DELETE_CUSTOMER', 'customers', $del_id, $old_row, null);
-            redirect("sales_hub.php");
+            redirect("sales_hub.php", $has_trash_col ? '@Moved to the trash bin - it can be restored from there.' : '@Deleted successfully');      // (sletningen gav ingen besked)
         } else {
-            $err = lang('@SQL Error:') . " " . DB::error($conn);
+            $err = lang('@SQL Error:') . ' ' . htmlspecialchars((string)DB::error($conn));      // (MySQL-fejlen gentager den indtastede værdi)
         }
     }
 }
@@ -93,7 +96,7 @@ if (isset($_GET['del']) && (int)$_GET['del'] > 0) {
 // 1. HÅNDTER GEM (Både ny og opdatering)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name    = DB::escape($conn, $_POST['cust_name']);
-    $email   = DB::escape($conn, $_POST['cust_email']);
+    $email   = DB::escape($conn, trim((string)($_POST['cust_email'] ?? '')));      // (blev valideret trimmet, men gemt med mellemrummene - afsendelsen fejlede så)
     $phone   = DB::escape($conn, $_POST['cust_phone']);
     $address = DB::escape($conn, $_POST['cust_address']);
     $cvr     = DB::escape($conn, $_POST['cust_cvr']);
@@ -113,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $has_credit_limit_col = db_has_column($conn, 'customers', 'credit_limit');
     $has_credit_limit_col = $has_credit_limit_col && field_visible_to_user($conn, 'customer_edit.credit_limit');
     $credit_limit_raw = trim($_POST['credit_limit'] ?? '');
-    $credit_limit_sql = tc_num($credit_limit_raw, 0) ?? 'NULL';      // tomt eller ugyldigt = ingen grænse
+    $credit_limit_sql = tc_num($credit_limit_raw, 0) ?? 'NULL';      // tomt = ingen grænse (et ugyldigt beløb afvises nedenfor)
 
     // NYT (bruger-anmodet, "kan bogholderen ønske sig mere", runde 28):
     // valgfrit fakturasprog - samme "stille degradering hvis ikke migreret
@@ -121,7 +124,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $has_language_col = db_has_column($conn, 'customers', 'cust_language');
     $has_language_col = $has_language_col && field_visible_to_user($conn, 'customer_edit.cust_language');
     $cust_language_raw = trim($_POST['cust_language'] ?? '');
+    // (sproget blev gemt ukontrolleret og bruges som sessionens sprog, når kundens dokumenter laves - kun en sprogkode)
+    if ($cust_language_raw !== '' && !preg_match('/^[a-z]{2}$/', $cust_language_raw)) $cust_language_raw = '';
     $cust_language_sql = $cust_language_raw !== '' ? "'" . DB::escape($conn, $cust_language_raw) . "'" : 'NULL';
+
+    // EAN-nummer (offentlige kunder: OIOUBL-e-fakturaens modtageradresse) - kun når migreret
+    $has_ean_col = db_has_column($conn, 'customers', 'cust_ean') && field_visible_to_user($conn, 'customer_edit.cust_ean');
+    $cust_ean = tc_ean($_POST['cust_ean'] ?? '');
+    $cust_ean_sql = $cust_ean ? "'$cust_ean'" : 'NULL';
+
+    // Land og momsnummer (EU-handel/landepakker) - kun når migreret. Tomt land = virksomhedens eget land.
+    $has_country_col = db_has_column($conn, 'customers', 'cust_vat_id') && field_visible_to_user($conn, 'customer_edit.cust_country');
+    $cust_country = strtoupper(trim((string)($_POST['cust_country'] ?? '')));
+    $cust_country_sql = isset(tc_country_codes()[$cust_country]) ? "'" . DB::escape($conn, $cust_country) . "'" : 'NULL';
+    $cust_vat_id = tc_vat_id_clean($_POST['cust_vat_id'] ?? '');
+    $cust_vat_id_sql = $cust_vat_id ? "'" . DB::escape($conn, $cust_vat_id) . "'" : 'NULL';
+    // Peppol-ID ("0184:12345678") til Peppol BIS 3-e-fakturaer - kun når migreret
+    require_once 'inc/peppol.inc.php';
+    $has_peppol_col = db_has_column($conn, 'customers', 'cust_peppol_id') && field_visible_to_user($conn, 'customer_edit.cust_country');
+    $cust_peppol_raw = trim((string)($_POST['cust_peppol_id'] ?? ''));
+    $cust_peppol_sql = ($cust_peppol_raw !== '' && peppol_id_parse($cust_peppol_raw)) ? "'" . DB::escape($conn, $cust_peppol_raw) . "'" : 'NULL';
 
     // Flere fakturalayouts: kundens layout (tomt = standardlayoutet) - kun når migreret
     require_once 'inc/invoice_layouts.inc.php';
@@ -137,8 +159,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $raw_email = trim($_POST['cust_email'] ?? '');
     if (trim((string)($_POST['cust_name'] ?? '')) === '') {      // RETTET: en kunde uden navn blev oprettet - intet krævede et navn
         $err = lang('@Please enter the customer name.');
+    } elseif ($has_credit_limit_col && $credit_limit_raw !== '' && tc_num($credit_limit_raw, 0) === null) {
+        // (et ugyldigt beløb, fx "10.000 kr", fjernede stille en eksisterende kreditgrænse)
+        $err = lang('@The credit limit must be an amount of 0 or more, or leave the field empty for no limit.');
     } elseif ($raw_email !== '' && filter_var($raw_email, FILTER_VALIDATE_EMAIL) === false) {
         $err = lang('@Please enter a valid email address, or leave the field empty.');
+    } elseif ($has_ean_col && $cust_ean === null) {
+        $err = lang('@The EAN number must be 13 digits with a valid check digit, or leave the field empty.');
+    } elseif ($has_peppol_col && $cust_peppol_raw !== '' && !peppol_id_parse($cust_peppol_raw)) {
+        $err = lang('@The Peppol ID must be a 4-digit scheme and the ID, e.g. 0184:12345678 or 0088:5790000000000, or leave the field empty.');
+    } elseif ($has_country_col && $cust_vat_id === null) {
+        $err = lang('@The VAT number must start with the country code, e.g. SE556677889901, or leave the field empty.');
+    // (et momsnummer fra et andet land end kundens - fx et dansk nummer på en tysk kunde - gjorde salget til EU-salg uden
+    // moms med omvendt betalingspligt; Grækenlands momsnumre starter med EL)
+    } elseif ($has_country_col && $cust_vat_id !== '' && in_array($cust_country, TC_EU_COUNTRIES, true)
+              && substr($cust_vat_id, 0, 2) !== ($cust_country === 'GR' ? 'EL' : $cust_country)) {
+        $err = sprintf(lang('@The VAT number %s does not belong to the chosen country (%s) - check the country or the number.'), htmlspecialchars($cust_vat_id), htmlspecialchars($cust_country));
     } elseif ($cust_id > 0) {
         $sql = "UPDATE customers SET
                 cust_name = '$name', cust_email = '$email', cust_phone = '$phone',
@@ -147,7 +183,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . ($has_no_rem_col ? ", cust_no_reminders = $no_reminders" : "")
                 . ($has_credit_limit_col ? ", credit_limit = $credit_limit_sql" : "")
                 . ($has_language_col ? ", cust_language = $cust_language_sql" : "")
-                . ($has_layout_col ? ", cust_layout_id = $cust_layout_sql" : "") . "
+                . ($has_layout_col ? ", cust_layout_id = $cust_layout_sql" : "")
+                . ($has_ean_col ? ", cust_ean = $cust_ean_sql" : "")
+                . ($has_country_col ? ", cust_country = $cust_country_sql, cust_vat_id = $cust_vat_id_sql" : "")
+                . ($has_peppol_col ? ", cust_peppol_id = $cust_peppol_sql" : "") . "
                 WHERE cust_id = $cust_id";
     } else {
         $insert_cols = "cust_name, cust_email, cust_phone, cust_address, cust_cvr, cust_contact_person, cust_notes, cust_payment_days";
@@ -156,6 +195,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($has_credit_limit_col) { $insert_cols .= ", credit_limit";      $insert_vals .= ", $credit_limit_sql"; }
         if ($has_language_col)     { $insert_cols .= ", cust_language";     $insert_vals .= ", $cust_language_sql"; }
         if ($has_layout_col)       { $insert_cols .= ", cust_layout_id";    $insert_vals .= ", $cust_layout_sql"; }
+        if ($has_ean_col)          { $insert_cols .= ", cust_ean";          $insert_vals .= ", $cust_ean_sql"; }
+        if ($has_country_col)      { $insert_cols .= ", cust_country, cust_vat_id"; $insert_vals .= ", $cust_country_sql, $cust_vat_id_sql"; }
+        if ($has_peppol_col)       { $insert_cols .= ", cust_peppol_id";    $insert_vals .= ", $cust_peppol_sql"; }
         $sql = "INSERT INTO customers ($insert_cols) VALUES ($insert_vals)";
     }
 
@@ -163,7 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($cust_id == 0) $cust_id = DB::insert_id($conn);
         $msg = lang('@Customer saved successfully');
     } elseif (!isset($err)) {
-        $err = lang('@SQL Error:') . " " . DB::error($conn);
+        $err = lang('@SQL Error:') . ' ' . htmlspecialchars((string)DB::error($conn));      // (MySQL-fejlen gentager den indtastede værdi)
     }
 }
 
@@ -184,6 +226,8 @@ if (isset($err) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cust_n
         'credit_limit' => $_POST['credit_limit'] ?? '',
         'cust_language' => $_POST['cust_language'] ?? '',
         'cust_layout_id' => $_POST['cust_layout_id'] ?? '',
+        'cust_ean' => $_POST['cust_ean'] ?? '',
+        'cust_country' => $_POST['cust_country'] ?? '', 'cust_vat_id' => $_POST['cust_vat_id'] ?? '', 'cust_peppol_id' => $_POST['cust_peppol_id'] ?? '',
     ];
 } elseif ($cust_id > 0) {
     $res = DB::query($conn, "SELECT * FROM customers WHERE cust_id = $cust_id");
@@ -196,7 +240,8 @@ if (isset($err) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cust_n
     $cust = [
         'cust_name' => '', 'cust_email' => '', 'cust_phone' => '', 'cust_address' => '',
         'cust_cvr' => '', 'cust_contact_person' => '', 'cust_notes' => '', 'cust_payment_days' => 8, 'cust_no_reminders' => 0,
-        'credit_limit' => null, 'cust_language' => null, 'cust_layout_id' => null,
+        'credit_limit' => null, 'cust_language' => null, 'cust_layout_id' => null, 'cust_ean' => '',
+        'cust_country' => '', 'cust_vat_id' => '',
     ];
 }
 
@@ -226,11 +271,13 @@ if ($cust_id > 0) {
     require_once 'inc/customer_statement.inc.php';
     $stmt_data = get_customer_statement_data($conn, $cust_id);
     if ($stmt_data && !empty($stmt_data['invoices'])) {
-        $this_year = date('Y');
+        // Omsætning = uden moms, i det igangværende regnskabsår (før inkl. moms og pr. kalenderår)
+        [$fy_from, $fy_to] = tc_fiscal_year_bounds($conn);
         $revenue_this_year = 0.0;
         foreach ($stmt_data['invoices'] as $si) {
-            if (substr($si['inv_date'], 0, 4) === $this_year) {
-                $revenue_this_year += invoice_dkk_totals($conn, $si['inv_id'])['incl'];
+            $si_d = substr((string)$si['inv_date'], 0, 10);
+            if ($si_d >= $fy_from && $si_d <= $fy_to) {
+                $revenue_this_year += invoice_dkk_totals($conn, $si['inv_id'])['excl'];
             }
         }
         $last_inv = end($stmt_data['invoices']);
@@ -263,12 +310,13 @@ htm_Card_(capt: '@Customer Information', wdth: 650, form: 'edit_customer_form');
     echo "<div style='display:flex; width:100%; gap:6px; align-items:flex-end;'>";
         echo '<div style="width:33%; display:flex; gap:4px; align-items:flex-end;">';
         echo '<div style="flex:1;">';
-        htm_Field(icon: 'fa-id-card', labl: '@CVR', name: 'cust_cvr', valu: $cust['cust_cvr'], extr: 'align-left onblur="checkCvrDuplicate(this.value, \'customer\', '.$cust_id.')"', wdth: '100%');
+        htm_Field(icon: 'fa-id-card', labl: '@' . tc_country_pack('company_id.short', 'CVR'), name: 'cust_cvr', valu: $cust['cust_cvr'], extr: 'align-left onblur="checkCvrDuplicate(this.value, \'customer\', '.$cust_id.')"', wdth: '100%');
         echo '</div>';
         // NYT: slår CVR-nummeret op via cvr_proxy.php (cvrapi.dk) og udfylder navn/adresse/telefon/email
         // automatisk - se cvrLookup nedenfor. "tc-info-fill" (htm_page.lib.php): mørkere tekst/ikon i dark-temaet,
         // hvor var(--color-info) er lysegrå og ellers gør ikonet ulæseligt.
-        echo '<button type="button" onclick="cvrLookup(this)" class="tc-info-fill" style="flex-shrink:0; margin-bottom:2px; padding:9px 10px; background:var(--color-info); color:var(--text-light); border:none; border-radius:4px; cursor:pointer;" data-hint="'.lang('@Look up company name, address, phone and email from the CVR number').'"><i class="fa-solid fa-magnifying-glass"></i></button>';
+        if (tc_registry() !== null)      // (kun når landepakken har et firmaregister)
+        echo '<button type="button" onclick="cvrLookup(this)" class="tc-info-fill" style="flex-shrink:0; margin-bottom:2px; padding:9px 10px; background:var(--color-info); color:var(--text-light); border:none; border-radius:4px; cursor:pointer;" data-hint="'.htmlspecialchars(sprintf(lang('@Look up company name, address, phone and email from the %s'), tc_company_id_label())).'"><i class="fa-solid fa-magnifying-glass"></i></button>';
         echo '</div>';
         htm_Field(icon: 'fa-phone', labl: '@Phone', name: 'cust_phone', valu: $cust['cust_phone'], extr: 'align-left', wdth: '33%');
         htm_Field(icon: 'fa-calendar-check', labl: '@Payment Days', name: 'cust_payment_days', valu: $cust['cust_payment_days'], type: 'number', extr: 'min="0" align-left', wdth: '34%');
@@ -299,7 +347,8 @@ htm_Card_(capt: '@Customer Information', wdth: 650, form: 'edit_customer_form');
     // migreret (inc/invoice_layouts.inc.php)
     require_once 'inc/invoice_layouts.inc.php';
     $show_layout_field = il_ready($conn);
-    if ($has_language_col_disp || $show_credit_limit_field || $show_layout_field) {
+    $show_ean_field = db_has_column($conn, 'customers', 'cust_ean');
+    if ($has_language_col_disp || $show_credit_limit_field || $show_layout_field || $show_ean_field) {
         echo "<div style='display:flex; gap:15px; align-items:flex-start; flex-wrap:wrap;'>";
     }
     if ($has_language_col_disp) {
@@ -337,6 +386,37 @@ htm_Card_(capt: '@Customer Information', wdth: 650, form: 'edit_customer_form');
             );
         }, true); // has_own_box: htm_Field() tegner allerede sin egen fieldset-kant
     }
+    if (db_has_column($conn, 'customers', 'cust_vat_id')) {
+        // Land og momsnummer: tomt land = virksomhedens eget land. Momsnummeret skal med ved EU-salg uden moms.
+        render_hideable_field($fv_overrides, 'customer_edit.cust_country', $fv_is_admin, $fv_uLev, function() use ($cust, $conn, $cust_id) {
+            $c_opts = ['' => '-- ' . lang('@Same as the company') . ' --'];
+            foreach (tc_country_codes() as $iso => $nm) $c_opts[$iso] = $iso . ' - ' . lang($nm);
+            echo '<div style="display:flex; gap:6px; width:100%;">';
+            htm_Field(icon: 'fa-globe', labl: '@Country', name: 'cust_country', valu: (string)($cust['cust_country'] ?? ''), type: 'sele', opti: $c_opts, wdth: '40%',
+                hint: '@Only needed for customers abroad - used for EU sales without VAT, the VAT return and e-invoices.');
+            htm_Field(icon: 'fa-receipt', labl: '@VAT Number', name: 'cust_vat_id', valu: (string)($cust['cust_vat_id'] ?? ''), extr: 'align-left maxlength="20"', wdth: '60%',
+                plho: 'SE556677889901', hint: '@The VAT number with country code. A business customer in another EU country must have one before you can invoice without VAT (reverse charge).');
+            echo '</div>';
+            require_once 'inc/vies.inc.php';
+            htm_vies_button($conn, 'cust_vat_id', 'customers', (int)$cust_id);
+            if (db_has_column($conn, 'customers', 'cust_peppol_id')) {
+                htm_Field(icon: 'fa-network-wired', labl: '@Peppol ID', name: 'cust_peppol_id', valu: (string)($cust['cust_peppol_id'] ?? ''), extr: 'align-left maxlength="60"', wdth: '60%',
+                    plho: '0184:12345678', hint: '@Address of the customer in the Peppol e-invoice network: a 4-digit scheme and the ID (0184 = Danish CVR, 0088 = EAN/GLN, 0007 = Swedish org. no., 0192 = Norwegian org. no.). Leave empty if it is the EAN or Danish CVR number.');
+            }
+        }, true);
+    }
+    if ($show_ean_field) {
+        render_hideable_field($fv_overrides, 'customer_edit.cust_ean', $fv_is_admin, $fv_uLev, function() use ($cust) {
+            htm_Field(icon: 'fa-barcode', labl: '@EAN Number', name: 'cust_ean', valu: (string)($cust['cust_ean'] ?? ''),
+                extr: 'align-left inputmode="numeric" maxlength="17"', wdth: '260px',
+                hint: '@Public authorities receive e-invoices (OIOUBL) on their 13-digit EAN location number. Leave empty for private customers - the e-invoice then goes to the CVR number.');
+        }, true); // has_own_box: htm_Field() tegner allerede sin egen fieldset-kant
+    }
+    // Kan kunden modtage e-faktura via Nemhandel? (opslag på EAN, ellers CVR - inc/nemhandel.inc.php)
+    if ($cust_id > 0) {
+        require_once __DIR__ . '/inc/nemhandel.inc.php';
+        echo htm_nemhandel_status($cust_id, 'display:block; margin:-4px 0 8px 4px;');
+    }
     if ($show_credit_limit_field) {
         render_hideable_field($fv_overrides, 'customer_edit.credit_limit', $fv_is_admin, $fv_uLev, function() use ($cust) {
             htm_Field(icon: 'fa-shield-halved', labl: '@Credit Limit', name: 'credit_limit',
@@ -346,7 +426,7 @@ htm_Card_(capt: '@Customer Information', wdth: 650, form: 'edit_customer_form');
                 hint: '@Optional. Warns when creating a new invoice would push this customer\'s total outstanding balance above this amount. Leave empty for no limit.');
         }, true); // has_own_box: htm_Field() tegner allerede sin egen fieldset-kant
     }
-    if ($has_language_col_disp || $show_credit_limit_field || $show_layout_field) {
+    if ($has_language_col_disp || $show_credit_limit_field || $show_layout_field || $show_ean_field) {
         echo "</div>";
     }
 
@@ -390,7 +470,7 @@ htm_Card_(capt: '@Customer Information', wdth: 650, form: 'edit_customer_form');
                 icon: 'fa-trash',
                 labl: '@Delete',
                 link: 'customer_edit.php?id='.$cust_id.'&del='.$cust_id,
-                mess: '@Are you sure you want to delete this customer? This cannot be undone.',
+                mess: '@Delete this customer? It is moved to the trash bin, where it can be restored.',      // (sletningen er en blødsletning - "kan ikke fortrydes" var forkert)
                 type: 'danger',
                 styl: 'flex:1; text-align:center;',
                 attr: 'data-hint="'.lang('@Delete this customer - only possible if no invoices or projects are linked').'"'
@@ -462,7 +542,7 @@ function checkCvrDuplicate(cvrRaw, type, excludeId) {
     var box = document.getElementById('cvr_dup_warning');
     if (!box) return;
     var cvr = (cvrRaw || '').replace(/\D/g, '');
-    if (cvr.length !== 8) { box.style.display = 'none'; return; }
+    if (cvr.length < 6) { box.style.display = 'none'; return; }
     var params = new URLSearchParams({ type: type, cvr: cvr, exclude_id: excludeId || 0 });
     fetch('cvr_duplicate_check.php?' + params.toString())
         .then(function(r) { return r.json(); })
@@ -470,7 +550,7 @@ function checkCvrDuplicate(cvrRaw, type, excludeId) {
             if (data.duplicate && data.matches && data.matches.length > 0) {
                 var names = data.matches.map(function(m) { return m.name; }).join(', ');
                 box.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:var(--color-warning);"></i> '
-                    + <?php echo json_encode(lang('@This CVR number is already registered on:')); ?> + ' <strong>' + names.replace(/</g, '&lt;') + '</strong>.';
+                    + <?php echo json_encode(sprintf(lang('@This %s is already registered on:'), tc_company_id_label())); ?> + ' <strong>' + names.replace(/</g, '&lt;') + '</strong>.';
                 box.style.display = 'block';
             } else {
                 box.style.display = 'none';
@@ -486,8 +566,8 @@ function checkCvrDuplicate(cvrRaw, type, excludeId) {
 function cvrLookup(btn) {
     var cvrField = document.querySelector('[name="cust_cvr"]');
     var cvr = (cvrField.value || '').replace(/\D/g, '');
-    if (cvr.length !== 8) {
-        alert(<?php echo json_encode(lang('@Please enter a valid 8-digit CVR number first.')); ?>);
+    if (cvr.length !== <?= tc_company_id_digits() ?>) {
+        sysAlert(<?php echo json_encode(sprintf(lang('@Please enter a valid %s first.'), tc_company_id_label())); ?>);
         return;
     }
     var icon = btn.querySelector('i');
@@ -499,7 +579,7 @@ function cvrLookup(btn) {
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (!data.success) {
-                alert(data.error || <?php echo json_encode(lang('@CVR lookup failed.')); ?>);
+                sysAlert(data.error || <?php echo json_encode(lang('@The company register lookup failed.')); ?>);
                 return;
             }
             var nameField  = document.querySelector('[name="cust_name"]');
@@ -512,7 +592,7 @@ function cvrLookup(btn) {
             if (emailField && !emailField.value && data.email) emailField.value = data.email;
         })
         .catch(function() {
-            alert(<?php echo json_encode(lang('@Could not reach the CVR lookup service.')); ?>);
+            sysAlert(<?php echo json_encode(lang('@Could not reach the company register.')); ?>);
         })
         .finally(function() {
             icon.className = origClass;

@@ -98,17 +98,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // banken blev kun krediteret nettobeløbet, selvom der gik mere fra kontoen. Er beløbet inkl. 25 % moms, aktiveres
         // nu nettobeløbet, momsen debiteres købsmomskontoen, og banken krediteres det fulde beløb.
         $acq_gross     = $acq_cost;
-        $acq_vat       = !empty($_POST['cost_incl_vat']) ? round($acq_gross * 25 / 125, 2) : 0.0;
+        $acq_vat       = !empty($_POST['cost_incl_vat']) ? tc_vat_of_gross((float)$acq_gross) : 0.0;
         $acq_cost      = round($acq_gross - $acq_vat, 2);
         $residual  = parse_dk_number($_POST['residual_value'] ?? 0);
         $life      = max(1, (int)($_POST['useful_life_years'] ?? 5));
         $asset_acc = (int)($_POST['asset_account_id'] ?? 0);
         $dep_acc   = (int)($_POST['depreciation_account_id'] ?? 0);
+        // Et felt skjult for brugerens niveau (højreklik-skjul) sendes ikke - aktivet kunne så aldrig oprettes ("vælg en
+        // gyldig konto", uden et felt at vælge i). Aktivets egen konto (ny: standardkontoen) bruges i stedet.
+        require_once __DIR__ . '/inc/field_visibility.inc.php';
+        if (!field_visible_to_user($conn, 'fixed_asset_edit.asset_account_id') && !isset($asset_accounts[$asset_acc]))
+            $asset_acc = isset($asset_accounts[(int)$asset['asset_account_id']]) ? (int)$asset['asset_account_id'] : (int)array_key_first($asset_accounts);
+        if (!field_visible_to_user($conn, 'fixed_asset_edit.depreciation_account_id') && !isset($exp_accounts[$dep_acc]))
+            $dep_acc = isset($exp_accounts[(int)$asset['depreciation_account_id']]) ? (int)$asset['depreciation_account_id'] : (int)array_key_first($exp_accounts);
 
         // RETTET: anskaffelsesdatoen blev ikke kontrolleret (i modsætning til afhændelsesdatoen i fixed_asset_dispose.php)
         // - en tom eller ugyldig dato blev bogført direkte som journaldato for anskaffelsen og afskrivningsgrundlaget
         if (!tc_is_date($acq_date)) {
             $err = lang('@Please enter a valid date.');
+        // ("1.500 kr" blev læst som 1,50 og "abc" i levetid som 1 år - begge bogført og afskrevet uden en fejl)
+        } elseif (tc_num($_POST['acquisition_cost'] ?? '', 0.01) === null
+                  || (trim((string)($_POST['residual_value'] ?? '')) !== '' && tc_num($_POST['residual_value'], 0) === null)
+                  || !preg_match('/^\s*[1-9][0-9]?\s*$/', (string)($_POST['useful_life_years'] ?? ''))) {
+            $err = lang('@Please enter a valid amount.');
         } elseif ($acq_cost <= 0) {
             $err = lang('@Please enter a valid acquisition cost.');
         } elseif ($residual < 0) {      // RETTET: en negativ restværdi afskrev mere end anskaffelsessummen (negativ bogført værdi)
@@ -199,7 +211,7 @@ htm_Field(icon: 'fa-coins', labl: '@Acquisition Cost', name: 'acquisition_cost',
 echo '</div>';
 if (!$is_posted) {
     echo '<label style="display:block; margin:0 0 10px; font-size:0.9em;"><input type="checkbox" name="cost_incl_vat" value="1"' . (!empty($_POST['cost_incl_vat']) ? ' checked' : '') . '> '
-       . lang('@The cost includes 25 % VAT (deducted as input VAT - the asset is recorded excl. VAT)') . '</label>';
+       . sprintf(lang('@The cost includes %s %% VAT (deducted as input VAT - the asset is recorded excl. VAT)'), fmt_pct(tc_vat_std_rate())) . '</label>';
 }
 
 echo '<div style="display:flex; width:100%; gap:10px;">';
@@ -250,12 +262,12 @@ if ($is_posted) {
 // levetiden, nyttigt til planlægning eller ved en revisorgennemgang. Ren beregning/visning
 // (fa_build_full_schedule, samme formel som selve den bogførende afskrivningskørsel bruger) - ingen ny bogføring,
 // og vist uanset om aktivet allerede er bogført, så tallene kan tjekkes FØR man gemmer et helt nyt aktiv.
-$schedule = fa_build_full_schedule($asset);
+$schedule = fa_build_full_schedule($asset, fn($d) => (int)substr(tc_fiscal_year_bounds($conn, $d)[1], 0, 4));      // (pr. regnskabsår - som bogføringen)
 if (!empty($schedule)) {
     echo '<details style="margin:15px 5px;"><summary style="cursor:pointer; font-weight:bold; color:var(--text-muted); user-select:none; list-style:none; display:flex; align-items:center; gap:6px;">'
         . '<i class="fa-solid fa-table-list" style="color:var(--color-primary);"></i> ' . lang('@Full Depreciation Schedule') . '</summary>';
     echo '<div style="margin-top:8px;">';
-    $today_year = (int)date('Y');
+    $today_year = (int)substr(tc_fiscal_year_bounds($conn)[1], 0, 4);      // (det igangværende regnskabsår)
     $sched_rows = [];
     foreach ($schedule as $row) {
         $is_current_year = ($row['year'] === $today_year);

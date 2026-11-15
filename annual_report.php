@@ -14,6 +14,7 @@ require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
 require_once 'inc/annual_report.lib.php';
+require_country_feature($conn, 'annual_report');      // (årsregnskabsloven klasse B - kun lande hvis pakke har den)
 
 $s = get_settings($conn);
 $currency = $s['currency'] ?? 'DKK';
@@ -141,7 +142,7 @@ echo '<style>#report-page h3 { margin: 14px 0 6px; }</style>';
         echo '</table></div>';
 
     echo '</div>';
-    if (abs($bs['diff']) > 0.01) {
+    if (abs(round($bs['diff'], 2)) >= 0.005) {      // (> 0.01 lod en difference på præcis 1 øre passere)
         echo '<p style="color:#c0392b; font-size:0.85em;">⚠ ' . sprintf(lang('@Balance does not match by %s %s.'), fmt_dk($bs['diff']), $currency) . '</p>';
     }
 

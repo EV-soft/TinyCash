@@ -53,6 +53,8 @@ if (isset($_POST['bulk_pairs']) && is_array($_POST['bulk_pairs'])) {
 
 // --- ENKELT-TILSTAND (uændret ekstern opførsel ift. tidligere version) ---
 $tmp_id     = isset($_POST['tmp_id'])     ? (int)$_POST['tmp_id']     : 0;
+// (et gebyr som "abc" eller "15 kr" blev stille til 0 eller 15 - kun et rigtigt tal godtages; tomt = intet gebyr)
+if (trim((string)($_POST['fee_amount'] ?? '')) !== '' && tc_num($_POST['fee_amount'], 0) === null) redirect('reconcile_list.php', '@Please enter a valid amount.', 'error');
 // NYT (webbutik): "Udbetaling fra webbutik X" (target_id = "shop:<id>") - mod butikkens mellemregningskonto, gebyret med
 if (preg_match('/^shop:(\d+)$/', (string)($_POST['target_id'] ?? ''), $sm)) {
     $p_res = reconcile_shop_payout($conn, $global_settings, $tmp_id, (int)$sm[1],
@@ -78,10 +80,10 @@ $result = reconcile_one_bank_line($conn, $global_settings, $tmp_id, $target_id, 
 // ikke er kørt.
 if ($result['ok'] && $target_id === 0 && $acc_id > 0 && isset($_POST['save_rule']) && $_POST['save_rule'] === '1') {
     $rule_pattern = trim($_POST['rule_pattern'] ?? '');
-    if ($rule_pattern !== '') {
+    if (mb_strlen($rule_pattern) >= 3) {      // (som bank_rules.php: et mønster på 1-2 tegn rammer næsten alle linjer)
         $has_rules_table = db_has_table($conn, 'bank_match_rules');
         if ($has_rules_table) {
-            $dup = DB::fetch_assoc(DB::query($conn, "SELECT rule_id FROM bank_match_rules WHERE pattern = '" . DB::escape($conn, $rule_pattern) . "' AND acc_id = $acc_id"));
+            $dup = DB::fetch_assoc(DB::query($conn, "SELECT rule_id FROM bank_match_rules WHERE LOWER(pattern) = LOWER('" . DB::escape($conn, $rule_pattern) . "')"));
             if (!$dup) {
                 DB::insert($conn, 'bank_match_rules', [
                     'pattern'    => $rule_pattern,
@@ -99,7 +101,8 @@ if (!empty($result['already_processed'])) {
 } elseif ($result['ok']) {
     redirect('reconcile_list.php', '@Transaction Processed Successfully');
 } else {
-    die($result['message']);
+    // (en afvisning - låst periode, modkonto = bankkontoen selv osv. - gav en hvid side med den rå tekst)
+    redirect('reconcile_list.php', htmlspecialchars((string)($result['message'] ?? lang('@Error:'))), 'error');
 }
 ob_end_flush();
 ?>

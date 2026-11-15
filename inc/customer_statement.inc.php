@@ -11,6 +11,17 @@
 
 // Er en invoice_payments-note en afskrivning? Notens præfiks er lang('@Written off as bad debt') på det sprog brugeren
 // havde, da afskrivningen blev lavet - derfor sammenlignes mod alle sprogs oversættelser (og den engelske nøgle).
+// Er noten en kursdifference (inc/reconcile.inc.php, lukning af en udenlandsk faktura)? Samme sprog-uafhængige genkendelse
+function cs_is_fx_note(string $note): bool {
+    static $texts = null;
+    if ($note === '') return false;
+    if ($texts === null) {
+        $texts = ['Currency exchange difference'];
+        $d = json_decode((string)@file_get_contents(dirname(__DIR__) . '/json-data/languages.json'), true);
+        foreach (($d['language'] ?? []) as $l) { $t = trim((string)($l['translation']['@Currency exchange difference'] ?? '')); if ($t !== '') $texts[] = $t; }
+    }
+    return in_array(trim($note), $texts, true);
+}
 function cs_is_writeoff_note(string $note): bool {
     static $prefixes = null;
     if ($note === '') return false;
@@ -55,6 +66,7 @@ function get_customer_statement_data($conn, int $cust_id, string $from = '', str
     $events           = [];
     $open_invoices    = 0;
     $overdue_invoices = 0;
+    $overdue_amount   = 0.0;      // (restbeløbet på netop de forfaldne - "N forfaldne på i alt X" viste før hele saldoen)
     $today            = date('Y-m-d');
 
     foreach ($invoices as $inv) {
@@ -80,15 +92,22 @@ function get_customer_statement_data($conn, int $cust_id, string $from = '', str
             'amount' => $inv_total,
         ];
 
-        $paid_row = DB::fetch_assoc(DB::query($conn,
-            "SELECT COALESCE(SUM(amount), 0) AS paid FROM invoice_payments WHERE inv_id = " . $inv['inv_id']));
-        $paid = round((float)($paid_row['paid'] ?? 0), 2);
-        $remaining = round($inv_total + ($is_credit ? 0.0 : invoice_credited_dkk($conn, (int)$inv['inv_id'])) - $paid, 2);     // (minus en delvis kreditnota)
+        $fees = $is_credit ? 0.0 : invoice_fees_dkk($conn, (int)$inv['inv_id']);
+        // Restbeløbet: den fælles definition (invoice_open_dkk()) - en kreditnota indgår i sin fakturas restbeløb
+        $remaining = $is_credit ? 0.0 : invoice_open_dkk($conn, (int)$inv['inv_id']);
+        // Bogførte rykkergebyrer er en egen linje på udtoget (de står på debitorkontoen)
+        if ($fees > 0) {
+            $fres = DB::query($conn, "SELECT fee_date, amount, reminder_no FROM invoice_fees WHERE inv_id = " . (int)$inv['inv_id'] . " ORDER BY fee_id");
+            while ($fres && ($f = DB::fetch_assoc($fres))) {
+                $events[] = ['date' => $f['fee_date'], 'label' => sprintf(lang('@Reminder fee, reminder no. %d, invoice #%s'), (int)$f['reminder_no'], str_pad((string)$inv['invoice_no'], 6, '0', STR_PAD_LEFT)),
+                             'link' => 'invoice_view.php?id=' . $inv['inv_id'], 'amount' => round((float)$f['amount'], 2)];
+            }
+        }
 
-        $is_credited = (strtolower($inv['inv_status'] ?? '') === 'credited');
-        if (!$is_credit && !$is_credited && $remaining > 0.01) {
+        // (også en krediteret faktura, der stadig skylder et rykkergebyr - status alene siger ikke om noget er åbent)
+        if (!$is_credit && $remaining > 0.01) {
             $open_invoices++;
-            if (!empty($inv['inv_due_date']) && $inv['inv_due_date'] < $today) $overdue_invoices++;
+            if (!empty($inv['inv_due_date']) && $inv['inv_due_date'] < $today) { $overdue_invoices++;  $overdue_amount += $remaining; }
         }
 
         $pay_res = DB::query($conn, "SELECT payment_date, amount, note FROM invoice_payments
@@ -98,9 +117,14 @@ function get_customer_statement_data($conn, int $cust_id, string $from = '', str
             // "Betaling for faktura #..." - også på kontoudtoget der mailes til kunden, som en betaling kunden aldrig
             // har foretaget. Genkendes på notens præfiks (skrevet på brugerens sprog på afskrivningstidspunktet).
             $is_wo = cs_is_writeoff_note((string)($p['note'] ?? ''));
+            $is_fx = !$is_wo && cs_is_fx_note((string)($p['note'] ?? ''));      // (en kursdifference er ikke en betaling fra kunden)
+            // En udbetaling på en kreditnota er en tilbagebetaling til kunden - kreditnotaen har intet fakturanummer
+            $label = $is_credit
+                ? lang('@Refund paid out') . ' - ' . $inv_label
+                : lang($is_wo ? '@Written off as bad debt' : ($is_fx ? '@Currency exchange difference' : '@Payment for invoice')) . (($is_wo || $is_fx) ? ' - ' . lang('@Invoice') : '') . ' #' . str_pad((string)$inv['invoice_no'], 6, '0', STR_PAD_LEFT);
             $events[] = [
                 'date'   => $p['payment_date'],
-                'label'  => lang($is_wo ? '@Written off as bad debt' : '@Payment for invoice') . ($is_wo ? ' - ' . lang('@Invoice') : '') . ' #' . str_pad((string)$inv['invoice_no'], 6, '0', STR_PAD_LEFT),
+                'label'  => $label,
                 'link'   => 'invoice_view.php?id=' . $inv['inv_id'],
                 'amount' => round((float)$p['amount'], 2) * -1,
             ];
@@ -140,5 +164,6 @@ function get_customer_statement_data($conn, int $cust_id, string $from = '', str
         'closing_balance'   => round((float)$closing_balance, 2),
         'open_invoices'     => $open_invoices,
         'overdue_invoices'  => $overdue_invoices,
+        'overdue_amount'    => round($overdue_amount, 2),
     ];
 }

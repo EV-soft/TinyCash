@@ -27,7 +27,8 @@ if (isset($_GET['action']) && $_GET['action'] == 'delete_jou' && isset($_GET['jo
     // kaldes direkte. Bogført (har voucher_no) er urørlig uanset periodelås;
     // ellers gælder den gamle periodelås-regel.
     $jrow = DB::fetch_assoc(DB::query($conn, "SELECT jou_date, voucher_no FROM journal WHERE jou_id = $jou_id"));
-    if ($jrow && !empty($jrow['voucher_no'])) {
+    if (!$jrow) redirect('ledger_view.php', '@Not found - it may already have been deleted.', 'error');      // (meldte "slettet" om en postering der ikke fandtes - dobbeltklik, en anden fane)
+    if (!empty($jrow['voucher_no'])) {
         redirect('ledger_view.php', '@This entry is posted and can never be deleted, only reversed with an opposite counter-posting.', 'error');
     }
     if ($jrow && is_date_locked($conn, $jrow['jou_date'])) {
@@ -40,20 +41,19 @@ if (isset($_GET['action']) && $_GET['action'] == 'delete_jou' && isset($_GET['jo
     $led_rows = [];
     $lres = DB::query($conn, "SELECT * FROM ledger WHERE jou_id = $jou_id");
     while ($lr = DB::fetch_assoc($lres)) { $led_rows[] = $lr; }
-    if ($jou_full) {
-        log_action($conn, 'DELETE_JOURNAL_ENTRY', 'journal', $jou_id, ['journal' => $jou_full, 'ledger_lines' => $led_rows], null);
-    }
-
     DB::begin_transaction($conn);
     try {
-        DB::query($conn, "DELETE FROM ledger WHERE jou_id = $jou_id");
-        DB::query($conn, "DELETE FROM journal WHERE jou_id = $jou_id");
+        if (DB::query($conn, "DELETE FROM ledger WHERE jou_id = $jou_id") === false || DB::query($conn, "DELETE FROM journal WHERE jou_id = $jou_id") === false) {
+            throw new Exception((string)DB::error($conn));
+        }
+        // (i samme transaktion - før stod sletningen i revisionssporet, også når den fejlede og blev rullet tilbage)
+        log_action($conn, 'DELETE_JOURNAL_ENTRY', 'journal', $jou_id, ['journal' => $jou_full, 'ledger_lines' => $led_rows], null);
 
         DB::commit($conn);
         redirect('ledger_view.php', '@Journal entry and all related ledger lines have been deleted.');
     } catch (Exception $e) {
         DB::rollback($conn);
-        die("Fejl ved sletning: " . $e->getMessage());
+        redirect('ledger_view.php', lang('@Error:') . ' ' . htmlspecialchars($e->getMessage()), 'error');      // (var en hvid side med en hårdkodet dansk tekst)
     }
 }
 
@@ -74,11 +74,11 @@ function ledger_debtor_jous($conn, ?int $only = null): array {
     $deb = (int)($st['conf_acc_debitor'] ?? 8100);  $cre = (int)($st['conf_acc_creditor'] ?? 4000);
     $out = [];
     $r = DB::query($conn, "SELECT DISTINCT l.jou_id FROM ledger l JOIN journal j ON j.jou_id = l.jou_id
-                           WHERE l.acc_id IN ($deb, $cre) AND (j.trans_type IS NULL OR j.trans_type = '')" . ($only ? " AND l.jou_id = $only" : ''));
+                           WHERE l.acc_id IN ($deb, $cre) AND (j.trans_type IS NULL OR j.trans_type IN ('', 'bank_direct'))" . ($only ? " AND l.jou_id = $only" : ''));
     if ($r) while ($x = DB::fetch_assoc($r)) $out[(int)$x['jou_id']] = true;
     // ... og bankposteringer der har oprettet en (bogført) udgift med samme bilagsnummer - rettes via udgiften
     $r = DB::query($conn, "SELECT DISTINCT j.jou_id FROM journal j JOIN expenses e ON e.voucher_no = j.voucher_no
-                           WHERE (j.trans_type IS NULL OR j.trans_type = '')" . ($only ? " AND j.jou_id = $only" : ''));
+                           WHERE (j.trans_type IS NULL OR j.trans_type IN ('', 'bank_direct'))" . ($only ? " AND j.jou_id = $only" : ''));
     if ($r) while ($x = DB::fetch_assoc($r)) $out[(int)$x['jou_id']] = true;
     return $out;
 }
@@ -99,6 +99,10 @@ if (isset($_GET['action']) && $_GET['action'] == 'cancel_jou' && isset($_GET['jo
     if ((int)($orig['is_cancelled'] ?? 0) === 1) {
         redirect('ledger_view.php', '@This entry has already been reversed.', 'error');
     }
+    // Modposteringen dateres i dag - som enhver anden postering må den ikke lande i en låst periode (tjekket manglede)
+    if (is_date_locked($conn, date('Y-m-d'))) {
+        redirect('ledger_view.php', "@Today's date is in a locked accounting period and this cannot be posted.", 'error');
+    }
 
     $lines = [];
     $lres = DB::query($conn, "SELECT acc_id, amount FROM ledger WHERE jou_id = $jou_id");
@@ -111,7 +115,8 @@ if (isset($_GET['action']) && $_GET['action'] == 'cancel_jou' && isset($_GET['jo
     DB::begin_transaction($conn);
     try {
         $today       = date('Y-m-d');
-        $cancel_text = DB::escape($conn, "Annullering af bilag #$jou_id: " . $orig['jou_text']);
+        // Teksten henviser til bilagsnummeret (det revisoren slår op på) - før stod journalens interne id, et andet bilag
+        $cancel_text = DB::escape($conn, sprintf(lang('@Reversal of voucher %s'), !empty($orig['voucher_no']) ? (string)$orig['voucher_no'] : '#' . $jou_id) . ': ' . $orig['jou_text']);
         // Bilagsnummer fra den fælles tæller - manglede FØR, samme klasse fejl som blev fundet i
         // year_end_close.php: uden det ville selve modposteringen ikke tælle som "bogført" og dermed forblive
         // hård-sletbar, selvom den er selve rettelsesbeviset.
@@ -151,7 +156,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'cancel_jou' && isset($_GET['jo
         redirect('ledger_view.php', '@Entry reversed with an opposite counter-posting. The original is kept for the audit trail.');
     } catch (Exception $e) {
         DB::rollback($conn);
-        die("Fejl ved annullering: " . $e->getMessage());
+        redirect('ledger_view.php', lang('@Error:') . ' ' . htmlspecialchars($e->getMessage()), 'error');      // (var en hvid side med en hårdkodet dansk tekst)
     }
 }
 

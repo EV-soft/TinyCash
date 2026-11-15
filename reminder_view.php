@@ -33,6 +33,12 @@ $sent_fee     = $is_next ? null : ($sent_log[$reminder_no]['fee'] ?? ($sent_at &
 
 $lay = doc_layout_setup($conn, 'reminder');      // (?layout= viser og designer et andet rykkerlayout)
 
+// Gebyrer: den næste rykker kræver kun et gebyr, der kan bogføres; en sendt rykkers eget (og senere) bogførte gebyr er
+// allerede i fakturaens restbeløb - trækkes fra, ellers stod det der to gange (i restbeløbet og som gebyrlinje)
+if ($is_next && !rf_ready($conn)) $s['reminder_fee_amount'] = 0;
+if (!$is_next && db_has_table($conn, 'invoice_fees')) {
+    $inv['total'] = (float)$inv['total'] - (float)(DB::fetch_row(DB::query($conn, "SELECT COALESCE(SUM(amount), 0) FROM invoice_fees WHERE inv_id = $inv_id AND reminder_no >= $reminder_no"))[0] ?? 0);
+}
 $rm_head = reminder_compose($s, $inv, $reminder_no, $prev_sent_at, $sent_at, $sent_fee);      // (på bogholderens sprog - til sidens titel)
 htm_Header($rm_head['title'] . ' ' . $rm_head['f_no']);
 showMenu();
@@ -48,13 +54,20 @@ if (!reminder_due($inv)) {
 // Knaprækken
 doc_toolbar_();
 if ($is_next && reminder_due($inv) && !empty($inv['cust_email']) && !$sent_today) {      // (sender den NÆSTE rykker - kun når det er den, der vises)
-    htm_Button(icon: 'fa-envelope', labl: '@Send Reminder', type: 'info', link: 'reminder_action.php?id=' . $inv_id,
-        attr: 'onclick="' . htm_confirm_js(sprintf(lang('@Send a payment reminder to %s?'), $inv['cust_email'])) . '" data-hint="' . lang('@Email a reminder for the invoice to the customer (you are asked first)') . '"');
+    // Rykkeren sendes med blanketten som PDF (docPdfSend() danner den af papiret herunder)
+    htm_Button(icon: 'fa-envelope', labl: '@Send Reminder', type: 'info',
+        attr: 'onclick="docPdfSend(\'reminder-page\', \'reminder_action.php?id=' . $inv_id . '\', \'' . doc_file_label('Rykker', '@Payment Reminder') . '_' . preg_replace('/\D/', '', $rm_head['f_no']) . '_' . $reminder_no . '.pdf\', '
+            . htmlspecialchars(json_encode(sprintf(lang('@Send a payment reminder to %s?'), $inv['cust_email'])), ENT_QUOTES) . ', this); return false;" data-hint="' . lang('@Email the reminder with this letter attached as a PDF (you are asked first)') . '"');
+}
+// Udskrevet og sendt med posten: rykkeren tælles og et gebyr bogføres - ellers krævede brevet et gebyr der aldrig blev bogført
+if ($is_next && reminder_due($inv) && !$sent_today) {
+    htm_Button(icon: 'fa-envelope-open-text', labl: '@Mark as sent by post', type: 'secondary', link: 'reminder_action.php?id=' . $inv_id . '&mode=post',
+        attr: 'onclick="' . htm_confirm_js('@Register this reminder as printed and sent by post? It counts as sent, and a reminder fee is posted if one applies.') . '" data-hint="' . lang('@Use this when you print the letter and send it by post') . '"');
 }
 if ($lay['on']) {
     htm_Button(icon: 'fa-pencil-ruler', labl: '@Design Mode', type: 'secondary', attr: 'onclick="docToggleDesign()" id="rDesignBtn" data-hint="' . lang('@Move, resize and hide the blocks of the reminder - saved in the reminder layout shown') . '"');
 }
-htm_Button(icon: 'fa-file-pdf', labl: '@Download PDF', type: 'secondary', attr: 'onclick="docPdfSave(\'reminder-page\', \'rykker_' . preg_replace('/\D/', '', $rm_head['f_no']) . '_' . $reminder_no . '.pdf\')" data-hint="' . lang('@Save the reminder as a PDF file - e.g. to send it by post or attach it yourself') . '"');
+htm_Button(icon: 'fa-file-pdf', labl: '@Download PDF', type: 'secondary', attr: 'onclick="docPdfSave(\'reminder-page\', \'' . doc_file_label('rykker', '@Payment Reminder') . '_' . preg_replace('/\D/', '', $rm_head['f_no']) . '_' . $reminder_no . '.pdf\')" data-hint="' . lang('@Save the reminder as a PDF file - e.g. to send it by post or attach it yourself') . '"');
 htm_Button(icon: 'fa-print', labl: '@Print', type: 'primary', attr: 'onclick="window.print()"');
 htm_Button(icon: 'fa-file-invoice', labl: '@Invoice', type: 'secondary', link: 'invoice_view.php?id=' . $inv_id);
 htm_Button(icon: 'fa-arrow-left', labl: '@Back', type: 'secondary', link: 'reminders.php');
@@ -68,6 +81,7 @@ $co = doc_company($s);
 $rm = reminder_compose($s, $inv, $reminder_no, $prev_sent_at, $sent_at, $sent_fee);
 $layouts = $lay['blocks'];
 echo '<div class="doc-paper" id="reminder-page">';
+echo doc_shapes_html(il_shapes($conn, (int)$lay['id']));      // (layoutets grafik - bag teksten)
 doc_head_blocks($layouts, $co, $inv['cust_name'], $inv['cust_address'] ?? '');
 
 // Titel + fakturanummer, dato, oprindeligt forfald
@@ -92,11 +106,11 @@ if ($rm['fee'] > 0) {
 $tot .= '</table>';
 doc_block('block-totals', $tot, $layouts);
 
-doc_foot_blocks($s, $layouts, $co);
+doc_foot_blocks($s, $layouts, $co, true, !empty($inv['invoice_no']) ? tc_payment_ref($inv['invoice_no']) : null);
 echo '</div>'; // .doc-paper
 doc_lang_pop();
 $GLOBALS['no_floating_menu'] = true;
 echo doc_pdf_js();
-if ($lay['on']) echo doc_design_js(['paper' => 'reminder-page', 'layout' => $lay['id'], 'doc' => 'reminder', 'btn' => 'rDesignBtn',
+if ($lay['on']) echo doc_design_js(['paper' => 'reminder-page', 'layout' => $lay['id'], 'doc' => 'reminder', 'shapes' => il_shapes_ready($conn), 'btn' => 'rDesignBtn',
     'url' => 'reminder_view.php?id=' . $inv_id . '&no=' . $reminder_no, 'names' => array_map(fn($l) => $l['name'], $lay['list'])]);
 htm_Footer();

@@ -1,0 +1,334 @@
+{
+    "code": "se",
+    "iso": "SE",
+    "name": "Sverige",
+    "name_en": "Sweden",
+    "language": "sv",
+    "locale": "sv-SE",
+    "currency": "SEK",
+    "currency_symbol": "kr",
+    "timezone": "Europe/Stockholm",
+    "date_format": "Y-m-d",
+    "number": {
+        "dec": ",",
+        "thou": " "
+    },
+    "company_id": {
+        "label": "@Organisation Number",
+        "short": "Org.nr",
+        "regex": "^[0-9]{6}-?[0-9]{4}$",
+        "registry": null,
+        "checksum": "se_luhn"
+    },
+    "vat_id": {
+        "prefix": "SE",
+        "suffix": "01",
+        "regex": "^SE[0-9]{10}01$"
+    },
+    "zip": {
+        "regex": "^[0-9]{3} ?[0-9]{2}$",
+        "prefix": "SE-"
+    },
+    "vat_portal": "Skatteverket (e-tjänsten Moms)",
+    "draft": true,
+    "vat": {
+        "standard_rate": 25,
+        "codes": [
+            {
+                "id": "U25",
+                "name": "Utgående moms 25%",
+                "rate": 25,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "U12",
+                "name": "Utgående moms 12%",
+                "rate": 12,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "U6",
+                "name": "Utgående moms 6%",
+                "rate": 6,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "I25",
+                "name": "Ingående moms 25%",
+                "rate": 25,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "I12",
+                "name": "Ingående moms 12%",
+                "rate": 12,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "I6",
+                "name": "Ingående moms 6%",
+                "rate": 6,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "EUV",
+                "name": "Försäljning av varor till annat EU-land",
+                "rate": 0,
+                "type": "eu_goods_sale"
+            },
+            {
+                "id": "EUT",
+                "name": "Försäljning av tjänster till annat EU-land",
+                "rate": 0,
+                "type": "eu_services_sale"
+            },
+            {
+                "id": "EXP",
+                "name": "Export utanför EU",
+                "rate": 0,
+                "type": "export"
+            },
+            {
+                "id": "OSK",
+                "name": "Försäljning med omvänd skattskyldighet i Sverige",
+                "rate": 0,
+                "type": "reverse_domestic"
+            },
+            {
+                "id": "FRI",
+                "name": "Momsfri försäljning",
+                "rate": 0,
+                "type": "exempt"
+            },
+            {
+                "id": "IEUV",
+                "name": "Inköp av varor från annat EU-land",
+                "rate": 25,
+                "type": "eu_goods_purchase",
+                "rc_account": 2614
+            },
+            {
+                "id": "IEUT",
+                "name": "Inköp av tjänster från annat EU-land",
+                "rate": 25,
+                "type": "eu_services_purchase",
+                "rc_account": 2614
+            },
+            {
+                "id": "IUV",
+                "name": "Import av varor (importmoms)",
+                "rate": 25,
+                "type": "noneu_goods_purchase",
+                "rc_account": 2615
+            },
+            {
+                "id": "IUT",
+                "name": "Inköp av tjänster från land utanför EU",
+                "rate": 25,
+                "type": "noneu_services_purchase",
+                "rc_account": 2614
+            }
+        ],
+        "std_account_codes": []
+    },
+    "reminders": {
+        "fee_from_reminder": 1,
+        "fee_until_reminder": 1,
+        "min_days_between": 0,
+        "max_fee": 60,
+        "max_fee_currency": "SEK",
+        "law": "lag (1981:739) om ersättning för inkassokostnader m.m."
+    },
+    "chart": null,
+    "chart_classes": [["19", "bank"], ["1", "asset"], ["20", "equity"], ["26", "vat"], ["2", "liability"], ["3", "income"], ["4", "expense"], ["5", "expense"], ["6", "expense"], ["7", "expense"], ["80", "income"], ["81", "income"], ["82", "income"], ["83", "income"], ["8", "expense"]],
+    "einvoice": [
+        "peppol_bis3"
+    ],
+    "payment_ref": "ocr",
+    "saft": null,
+    "legal": {
+        "annual_report": null,
+        "cvr_lock": false,
+        "oss": true,
+        "ioss": true,
+        "eu_sales_list": {
+            "name": "@Periodisk sammanställning (Skatteverket)",
+            "boxes": {"goods": "35", "services": "39"}
+        }
+    },
+    "vat_return": [
+        {
+            "box": "05",
+            "label": "@Box 05: Taxable sales (excl. VAT)",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "10",
+            "label": "@Box 10: Output VAT 25 %",
+            "rule": "vat_of_net",
+            "types": [
+                "sales"
+            ],
+            "rates": [
+                25
+            ],
+            "sign": -1
+        },
+        {
+            "box": "11",
+            "label": "@Box 11: Output VAT 12 %",
+            "rule": "vat_of_net",
+            "types": [
+                "sales"
+            ],
+            "rates": [
+                12
+            ],
+            "sign": -1
+        },
+        {
+            "box": "12",
+            "label": "@Box 12: Output VAT 6 %",
+            "rule": "vat_of_net",
+            "types": [
+                "sales"
+            ],
+            "rates": [
+                6
+            ],
+            "sign": -1
+        },
+        {
+            "box": "sales_vat",
+            "label": "@Output VAT in the ledger (check: boxes 10 + 11 + 12)",
+            "rule": "setting_acc",
+            "setting": "conf_acc_vat",
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "20",
+            "label": "@Box 20: Purchases of goods from other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_goods_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "21",
+            "label": "@Box 21: Purchases of services from other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "22",
+            "label": "@Box 22: Purchases of services from outside the EU",
+            "rule": "net",
+            "types": [
+                "noneu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "30",
+            "label": "@Box 30: Output VAT on purchases in boxes 20-24",
+            "rule": "rc_vat",
+            "types": [
+                "eu_goods_purchase",
+                "eu_services_purchase",
+                "noneu_services_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "35",
+            "label": "@Box 35: Sales of goods to other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_goods_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "36",
+            "label": "@Box 36: Sales of goods outside the EU",
+            "rule": "net",
+            "types": [
+                "export"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "39",
+            "label": "@Box 39: Sales of services to businesses in other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_services_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "41",
+            "label": "@Box 41: Sales where the buyer is liable for VAT in Sweden",
+            "rule": "net",
+            "types": [
+                "reverse_domestic"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "42",
+            "label": "@Box 42: Other sales (VAT exempt)",
+            "rule": "net",
+            "types": [
+                "exempt"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "48",
+            "label": "@Box 48: Input VAT to deduct",
+            "rule": "setting_acc",
+            "setting": "conf_acc_purchase_vat",
+            "sign": 1,
+            "payable": -1
+        },
+        {
+            "box": "50",
+            "label": "@Box 50: Taxable value of imports",
+            "rule": "net",
+            "types": [
+                "noneu_goods_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "60",
+            "label": "@Box 60: Output VAT on imports 25 %",
+            "rule": "rc_vat",
+            "types": [
+                "noneu_goods_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        }
+    ],
+    "peppol": {
+        "endpoint_scheme": "0007"
+    }
+}

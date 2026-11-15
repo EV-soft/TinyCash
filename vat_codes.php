@@ -47,6 +47,8 @@ echo "<div style='max-width:800px; margin:0 auto;'>";
     // vat_id/vat_name (manglede FØR helt - lav risiko her da siden er admin-only, men billigt at rette når
     // linjerne alligevel skulle omskrives).
     htm_Card_('@VAT Codes', '600');
+    $vc_has_type = db_has_column($conn, 'vat_codes', 'vat_type');
+    $vat_type_labels = tc_vat_type_labels();
     $vat_rows = [];
     $res = DB::query($conn, "SELECT * FROM vat_codes ORDER BY vat_id ASC");
     while ($row = DB::fetch_assoc($res)) {
@@ -60,7 +62,7 @@ echo "<div style='max-width:800px; margin:0 auto;'>";
         // escaper teksten korrekt.
         $delBtn = htm_ConfirmLink(
             icon: 'fa-trash',
-            link: '?delete='.$row['vat_id'],
+            link: '?delete=' . urlencode((string)$row['vat_id']),      // (uden URL-kodning slettede "A&B" momskoden "A", og "K25+"/"#" kunne ikke slettes)
             mess: '@Are you sure?',
             type: 'danger',
             styl: 'padding:0; background:transparent; color:var(--color-danger); font-size:16px;',
@@ -73,10 +75,11 @@ echo "<div style='max-width:800px; margin:0 auto;'>";
             htmlspecialchars($row['vat_name']),
             '<div style="text-align:center;">'.$row['vat_rate'].'%</div>',
             '<div style="text-align:right;">'.htmlspecialchars((string)$acc_id).'</div>',
-            '<div style="text-align:right;">'.$delBtn.'</div>',
         ];
+        if ($vc_has_type) $vat_rows[count($vat_rows) - 1][] = htmlspecialchars($vat_type_labels[$row['vat_type'] ?? ''] ?? (string)($row['vat_type'] ?? ''));
+        $vat_rows[count($vat_rows) - 1][] = '<div style="text-align:right;">'.$delBtn.'</div>';
     }
-    htm_Table(['ID', '@Name', '%', '@Account', ''], $vat_rows, 'vat_tbl', 100);
+    htm_Table($vc_has_type ? ['ID', '@Name', '%', '@Account', '@Type', ''] : ['ID', '@Name', '%', '@Account', ''], $vat_rows, 'vat_tbl', 100);
     htm_Card_end();
 
     // Formular til at tilføje ny
@@ -89,11 +92,17 @@ echo "<div style='max-width:800px; margin:0 auto;'>";
             <?php 
                 htm_Field('🔑', 'ID', 'vat_id', '', 'text', null, 'required placeholder="f.eks. S25"');
                 htm_Field('📝', '@Name', 'vat_name', '', 'text', null, 'required');
-                htm_Field('📊', '%', 'vat_rate', '25', 'number');
+                htm_Field('📊', '%', 'vat_rate', (string)tc_vat_std_rate(), 'number');
                 // RETTET: feltet hed hidtil "vat_acc_id", men vat_save.php læser $_POST['vat_account'] og
                 // DB-kolonnen hedder samme - mismatchet betød at kontonummeret aldrig blev gemt (endte altid som
                 // NULL uanset hvad brugeren indtastede).
                 htm_Field('📑', '@Account', 'vat_account', '', 'number', null, 'required');
+                if ($vc_has_type) {
+                    echo '<div style="grid-column: span 4;">';
+                    htm_Field(icon: 'fa-tags', labl: '@Type', name: 'vat_type', valu: 'sales', type: 'sele', opti: $vat_type_labels, legd: 'align-left',
+                        hint: '@Which kind of VAT the code is - used for the boxes on the VAT return.');
+                    echo '</div>';
+                }
             ?>
             <label style="grid-column: span 4; font-size:0.9em;"><input type="checkbox" name="update" value="1"> <?php echo lang('@Change the existing code (same ID)'); ?></label>
             <button type="submit" style="background:#2ecc71; color:white; border:none; padding:12px; border-radius:4px; cursor:pointer; font-weight:bold; grid-column: span 4;">

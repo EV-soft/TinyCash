@@ -20,7 +20,9 @@ function shop_verify_woocommerce(string $raw, array $h, string $secret): bool {
 function shop_rate_from(float $net, float $tax): float {
     if (abs($net) < 0.005) return 0.0;
     $r = $tax / $net * 100;
-    return abs($r - round($r)) < 0.2 ? (float)round($r) : round($r, 2);
+    // (øreafrunding giver fx 13,47 - nærmeste halve procent, så også Finlands 25,5 og 13,5 % genkendes)
+    $h = round($r * 2) / 2;
+    return abs($r - $h) < 0.2 ? (float)$h : round($r, 2);
 }
 
 function shop_adapter_woocommerce(string $raw, array $h, array $shop): array {
@@ -65,7 +67,8 @@ function shop_adapter_woocommerce(string $raw, array $h, array $shop): array {
         'currency'         => (string)($p['currency'] ?? '') ?: null,
         'paid'             => true,
         'prices_incl_vat'  => true,
-        'customer'         => ['email' => (string)($b['email'] ?? ''), 'name' => $name, 'phone' => (string)($b['phone'] ?? ''), 'address' => $addr($b), 'cvr' => $cvr],
+        'customer'         => ['email' => (string)($b['email'] ?? ''), 'name' => $name, 'phone' => (string)($b['phone'] ?? ''), 'address' => $addr($b), 'cvr' => $cvr,
+                               'country' => strtoupper((string)($b['country'] ?? ''))],
         'delivery_address' => $ship_addr !== $addr($b) ? $ship_addr : '',
         'lines'            => $lines,
         'total'            => shop_num($p['total'] ?? 0),

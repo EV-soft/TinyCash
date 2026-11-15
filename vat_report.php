@@ -22,7 +22,7 @@ require_once 'inc/menu.inc.php';
 // NYT: denne rapport er specifikt formet efter dansk momsindberetning (afrunding til hele kroner til SKATs
 // TastSelv Erhverv, jf. kommentaren ovenfor) og giver ikke mening for en virksomhed, der bruger en anden
 // bogføringsvaluta end DKK.
-require_dkk_base_currency($conn);
+require_country_feature($conn, 'vat_report');
 
 htm_Header('@VAT Report');
 showMenu();
@@ -32,39 +32,12 @@ showMenu();
 // året eller et udsnit af det (halvår/kvartal/måned), som er de faktiske
 // afregningsperioder de fleste danske virksomheder bruger over for SKAT.
 // -------------------------------------------------------------------------
-$year        = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
-$period_type = in_array($_GET['period_type'] ?? '', ['year', 'half', 'quarter', 'month'], true) ? $_GET['period_type'] : 'year';
-$period_num  = isset($_GET['period_num']) ? (int)$_GET['period_num'] : 1;
-
-switch ($period_type) {
-    case 'month':
-        $period_num   = max(1, min(12, $period_num));
-        $period_start = sprintf('%04d-%02d-01', $year, $period_num);
-        $period_end   = date('Y-m-t', strtotime($period_start));
-        $period_label = tc_month_name($period_num) . ' ' . $year;      // RETTET: date('F') var altid engelsk
-        break;
-    case 'quarter':
-        $period_num   = max(1, min(4, $period_num));
-        $start_month  = ($period_num - 1) * 3 + 1;
-        $period_start = sprintf('%04d-%02d-01', $year, $start_month);
-        $period_end   = date('Y-m-t', strtotime(sprintf('%04d-%02d-01', $year, $start_month + 2)));
-        $period_label = lang('@Quarter') . ' ' . $period_num . ' ' . $year;
-        break;
-    case 'half':
-        $period_num   = max(1, min(2, $period_num));
-        $start_month  = ($period_num - 1) * 6 + 1;
-        $period_start = sprintf('%04d-%02d-01', $year, $start_month);
-        $period_end   = date('Y-m-t', strtotime(sprintf('%04d-%02d-01', $year, $start_month + 5)));
-        $period_label = lang('@Half-year') . ' ' . $period_num . ' ' . $year;
-        break;
-    case 'year':
-    default:
-        $period_type  = 'year';
-        $period_start = "$year-01-01";
-        $period_end   = "$year-12-31";
-        $period_label = (string)$year;
-        break;
-}
+require_once 'inc/vat_return.inc.php';      // (momsperioderne og angivelsens felter)
+// (uden valg: den senest afsluttede periode af landets type - den der skal angives)
+[$def_year, $def_num] = vat_period_last_closed((string)($_GET['period_type'] ?? vat_period_default()));
+$year = isset($_GET['year']) ? (int)$_GET['year'] : $def_year;
+[$period_start, $period_end, $period_label, $period_type, $period_num] =
+    vat_period_bounds($year, (string)($_GET['period_type'] ?? vat_period_default()), (int)($_GET['period_num'] ?? (isset($_GET['year']) ? 1 : $def_num)));
 
 $ps = DB::escape($conn, $period_start);
 $pe = DB::escape($conn, $period_end);
@@ -89,6 +62,12 @@ $pv_row = DB::fetch_assoc(DB::query($conn,
 $purchase_vat = (float)($pv_row['total'] ?? 0);
 
 $vat_payable = $sales_vat - $purchase_vat;
+
+// Momsangivelsens felter efter landepakken (inc/vat_return.inc.php) - momstilsvaret tager nu også moms af køb i
+// udlandet (omvendt betalingspligt) med, som ikke står på salgsmomskontoen
+require_once 'inc/vat_return.inc.php';
+$vr = vat_return_fields($conn, $period_start, $period_end);
+if ($vr['fields']) $vat_payable = $vr['payable'];
 
 // -------------------------------------------------------------------------
 // 3. NETTOOMSÆTNING/-KØB PR. MOMSGRUPPE - kontekst/detalje der viser
@@ -120,7 +99,7 @@ echo '<div><label style="font-size:0.85em; font-weight:bold; display:block;">' .
 echo '<input type="number" name="year" value="' . $year . '" style="width:90px; padding:6px;"></div>';
 echo '<div><label style="font-size:0.85em; font-weight:bold; display:block;">' . lang('@Period Type') . '</label>';
 echo '<select name="period_type" id="period_type" onchange="document.getElementById(\'period_num_wrap\').style.display = (this.value==\'year\'?\'none\':\'block\');">';
-foreach (['year' => '@Full Year', 'half' => '@Half-year', 'quarter' => '@Quarter', 'month' => '@Month'] as $val => $lbl) {
+foreach (array_map(fn($t) => $t[0], VAT_PERIOD_TYPES) as $val => $lbl) {
     echo '<option value="' . $val . '" ' . ($period_type === $val ? 'selected' : '') . '>' . lang($lbl) . '</option>';
 }
 echo '</select></div>';
@@ -142,14 +121,40 @@ $box_color = $vat_payable >= 0 ? '#c0392b' : '#27ae60';
 echo '<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:25px;">';
 echo '<div style="background:var(--bg-panel); border-radius:6px; padding:15px; text-align:center;">
         <div style="font-size:0.8em; color:var(--text-muted); text-transform:uppercase; font-weight:bold;">' . lang('@Sales VAT') . '</div>
-        <div style="font-size:1.4em; font-weight:bold; margin-top:5px;">' . fmt_dk($sales_vat) . ' kr</div></div>';
+        <div style="font-size:1.4em; font-weight:bold; margin-top:5px;">' . fmt_dk($sales_vat) . ' ' . htmlspecialchars(tc_cur_label()) . '</div></div>';
 echo '<div style="background:var(--bg-panel); border-radius:6px; padding:15px; text-align:center;">
         <div style="font-size:0.8em; color:var(--text-muted); text-transform:uppercase; font-weight:bold;">' . lang('@Purchase VAT') . '</div>
-        <div style="font-size:1.4em; font-weight:bold; margin-top:5px;">' . fmt_dk($purchase_vat) . ' kr</div></div>';
+        <div style="font-size:1.4em; font-weight:bold; margin-top:5px;">' . fmt_dk($purchase_vat) . ' ' . htmlspecialchars(tc_cur_label()) . '</div></div>';
 echo '<div style="background:var(--bg-panel); border-radius:6px; padding:15px; text-align:center; border:2px solid ' . $box_color . ';">
-        <div style="font-size:0.8em; color:var(--text-muted); text-transform:uppercase; font-weight:bold;">' . lang('@VAT Payable (rounded to whole DKK for TastSelv)') . '</div>
-        <div style="font-size:1.6em; font-weight:bold; color:' . $box_color . '; margin-top:5px;">' . fmt_dk(round($vat_payable), 0) . ' kr</div></div>';
+        <div style="font-size:0.8em; color:var(--text-muted); text-transform:uppercase; font-weight:bold;">' . sprintf(lang('@VAT payable (rounded to whole %s for %s)'), tc_cur_label(), (string)tc_country_pack('vat_portal', '')) . '</div>
+        <div style="font-size:1.6em; font-weight:bold; color:' . $box_color . '; margin-top:5px;">' . fmt_dk(round($vat_payable), 0) . ' ' . htmlspecialchars(tc_cur_label()) . '</div></div>';
 echo '</div>';
+
+// --- Momsangivelsens felter (landepakken) ---
+if ($vr['fields']) {
+    $vr_cur = htmlspecialchars(tc_cur_label());
+    echo '<h3 style="margin:10px 0 5px;">' . lang('@VAT return fields') . '</h3>';
+    echo '<table style="width:100%; border-collapse:collapse; margin-bottom:20px;">';
+    foreach ($vr['fields'] as $i => $fld) {
+        $sep = ($i > 0 && !$fld['payable'] && $vr['fields'][$i - 1]['payable']) ? 'border-top:2px solid var(--border-color);' : '';
+        echo '<tr style="border-bottom:1px solid var(--border-color);' . $sep . '"><td style="padding:8px;">' . htmlspecialchars(lang($fld['label'])) . '</td>'
+           . '<td style="padding:8px; text-align:right; white-space:nowrap; font-weight:bold;">' . fmt_dk(round($fld['value']), 0) . ' ' . $vr_cur . '</td></tr>';
+    }
+    echo '</table>';
+    htm_Note(lang('@Amounts are rounded to whole units as on the VAT return. The boxes A, B and C come from accounts whose VAT code has an EU or export type (VAT Codes page). Box B sales must also be reported to "EU sales without VAT".'), 'font-size:0.85em; margin-top:-12px;');
+    if (tc_pack_feature('eu_sales_list')) {
+        $eu_qs = match ($period_type) { 'month' => ['ptype' => 'month', 'num' => $period_num], 'bimonth' => ['ptype' => 'month', 'num' => $period_num * 2 - 1],
+                                        'quarter' => ['ptype' => 'quarter', 'num' => $period_num], default => ['ptype' => 'quarter', 'num' => 1] };
+        htm_Button(icon: 'fa-list', labl: '@EU sales without VAT', type: 'secondary', link: 'eu_sales_list.php?' . http_build_query(['year' => $year] + $eu_qs));
+    }
+    if ($vr['unplaced']) {
+        $rows = '';
+        foreach ($vr['unplaced'] as $u) $rows .= '<li>' . sprintf(lang('@Invoice %s to %s (%s): %s on account %d'), htmlspecialchars((string)$u['invoice_no']), htmlspecialchars((string)$u['cust_name']), htmlspecialchars($u['country']), fmt_dk($u['net']) . ' ' . $vr_cur, (int)$u['acc']) . '</li>';
+        echo '<div style="margin:0 0 20px; padding:10px 14px; border-left:4px solid var(--color-warning); background:var(--bg-panel); border-radius:4px; font-size:0.9em;">'
+           . '<strong>' . lang('@Sales without VAT to customers abroad that are not in box B or C:') . '</strong><ul style="margin:6px 0 4px 18px;">' . $rows . '</ul>'
+           . lang('@Give the product an account with an EU or export VAT code (e.g. 1050 / 1150 / 1100 in the standard chart), so the sale is counted in the right box.') . '</div>';
+    }
+}
 
 // --- Detalje/kontekst-tabel ---
 if (DB::num_rows($res) == 0) {

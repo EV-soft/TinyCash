@@ -25,8 +25,8 @@ require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
 require_once 'inc/audit.inc.php';
 
-$import_dir = __DIR__ . '/storage/saft_import/';
-if (!is_dir($import_dir)) @mkdir($import_dir, 0755, true);
+// Hvert regnskab har sin egen mappe (som storage/saf-t) - ellers så regnskab B regnskab A's importerede filer
+$import_dir = tc_account_storage_dir(__DIR__ . '/storage/saft_import');
 
 // --- UPLOAD (POST) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_saft'])) {
@@ -85,8 +85,14 @@ function saft_import_parse(string $path): array {
     // holdt kun for filer UDEN namespace-præfiks (som TinyCashs egen eksport). $xml->children($ns) virker korrekt
     // i BEGGE tilfælde (testet mod begge varianter) og bruges nu konsekvent i stedet for almindelig ->felt-adgang
     // på selve roden.
+    // Norsk SAF-T (landepakke NO) har eget namespace, <Name> i stedet for <CompanyName> og beløb i <DebitAmount><Amount>
     $ns = 'urn:StandardAuditFile-Taxation-Financial:DK';
+    foreach ($xml->getDocNamespaces() as $uri) {
+        if (str_starts_with((string)$uri, 'urn:StandardAuditFile-Taxation-Financial:')) { $ns = (string)$uri; break; }
+    }
     $root = $xml->children($ns);
+    $party = fn($p) => (string)($p->CompanyName ?? '') !== '' ? (string)$p->CompanyName : (string)($p->Name ?? '');
+    $amt   = fn($a) => ($a === null || !$a->count() && trim((string)$a) === '') ? '' : (isset($a->Amount) ? trim((string)$a->Amount) : trim((string)$a));
     $header = $root->Header ?? null;
     $result = [
         'header' => [
@@ -119,15 +125,15 @@ function saft_import_parse(string $path): array {
         foreach (($master->Customers->Customer ?? []) as $c) {
             $result['customers'][] = [
                 'id'   => (string)$c->CustomerID,
-                'name' => (string)$c->CompanyName,
-                'cvr'  => (string)($c->CustomerTaxID ?? ''),
+                'name' => $party($c),
+                'cvr'  => (string)($c->CustomerTaxID ?? '') !== '' ? (string)$c->CustomerTaxID : (string)($c->RegistrationNumber ?? ''),
             ];
         }
         foreach (($master->Suppliers->Supplier ?? []) as $s) {
             $result['suppliers'][] = [
                 'id'   => (string)$s->SupplierID,
-                'name' => (string)$s->CompanyName,
-                'cvr'  => (string)($s->SupplierTaxID ?? ''),
+                'name' => $party($s),
+                'cvr'  => (string)($s->SupplierTaxID ?? '') !== '' ? (string)$s->SupplierTaxID : (string)($s->RegistrationNumber ?? ''),
             ];
         }
     }
@@ -139,8 +145,8 @@ function saft_import_parse(string $path): array {
             foreach (($t->Line ?? []) as $l) {
                 $lines[] = [
                     'account' => (string)$l->AccountID,
-                    'debit'   => (string)($l->DebitAmount ?? ''),
-                    'credit'  => (string)($l->CreditAmount ?? ''),
+                    'debit'   => $amt($l->DebitAmount ?? null),
+                    'credit'  => $amt($l->CreditAmount ?? null),
                 ];
             }
             $result['transactions'][] = [
@@ -198,7 +204,7 @@ if (isset($_GET['view'])) {
         $rows = [];
         foreach ($parsed['customers'] as $c) $rows[] = [lang('@Customer'), htmlspecialchars($c['id']), htmlspecialchars($c['name']), htmlspecialchars($c['cvr'])];
         foreach ($parsed['suppliers'] as $s) $rows[] = [lang('@Supplier'), htmlspecialchars($s['id']), htmlspecialchars($s['name']), htmlspecialchars($s['cvr'])];
-        if ($rows) htm_Table(['@Type', '@ID', '@Name', '@CVR'], $rows, 'saftPartyTbl', 25, vhgh: '300px');
+        if ($rows) htm_Table(['@Type', '@ID', '@Name', tc_company_id_short()], $rows, 'saftPartyTbl', 25, vhgh: '300px');
 
         echo '<h3>' . lang('@General Ledger') . ' (' . $parsed['n_transactions'] . ' ' . lang('@entries') . ', ' . $parsed['n_lines'] . ' ' . lang('@lines') . ')</h3>';
         $rows = [];

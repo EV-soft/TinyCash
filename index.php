@@ -107,18 +107,11 @@ if (isset($conn) && $conn) {
     $todo_unreconciled_bank = $r ? (int)$r[0] : 0;
 
     $today_iso = date('Y-m-d');
-    $idx_disc = invoice_discount_sql($conn);
-    $ov_res = @DB::query($conn, "SELECT
-            (SELECT COALESCE(SUM(quantity * price_each $idx_disc * (100 + line_vat_rate) / 100.0), 0)
-             FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1) + " . invoice_credited_sql($conn) . " AS total,
-            (SELECT COALESCE(SUM(amount), 0) FROM invoice_payments WHERE inv_id = i.inv_id) AS paid
-        FROM invoices i
-        WHERE i.inv_status = 'sent' AND i.inv_due_date IS NOT NULL AND i.inv_due_date <> '' AND i.inv_due_date < '$today_iso'");
-    if ($ov_res) {
-        while ($ov_row = DB::fetch_assoc($ov_res)) {
-            if ((float)$ov_row['total'] - (float)$ov_row['paid'] > 0.01) $todo_overdue_invoices++;
-        }
-    }
+    $ov_res = @DB::query($conn, "SELECT COUNT(*) FROM invoices i
+        WHERE " . invoice_open_where() . " AND i.inv_due_date IS NOT NULL AND i.inv_due_date <> '' AND i.inv_due_date < '$today_iso'
+          AND " . invoice_open_sql($conn) . " > 0.01");
+    $ov_row = $ov_res ? DB::fetch_row($ov_res) : null;
+    $todo_overdue_invoices = $ov_row ? (int)$ov_row[0] : 0;
 
     // "Udgifter der forfalder snart" - samme kriterium som expense_list.php's
     // "Betal nu"-knap ($is_payable), afgrænset til de næste 7 dage (inkl.
@@ -183,7 +176,9 @@ if (isset($conn) && $conn) {
     $todo_over_budget = 0;
     $has_budget_table_idx = db_has_table($conn, 'account_budgets');
     if ($has_budget_table_idx) {
-        $cur_year_idx = (int)date('Y');
+        // Det igangværende regnskabsår (et forskudt år 1/7-30/6 hedder efter sit slutår - som report_income.php's ?year=)
+        [$fy_start_idx, $fy_end_idx] = tc_fiscal_year_bounds($conn);
+        $cur_year_idx = (int)substr($fy_end_idx, 0, 4);
         $bud_res_idx = @DB::query($conn, "SELECT acc_id, budget_amount FROM account_budgets WHERE year = $cur_year_idx AND budget_amount > 0");
         $budgets_idx = [];
         if ($bud_res_idx) { while ($b = DB::fetch_assoc($bud_res_idx)) { $budgets_idx[(int)$b['acc_id']] = (float)$b['budget_amount']; } }
@@ -191,7 +186,7 @@ if (isset($conn) && $conn) {
             $actual_res_idx = @DB::query($conn, "
                 SELECT a.acc_id, SUM(l.amount) AS spent
                 FROM ledger l JOIN journal j ON l.jou_id = j.jou_id JOIN accounts a ON l.acc_id = a.acc_id
-                WHERE a.acc_type = 'expense' AND j.jou_date BETWEEN '$cur_year_idx-01-01' AND '$cur_year_idx-12-31'
+                WHERE a.acc_type = 'expense' AND j.jou_date BETWEEN '$fy_start_idx' AND '$fy_end_idx'
                   AND (j.trans_type IS NULL OR j.trans_type != 'year_end_close')      -- RETTET: lukkeposteringen nulstillede forbruget (som i report_income.php)
                 GROUP BY a.acc_id");
             if ($actual_res_idx) {
@@ -212,7 +207,8 @@ if (isset($conn) && $conn) {
     $recur_cutoff = date('Y-m-d', strtotime('-7 days'));
     $ri_res = @DB::query($conn, "SELECT COUNT(*) FROM recurring_invoices WHERE is_active = 1 AND next_run_date IS NOT NULL AND next_run_date <= '$recur_cutoff'");
     $ri_res = $ri_res ? DB::fetch_row($ri_res) : null;
-    $todo_recur_overdue += $ri_res ? (int)$ri_res[0] : 0;
+    $todo_recur_inv_overdue = $ri_res ? (int)$ri_res[0] : 0;
+    $todo_recur_overdue += $todo_recur_inv_overdue;
     $re_res = @DB::query($conn, "SELECT COUNT(*) FROM recurring_expenses WHERE is_active = 1 AND next_run_date IS NOT NULL AND next_run_date <= '$recur_cutoff'");
     $re_res = $re_res ? DB::fetch_row($re_res) : null;
     $todo_recur_overdue += $re_res ? (int)$re_res[0] : 0;
@@ -313,18 +309,12 @@ if (isset($conn) && $conn) {
         $label_end   = tc_month_name((int)date('n', strtotime($to . ' -1 day')), true);
         $flow_labels[] = ($label_start === $label_end) ? $label_start : "$label_start-$label_end";
 
-        // RETTET (selv-fanget, runde 24 - samme fejlklasse som §bookkeeper-
-        // wishlist-round23's rabat-gennemgang overså her): summerede FØR
-        // linjernes rå quantity*price_each direkte, uden hverken
-        // invoice_discount_sql()'s rabatfaktor eller exch_rate-korrektionen
-        // - en rabatteret eller fremmedvaluta-faktura viste et for højt
-        // salgstal i netop dette diagram. Ekskl. moms er bevidst bevaret
-        // (samme semantik som før - dette er et netto-salgs-diagram, ikke
-        // en inkl.-moms-opgørelse).
+        // Salget fra hovedbogens indtægtskonti, som udgifterne nedenfor og "Samlet salg" øverst - fra fakturaerne alene
+        // manglede webbutikkens dagssalg (model B), indtægtsbilag og salg bogført direkte fra banken
         $sales_row = DB::fetch_row(@DB::query($conn,
-            "SELECT SUM((SELECT COALESCE(SUM(quantity * price_each $idx_disc), 0) FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1))
-             FROM invoices i
-             WHERE LOWER(i.inv_status) NOT IN ('void', 'draft') AND i.inv_date >= '$from' AND i.inv_date < '$to'"));
+            "SELECT SUM(-l.amount) FROM ledger l JOIN journal j ON j.jou_id = l.jou_id JOIN accounts a ON a.acc_id = l.acc_id
+             WHERE a.acc_type = 'income' AND j.jou_date >= '$from' AND j.jou_date < '$to'
+               AND (j.trans_type IS NULL OR j.trans_type != 'year_end_close')"));
         $flow_sales[] = ($sales_row && $sales_row[0] !== null) ? (float)$sales_row[0] : 0.0;
 
         // RETTET: udgifterne var bilagenes BRUTTObeløb (inkl. moms) - mod en omsætning EKSKL. moms - og talte også
@@ -381,16 +371,11 @@ if (isset($conn) && $conn) {
         return 5;
     };
 
-    $fc_disc = invoice_discount_sql($conn);
-    $fc_i_res = DB::query($conn, "SELECT i.inv_due_date,
-            (SELECT COALESCE(SUM(quantity * price_each $fc_disc * (100 + line_vat_rate) / 100.0), 0)
-             FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1) + " . invoice_credited_sql($conn) . " AS total,
-            (SELECT COALESCE(SUM(amount), 0) FROM invoice_payments WHERE inv_id = i.inv_id) AS paid
-        FROM invoices i
-        WHERE LOWER(i.inv_status) = 'sent' AND i.inv_due_date IS NOT NULL");
+    $fc_i_res = DB::query($conn, "SELECT i.inv_due_date, " . invoice_open_sql($conn) . " AS open_amt
+        FROM invoices i WHERE " . invoice_open_where() . " AND i.inv_due_date IS NOT NULL");
     if ($fc_i_res) {
         while ($fc_row = DB::fetch_assoc($fc_i_res)) {
-            $fc_due = (float)$fc_row['total'] - (float)$fc_row['paid'];
+            $fc_due = (float)$fc_row['open_amt'];
             if ($fc_due > 0.01) $fc_incoming[$fc_bucket_of($fc_row['inv_due_date'])] += $fc_due;
         }
     }
@@ -428,6 +413,10 @@ $fc_has_data = (array_sum($fc_incoming) > 0.01 || array_sum($fc_outgoing) > 0.01
 // nede (ses opfølgning), hvor øjet rent faktisk er når de opdigtede tal skal fortolkes. At vise den BÅDE her
 // øverst OG nede ved graferne var overflødigt dobbelt op.
 
+// Systemsundhed (kun administrator): halve/ubalancerede bilag, afstemningsdifferencer, manglende migrationer, friske fejl
+require_once 'inc/health.inc.php';
+health_box($conn);
+
 // "Mine opgaver" - placeret FØR KPI-tallene, da handlinger der venter er
 // mere presserende end historiske nøgletal for den daglige bogholder-brug.
 $todo_items = [
@@ -440,8 +429,8 @@ $todo_items = [
     ['count' => $todo_low_stock,        'label' => '@Low Stock Products',      'link' => 'inventory_status.php','icon' => '📦'],
     ['count' => $todo_missing_email,    'label' => '@Customers Missing Email', 'link' => 'sales_hub.php#c_card','icon' => '✉️'],
     ['count' => $todo_vat_deadline,     'label' => '@VAT Deadline Approaching','link' => 'vat_report.php',       'icon' => '📅'],
-    ['count' => $todo_over_budget,      'label' => '@Accounts Over Budget',    'link' => 'report_income.php?year=' . date('Y'), 'icon' => '📈'],
-    ['count' => $todo_recur_overdue,    'label' => '@Recurring Templates Overdue', 'link' => 'recurring_invoices.php', 'icon' => '🔁'],
+    ['count' => $todo_over_budget,      'label' => '@Accounts Over Budget',    'link' => 'report_income.php?year=' . substr(tc_fiscal_year_bounds($conn)[1], 0, 4), 'icon' => '📈'],
+    ['count' => $todo_recur_overdue,    'label' => '@Recurring Templates Overdue', 'link' => ($todo_recur_inv_overdue ?? 0) > 0 ? 'recurring_invoices.php' : 'recurring_expenses.php', 'icon' => '🔁'],      // (pegede altid på fakturaerne, også når det var en fast udgift der var bagud)
 ];
 ?>
 <div style="width: 1000px; max-width: 100%; box-sizing: border-box; margin: 0 auto 20px auto;">
@@ -475,15 +464,15 @@ $todo_items = [
 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; width: 1000px; max-width: 100%; box-sizing: border-box; margin: 0 auto 20px auto;">
     <div class="kpi-card" style="padding: 20px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 8px dotted #2ecc71;">
         <div class="kpi-title" style="font-size: 12px; text-transform: uppercase; font-weight: bold;"><?php echo lang('@Total Sales'); ?></div>
-        <div style="font-size: 24px; font-weight: bold; margin-top: 5px;"><?php echo fmt_dk($total_sales); ?> kr.</div>
+        <div style="font-size: 24px; font-weight: bold; margin-top: 5px;"><?php echo fmt_dk($total_sales); ?> <?php echo htmlspecialchars(tc_cur_label()); ?></div>
     </div>
     <div class="kpi-card" style="padding: 20px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 8px dotted #e74c3c;">
         <div class="kpi-title" style="font-size: 12px; text-transform: uppercase; font-weight: bold;"><?php echo lang('@Total Expenses'); ?></div>
-        <div style="font-size: 24px; font-weight: bold; margin-top: 5px;"><?php echo fmt_dk($total_expenses); ?> kr.</div>
+        <div style="font-size: 24px; font-weight: bold; margin-top: 5px;"><?php echo fmt_dk($total_expenses); ?> <?php echo htmlspecialchars(tc_cur_label()); ?></div>
     </div>
     <div class="kpi-card" style="padding: 20px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 8px dotted <?php echo $profit_color; ?>;">
         <div class="kpi-title" style="font-size: 12px; text-transform: uppercase; font-weight: bold;"><?php echo lang('@Net Profit / Balance'); ?></div>
-        <div style="font-size: 24px; font-weight: bold; color: <?php echo $profit_color; ?>; margin-top: 5px;"><?php echo fmt_dk($net_profit); ?> kr.</div>
+        <div style="font-size: 24px; font-weight: bold; color: <?php echo $profit_color; ?>; margin-top: 5px;"><?php echo fmt_dk($net_profit); ?> <?php echo htmlspecialchars(tc_cur_label()); ?></div>
     </div>
 </div>
 

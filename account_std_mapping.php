@@ -63,7 +63,7 @@ if (isset($_POST['import_std_csv'])) {
         $raw = file_get_contents($_FILES['std_csv']['tmp_name']);
         $lines = preg_split('/\r\n|\r|\n/', trim($raw));
         $delim = (strpos($lines[0] ?? '', ';') !== false) ? ';' : ',';
-        $header_row = str_getcsv(array_shift($lines), $delim);
+        $header_row = str_getcsv(array_shift($lines), $delim, '"', '');
 
         $col_num = $col_name = null;
         foreach ($header_row as $i => $h) {
@@ -75,21 +75,26 @@ if (isset($_POST['import_std_csv'])) {
         if ($col_num === null) {
             $import_message = htm_Alert(lang('@Error: Could not recognize this file as a standard chart of accounts CSV (expected a KONTONUMMER column).'), 'error', 700, false);
         } else {
+            // Typen tages fra den medleverede standardkontoplan, når nummeret findes der; ellers dens nummerintervaller
+            // (1000-1599 omsætning, 1600-3189 omkostninger, 6500-6979 egenkapital - før blev 1xxx og 65xx til aktiver)
+            $known_types = [];
+            $skp = json_decode((string)@file_get_contents(__DIR__ . '/json-data/standardkontoplan_2026.json'), true);
+            foreach (($skp['accounts'] ?? []) as $ka) $known_types[(int)$ka['no']] = (string)$ka['std_type'];
             $parsed = [];
             foreach ($lines as $line) {
                 if (trim($line) === '') continue;
-                $cols = str_getcsv($line, $delim);
+                $cols = str_getcsv($line, $delim, '"', '');
                 $num = (int)trim($cols[$col_num] ?? '');
                 if ($num <= 0) continue;
                 $name = ($col_name !== null) ? trim($cols[$col_name] ?? '') : '';
                 if ($name === '') $name = lang('@Account') . ' ' . $num;
 
-                if ($num < 2000) $type = 'asset';
-                elseif ($num < 3000) $type = 'expense';
+                if (isset($known_types[$num])) $type = $known_types[$num];
+                elseif ($num < 1600) $type = 'income';
+                elseif ($num < 3190) $type = 'expense';
                 elseif ($num < 5000) $type = 'finance';
-                elseif ($num < 6000) $type = 'asset';
-                elseif ($num < 7000) $type = 'asset';
-                elseif ($num < 8000) $type = 'liability';
+                elseif ($num < 6500) $type = 'asset';
+                elseif ($num < 6980) $type = 'equity';
                 else $type = 'liability';
 
                 $parsed[$num] = ['name' => $name, 'type' => $type];

@@ -30,6 +30,9 @@ if (session_status() === PHP_SESSION_NONE) {
 // blive ekkoet uescapet i <html lang="..."> (inc/htm_page.lib.php) - XSS.
 $requested_lang = isset($_GET['l']) ? trim($_GET['l']) : 'da';
 $lang = preg_match('/^[a-z]{2}$/', $requested_lang) ? $requested_lang : 'da';
+// Kun et sprog brugerfladen har - en ukendt kode (?l=xx) gav ellers rå engelske nøgler med "@" uden at kunne vælges væk
+$sl_codes = array_column((array)(json_decode((string)@file_get_contents(__DIR__ . '/json-data/languages.json'), true)['language'] ?? []), 'code');
+if ($sl_codes && !in_array($lang, $sl_codes, true)) $lang = 'da';
 
 // 3. Opdater BEGGE session-variabler så både menu og bibliotek forstår det
 $_SESSION['lang'] = $lang;

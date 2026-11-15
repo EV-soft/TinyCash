@@ -15,13 +15,16 @@ require_once 'inc/mail_handler.lib.php';
 require_once 'inc/audit.inc.php';
 require_once 'inc/invoice_layouts.inc.php';  // il_column_exists()
 require_once 'inc/reminder.inc.php';
+require_once 'inc/doc_paper.inc.php';      // (doc_uploaded_pdf())
 
 /**
  * Sender én rykker for fakturaen med id $id. Returnerer status som en
  * af: 'sent', 'already_sent_today', 'error' (ugyldig/ikke-rykkerbar
  * faktura, eller mailen fejlede reelt).
  */
-function send_single_reminder($conn, array $s, int $id): string {
+// $by_post: rykkeren er udskrevet og sendt med posten (rykkerblanketten) - ingen mail, men den tælles og gebyret bogføres
+// $pdf: rykkerblanketten som PDF (fra reminder_view.php) - vedhæftes mailen
+function send_single_reminder($conn, array $s, int $id, bool $by_post = false, ?string $pdf = null): string {
     if ($id <= 0) return 'error';
 
     // "(100+rate)/100" - se reminders.php for hvorfor "(1+rate/100)" er forkert på SQLite.
@@ -56,19 +59,33 @@ function send_single_reminder($conn, array $s, int $id): string {
     // send_invoice_action.php gør, og ruller tilbage når mailen er bygget.
     require_once __DIR__ . '/inc/doc_paper.inc.php';
     doc_lang_push((string)($inv['cust_language'] ?? ''));
+    if (!rf_ready($conn)) $s['reminder_fee_amount'] = 0;      // (et gebyr der ikke kan bogføres, kræves heller ikke)
     $rm = reminder_compose($s, $inv, $reminder_no, $old_sent_at);      // (tekst, beløb og gebyr - samme som blanketten)
     $subject   = $rm['subject'];
     $body_text = $rm['body_text'];
     $body = nl2br(htmlspecialchars($body_text));
+    $rm_label = tc_mail_doc_label('Rykker', '@Payment Reminder');
     doc_lang_pop();
 
-    $result = sendTinyMail($inv['cust_email'], $inv['cust_name'], $subject, $body, null, $inv['invoice_no']);
+    $result = $by_post ? ['success' => true] : sendTinyMail($inv['cust_email'], $inv['cust_name'], $subject, $body, $pdf, $inv['invoice_no'], $rm_label);
 
     if (isset($result['success']) && $result['success'] == true) {
         DB::query($conn, "UPDATE invoices SET reminder_count = reminder_count + 1 WHERE inv_id = $id");
+        // Gebyret bogføres (debet debitor, kredit gebyrkontoen) og lægges på fakturaen - før stod det kun i teksten
+        $fee_voucher = 0;
+        if ($rm['fee'] > 0) {
+            // (rf_post_fee() er atomisk - fejler den, står der intet halvt bilag; rykkeren er sendt, gebyret logges som 0)
+            try { $fee_voucher = rf_post_fee($conn, $id, (float)$rm['fee'], $reminder_no, date('Y-m-d')); }
+            catch (\Throwable $e) {
+                $fee_voucher = 0;  error_log('[reminder fee] faktura ' . $id . ': ' . $e->getMessage());
+                // Rykkeren (med gebyret i teksten) ER sendt - brugeren skal vide at gebyret ikke står på fakturaen (før kun i fejlloggen)
+                flash(sprintf(lang('@The reminder for invoice #%s was sent, but the reminder fee could not be posted: %s'), htmlspecialchars((string)$inv['invoice_no']), htmlspecialchars($e->getMessage())), 'warning');
+            }
+        }
         log_action($conn, 'SEND_REMINDER', 'invoices', $id,
             ['reminder_count' => (int)$inv['reminder_count']],
-            ['reminder_count' => (int)$inv['reminder_count'] + 1, 'to' => $inv['cust_email'], 'days_overdue' => $rm['days_overdue'], 'fee' => $rm['fee']]);      // (gebyret: rykkerblanketten viser det for en sendt rykker)
+            ['reminder_count' => (int)$inv['reminder_count'] + 1, 'to' => $by_post ? 'post' : $inv['cust_email'], 'days_overdue' => $rm['days_overdue'],
+             'fee' => $fee_voucher ? $rm['fee'] : 0, 'fee_voucher' => $fee_voucher]);      // (gebyret: rykkerblanketten viser det for en sendt rykker)
         return 'sent';
     }
 
@@ -104,7 +121,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ids']) && is_array($_
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($id <= 0) { redirect("reminders.php"); }
 
-$status = send_single_reminder($conn, $s, $id);
+// Fra rykkerblanketten: blanketten som PDF vedhæftes, svaret er JSON (docPdfSend() i inc/doc_design.inc.php)
+if (!empty($_POST['ajax'])) {
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    $pdf = doc_uploaded_pdf();
+    if ($pdf === null) { echo json_encode(['success' => false, 'error' => lang('@The PDF could not be made - nothing was sent.')]);  exit; }
+    $status = send_single_reminder($conn, $s, $id, false, $pdf);
+    if ($status === 'sent') {
+        flash(lang('@Reminder sent successfully.'));
+        echo json_encode(['success' => true, 'redirect' => "reminder_view.php?id=$id"]);
+    } else {
+        echo json_encode(['success' => false, 'error' => lang($status === 'already_sent_today'
+            ? '@A reminder was already sent for this invoice today - please wait until tomorrow to send another.' : '@Could not send the reminder. Check your mail settings.')]);
+    }
+    exit;
+}
+$by_post = ($_GET['mode'] ?? '') === 'post';      // (fra rykkerblanketten: udskrevet og sendt med posten)
+$status = send_single_reminder($conn, $s, $id, $by_post);
+if ($by_post) {
+    redirect("reminder_view.php?id=$id", $status === 'sent' ? '@The reminder is registered as sent by post.' : ($status === 'already_sent_today'
+        ? '@A reminder was already sent for this invoice today - please wait until tomorrow to send another.' : '@The reminder could not be registered.'), $status === 'sent' ? 'success' : 'warning');
+}
 if ($status === 'sent') {
     redirect('reminders.php', '@Reminder sent successfully.');
 } elseif ($status === 'already_sent_today') {

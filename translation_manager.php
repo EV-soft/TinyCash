@@ -130,10 +130,8 @@ function getAiSuggestion($key, $target_lang, $force_live_api = false) {
         // "SSL certificate... Viser nu den faktiske curl-fejl i stedet, så et resterende/nyt netværksproblem er
         // synligt frem for at ligne en (ikke-eksisterende) oversættelse.
         $err = curl_error($ch);
-        curl_close($ch);
         return "[AI-kald fejlede: {$err}]";
     }
-    curl_close($ch);
 
     $result = json_decode($response, true);
     $suggested_text = $result['choices'][0]['message']['content'] ?? '';

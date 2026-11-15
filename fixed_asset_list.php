@@ -77,7 +77,7 @@ if ($res) {
         } elseif ($row['status'] === 'cancelled') {
             // NYT (§bugs-batch-26-review): se fixed_asset_actions.php?action=cancel
             $status_html = '<span style="color:var(--text-muted);"><i class="fa-solid fa-rotate-left"></i> ' . lang('@Cancelled') . '</span>';
-        } elseif ($nbv <= 0.01) {
+        } elseif ($nbv <= (float)($row['residual_value'] ?? 0) + 0.01) {      // (afskrivningen stopper ved scrapværdien, ikke ved 0)
             $status_html = '<span style="color:var(--color-secondary);">' . lang('@Fully Depreciated') . '</span>';
         } else {
             $status_html = '<span style="color:var(--color-success);">' . lang('@Active') . '</span>';

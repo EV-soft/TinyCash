@@ -74,7 +74,7 @@ if (!empty($cust_rows)) {
             htmlspecialchars($r['cust_cvr'] ?? ''),
         ];
     }
-    htm_Table(['@Name', '@Email', '@CVR'], $data, 'search_cust_tbl', 100);
+    htm_Table(['@Name', '@Email', tc_company_id_short()], $data, 'search_cust_tbl', 100);      // (landets firma-id, ikke altid "CVR")
     htm_Card_end();
 }
 
@@ -84,6 +84,7 @@ require_once __DIR__ . '/inc/invoice_layouts.inc.php';
 $sr_has_cn = il_column_exists($conn, 'invoices', 'credit_note_no');
 $sr_cn_no  = (int)preg_replace('/\D/', '', preg_replace('/^\s*KN-?/i', '', $q));
 $sr_cn_sql = ($sr_has_cn && $sr_cn_no > 0 && preg_match('/^\s*(KN-?)?\d+\s*$/i', $q)) ? " OR i.credit_note_no = $sr_cn_no" : '';
+$sr_cn_sql .= preg_match('/^\s*#\s*0*(\d+)\s*$/', $q, $sr_im) ? " OR i.invoice_no = " . (int)$sr_im[1] : '';      // (fakturanummeret vises som "#1005")
 $inv_res = DB::query($conn, "SELECT i.inv_id, i.invoice_no, i.inv_status, i.inv_date, i.credit_ref" . ($sr_has_cn ? ", i.credit_note_no" : "") . ", c.cust_name
     FROM invoices i JOIN customers c ON i.cust_id = c.cust_id
     WHERE {$L('i.invoice_no')} OR {$L('c.cust_name')} OR {$L('i.cust_reference')}$sr_cn_sql
@@ -102,7 +103,7 @@ if (!empty($inv_rows)) {
             '<a href="invoice_view.php?id=' . (int)$r['inv_id'] . '">' . htmlspecialchars($label) . '</a>',
             htmlspecialchars($r['cust_name']),
             date(CONF_DATE_FORMAT, strtotime($r['inv_date'])),
-            htmlspecialchars(ucfirst($r['inv_status'])),
+            tc_invoice_status_label($r['inv_status']),      // ("Sent"/"Paid" stod på engelsk for en dansk bruger)
         ];
     }
     htm_Table(['@Invoice', '@Customer', '@Date', '@Status'], $data, 'search_inv_tbl', 100);
@@ -153,7 +154,7 @@ if ($sup_res !== false) {
                 htmlspecialchars($r['cvr'] ?? ''),
             ];
         }
-        htm_Table(['@Name', '@CVR'], $data, 'search_sup_tbl', 100);
+        htm_Table(['@Name', tc_company_id_short()], $data, 'search_sup_tbl', 100);
         htm_Card_end();
     }
 }
@@ -174,7 +175,7 @@ if (!empty($prod_rows)) {
             '<a href="product_edit.php?id=' . (int)$r['prod_id'] . '">' . htmlspecialchars($r['prod_name']) . '</a>',
             htmlspecialchars($r['prod_sku'] ?? ''),
             fmt_dk((float)$r['prod_price']),
-            $r['prod_stock'],
+            rtrim(rtrim(fmt_dk((float)$r['prod_stock'], 3), '0'), tc_num_sep()[0]),      // (stod rå fra databasen: "7.5000")
         ];
     }
     htm_Table(['@Name', '@SKU', '@Price', '@Stock'], $data, 'search_prod_tbl', 100);
@@ -186,9 +187,11 @@ if (!empty($prod_rows)) {
 // lavet til dem, selvom tilbuddet er et fuldgyldigt dokument på lige fod med en faktura.
 
 // --- TILBUD ---
+// Tilbudsnummeret vises som "T-000012" - det søgte man på, men kolonnen rummer kun tallet 12
+$sr_q_sql = preg_match('/^\s*T-?0*(\d+)\s*$/i', $q, $sr_qm) ? " OR q.quote_no = " . (int)$sr_qm[1] : '';
 $quote_res = @DB::query($conn, "SELECT q.quote_id, q.quote_no, q.status, q.quote_date, c.cust_name
     FROM quotes q JOIN customers c ON q.cust_id = c.cust_id
-    WHERE {$L('q.quote_no')} OR {$L('c.cust_name')} OR {$L('q.cust_reference')}
+    WHERE {$L('q.quote_no')} OR {$L('c.cust_name')} OR {$L('q.cust_reference')}$sr_q_sql
     ORDER BY q.quote_date DESC LIMIT $RESULT_LIMIT");
 if ($quote_res !== false) {
     $quote_rows = [];
@@ -202,7 +205,8 @@ if ($quote_res !== false) {
                 '<a href="quote_view.php?id=' . (int)$r['quote_id'] . '">T-' . str_pad((string)$r['quote_no'], 6, '0', STR_PAD_LEFT) . '</a>',
                 htmlspecialchars($r['cust_name']),
                 date(CONF_DATE_FORMAT, strtotime($r['quote_date'])),
-                htmlspecialchars(ucfirst($r['status'])),
+                ($sr_q = ['draft' => '@Draft', 'sent' => '@Sent', 'accepted' => '@Accepted', 'rejected' => '@Rejected', 'converted' => '@Converted to Invoice'][$r['status']] ?? null)
+                    ? lang($sr_q) : htmlspecialchars(ucfirst((string)$r['status'])),
             ];
         }
         htm_Table(['@Quote', '@Customer', '@Date', '@Status'], $data, 'search_quote_tbl', 100);
@@ -226,7 +230,8 @@ if ($asset_res !== false) {
                 '<a href="fixed_asset_edit.php?id=' . (int)$r['asset_id'] . '">' . htmlspecialchars($r['asset_name']) . '</a>',
                 htmlspecialchars($r['description'] ?? ''),
                 date(CONF_DATE_FORMAT, strtotime($r['acquisition_date'])),
-                htmlspecialchars(ucfirst($r['status'])),
+                ($sr_a = ['active' => '@Active', 'disposed' => '@Disposed', 'cancelled' => '@Cancelled'][$r['status']] ?? null)
+                    ? lang($sr_a) : htmlspecialchars(ucfirst((string)$r['status'])),
             ];
         }
         htm_Table(['@Name', '@Description', '@Acquired', '@Status'], $data, 'search_asset_tbl', 100);

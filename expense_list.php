@@ -37,14 +37,17 @@ htm_Card_('@Expense Overview', 1200, '', 'exp_card', true, $top_btn); // fold: k
 // den (nu potentielt misvisende) expenses.account_id. Samme "PHP-side aggregering pr. udgift"-mønster som
 // vat_reconciliation.php's egen tilsvarende rettelse.
 // RETTET: udgiftskladder (intet bilagsnummer, ikke bogført) talte med i fordelingen pr. konto
-$exp_by_acc_ids = DB::query($conn, "SELECT exp_id FROM expenses WHERE is_cancelled = 0 AND voucher_no IS NOT NULL AND (exp_type IS NULL OR exp_type != 'income')");
+// Uden fradragsberettiget moms (som resultatopgørelsen) og for det igangværende regnskabsår - før inkl. moms og over hele historikken
+[$eba_from, $eba_to] = tc_fiscal_year_bounds($conn);
+$exp_by_acc_ids = DB::query($conn, "SELECT exp_id FROM expenses WHERE is_cancelled = 0 AND voucher_no IS NOT NULL AND (exp_type IS NULL OR exp_type != 'income')
+    AND exp_date BETWEEN '" . DB::escape($conn, $eba_from) . "' AND '" . DB::escape($conn, $eba_to) . "'");
 $exp_by_acc_sums = []; // acc_id => sum
 $exp_by_acc_grand = 0.0;
 if ($exp_by_acc_ids) {
     while ($eid = DB::fetch_assoc($exp_by_acc_ids)) {
         foreach (expense_get_lines($conn, (int)$eid['exp_id']) as $line) {
-            $exp_by_acc_sums[$line['account_id']] = ($exp_by_acc_sums[$line['account_id']] ?? 0) + $line['gross'];
-            $exp_by_acc_grand += $line['gross'];
+            $exp_by_acc_sums[$line['account_id']] = ($exp_by_acc_sums[$line['account_id']] ?? 0) + $line['net'];
+            $exp_by_acc_grand += $line['net'];
         }
     }
 }
@@ -62,7 +65,7 @@ foreach ($exp_by_acc_sums as $acc_id => $total) {
 }
 if (!empty($exp_by_acc_rows)) {
     echo '<details style="margin-bottom:15px;"><summary style="cursor:pointer; font-weight:bold; color:var(--text-muted); user-select:none; list-style:none; display:flex; align-items:center; gap:6px;">'
-        . '<i class="fa-solid fa-chart-pie" style="color:var(--color-primary);"></i> ' . lang('@Expense Breakdown by Account') . '</summary>';
+        . '<i class="fa-solid fa-chart-pie" style="color:var(--color-primary);"></i> ' . lang('@Expense Breakdown by Account') . ' (' . lang('@excl. VAT') . ', ' . date(CONF_DATE_FORMAT, strtotime($eba_from)) . ' - ' . date(CONF_DATE_FORMAT, strtotime($eba_to)) . ')</summary>';
     echo '<div style="margin-top:8px;">';
     htm_Table(['@Account', '@Amount', '@Share'], $exp_by_acc_rows, 'expByAccTbl', 20, '', true, ['', 'width:150px; text-align:right;', 'width:100px; text-align:right;']);
     echo '</div></details>';

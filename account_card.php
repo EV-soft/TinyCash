@@ -29,8 +29,9 @@ $default_from = tc_fiscal_year_bounds($conn)[0];      // (regnskabsårets start 
 $default_to   = date('Y-m-d');
 $from = $_GET['from'] ?? $default_from;
 $to   = $_GET['to']   ?? $default_to;
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) $from = $default_from;
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $to))   $to   = $default_to;
+if (!tc_is_date((string)$from)) $from = $default_from;      // (tc_is_date: "2026-02-31" bestod formattjekket)
+if (!tc_is_date((string)$to))   $to   = $default_to;
+if ($from > $to) [$from, $to] = [$to, $from];      // (en omvendt periode viste saldo primo fra slutdatoen og ingen bevægelser)
 
 // Hent kontoplanen til vælgeren
 $acc_options = [];
@@ -74,10 +75,14 @@ if (!empty($acc_options) && $acc_id > 0) {
     } else {
         // Primo: saldo af ALLE posteringer på kontoen før periodens start -
         // ingen trans_type-udelukkelse, skal afspejle den faktiske saldo.
+        // En resultatkonto starter forfra hvert regnskabsår - uden en årsafslutning tog primo ellers alle tidligere års
+        // indtægter/omkostninger med. (Er året afsluttet, er lukkeposteringen dateret i det gamle år og falder også udenfor.)
+        $ac_pl_from = in_array($acc_row['acc_type'], ['income', 'expense'], true)
+            ? " AND j.jou_date >= '" . DB::escape($conn, tc_fiscal_year_bounds($conn, $from)[0]) . "'" : '';
         $primo_row = DB::fetch_assoc(DB::query($conn, "
             SELECT SUM(l.amount) AS primo
             FROM ledger l JOIN journal j ON l.jou_id = j.jou_id
-            WHERE l.acc_id = $acc_id AND j.jou_date < '$ps'"));
+            WHERE l.acc_id = $acc_id AND j.jou_date < '$ps'$ac_pl_from"));
         $primo = (float)($primo_row['primo'] ?? 0);
 
         $lines_sql = "SELECT j.jou_id, j.jou_date, j.jou_text, j.voucher_no, j.is_cancelled, l.amount
@@ -89,7 +94,7 @@ if (!empty($acc_options) && $acc_id > 0) {
         $lines = [];
         if ($lines_res) { while ($lr = DB::fetch_assoc($lines_res)) { $lines[] = $lr; } }
 
-        htm_Card_(lang('@Account Card') . ': ' . $acc_row['acc_id'] . ' - ' . htmlspecialchars($acc_row['acc_name']), 1000);
+        htm_Card_(lang('@Account Card') . ': ' . $acc_row['acc_id'] . ' - ' . $acc_row['acc_name'], 1000);      // (htm_Card_ escaper selv titlen - "&" blev vist som "&amp;")
 
         $headers = ['@Date', '@Journal #', '@Description', '@Debit', '@Credit', '@Balance'];
         $data = [];

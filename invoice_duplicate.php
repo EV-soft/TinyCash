@@ -44,6 +44,21 @@ $cust_ref_sql  = "'" . DB::escape($conn, $src['cust_reference'] ?? '') . "'";
 $proj_sql      = !empty($src['proj_id']) ? (int)$src['proj_id'] : 'NULL';
 $orig_cur_sql  = !empty($src['orig_currency']) ? "'" . DB::escape($conn, $src['orig_currency']) . "'" : 'NULL';
 $exch_rate_sql = !empty($src['exch_rate']) ? (float)$src['exch_rate'] : 'NULL';
+// En kopi dateret i dag skal have dagens kurs, ikke originalens (der kan være måneder gammel) - fra kurscachen
+// (currency_proxy.php, højst 7 dage gammel); ellers beholdes kursen, og brugeren bedes kontrollere den
+$dup_rate_note = '';
+if (!empty($src['orig_currency']) && !empty($src['exch_rate'])) {
+    $fx = json_decode((string)@file_get_contents(__DIR__ . '/storage/currency_rates.json'), true);
+    $base = strtoupper((string)($global_settings['currency'] ?? 'DKK'));  $oc = strtoupper((string)$src['orig_currency']);
+    $per_eur = fn(string $c) => $c === 'EUR' ? 1.0 : (float)($fx['rates'][$c] ?? 0);
+    if (is_array($fx) && tc_is_date((string)($fx['date'] ?? '')) && $fx['date'] >= date('Y-m-d', strtotime('-7 days'))
+        && $per_eur($base) > 0 && $per_eur($oc) > 0) {
+        $exch_rate_sql = round($per_eur($base) / $per_eur($oc), 6);
+        $dup_rate_note = ' ' . sprintf(lang('@The exchange rate was updated to %s (%s).'), fmt_dk($exch_rate_sql, 4), date(CONF_DATE_FORMAT, strtotime($fx['date'])));
+    } else {
+        $dup_rate_note = ' ' . lang('@Check the exchange rate - it was copied from the original invoice.');
+    }
+}
 
 DB::begin_transaction($conn);
 
@@ -54,10 +69,13 @@ $ok = DB::query($conn, "INSERT INTO invoices
      $deliv_sql, $currency_sql, $proj_sql, $orig_cur_sql, $exch_rate_sql)");
 
 if (!$ok) {
-    DB::rollback($conn);
-    die(lang('@Error saving to database:') . " " . DB::error($conn));
+    $dup_err = (string)DB::error($conn);  DB::rollback($conn);
+    redirect("invoice_view.php?id=$src_id", lang('@Error saving to database:') . ' ' . htmlspecialchars($dup_err), 'error');      // (var en hvid side)
 }
 $new_id = DB::insert_id($conn);
+// IOSS-mærket følger med (linjerne har modtagerlandets satser - uden mærket kunne kopien ikke bogføres)
+if (ioss_ready($conn) && trim((string)($src['inv_ioss'] ?? '')) !== '') DB::query($conn, "UPDATE invoices SET inv_ioss = 'Y' WHERE inv_id = " . (int)$new_id);
+if (!empty($src['inv_oss_off'])) DB::query($conn, "UPDATE invoices SET inv_oss_off = 1 WHERE inv_id = " . (int)$new_id);      // (ydelse beskattet i eget land)
 // Flere fakturalayouts: et layout valgt til den oprindelige faktura følger med (ellers kundens / standarden)
 require_once __DIR__ . '/inc/invoice_layouts.inc.php';
 if (il_ready($conn) && ($il_src = il_valid_id($conn, $src['inv_layout_id'] ?? 0)) > 0) DB::query($conn, "UPDATE invoices SET inv_layout_id = $il_src WHERE inv_id = $new_id");
@@ -79,14 +97,16 @@ while ($l = DB::fetch_assoc($lres)) {
         'proj_id'        => $l['proj_id'],
         'orig_currency'  => $l['orig_currency'],
         'orig_amount'    => $l['orig_amount'],
-        'exch_rate'      => $l['exch_rate'],
+        'exch_rate'      => ($l['exch_rate'] !== null && $exch_rate_sql !== 'NULL') ? $exch_rate_sql : $l['exch_rate'],
     ]);
 }
 
 log_action($conn, 'DUPLICATE_INVOICE', 'invoices', $new_id, ['source_inv_id' => $src_id], ['cust_id' => $cust_id_sql, 'inv_date' => $today]);
 
 DB::commit($conn);
-redirect("invoice_edit.php?id=$new_id", sprintf(lang('@New draft created as a duplicate of invoice #%d - review and adjust before sending.'), $src_id), 'info');
+// Kildens fakturanummer - ikke det interne id (faktura #1005 blev vist som "#7"); en kladde har intet nummer endnu
+$dup_src_label = !empty($src['invoice_no']) ? '#' . $src['invoice_no'] : lang('@draft') . ' (' . $src_id . ')';
+redirect("invoice_edit.php?id=$new_id", sprintf(lang('@New draft created as a copy of invoice %s - review and adjust before sending.'), $dup_src_label) . $dup_rate_note, 'info');
 ob_end_flush();
 exit;
 ?>

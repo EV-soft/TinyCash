@@ -35,6 +35,12 @@ $has_active_col = db_has_column($conn, 'users', 'is_active');
 // 1. Gem-logik
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_user'])) {
     $_POST['username'] = trim((string)($_POST['username'] ?? ''));
+    // En ukendt rolle (manipuleret eller tom formular) blev gemt som den var - brugeren fik niveau 1 og en rolle
+    // som ingen side kender. Kun de tre roller godtages; ellers beholdes den gemte rolle (som user_create.php).
+    if (!in_array((string)($_POST['user_role'] ?? ''), ['admin', 'accountant', 'user'], true)) {
+        $ue_cur = DB::fetch_assoc(DB::query($conn, "SELECT user_role FROM users WHERE user_id = $edit_id"));
+        $_POST['user_role'] = in_array((string)($ue_cur['user_role'] ?? ''), ['admin', 'accountant', 'user'], true) ? (string)$ue_cur['user_role'] : 'user';
+    }
     $username = DB::escape($conn, $_POST['username']);
     $role     = DB::escape($conn, $_POST['user_role']);
     $level    = role_to_level($_POST['user_role']);
@@ -111,6 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_user'])) {
             else {
                 $hash = password_hash($pw1, PASSWORD_DEFAULT);
                 DB::query($conn, "UPDATE users SET password_hash='$hash' WHERE user_id=$edit_id");
+                if ($edit_id === (int)($_SESSION['user_id'] ?? 0)) $_SESSION['pw_fp'] = tc_pw_fingerprint($hash);      // (eget kodeord: denne session fortsætter, andre logges ud)
                 $msg .= " + " . lang('@Password changed');
                 $password_changed = true;
             }
@@ -124,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_user'])) {
                 ['username' => $before_row['username'], 'user_role' => $before_row['user_role'], 'user_level' => (int)$before_row['user_level'], 'is_active' => (int)($before_row['is_active'] ?? 1)],
                 ['username' => $_POST['username'], 'user_role' => $_POST['user_role'], 'user_level' => $level, 'password_changed' => $password_changed, 'is_active' => $requested_active]);
         }
-    } else { $err = DB::error($conn); }
+    } else { $err = htmlspecialchars((string)DB::error($conn)); }
 }
 
 // 2. Hent data

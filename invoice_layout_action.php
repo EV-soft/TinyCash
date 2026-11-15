@@ -33,8 +33,8 @@ $action = (string)($_POST['action'] ?? '');
 // Layouttypen: et eksisterende layout har sin egen; et nyt får 'doc' (tilbud) eller typen fra det kopierede layout
 $id     = il_valid_id($conn, $_POST['layout_id'] ?? 0, null);
 $copy   = il_valid_id($conn, $_POST['copy_from'] ?? 0, null);
-$doc    = $id > 0 ? il_layout_doc($conn, $id) : ($copy > 0 ? il_layout_doc($conn, $copy)
-        : (in_array($_POST['doc'] ?? '', IL_DOC_TYPES, true) ? $_POST['doc'] : 'invoice'));
+$doc_in = in_array($_POST['doc'] ?? '', IL_DOC_TYPES, true) ? $_POST['doc'] : 'invoice';      // (kun de kendte typer)
+$doc    = $id > 0 ? il_layout_doc($conn, $id) : ($copy > 0 ? il_layout_doc($conn, $copy) : $doc_in);
 if ($doc !== 'invoice' && !il_doc_ready($conn)) {
     il_answer(false, ['error' => lang('@Quote layouts need a database update: System -> Maintenance -> Database migration (Several invoice layouts).')], 500);
 }
@@ -54,6 +54,7 @@ if ($action === 'create') {
                 'pos_x' => (float)$b['pos_x'], 'pos_y' => (float)$b['pos_y'], 'width_mm' => (float)$b['width_mm'], 'is_visible' => (int)($b['is_visible'] ?? 1)]);
         }
     }
+    if ($new_id > 0) $ok = $ok && il_copy_shapes($conn, $from, $new_id);      // (grafikken følger med kopien)
     if (!$ok || $new_id <= 0) { DB::rollback($conn);  il_answer(false, ['error' => DB::error($conn)], 500); }
     DB::commit($conn);
     log_action($conn, 'CREATE_INVOICE_LAYOUT', 'invoice_layouts', $new_id, null, ['name' => $name, 'copy_from' => $from]);
@@ -93,6 +94,7 @@ if ($action === 'delete') {
     $ok = DB::query($conn, "UPDATE customers SET cust_layout_id = NULL WHERE cust_layout_id = $id")
        && DB::query($conn, "UPDATE invoices SET inv_layout_id = NULL WHERE inv_layout_id = $id AND LOWER(inv_status) = 'draft'")
        && DB::query($conn, "DELETE FROM invoice_layout_blocks WHERE layout_id = $id")
+       && (!il_shapes_ready($conn) || DB::query($conn, "DELETE FROM invoice_layout_shapes WHERE layout_id = $id"))
        && DB::query($conn, "DELETE FROM invoice_layouts WHERE layout_id = $id");
     if (!$ok) { DB::rollback($conn);  il_answer(false, ['error' => DB::error($conn)], 500); }
     DB::commit($conn);
@@ -128,6 +130,34 @@ if ($action === 'set_visible') {
     if (!$ok) il_answer(false, ['error' => DB::error($conn)], 500);
     log_action($conn, $vis ? 'SHOW_LAYOUT_BLOCK' : 'HIDE_LAYOUT_BLOCK', 'invoice_layouts', $id, null, ['layout' => $old['name'], 'block' => $eid]);
     il_answer(true, ['layout_id' => $id, 'visible' => $vis]);
+}
+
+// Grafik i layoutet: tilføj (svarer med elementet og dets id), gem (placering, størrelse, farver) og slet
+if (in_array($action, ['shape_add', 'shape_save', 'shape_delete'], true)) {
+    if (!il_shapes_ready($conn)) il_answer(false, ['error' => lang('@Graphics in layouts need a database update: System -> Maintenance -> Database migration (Several invoice layouts).')], 500);
+    if ($action === 'shape_add') {
+        $sh = il_shape_clean($_POST, in_array($_POST['shape_type'] ?? '', IL_SHAPE_TYPES, true) ? $_POST['shape_type'] : 'rect') + ['layout_id' => $id];
+        if (!DB::insert($conn, 'invoice_layout_shapes', $sh)) il_answer(false, ['error' => DB::error($conn)], 500);
+        $sh['shape_id'] = (int)DB::insert_id($conn);
+        log_action($conn, 'ADD_LAYOUT_SHAPE', 'invoice_layouts', $id, null, ['layout' => $old['name'], 'shape' => $sh]);
+        il_answer(true, ['shape' => $sh]);
+    }
+    $sid = (int)($_POST['shape_id'] ?? 0);
+    $cur = DB::fetch_assoc(DB::query($conn, "SELECT * FROM invoice_layout_shapes WHERE shape_id = $sid AND layout_id = $id"));      // (kun dette layouts grafik)
+    if (!$cur) il_answer(false, ['error' => lang('@Not found - it may already have been deleted.')]);
+    if ($action === 'shape_delete') {
+        if (!DB::query($conn, "DELETE FROM invoice_layout_shapes WHERE shape_id = $sid")) il_answer(false, ['error' => DB::error($conn)], 500);
+        log_action($conn, 'DELETE_LAYOUT_SHAPE', 'invoice_layouts', $id, $cur, null);
+        il_answer(true, ['shape_id' => $sid]);
+    }
+    // Det gemte element - kun de felter der er sendt OG gyldige, ændres (en ugyldig farve nulstillede før stregfarven)
+    $in = ['x' => $cur['pos_x'], 'y' => $cur['pos_y'], 'w' => $cur['width_mm'], 'h' => $cur['height_mm'],
+           'stroke' => $cur['stroke_color'], 'fill' => $cur['fill_color'], 'stroke_mm' => $cur['stroke_mm'], 'radius_mm' => $cur['radius_mm']];
+    foreach (['x', 'y', 'w', 'h', 'stroke_mm', 'radius_mm'] as $k) if (isset($_POST[$k]) && is_numeric($_POST[$k])) $in[$k] = $_POST[$k];
+    foreach (['stroke', 'fill'] as $k) if (isset($_POST[$k]) && ($_POST[$k] === '' || preg_match('/^#[0-9a-f]{6}$/i', (string)$_POST[$k]))) $in[$k] = $_POST[$k];
+    $sh = il_shape_clean($in, $cur['shape_type']);
+    if (!DB::update($conn, 'invoice_layout_shapes', $sh, 'shape_id', $sid)) il_answer(false, ['error' => DB::error($conn)], 500);
+    il_answer(true, ['shape' => $sh + ['shape_id' => $sid]]);
 }
 
 il_answer(false, ['error' => 'Unknown action']);

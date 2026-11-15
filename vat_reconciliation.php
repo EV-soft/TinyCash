@@ -21,8 +21,9 @@ require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/menu.inc.php';
 require_once 'inc/php2htm.lib.php';
+require_once 'inc/vat_return.inc.php';
 
-require_dkk_base_currency($conn);
+require_country_feature($conn, 'vat_report');
 
 $s   = get_settings($conn);
 $cur = $s['currency'] ?? 'DKK';
@@ -31,39 +32,12 @@ $acc_vat_in  = (int)($s['conf_acc_purchase_vat'] ?? 6910);
 
 // --- Periodevalg - samme logik/valgmuligheder som vat_report.php, så de to
 // rapporter altid kan vise "samme periode" side om side.
-$year        = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
-$period_type = in_array($_GET['period_type'] ?? '', ['year', 'half', 'quarter', 'month'], true) ? $_GET['period_type'] : 'year';
-$period_num  = isset($_GET['period_num']) ? (int)$_GET['period_num'] : 1;
-
-switch ($period_type) {
-    case 'month':
-        $period_num   = max(1, min(12, $period_num));
-        $period_start = sprintf('%04d-%02d-01', $year, $period_num);
-        $period_end   = date('Y-m-t', strtotime($period_start));
-        $period_label = tc_month_name($period_num) . ' ' . $year;      // RETTET: date('F') var altid engelsk
-        break;
-    case 'quarter':
-        $period_num   = max(1, min(4, $period_num));
-        $start_month  = ($period_num - 1) * 3 + 1;
-        $period_start = sprintf('%04d-%02d-01', $year, $start_month);
-        $period_end   = date('Y-m-t', strtotime(sprintf('%04d-%02d-01', $year, $start_month + 2)));
-        $period_label = lang('@Quarter') . ' ' . $period_num . ' ' . $year;
-        break;
-    case 'half':
-        $period_num   = max(1, min(2, $period_num));
-        $start_month  = ($period_num - 1) * 6 + 1;
-        $period_start = sprintf('%04d-%02d-01', $year, $start_month);
-        $period_end   = date('Y-m-t', strtotime(sprintf('%04d-%02d-01', $year, $start_month + 5)));
-        $period_label = lang('@Half-year') . ' ' . $period_num . ' ' . $year;
-        break;
-    case 'year':
-    default:
-        $period_type  = 'year';
-        $period_start = "$year-01-01";
-        $period_end   = "$year-12-31";
-        $period_label = (string)$year;
-        break;
-}
+// (uden valg: den senest afsluttede periode af landets type - den der skal angives)
+[$def_year, $def_num] = vat_period_last_closed((string)($_GET['period_type'] ?? vat_period_default()));
+$year = isset($_GET['year']) ? (int)$_GET['year'] : $def_year;
+// Samme perioder som momsangivelsen (vat_period_bounds) - også landets egen, fx Norges 2-månedersterminer
+[$period_start, $period_end, $period_label, $period_type, $period_num] =
+    vat_period_bounds($year, (string)($_GET['period_type'] ?? vat_period_default()), (int)($_GET['period_num'] ?? (isset($_GET['year']) ? 1 : $def_num)));
 $ps = DB::escape($conn, $period_start);
 $pe = DB::escape($conn, $period_end);
 
@@ -92,14 +66,24 @@ $sub_sales_row = DB::fetch_assoc(DB::query($conn,
     "SELECT COALESCE(SUM(il.quantity * il.price_each $vr_disc * il.line_vat_rate / 100.0 * COALESCE(NULLIF(i.exch_rate, 0), 1)), 0) AS total
      FROM invoices i
      JOIN invoice_lines il ON il.inv_id = i.inv_id
-     WHERE i.inv_date BETWEEN '$ps' AND '$pe' AND LOWER(i.inv_status) != 'draft'"));
+     WHERE i.inv_date BETWEEN '$ps' AND '$pe' AND LOWER(i.inv_status) != 'draft'"
+     // (OSS-/IOSS-fakturaernes moms står på ordningens egen momskonto, ikke salgsmomskontoen)
+     . (db_has_column($conn, 'invoices', 'inv_oss') ? " AND (i.inv_oss IS NULL OR i.inv_oss = '')" : '')
+     . (db_has_column($conn, 'invoices', 'inv_ioss') ? " AND (i.inv_ioss IS NULL OR i.inv_ioss = '')" : '')));
 $sub_sales_vat = (float)($sub_sales_row['total'] ?? 0);
 $inc_res = @DB::query($conn,
     "SELECT exp_id FROM expenses
      WHERE is_cancelled = 0 AND voucher_no IS NOT NULL AND exp_date BETWEEN '$ps' AND '$pe' AND exp_type = 'income'");
 if ($inc_res) while ($r = DB::fetch_assoc($inc_res)) foreach (expense_get_lines($conn, (int)$r['exp_id']) as $line) $sub_sales_vat += $line['vat'];
-$shop_vat = @DB::query($conn, "SELECT COALESCE(SUM(vat), 0) AS v FROM shop_orders WHERE status = 'booked' AND order_date BETWEEN '$ps' AND '$pe'");
+// (efter dagsbilagets dato - en dag i en låst periode bogføres på første åbne dag, se shop_book_days())
+$shop_vat = @DB::query($conn, "SELECT COALESCE(SUM(o.vat), 0) AS v FROM shop_orders o JOIN journal j ON j.jou_id = o.day_jou_id WHERE o.status = 'booked' AND j.jou_date BETWEEN '$ps' AND '$pe'");
 if ($shop_vat && ($sv = DB::fetch_assoc($shop_vat))) $sub_sales_vat += (float)$sv['v'];
+// Moms der bogføres på salgsmomskontoen uden en faktura bag: salg af et anlægsaktiv (fixed_asset_dispose.php) og
+// momsreguleringen ved et konstateret tab (invoice_writeoff.php) - før gav de en falsk difference
+$expl = DB::fetch_row(DB::query($conn, "SELECT COALESCE(SUM(-l.amount), 0) FROM ledger l JOIN journal j ON l.jou_id = j.jou_id
+     WHERE l.acc_id IN (" . tc_vat_acc_list($conn, $acc_vat_out) . ") AND j.jou_date BETWEEN '$ps' AND '$pe'
+       AND j.trans_type IN ('fixed_asset_disposal', 'bad_debt_writeoff', 'bank_direct')"));
+$sub_sales_vat += (float)($expl[0] ?? 0);
 
 // --- indgående: genbruger nu expense_get_lines (inc/db_connect.inc.php) - den ENESTE autoritative kilde til
 // beløb/momssats pr. udgift, siden en udgift blev splitbar på flere konti - en udgift UDEN linjer giver samme
@@ -112,10 +96,15 @@ $sub_purchase_vat = 0.0;
 if ($exp_res) {
     while ($r = DB::fetch_assoc($exp_res)) {
         foreach (expense_get_lines($conn, (int)$r['exp_id']) as $line) {
-            $sub_purchase_vat += $line['vat'];
+            $sub_purchase_vat += $line['vat'] + ($line['rc_vat'] ?? 0);      // (+ den beregnede moms ved omvendt betalingspligt)
         }
     }
 }
+
+// (købsmomsen af et anlægsaktiv bogføres ved anskaffelsen, fixed_asset_edit.php - uden en udgift bag)
+$expl = DB::fetch_row(DB::query($conn, "SELECT COALESCE(SUM(l.amount), 0) FROM ledger l JOIN journal j ON l.jou_id = j.jou_id
+     WHERE l.acc_id IN (" . tc_vat_acc_list($conn, $acc_vat_in) . ") AND j.jou_date BETWEEN '$ps' AND '$pe' AND j.trans_type IN ('fixed_asset_acquisition', 'fixed_asset_cancellation', 'bank_direct')"));
+$sub_purchase_vat += (float)($expl[0] ?? 0);
 
 $diff_sales    = round($sub_sales_vat - $gl_sales_vat, 2);
 $diff_purchase = round($sub_purchase_vat - $gl_purchase_vat, 2);
@@ -149,7 +138,7 @@ echo '<div><label style="font-size:0.85em; font-weight:bold; display:block;">' .
 echo '<input type="number" name="year" value="' . $year . '" style="width:90px; padding:6px;"></div>';
 echo '<div><label style="font-size:0.85em; font-weight:bold; display:block;">' . lang('@Period Type') . '</label>';
 echo '<select name="period_type" id="period_type" onchange="document.getElementById(\'period_num_wrap\').style.display = (this.value==\'year\'?\'none\':\'block\');">';
-foreach (['year' => '@Full Year', 'half' => '@Half-year', 'quarter' => '@Quarter', 'month' => '@Month'] as $val => $lbl) {
+foreach (array_map(fn($t) => $t[0], VAT_PERIOD_TYPES) as $val => $lbl) {
     echo '<option value="' . $val . '" ' . ($period_type === $val ? 'selected' : '') . '>' . lang($lbl) . '</option>';
 }
 echo '</select></div>';

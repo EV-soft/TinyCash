@@ -19,18 +19,22 @@ require_once __DIR__ . '/accounts.inc.php';
 // Fast afløser for en indstillings rolle (standardkontoplanen 2026)
 const CS_ROLE_TARGETS = [
     'conf_acc_bank' => 6480, 'conf_acc_debitor' => 6190, 'conf_acc_creditor' => 7440, 'conf_acc_sales' => 1010,
-    'conf_acc_vat' => 7680, 'conf_acc_purchase_vat' => 7740, 'conf_acc_fx' => 3610, 'conf_acc_bad_debt' => 2280,
+    'conf_acc_vat' => 7680, 'conf_acc_purchase_vat' => 7740, 'conf_acc_fx' => 3610, 'conf_acc_bad_debt' => 2280, 'conf_acc_reminder_fee' => 1550, 'conf_acc_inventory' => 6140, 'conf_acc_stock_adjust' => 1770,
 ];
 const CS_BALANCE_TYPES = ['asset', 'bank', 'liability', 'vat', 'equity'];
 // Programmets egne standardværdier, når en indstilling ikke er gemt (samme ?? -værdier som posteringskoden)
 const CS_ROLE_DEFAULTS = ['conf_acc_bank' => 5000, 'conf_acc_debitor' => 8100, 'conf_acc_creditor' => 4000, 'conf_acc_sales' => 1000,
-                          'conf_acc_vat' => 6900, 'conf_acc_purchase_vat' => 6910, 'conf_acc_fx' => 7200, 'conf_acc_bad_debt' => 7100];
+                          'conf_acc_vat' => 6900, 'conf_acc_purchase_vat' => 6910, 'conf_acc_fx' => 7200, 'conf_acc_bad_debt' => 7100, 'conf_acc_reminder_fee' => 1090, 'conf_acc_inventory' => 8150, 'conf_acc_stock_adjust' => 2100];
+
+// Roller uden standardværdi og uden fast afløser - kun med, når de er valgt (OSS/IOSS-konti): [rolle => kontotype]
+const CS_OPTIONAL_ROLES = ['conf_acc_oss_sales' => 'income', 'conf_acc_oss_vat' => 'vat', 'conf_acc_ioss_sales' => 'income', 'conf_acc_ioss_vat' => 'vat'];
 
 // Den konto en rolle reelt bogfører på: [rolle => kontonr]
 function cs_role_accounts($conn): array {
     $s = get_settings($conn);
     $out = [];
     foreach (CS_ROLE_DEFAULTS as $k => $def) $out[$k] = (int)(($s[$k] ?? '') !== '' ? $s[$k] : $def);
+    foreach (array_keys(CS_OPTIONAL_ROLES) as $k) if ((int)($s[$k] ?? 0) > 0) $out[$k] = (int)$s[$k];
     return $out;
 }
 
@@ -131,7 +135,7 @@ function cs_own_accounts($conn): array {
     // En indstilling der peger på en konto der IKKE findes i kontoplanen (fx standardværdien 5000), men som der
     // bogføres på: med i listen, ellers blev indstillingen ikke skiftet og saldoen ikke overført. Typen følger rollen.
     $role_type = ['conf_acc_bank' => 'bank', 'conf_acc_debitor' => 'asset', 'conf_acc_creditor' => 'liability', 'conf_acc_sales' => 'income',
-                  'conf_acc_vat' => 'vat', 'conf_acc_purchase_vat' => 'vat', 'conf_acc_fx' => 'expense', 'conf_acc_bad_debt' => 'expense'];
+                  'conf_acc_vat' => 'vat', 'conf_acc_purchase_vat' => 'vat', 'conf_acc_fx' => 'expense', 'conf_acc_bad_debt' => 'expense', 'conf_acc_reminder_fee' => 'income', 'conf_acc_inventory' => 'asset', 'conf_acc_stock_adjust' => 'expense'] + CS_OPTIONAL_ROLES;
     foreach ($roles as $id => $rl) {
         if (isset($out[$id]) || tc_account_ok($conn, $id)) continue;
         if (($used[$id] ?? 0) === 0) continue;
@@ -168,7 +172,7 @@ function cs_word_match(string $a, string $b): bool {
 // Forslag til en afløser for én konto - 0 = intet forslag (behold)
 function cs_propose(array $acc, array $std): int {
     foreach ($acc['roles'] as $role) {
-        $t = cs_std_at($std, CS_ROLE_TARGETS[$role]);
+        $t = isset(CS_ROLE_TARGETS[$role]) ? cs_std_at($std, CS_ROLE_TARGETS[$role]) : 0;
         if ($t) return $t;
     }
     $fam = cs_family((string)$acc['acc_type']);

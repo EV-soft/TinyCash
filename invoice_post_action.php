@@ -47,12 +47,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 $inv_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($inv_id <= 0) {
-    echo json_encode(['success' => false, 'error' => 'Ugyldigt ID-parameter']);
+    echo json_encode(['success' => false, 'error' => lang('@Invoice or customer not found')]);      // (hårdkodet dansk)
     exit;
 }
 
 if (!$conn) {
-    echo json_encode(['success' => false, 'error' => 'Databaseforbindelse mistet']);
+    echo json_encode(['success' => false, 'error' => lang('@Could not connect to the database.')]);
     exit;
 }
 
@@ -69,11 +69,26 @@ try {
     }
 
     DB::commit($conn);
+    // Moms til en virksomhed i et andet EU-land (med momsnummer) er næsten altid en fejl: varer er en momsfri EU-levering,
+    // ydelser omvendt betalingspligt - en advarsel (ikke en afvisning: fx ydelser vedr. fast ejendom beskattes hvor de er)
+    $pw = DB::fetch_assoc(DB::query($conn, "SELECT c.cust_country, c.cust_vat_id, (SELECT COUNT(*) FROM invoice_lines il WHERE il.inv_id = i.inv_id AND COALESCE(il.line_vat_rate, 0) > 0) AS taxed
+                                            FROM invoices i JOIN customers c ON c.cust_id = i.cust_id WHERE i.inv_id = " . (int)$inv_id));
+    $pw_cc = strtoupper(trim((string)($pw['cust_country'] ?? '')));
+    $pw_home = strtoupper((string)tc_country_pack('iso', 'DK'));
+    $pw_home_eu = in_array($pw_home, TC_EU_COUNTRIES, true);
+    if ($pw && (int)$pw['taxed'] > 0 && trim((string)($pw['cust_vat_id'] ?? '')) !== '' && $pw_cc !== '' && $pw_cc !== $pw_home
+        && $pw_home_eu && in_array($pw_cc, TC_EU_COUNTRIES, true)) {
+        flash(sprintf(lang('@The invoice has VAT, but the customer is a business in %s with a VAT number. Goods to another EU country are an intra-Community supply without VAT, and most services are reverse charge - check it, and correct it with a credit note if needed.'), htmlspecialchars($pw_cc)), 'warning');
+    } elseif ($pw && (int)$pw['taxed'] > 0 && trim((string)($pw['cust_vat_id'] ?? '')) !== '' && $pw_cc !== '' && $pw_cc !== $pw_home && !$pw_home_eu) {
+        // (Norge/Island: et salg til en virksomhed i udlandet er normalt eksport uden moms - også til et EU-land)
+        flash(sprintf(lang('@The invoice has VAT, but the customer is a business in %s. A sale to a business abroad is normally an export without VAT - check it, and correct it with a credit note if needed.'), htmlspecialchars($pw_cc)), 'warning');
+    }
     echo json_encode(['success' => true, 'invoice_no' => $next_invoice_no]);
 
-} catch (Exception $e) {
+} catch (\Throwable $e) {      // (kun Exception: en PHP-fejl under bogføringen gav en 500 uden svar - knappen stod bare og ventede)
     DB::rollback($conn);
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    if (!($e instanceof Exception)) error_log('[invoice_post] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    echo json_encode(['success' => false, 'error' => $e instanceof Exception ? $e->getMessage() : lang('@Error:') . ' ' . $e->getMessage()]);
 }
 exit;
 ?>

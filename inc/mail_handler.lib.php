@@ -21,7 +21,14 @@ require_once __DIR__ . '/mail_config.inc.php';
 // selv når send_quote_action.php sendte et TILBUD, ikke en faktura. Tilføjet et valgfrit $doc_label-parameter, med
 // "Faktura" som standard - eksisterende kald (send_invoice_action.php/reminder_action.php) er derfor 100%
 // uændrede.
+// Den vedhæftede PDF's navn på det sprog der er aktivt nu (kundens): dansk som hidtil, ellers den oversatte titel.
+// Før hed filen altid "Faktura_1001.pdf" / "Rykker_..." / "Kontoudtog.pdf" - også til en engelsk eller tysk kunde.
+function tc_mail_doc_label(string $da_label, string $key): string {
+    return (($_SESSION['lang'] ?? (function_exists('tc_default_lang') ? tc_default_lang() : 'da')) === 'da') ? $da_label : lang($key);
+}
 function sendTinyMail($toEmail, $toName, $subject, $body, $attachment = null, $invoice_no = '', $doc_label = 'Faktura') {
+    // (filnavnet holdes ASCII - æ/ø/å og andre tegn gav et forvansket navn i flere mailprogrammer)
+    $doc_label = preg_replace('/[^A-Za-z0-9_-]+/', '_', strtr((string)$doc_label, ['æ' => 'ae', 'ø' => 'oe', 'å' => 'aa', 'Æ' => 'Ae', 'Ø' => 'Oe', 'Å' => 'Aa', 'ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss', 'Ä' => 'Ae', 'Ö' => 'Oe', 'Ü' => 'Ue', 'é' => 'e', 'è' => 'e', 'ó' => 'o', 'á' => 'a', 'ą' => 'a', 'ę' => 'e', 'ł' => 'l', 'ś' => 's', 'ż' => 'z', 'ź' => 'z', 'ć' => 'c', 'ń' => 'n', 'š' => 's', 'ž' => 'z', 'č' => 'c', 'ė' => 'e', 'ū' => 'u', 'ī' => 'i', 'ā' => 'a', 'ē' => 'e', 'õ' => 'o'])) ?: 'Dokument';
     $mail = new PHPMailer(true);
     try {
         $mail->isSMTP();

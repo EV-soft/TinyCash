@@ -22,7 +22,9 @@ $currency = $s['currency'] ?? 'DKK';
 // bogføringen (ingen filter, uændret fra før), præcis som banneret nedenfor allerede forklarer -
 // budget-sammenligningen vises kun når et konkret årstal vælges.
 $year_filter = (isset($_GET['year']) && trim($_GET['year']) !== '') ? (int)$_GET['year'] : null;
-$date_sql = $year_filter ? "j.jou_date BETWEEN '" . $year_filter . "-01-01' AND '" . $year_filter . "-12-31'" : '1=1';
+// Året er regnskabsåret der slutter i det år (et forskudt regnskabsår 1/7-30/6 blev før skåret over ved nytår)
+[$fy_start, $fy_end] = $year_filter ? tc_fiscal_year_of($conn, $year_filter) : ['', ''];
+$date_sql = $year_filter ? "j.jou_date BETWEEN '$fy_start' AND '$fy_end'" : '1=1';
 // RETTET: årsafslutningens lukkepostering (dateret på årets sidste dag) nulstiller netop indtægts- og
 // udgiftskontiene - talte den med, viste et LUKKET år omsætning 0 og udgifter 0 (og "hele perioden" kun
 // det åbne år). Samme udelukkelse som trial_balance.php og inc/annual_report.lib.php.
@@ -81,6 +83,18 @@ $res_purchase_vat = DB::query($conn, "
 $purchase_vat = (float)(DB::fetch_assoc($res_purchase_vat)['total'] ?? 0);
 
 $vat_to_pay = $sales_vat - $purchase_vat;
+// + moms af køb i udlandet (omvendt betalingspligt): fratrukket som købsmoms ovenfor, men skyldig på sin egen konto
+// (fx 7700) - uden den var tilsvaret her lavere end på momsangivelsen
+if (db_has_column($conn, 'vat_codes', 'vat_type')) {
+    $rc_accs = [];
+    $rc_res = DB::query($conn, "SELECT DISTINCT vat_account FROM vat_codes WHERE vat_account IS NOT NULL AND vat_type IN ('" . implode("','", TC_VAT_RC_TYPES) . "')");
+    while ($rc_res && ($rc_r = DB::fetch_row($rc_res))) if ((int)$rc_r[0] > 0) $rc_accs[] = (int)$rc_r[0];
+    $rc_accs = array_diff($rc_accs, array_map('intval', array_merge(explode(',', tc_vat_acc_list($conn, $acc_vat)), explode(',', tc_vat_acc_list($conn, $acc_purchase_vat)))));
+    if ($rc_accs) {
+        $rc_row = DB::fetch_row(DB::query($conn, "SELECT COALESCE(SUM(-l.amount), 0) FROM ledger l JOIN journal j ON l.jou_id = j.jou_id WHERE l.acc_id IN (" . implode(',', $rc_accs) . ") AND $date_sql"));
+        $vat_to_pay += round((float)($rc_row[0] ?? 0), 2);
+    }
+}
 $total_costs = 0;
 
 // Samlet omsætnings-budget - budgettet gemmes pr. konto, men omsætningen
@@ -119,7 +133,7 @@ echo "<div style='max-width:900px; margin:0 auto;'>";
     }
 
     // --- CARD 1: RESULTATOPGØRELSE ---
-    htm_Card_(lang('@Official Income Statement') . ($year_filter ? ' - ' . $year_filter : ''), '600');
+    htm_Card_(lang('@Official Income Statement') . ($year_filter ? ' - ' . $year_filter . ($fy_start !== "$year_filter-01-01" ? ' (' . date(CONF_DATE_FORMAT, strtotime($fy_start)) . ' - ' . date(CONF_DATE_FORMAT, strtotime($fy_end)) . ')' : '') : ''), '600');
     ?>
     <table style="width:100%; border-collapse:collapse; font-family:sans-serif;">
         <tr style="background:#f8f9fa; font-weight:bold; border-bottom: 2px solid #dee2e6;">

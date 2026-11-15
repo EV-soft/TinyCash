@@ -53,13 +53,18 @@ if (isset($_GET['del']) && $_GET['del'] == 1) {
     // "faktureret" (kunne aldrig faktureres igen), tilbuddet stod som "konverteret" til en faktura der ikke
     // fandtes, og en webordre pegede på den. Nu: timerne kan faktureres igen, tilbuddet er "accepteret" igen.
     DB::begin_transaction($conn);
+    // Kun en kladde slettes - statussen tjekkes i selve DELETE: blev kladden bogført i en anden fane efter tjekket
+    // ovenfor, slettede den ubetingede DELETE en bogført faktura (posteringerne stod tilbage uden faktura)
+    $del_res = DB::query($conn, "DELETE FROM invoices WHERE inv_id = $inv_id AND LOWER(inv_status) = 'draft'");
+    if (!$del_res || DB::affected_rows($conn, $del_res) < 1) {
+        DB::rollback($conn);
+        redirect("invoice_edit.php?id=$inv_id", '@This invoice is already posted and cannot be deleted. Use Create Credit Note to correct it.', 'error');
+    }
     @DB::query($conn, "UPDATE time_entries SET is_invoiced = 0, inv_id = NULL WHERE inv_id = $inv_id");
     @DB::query($conn, "UPDATE quotes SET status = 'accepted', converted_invoice_id = NULL WHERE converted_invoice_id = $inv_id AND status = 'converted'");
     @DB::query($conn, "UPDATE shop_orders SET inv_id = NULL, status = 'draft_deleted' WHERE inv_id = $inv_id AND status = 'draft'");
     DB::query($conn, "DELETE FROM invoice_lines WHERE inv_id=$inv_id");
-    if (DB::query($conn, "DELETE FROM invoices WHERE inv_id=$inv_id") && $del_row) {
-        log_action($conn, 'DELETE_DRAFT_INVOICE', 'invoices', $inv_id, $del_row, null);
-    }
+    log_action($conn, 'DELETE_DRAFT_INVOICE', 'invoices', $inv_id, $del_row, null);
     DB::commit($conn);
     redirect('sales_hub.php', '@Draft invoice deleted.');
 }
@@ -67,6 +72,11 @@ if (isset($_GET['del']) && $_GET['del'] == 1) {
 // 2. HÅNDTER GEM / OPDATER
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_invoice'])) {
     // Linjens momssats er et frit talfelt - en tastefejl som 250 eller -25 må ikke bogføres (tom linje = 0 %)
+    // Prisen og antallet var lige så frie - "abc" eller "500 kr" blev stille til 0 kr på linjen (et negativt beløb, fx en
+    // rabatlinje, er stadig tilladt)
+    foreach (['price_each', 'quantity'] as $nf) foreach ((array)($_POST[$nf] ?? []) as $nchk) {
+        if (trim((string)$nchk) !== '' && tc_num($nchk) === null) redirect("invoice_edit.php?id=" . (int)($_POST['inv_id'] ?? 0), '@Please enter a valid amount.', 'error');
+    }
     foreach ((array)($_POST['line_vat'] ?? []) as $vchk) {
         if (trim((string)$vchk) !== '' && tc_pct($vchk) === null) redirect("invoice_edit.php?id=" . (int)($_POST['inv_id'] ?? 0), '@The VAT rate must be between 0 and 100 %.', 'error');
     }
@@ -226,7 +236,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_invoice'])) {
 
             DB::query($conn, "UPDATE invoices SET inv_due_date='$inv_due_date', cust_reference='$cust_ref',
                 inv_note='$inv_note', delivery_address='$deliv_addr', proj_id=$proj_sql WHERE inv_id=$inv_id");
-            DB::query($conn, "UPDATE invoice_lines SET proj_id=$proj_sql WHERE inv_id=$inv_id");
+            // Kun linjer der fulgte fakturahovedets projekt flytter med - en linje med sit eget projekt (fast faktura,
+            // tilbud) beholder det; ellers flyttede en ændret forfaldsdato omsætning bagud mellem projekter
+            $old_hp = !empty($existing_inv['proj_id']) ? (int)$existing_inv['proj_id'] : 0;
+            DB::query($conn, "UPDATE invoice_lines SET proj_id=$proj_sql WHERE inv_id=$inv_id AND (proj_id IS NULL OR proj_id = 0" . ($old_hp ? " OR proj_id = $old_hp" : '') . ")");
             if (!empty($GLOBALS['tc_dropped_lines'])) flash(sprintf(lang('@%d line(s) with a quantity of 0 or less were not saved - use a credit note to reduce an invoice.'), $GLOBALS['tc_dropped_lines']), 'warning');
             redirect("invoice_edit.php?id=$inv_id", '@Changes saved successfully');
         }
@@ -238,7 +251,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_invoice'])) {
             cust_reference='$cust_ref', inv_note='$inv_note', delivery_address='$deliv_addr',
             currency='$db_currency', proj_id=$proj_sql,
             orig_currency=$orig_currency_sql, exch_rate=$exch_rate_sql" . ($il_on_save ? ", inv_layout_id=$inv_layout_sql" : "") . "
-            WHERE inv_id=$inv_id");
+            WHERE inv_id=$inv_id AND LOWER(inv_status) = 'draft'");      // (blev kladden bogført imens, satte gem den bogførte faktura TILBAGE til kladde - nu fanget ved linjerne nedenfor)
     } else {
         $save_ok = DB::query($conn, "INSERT INTO invoices
             (cust_id, inv_date, inv_due_date, inv_status, cust_reference, inv_note,
@@ -260,21 +273,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_invoice'])) {
     // falsk "saved"-redirect. Vis den reelle DB-fejl i stedet, så problemet er
     // synligt frem for at fakturaen tavst forsvinder.
     if (!$save_ok) {
-        die(lang('@Error saving invoice: ') . DB::error($conn));
+        redirect($inv_id > 0 ? "invoice_edit.php?id=$inv_id" : 'sales_hub.php', lang('@Error saving invoice: ') . htmlspecialchars((string)DB::error($conn)), 'error');      // (var en hvid side)
+    }
+    // IOSS-mærket på kladden (kun når feltet er vist - ellers røres det ikke); bogføringen sætter modtagerlandet
+    if (ioss_ready($conn) && isset($_POST['inv_ioss'])) {
+        DB::query($conn, "UPDATE invoices SET inv_ioss = " . ($_POST['inv_ioss'] === '1' ? "'Y'" : 'NULL') . " WHERE inv_id = " . (int)$inv_id . " AND LOWER(inv_status) = 'draft'");
+    }
+    // EU-OSS eller en ydelse beskattet i eget land (feltet vises kun ved OSS-registrering)
+    if (oss_off_ready($conn) && isset($_POST['inv_oss_off'])) {
+        DB::query($conn, "UPDATE invoices SET inv_oss_off = " . ($_POST['inv_oss_off'] === '1' ? 1 : 0) . " WHERE inv_id = " . (int)$inv_id . " AND LOWER(inv_status) = 'draft'");
     }
 
     // Linjer (nået kun for kladder - en bogført faktura exit'er tidligere
     // ovenfor via den finansielle lås). Genbruger $posted_lines fra ovenfor,
     // så linjeindholdet ikke tolkes to gange forskelligt.
-    DB::query($conn, "DELETE FROM invoice_lines WHERE inv_id=$inv_id");
-    foreach ($posted_lines as $pl) {
+    // En linje med sit EGET projekt (forskelligt fra hovedets - fra en fast faktura eller et tilbud) beholder det; formularen
+    // har intet projektfelt pr. linje, så før fik alle linjer hovedets projekt ved hvert gem af kladden
+    $keep_proj = [];
+    if ($inv_id > 0) {
+        $old_hp = (int)($existing_inv['proj_id'] ?? 0);      // (hovedets projekt FØR dette gem - $existing_inv er hentet før opdateringen)
+        $kp_res = DB::query($conn, "SELECT proj_id FROM invoice_lines WHERE inv_id = $inv_id ORDER BY line_id");
+        while ($kp_res && ($kp = DB::fetch_assoc($kp_res))) $keep_proj[] = (!empty($kp['proj_id']) && (int)$kp['proj_id'] !== $old_hp) ? (int)$kp['proj_id'] : null;
+    }
+    // Kladde-kravet gentages i selve sletningen og efter den (med lås): blev kladden bogført i en anden fane, mens denne
+    // formular stod åben, blev den bogførte fakturas linjer før skiftet ud - og passede ikke længere til posteringerne
+    DB::begin_transaction($conn);
+    DB::query($conn, "DELETE FROM invoice_lines WHERE inv_id=$inv_id AND EXISTS (SELECT 1 FROM invoices WHERE inv_id=$inv_id AND LOWER(inv_status) = 'draft')");
+    $ie_still = DB::fetch_row(DB::query($conn, "SELECT LOWER(inv_status) FROM invoices WHERE inv_id=$inv_id" . (DB::is_sqlite() ? '' : ' FOR UPDATE')));
+    if (($ie_still[0] ?? '') !== 'draft') {
+        DB::rollback($conn);
+        redirect("invoice_view.php?id=$inv_id", '@The invoice was posted in the meantime - the lines were not changed.', 'error');
+    }
+    foreach ($posted_lines as $li => $pl) {
         $txt = DB::escape($conn, $pl['text']);
-        DB::query($conn, "INSERT INTO invoice_lines
+        $line_proj_sql = isset($keep_proj[$li]) && $keep_proj[$li] ? $keep_proj[$li] : $proj_sql;
+        if (!DB::query($conn, "INSERT INTO invoice_lines
             (inv_id, line_text, quantity, price_each, line_vat_rate, prod_id, proj_id"
             . ($has_discount_col_ie ? ", discount_pct" : "") . ")
-            VALUES ($inv_id, '$txt', {$pl['qty']}, {$pl['price']}, {$pl['vat']}, {$pl['prod_id']}, $proj_sql"
-            . ($has_discount_col_ie ? ", {$pl['discount']}" : "") . ")");
+            VALUES ($inv_id, '$txt', {$pl['qty']}, {$pl['price']}, {$pl['vat']}, {$pl['prod_id']}, $line_proj_sql"
+            . ($has_discount_col_ie ? ", {$pl['discount']}" : "") . ")")) {
+            $ie_err = (string)DB::error($conn);  DB::rollback($conn);      // (de gamle linjer bevares - før var de slettet)
+            redirect("invoice_edit.php?id=$inv_id", lang('@Error saving invoice: ') . htmlspecialchars($ie_err), 'error');
+        }
     }
+    DB::commit($conn);
     if (!empty($GLOBALS['tc_dropped_lines'])) flash(sprintf(lang('@%d line(s) with a quantity of 0 or less were not saved - use a credit note to reduce an invoice.'), $GLOBALS['tc_dropped_lines']), 'warning');
     redirect("invoice_edit.php?id=$inv_id", '@Changes saved successfully');
 }
@@ -287,7 +329,7 @@ $currency_module  = !empty($s['module_currency']) && $s['module_currency'] == '1
 
 if ($inv_id > 0) {
     $inv = DB::fetch_assoc(DB::query($conn, "SELECT * FROM invoices WHERE inv_id=$inv_id"));
-    if (!$inv) redirect("invoice_edit.php?id=" . (int)($_POST['inv_id'] ?? 0), '@Invoice not found', 'error');
+    if (!$inv) redirect('sales_hub.php', '@Not found - it may already have been deleted.', 'error');      // (åbnede en tom ny faktura med fejlen - fx et link til en slettet kladde)
     $inv_lines = [];
     $lines_res = DB::query($conn, "SELECT * FROM invoice_lines WHERE inv_id=$inv_id ORDER BY line_id");
     while ($l = DB::fetch_assoc($lines_res)) { $inv_lines[] = $l; }
@@ -327,6 +369,8 @@ echo '<input type="hidden" name="inv_id" value="'.$inv_id.'">';
 $cust_res = DB::query($conn, "SELECT cust_id, cust_name, cust_payment_days FROM customers WHERE " . customers_active_filter($conn) . " ORDER BY cust_name");
 $cust_opt = [];  $cust_days_map = [];
 while ($c = DB::fetch_assoc($cust_res)) { $cust_opt[$c['cust_id']] = $c['cust_name'];  $cust_days_map[$c['cust_id']] = (int)($c['cust_payment_days'] ?? 8); }
+// EU-OSS: private kunder i andre EU-lande får modtagerlandets moms (inc/oss.inc.php, assets/tc-oss.js)
+$oss_cust_map = oss_customer_map($conn);
 // RETTET: en kladde til en kunde i papirkurven viste den FØRSTE kunde i listen som fakturaens kunde (den låste
 // liste havde ikke kundens egen række) - samme "(slettet)"-mærkning som quote_edit.php.
 if (!empty($inv['cust_id']) && !isset($cust_opt[$inv['cust_id']])) {
@@ -334,9 +378,33 @@ if (!empty($inv['cust_id']) && !isset($cust_opt[$inv['cust_id']])) {
     if ($del_cust) $cust_opt[$inv['cust_id']] = $del_cust['cust_name'] . ' (' . lang('@Deleted') . ')';
 }
 htm_Field(icon:'fa-user', labl:'@Customer', name:'cust_id', valu:$inv['cust_id'], type:'sele',
-    opti:$cust_opt, extr:($inv_id > 0 ? 'disabled required' : 'required onchange="checkCustomerBalance(this.value)"'), wdth:'70%', echo:true);
+    opti:$cust_opt, extr:($inv_id > 0 ? 'disabled required' : 'required onchange="checkCustomerBalance(this.value); ossApply(this.value)"'), wdth:'70%', echo:true);
 htm_ProjektCodeField($conn, $proj_id ?: null, '30%');
 if ($inv_id > 0) echo '<input type="hidden" name="cust_id" value="'.$inv['cust_id'].'">';
+// IOSS: varerne sendes fra et land uden for EU (afsendelsesstedet kan ikke ses af kunden - derfor et valg pr. faktura)
+// (også uden IOSS-nummer, når kladden allerede er markeret - ellers kunne mærket ikke fjernes, og kladden ikke bogføres)
+$ioss_on = ioss_ready($conn) && strtolower((string)($inv['inv_status'] ?? 'draft')) === 'draft'
+    && (ioss_registered() || trim((string)($inv['inv_ioss'] ?? '')) !== '');
+if ($ioss_on) {
+    htm_Field(icon:'fa-box', labl:'@IOSS (sent from outside the EU)', name:'inv_ioss', valu:(trim((string)($inv['inv_ioss'] ?? '')) !== '' ? '1' : '0'), type:'sele',
+        opti:['0' => lang('@No'), '1' => lang('@Yes')], wdth:'50%',
+        hint:'@Yes: the goods are sent from a country outside the EU to a consumer in the EU, worth at most 150 EUR. The invoice gets the VAT of the customer\'s country and goes on the monthly IOSS return.', echo:true);
+} elseif (!empty($inv['inv_ioss']) && preg_match('/^[A-Z]{2}$/', (string)$inv['inv_ioss'])) {
+    htm_Note(sprintf(lang('@IOSS sale - VAT of %s, on the IOSS return.'), htmlspecialchars((string)$inv['inv_ioss'])));
+}
+// EU-OSS: varer (og elektroniske ydelser) til en privatkunde i et andet EU-land er OSS; en almindelig ydelse (fx timer)
+// beskattes i eget land. Satsen kan ikke afgøre det - derfor et valg pr. faktura, vist når kunden er en OSS-kunde.
+$oss_off_on = oss_off_ready($conn) && oss_registered() && strtolower((string)($inv['inv_status'] ?? 'draft')) === 'draft';
+if ($oss_off_on) {
+    echo '<div id="oss-off-wrap" style="display:none; width:100%;">';
+    htm_Field(icon:'fa-earth-europe', labl:'@EU-OSS or own country', name:'inv_oss_off', valu:(!empty($inv['inv_oss_off']) ? '1' : '0'), type:'sele',
+        opti:['0' => lang('@EU-OSS: goods or electronic services (VAT of the customer\'s country)'), '1' => lang('@Own country: a service taxed where you are (e.g. hours, repairs)')], wdth:'70%',
+        hint:'@Sales of goods and electronic services to private customers in other EU countries carry the VAT of the customer\'s country (EU-OSS). Most other services to private customers - consulting hours, repairs, design - are taxed in your own country with your own VAT rate.', echo:true);
+    echo '</div>';
+} elseif (!empty($inv['inv_oss_off'])) {
+    htm_Note(lang('@Not EU-OSS: a service taxed in your own country.'));
+}
+echo '<div id="oss-note" style="display:none; width:100%; margin:4px 0; padding:6px 10px; border-left:4px solid var(--color-info); background:var(--bg-hover); font-size:0.9em;"></div>';
 // RETTET: kundens betalingsfrist (kundekortet) blev aldrig brugt her - en ny faktura fik altid +14 dage.
 // Forfaldsdatoen følger nu kundens frist, når kunden eller fakturadatoen vælges (kan stadig rettes i hånden).
 if ($inv_id == 0) {
@@ -359,7 +427,7 @@ if ($inv_id > 0 && (int)$inv['cust_id'] > 0) {
         $bal_cur = $global_settings['currency'] ?? 'DKK';
         echo '<div style="margin:10px 0; padding:10px 14px; background:var(--bg-panel); border-left:4px solid var(--color-warning); border-radius:4px; font-size:0.9em;">'
             . '<i class="fa-solid fa-triangle-exclamation" style="color:var(--color-warning);"></i> '
-            . sprintf(lang('@This customer already has %d overdue invoice(s) totaling %s.'), $bal_stmt['overdue_invoices'], fmt_dk($bal_stmt['total_outstanding']) . ' ' . $bal_cur)
+            . sprintf(lang('@This customer already has %d overdue invoice(s) totaling %s.'), $bal_stmt['overdue_invoices'], fmt_dk($bal_stmt['overdue_amount'] ?? $bal_stmt['total_outstanding']) . ' ' . $bal_cur)
             . '</div>';
     }
     // NYT: kreditgrænse - uafhængig af "forfalden saldo" ovenfor, en kunde der altid betaler til tiden kan sagtens
@@ -495,7 +563,7 @@ echo '<h3 style="margin:20px 0 10px 0;">'.lang('@Invoice Lines').'</h3>';
 // Linjer-tabel (uændret)
 $prod_res = DB::query($conn, "SELECT p.prod_id, p.prod_name, p.prod_price, p.prod_stock, a.vat_rate FROM products p LEFT JOIN accounts a ON p.acc_id = a.acc_id ORDER BY p.prod_name");
 $prod_opt = [0 => '-- '.lang('@Select Product/Description').' --'];
-$prod_vat_map = [0 => 25]; $prod_price_map = [0 => 0.00];
+$prod_vat_map = [0 => tc_vat_std_rate()]; $prod_price_map = [0 => 0.00];
 // NYT: et lagerlavarsel ved selve faktureringen manglede - man opdagede først en overskredet lagerbeholdning EFTER
 // fakturaen var gemt (prod_stock trækkes automatisk ved gemning, se invoice_actions.php), aldrig FØR. Samme
 // "advarer, blokerer ikke"-princip som customer_balance_check.php/expense_duplicate_check.php: en bogholder kan
@@ -504,7 +572,7 @@ $prod_vat_map = [0 => 25]; $prod_price_map = [0 => 0.00];
 $prod_stock_map = [0 => null];
 while ($p = DB::fetch_assoc($prod_res)) {
     $prod_opt[$p['prod_id']] = $p['prod_name'];
-    $prod_vat_map[$p['prod_id']]   = ($p['vat_rate']   !== null) ? (float)$p['vat_rate']   : 25.00;
+    $prod_vat_map[$p['prod_id']]   = ($p['vat_rate']   !== null) ? (float)$p['vat_rate']   : tc_vat_std_rate();
     $prod_price_map[$p['prod_id']] = ($p['prod_price'] !== null) ? (float)$p['prod_price'] : 0.00;
     $prod_stock_map[$p['prod_id']] = ($p['prod_stock'] !== null) ? (float)$p['prod_stock'] : null;      // (float: lager kan have decimaler, fx 7,5 kg)
 }
@@ -552,7 +620,7 @@ for ($i = 0; $i < $line_render_count; $i++) {
     $prod_id    = isset($inv_lines[$i]['prod_id'])       ? (int)$inv_lines[$i]['prod_id']       : 0;
     $line_qty   = isset($inv_lines[$i]['quantity'])      ? $inv_lines[$i]['quantity']            : '';
     $line_price = isset($inv_lines[$i]['price_each'])    ? $inv_lines[$i]['price_each']          : '';
-    $line_vat   = isset($inv_lines[$i]['line_vat_rate']) ? $inv_lines[$i]['line_vat_rate']       : 25;
+    $line_vat   = isset($inv_lines[$i]['line_vat_rate']) ? $inv_lines[$i]['line_vat_rate']       : tc_vat_std_rate();
     $existing_line_text = ($prod_id <= 0 && isset($inv_lines[$i]['line_text'])) ? $inv_lines[$i]['line_text'] : '';
     $line_discount = $has_discount_col_display ? ((isset($inv_lines[$i]['discount_pct']) && $inv_lines[$i]['discount_pct'] !== null) ? $inv_lines[$i]['discount_pct'] : 0) : null;
     $tbl_data[] = build_invoice_line_row($i, $prod_id, $line_qty, $line_price, $line_vat, $existing_line_text, $prod_opt, $line_discount);
@@ -581,7 +649,7 @@ echo '</div>';
 // nedenfor). Bygget med nøjagtig samme funktion som de rigtige rækker
 // ovenfor, så en tilføjet linje aldrig kan komme til at afvige visuelt eller
 // strukturelt fra dem.
-$template_row = build_invoice_line_row('IDX', 0, '', '', 25, '', $prod_opt, $has_discount_col_display ? 0 : null);
+$template_row = build_invoice_line_row('IDX', 0, '', '', tc_vat_std_rate(), '', $prod_opt, $has_discount_col_display ? 0 : null);
 $template_row_html = '<tr><td style="width:47%;">'.$template_row[0].'</td><td style="width:13%;">'.$template_row[1]
     .'</td><td style="width:13%;">'.$template_row[2].'</td><td style="width:12%;">'.$template_row[3].'</td>'
     . ($has_discount_col_display ? '<td style="width:15%;">'.$template_row[4].'</td>' : '') . '</tr>';
@@ -606,6 +674,14 @@ const priceMap = <?php echo json_encode($prod_price_map); ?>;
 const stockMap = <?php echo json_encode($prod_stock_map); ?>;
 const lineRowTemplate = <?php echo json_encode($template_row_html); ?>;
 
+// EU-OSS (assets/tc-oss.js giver ossApply/ossRateFor)
+window.tcOss = {map: <?php echo json_encode((object)$oss_cust_map); ?>, home: <?php echo json_encode(tc_vat_std_rate()); ?>, totals: 'calculateInvoiceTotals',
+    note: <?php echo json_encode(lang('@EU-OSS: private customer in %s - the lines get the VAT of the customer\'s country (standard rate %s %). Reduced rates are entered by hand.')); ?>,
+    ioss: <?php echo json_encode((object)($ioss_on ? ioss_customer_map($conn) : [])); ?>,
+    iossNote: <?php echo json_encode(lang('@IOSS: consumer in %s - the lines get the VAT of the customer\'s country (standard rate %s %). Reduced rates are entered by hand.')); ?>};
+</script>
+<script src="<?php echo tc_asset('assets/tc-oss.js'); ?>"></script>
+<script>
 // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): rent visuelt
 // lagerlavarsel pr. linje, opdateret live ved skift af produkt/antal.
 // Blokerer aldrig - se PHP-kommentaren ved $prod_stock_map ovenfor.
@@ -649,14 +725,14 @@ function checkCustomerBalance(custId) {
                 html += '<div><i class="fa-solid fa-triangle-exclamation" style="color:var(--color-warning);"></i> '
                     + <?php echo json_encode(lang('@This customer already has')); ?> + ' ' + data.overdue_count + ' '
                     + <?php echo json_encode(lang('@overdue invoice(s) totaling')); ?> + ' '
-                    + Number(data.balance).toLocaleString('da-DK', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' ' + data.currency + '.</div>';
+                    + Number(data.overdue_amount ?? data.balance).toLocaleString(window.tcLocale || 'da-DK', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' ' + data.currency + '.</div>';
             }
             if (data.over_limit) {
                 html += '<div' + (data.overdue ? ' style="margin-top:6px;"' : '') + '><i class="fa-solid fa-shield-halved" style="color:var(--color-danger);"></i> '
                     + <?php echo json_encode(lang('@This customer\'s outstanding balance')); ?> + ' ('
-                    + Number(data.balance).toLocaleString('da-DK', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' ' + data.currency + ') '
+                    + Number(data.balance).toLocaleString(window.tcLocale || 'da-DK', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' ' + data.currency + ') '
                     + <?php echo json_encode(lang('@already exceeds their credit limit')); ?> + ' ('
-                    + Number(data.credit_limit).toLocaleString('da-DK', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' ' + data.currency + ').</div>';
+                    + Number(data.credit_limit).toLocaleString(window.tcLocale || 'da-DK', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' ' + data.currency + ').</div>';
             }
             if (html) { box.innerHTML = html; box.style.display = 'block'; }
             else { box.style.display = 'none'; }
@@ -751,6 +827,8 @@ function addInvoiceLine() {
     const wrapper  = document.createElement('tbody');
     wrapper.innerHTML = lineRowTemplate.replace(/IDX/g, newIndex);
     document.querySelector('#line_tbl tbody').appendChild(wrapper.firstElementChild);
+    const nv = document.getElementsByName('line_vat[]')[newIndex], ossR = nv ? ossRateFor(nv.value) : null;
+    if (ossR !== null) nv.value = ossR;
     calculateInvoiceTotals();
 }
 
@@ -873,7 +951,9 @@ function saveInvoiceTemplate() {
 function updateVatRate(selectElement, rowIndex) {
     const pid = selectElement.value;
     document.getElementsByName('prod_id[]')[rowIndex].value       = pid;
-    document.getElementsByName('line_vat[]')[rowIndex].value      = vatMap[pid]   !== undefined ? vatMap[pid]   : 25;
+    document.getElementsByName('line_vat[]')[rowIndex].value      = vatMap[pid]   !== undefined ? vatMap[pid]   : <?= json_encode(tc_vat_std_rate()) ?>;
+    const ossR = ossRateFor(document.getElementsByName('line_vat[]')[rowIndex].value);
+    if (ossR !== null) document.getElementsByName('line_vat[]')[rowIndex].value = ossR;
     document.getElementsByName('price_each[]')[rowIndex].value    = priceMap[pid] !== undefined ? priceMap[pid] : 0.00;
     calculateInvoiceTotals();
     checkStockWarning(rowIndex);
@@ -901,9 +981,9 @@ function calculateInvoiceTotals() {
         vat += lineNet * (v / 100);
     }
     const fmt = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
-    document.getElementById('total_sub').innerText   = sub.toLocaleString('da-DK', fmt);
-    document.getElementById('total_vat').innerText   = vat.toLocaleString('da-DK', fmt);
-    document.getElementById('total_grand').innerText = (sub + vat).toLocaleString('da-DK', fmt);
+    document.getElementById('total_sub').innerText   = sub.toLocaleString(window.tcLocale || 'da-DK', fmt);
+    document.getElementById('total_vat').innerText   = vat.toLocaleString(window.tcLocale || 'da-DK', fmt);
+    document.getElementById('total_grand').innerText = (sub + vat).toLocaleString(window.tcLocale || 'da-DK', fmt);
 }
 
 document.addEventListener('input', function(e) {

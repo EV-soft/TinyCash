@@ -32,8 +32,10 @@ $yes_no = ['1' => lang('@Yes'), '0' => lang('@No')];
 
 // Ny nøgle til butikken (den gamle tilbagekaldes) - klarteksten vises kun nu
 function shop_page_new_key($conn, array $shop): string {
-    if (!empty($shop['key_id'])) webhook_key_revoke((string)$shop['key_id']);
+    // Den nye nøgle laves FØR den gamle tilbagekaldes - kunne nøglefilen ikke skrives, stod butikken før uden nogen nøgle
     $plain = webhook_key_generate('Webbutik: ' . $shop['name'], $_SESSION['account_id'] ?? null);
+    if ($plain === '') return '';
+    if (!empty($shop['key_id'])) webhook_key_revoke((string)$shop['key_id']);
     $hash = hash('sha256', $plain);
     foreach (webhook_key_list() as $k) if (($k['key_hash'] ?? '') === $hash) { $key_id = (string)$k['id'];  break; }
     DB::update($conn, 'shop_connections', ['key_id' => $key_id ?? '', 'updated_at' => date('Y-m-d H:i:s')], 'shop_id', (int)$shop['shop_id']);
@@ -53,8 +55,9 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
               'auto_post' => !empty($_POST['auto_post']) ? 1 : 0, 'paid_default' => $paid_def,
               'prices_incl_vat' => !empty($_POST['prices_incl_vat']) ? 1 : 0, 'track_stock' => !empty($_POST['track_stock']) ? 1 : 0,
               'clearing_acc' => $clearing, 'sales_acc' => (int)($_POST['sales_acc'] ?? 0), 'shipping_acc' => (int)($_POST['shipping_acc'] ?? 0),
-              'shipping_vat' => tc_pct($_POST['shipping_vat'] ?? '25') ?? 25.0, 'active' => !empty($_POST['active']) ? 1 : 0,
+              'shipping_vat' => tc_pct($_POST['shipping_vat'] ?? (string)tc_vat_std_rate()) ?? tc_vat_std_rate(), 'active' => !empty($_POST['active']) ? 1 : 0,
               'updated_at' => date('Y-m-d H:i:s')];
+        if (db_has_column($conn, 'shop_connections', 'ioss') && isset($_POST['ioss'])) $d['ioss'] = $_POST['ioss'] === '1' ? 1 : 0;
         if ($plat_ready) {
             $old_p = $sid > 0 ? shop_get($conn, $sid) : null;
             $d['api_url'] = rtrim(trim((string)($_POST['api_url'] ?? '')), '/');
@@ -102,7 +105,8 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['new_key']) && ($shop = shop_get($conn, $sid))) {
         $new_key = shop_page_new_key($conn, $shop);
         $new_key_shop = shop_get($conn, $sid);
-        $msg = lang('@A new key is made - the old one no longer works.');
+        if ($new_key === '') { $msg = lang('@The key file could not be saved - no key was created.');  $msg_type = 'error'; }
+        else $msg = lang('@A new key is made - the old one no longer works.');
     } elseif (isset($_POST['book_days']) && ($shop = shop_get($conn, $sid))) {
         $r = shop_book_days($conn, $shop, date('Y-m-d'));
         $parts = [];
@@ -140,7 +144,7 @@ $endpoint = rtrim((!empty($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . ($_SE
 
 // --- Ny nøgle: vises kun nu ---
 if ($new_key && $new_key_shop) {
-    htm_Card_('🔑 ' . lang('@The key of the web shop') . ': ' . htmlspecialchars($new_key_shop['name']), 900);
+    htm_Card_('🔑 ' . lang('@The key of the web shop') . ': ' . $new_key_shop['name'], 900);      // (htm_Card_ escaper selv titlen)
     echo '<p style="color:var(--color-danger); font-weight:bold;">' . lang('@Copy this key now - it will not be shown again. Reloading this page will not bring it back; you would need to revoke it and generate a new one instead.') . '</p>';
     echo '<input type="text" readonly value="' . htmlspecialchars($new_key, ENT_QUOTES) . '" onclick="this.select();" style="width:100%; box-sizing:border-box; font-family:monospace; padding:10px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-panel); color:var(--text-main);">';
     echo '<p style="font-size:0.9em;">' . lang('@The shop sends its orders to') . ': <code>' . htmlspecialchars($endpoint) . '</code> ' . lang('@with the header') . ' <code>X-Webhook-Key: ' . htmlspecialchars($new_key) . '</code></p>';
@@ -158,8 +162,8 @@ foreach (SHOP_PLATFORMS as $k => $v) $platform_opts[$k] = $v . (shop_adapter_ava
 if (isset($_GET['edit'])) {
     $e = ((int)$_GET['edit'] > 0) ? shop_get($conn, (int)$_GET['edit']) : null;
     $e = $e ?: ['shop_id' => 0, 'name' => $_POST['name'] ?? '', 'platform' => 'native', 'mode' => 'invoice', 'auto_post' => 1, 'paid_default' => 1, 'prices_incl_vat' => 1,
-                'track_stock' => 1, 'clearing_acc' => '', 'sales_acc' => 0, 'shipping_acc' => 0, 'shipping_vat' => 25, 'active' => 1];
-    htm_Card_($e['shop_id'] ? '✏️ ' . lang('@Edit web shop') . ': ' . htmlspecialchars($e['name']) : '🆕 ' . lang('@Connect a web shop'), 900, '', 'shop_form');
+                'track_stock' => 1, 'clearing_acc' => '', 'sales_acc' => 0, 'shipping_acc' => 0, 'shipping_vat' => tc_vat_std_rate(), 'active' => 1];
+    htm_Card_($e['shop_id'] ? '✏️ ' . lang('@Edit web shop') . ': ' . $e['name'] : '🆕 ' . lang('@Connect a web shop'), 900, '', 'shop_form');
     echo '<input type="hidden" name="shop_id" value="' . (int)$e['shop_id'] . '">';
     htm_Field('fa-store', '@Name', 'name', $e['name'], 'text', null, 'required', '100%', '@E.g. the name or address of the shop');
     htm_Field('fa-plug', '@Platform', 'platform', $e['platform'], 'sele', $platform_opts, '', '100%', '@The shop system - TinyCash reads its order format. Until the adapter of a platform exists, the shop must send the TinyCash format.');
@@ -192,6 +196,10 @@ if (isset($_GET['edit'])) {
     htm_Field('fa-sack-dollar', '@Sales account (model B)', 'sales_acc', (string)(int)$e['sales_acc'], 'sele', $accounts_income, '', '48%', '@The goods of the daily sales.');
     htm_Field('fa-truck', '@Shipping account (model B)', 'shipping_acc', (string)(int)$e['shipping_acc'], 'sele', $accounts_income, '', '48%', '@Shipping of the daily sales - empty: the sales account.');
     htm_Field('fa-percent', '@VAT on shipping (%)', 'shipping_vat', fmt_dk_input((float)$e['shipping_vat']), 'text', null, '', '48%', '@When the shop does not send it.');
+    if (ioss_registered() && db_has_column($conn, 'shop_connections', 'ioss')) {
+        htm_Field('fa-box', '@Sends from outside the EU (IOSS)', 'ioss', (string)(int)($e['ioss'] ?? 0), 'sele', $yes_no, '', '48%',
+            '@Yes: the goods are sent from a country outside the EU - orders from consumers in the EU become IOSS sales (the VAT of the customer\'s country, the monthly IOSS return). An order can say otherwise ("ioss": false).');
+    }
     htm_Field('fa-power-off', '@Active', 'active', (string)(int)$e['active'], 'sele', $yes_no, '', '48%', '@No: the orders of the shop are refused.');
     echo '<div style="margin-top:15px; display:flex; gap:10px; flex-wrap:wrap;">';
     htm_Button(icon: 'fa-save', labl: '@Save', type: 'success', attr: 'name="save_shop" value="1"');
@@ -210,7 +218,7 @@ if (isset($_GET['edit'])) {
 $setup = $setup_shop ? shop_get($conn, $setup_shop) : ((isset($_GET['setup'])) ? shop_get($conn, (int)$_GET['setup']) : null);
 if ($plat_ready && $setup && $setup['platform'] !== 'native') {
     $code = fn($t) => '<input type="text" readonly value="' . htmlspecialchars($t, ENT_QUOTES) . '" onclick="this.select();" style="width:100%; box-sizing:border-box; font-family:monospace; padding:8px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-panel); color:var(--text-main);">';
-    htm_Card_('🔌 ' . lang('@Set up the shop') . ': ' . htmlspecialchars($setup['name']) . ' (' . htmlspecialchars(SHOP_PLATFORMS[$setup['platform']] ?? $setup['platform']) . ')', 1000);
+    htm_Card_('🔌 ' . lang('@Set up the shop') . ': ' . $setup['name'] . ' (' . (SHOP_PLATFORMS[$setup['platform']] ?? $setup['platform']) . ')', 1000);
     if ($setup['platform'] === 'woocommerce') {
         echo '<ol style="line-height:1.7; padding-left:20px;"><li>' . lang('@In WordPress: WooCommerce -> Settings -> Advanced -> Webhooks -> Add webhook.') . '</li>'
            . '<li>' . lang('@Topic: "Order created". Status: Active. API version: WP REST API Integration v3.') . '</li>'
@@ -289,7 +297,7 @@ htm_Card_end();
 if (isset($_GET['orders']) && ($s = shop_get($conn, (int)$_GET['orders']))) {
     $status_txt = ['draft' => lang('@Draft'), 'posted' => lang('@Posted'), 'paid' => lang('@Paid'), 'credited' => lang('@Credited'),
                    'pending_day' => lang('@Waits for the day'), 'booked' => lang('@Booked'), 'draft_deleted' => lang('@Draft deleted')];
-    htm_Card_('📦 ' . lang('@Orders') . ': ' . htmlspecialchars($s['name']), 1000);
+    htm_Card_('📦 ' . lang('@Orders') . ': ' . $s['name'], 1000);
     $res = DB::query($conn, "SELECT o.*, (SELECT j.voucher_no FROM journal j WHERE j.jou_id = o.day_jou_id) AS day_voucher FROM shop_orders o WHERE o.shop_id = " . (int)$s['shop_id'] . " ORDER BY o.order_id DESC LIMIT 300");
     $data = [];
     while ($o = DB::fetch_assoc($res)) {

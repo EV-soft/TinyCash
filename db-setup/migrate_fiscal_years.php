@@ -101,7 +101,7 @@ htm_Card_('Opret regnskabsår', 700);
         </div>
     </div>
     <?php
-    htm_Button(icon: 'fa-plus', labl: 'Opret regnskabsår', type: 'success', styl: 'width:100%; padding:12px;', attr: 'name="add_year" type="submit"');
+    htm_Button(icon: 'fa-plus', labl: '@Create Fiscal Year', type: 'success', styl: 'width:100%; padding:12px;', attr: 'name="add_year" type="submit"');
     ?>
 </form>
 <?php

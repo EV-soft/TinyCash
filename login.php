@@ -137,7 +137,9 @@ function login_complete_session(array $row, string $chosen_db_type, ?string $cho
     // enhver bruger give sig selv admin-niveau blot ved at besøge ?set_level=3.
     $_SESSION['real_user_level'] = (int)$row['user_level'];
     $_SESSION['user_role']  = (string)$row['user_role'];
-    $_SESSION['lang']       = 'da';
+    if (!empty($row['password_hash'])) $_SESSION['pw_fp'] = tc_pw_fingerprint((string)$row['password_hash']);      // (et nyt kodeord logger andre sessioner ud - se inc/auth.inc.php; 2FA-trinnet: sættes ved første side)
+    // (sproget valgt på login-siden - før blev det altid sat til dansk ved login)
+    $_SESSION['lang']       = preg_match('/^[a-z]{2}$/', (string)($_SESSION['lang'] ?? '')) ? $_SESSION['lang'] : tc_default_lang();
     $_SESSION['db_type']    = $chosen_db_type;
     // NYT: bevar det valgte regnskab på tværs af session-nulstillingen ovenfor, præcis som db_type - ellers ville
     // en vellykket 2FA-runde (som selv går via denne funktion) stille skifte tilbage til intet regnskab valgt.
@@ -180,12 +182,12 @@ if (isset($_POST['login'])) {
     // kommentar) og dækker derfor bevidst ikke login.php, som netop kører FØR nogen er logget ind. Uden dette tjek
     // er selve login-handlingen sårbar over for "login CSRF".
     if (!csrf_verify()) {
-        $error_msg = "Sikkerhedstjek fejlede (CSRF) - genindlæs siden og prøv igen.";
+        $error_msg = lang('@Security check failed (CSRF) - reload the page and try again.');
     } else {
     $initials = trim($_POST['initials'] ?? '');
     $pass     = $_POST['password'] ?? '';
-    $ip       = $_SERVER['REMOTE_ADDR'];
-    $ua       = $_SERVER['HTTP_USER_AGENT'];
+    $ip       = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    $ua       = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');      // (en klient uden User-Agent gav PHP-advarsler)
 
     // RETTET: login_log har hele tiden registreret hvert mislykkede loginforsøg (bruger, IP, tidspunkt), men intet
     // nogensinde LÆSTE de data igen - der var ingen øvre grænse for, hvor mange adgangskoder en angriber kunne
@@ -204,7 +206,7 @@ if (isset($_POST['login'])) {
     $recent_failures = $lock_res ? (int)(DB::fetch_assoc($lock_res)['n'] ?? 0) : 0;
 
     if ($recent_failures >= 5) {
-        $error_msg = "For mange mislykkede loginforsøg. Prøv igen om 15 minutter.";
+        $error_msg = lang('@Too many failed login attempts. Try again in 15 minutes.');
     } else {
         // VIGTIGT: hvis migrate_2fa.php ikke er kørt endnu, findes totp_*- kolonnerne ikke, og forespørgslen ville
         // ellers kaste en uhåndteret PDOException - der ville låse ALLE brugere (inkl. admin) helt ude, også fra
@@ -231,7 +233,7 @@ if (isset($_POST['login'])) {
         // Tjek om vi får et resultat tilbage
         if ($res && $row = DB::fetch_assoc($res)) {
             if (isset($row['is_active']) && (int)$row['is_active'] === 0) {
-                $error_msg = "Denne brugerkonto er deaktiveret. Kontakt din administrator.";
+                $error_msg = lang('@This user account is deactivated. Contact your administrator.');
                 $fail_sql = "INSERT INTO login_log (logged_username, ip_address, status, user_agent) VALUES (?, ?, 'Failed', ?)";
                 DB::prepare_and_execute($conn, $fail_sql, [$initials, $ip, $ua]);
             } elseif (password_verify($pass, $row['password_hash'])) {
@@ -267,12 +269,12 @@ if (isset($_POST['login'])) {
                     exit;
                 }
             } else {
-                $error_msg = "Forkert adgangskode.";
+                $error_msg = lang('@Wrong username or password.');
                 $fail_sql = "INSERT INTO login_log (logged_username, ip_address, status, user_agent) VALUES (?, ?, 'Failed', ?)";
                 DB::prepare_and_execute($conn, $fail_sql, [$initials, $ip, $ua]);
             }
         } else {
-            $error_msg = "Bruger findes ikke.";
+            $error_msg = lang('@Wrong username or password.');      // (samme besked som et forkert kodeord - afslørede ellers hvilke brugernavne der findes)
             $fail_sql = "INSERT INTO login_log (logged_username, ip_address, status, user_agent) VALUES (?, ?, 'Failed', ?)";
             DB::prepare_and_execute($conn, $fail_sql, [$initials, $ip, $ua]);
         }
@@ -284,12 +286,12 @@ if (isset($_POST['login'])) {
 if (isset($_POST['totp_login']) && !empty($_SESSION['totp_pending'])) {
     // Samme CSRF-rettelse som TRIN 1 ovenfor - se dens kommentar.
     if (!csrf_verify()) {
-        $error_msg = "Sikkerhedstjek fejlede (CSRF) - genindlæs siden og prøv igen.";
+        $error_msg = lang('@Security check failed (CSRF) - reload the page and try again.');
     } else {
     $pending = $_SESSION['totp_pending'];
     $code    = trim($_POST['totp_code'] ?? '');
-    $ip      = $_SERVER['REMOTE_ADDR'];
-    $ua      = $_SERVER['HTTP_USER_AGENT'];
+    $ip      = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    $ua      = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');      // (en klient uden User-Agent gav PHP-advarsler)
 
     // RETTET: dette trin havde INTET eget låsningstjek - en angriber der allerede kender adgangskoden (og derfor
     // nåede hertil) kunne afprøve 6-cifrede TOTP-koder ubegrænset, uden nogensinde at ramme trin 1's
@@ -301,7 +303,7 @@ if (isset($_POST['totp_login']) && !empty($_SESSION['totp_pending'])) {
     $recent_failures = $lock_res ? (int)(DB::fetch_assoc($lock_res)['n'] ?? 0) : 0;
 
     if ($recent_failures >= 5) {
-        $error_msg = "For mange mislykkede loginforsøg. Prøv igen om 15 minutter.";
+        $error_msg = lang('@Too many failed login attempts. Try again in 15 minutes.');
     } else {
         // RETTET: en kode kunne bruges igen inden for sit vindue (~90 sek.) - nu afvises et tidstrin der allerede
         // er brugt til et login for denne bruger (gemt i settings som totp_last_step_<user_id>)
@@ -500,15 +502,22 @@ htm_Button(
         attr: 'name="login" data-hint="'.lang('@Sign in with these credentials').'"',
         cont: '<div style="margin-top: 25px;"></div>'
     );
-echo '<div class="lang-switcher" style="text-align: center; margin-top: 20px; font-family: sans-serif; font-size: 0.9rem;">
-    <a href="set_lang.php?l=da" style="text-decoration: none; margin: 0 10px; color: #2c3e50;">
-        🇩🇰 Dansk
-    </a>
-    <span style="color: #ccc;">|</span>
-    <a href="set_lang.php?l=en" style="text-decoration: none; margin: 0 10px; color: #2c3e50;">
-        🇬🇧 English
-    </a>
-</div>';
+// Sprogvælgeren: dansk, engelsk og landepakkens sprog (fx svensk i Sverige) - før kun dansk og engelsk, så en bruger
+// uden for Danmark kunne ikke vælge sit eget sprog, før vedkommende var logget ind.
+$ls_langs = ['da' => null, 'en' => null];
+$ls_def = tc_default_lang();
+if (!isset($ls_langs[$ls_def])) $ls_langs[$ls_def] = null;
+foreach ((array)(json_decode((string)@file_get_contents('json-data/languages.json'), true)['language'] ?? []) as $ls_l)
+    if (array_key_exists((string)($ls_l['code'] ?? ''), $ls_langs)) $ls_langs[$ls_l['code']] = $ls_l;
+$ls_links = [];
+foreach ($ls_langs as $ls_code => $ls_l) {
+    if (!$ls_l) continue;
+    $ls_flag = strtoupper((string)($ls_l['flag'] ?? ''));
+    $ls_emoji = preg_match('/^[A-Z]{2}$/', $ls_flag) ? mb_chr(0x1F1E6 + ord($ls_flag[0]) - 65) . mb_chr(0x1F1E6 + ord($ls_flag[1]) - 65) . ' ' : '';
+    $ls_links[] = '<a href="set_lang.php?l=' . $ls_code . '" style="text-decoration: none; margin: 0 10px; color: #2c3e50;">' . $ls_emoji . htmlspecialchars((string)($ls_l['native'] ?? $ls_code)) . '</a>';
+}
+echo '<div class="lang-switcher" style="text-align: center; margin-top: 20px; font-family: sans-serif; font-size: 0.9rem;">'
+    . implode('<span style="color: #ccc;">|</span>', $ls_links) . '</div>';
 /* 
 echo '<div class="lang-switcher" style="text-align: center; margin-top: 20px; font-family: sans-serif; font-size: 0.9rem;">
     <a href="?l=da"><img src="dk.svg" alt="Dansk"></a>

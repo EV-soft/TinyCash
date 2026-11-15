@@ -18,7 +18,10 @@
 # db_name, host/bruger/kodeord kommer altid fra env.inis ene, delte
 # [mysql_config]-sektion (se account_resolve_settings()).
 
-define('ACCOUNTS_REGISTRY_FILE', __DIR__ . '/data/accounts.json');
+// (testpakken - TINYCASH_TEST_DB, kun cli/cli-server: et eget register i temp-mappen; ellers registrerede account_manage.php
+// testkørslens MySQL-database som et regnskab i det rigtige inc/data/accounts.json)
+define('ACCOUNTS_REGISTRY_FILE', in_array(PHP_SAPI, ['cli', 'cli-server'], true) && (string)getenv('TINYCASH_TEST_DB') !== ''
+    ? sys_get_temp_dir() . '/tinycash_test_accounts.json' : __DIR__ . '/data/accounts.json');
 define('ACCOUNTS_SQLITE_DIR', __DIR__ . '/data/accounts');
 
 // --- Interne hjælpefunktioner (fil-læsning/-skrivning) ------------------

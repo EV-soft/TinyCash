@@ -10,7 +10,8 @@
 #   "paid": true,                          // valgfri - ellers butikkens valg "betalt ved bestilling"
 #   "prices_include_vat": true,            // valgfri - ellers butikkens valg
 #   "currency": "DKK",                     // valgfri - kun regnskabets valuta understøttes
-#   "customer": {"email": "...", "name": "...", "phone": "...", "address": "...", "cvr": "..."},
+#   "customer": {"email": "...", "name": "...", "phone": "...", "address": "...", "cvr": "...",
+#                "country": "DE", "vat_id": "DE123456789"},  // land (ISO) + momsnummer: EU-OSS / omvendt betalingspligt
 #   "delivery_address": "...",
 #   "lines": [
 #     {"sku": "GLASSKO-1", "quantity": 2, "price": 625.00},               // vare - pris/moms fra produktet hvis de mangler
@@ -19,6 +20,7 @@
 #     {"type": "fee", "text": "Gebyr", "price": 10.00, "vat_rate": 25}
 #   ],
 #   "total": 1874.00,                       // valgfri kontrol (inkl. moms) - op til 1 kr forskel = øreafrunding
+#   "ioss": true,                           // valgfri - sendt fra et land uden for EU (IOSS); ellers butikkens valg
 #   "note": "..."
 # }
 
@@ -56,5 +58,6 @@ function shop_adapter_native(string $raw, array $headers, array $shop): array {
         'lines'            => $lines,
         'total'            => isset($p['total']) ? shop_num($p['total']) : null,
         'note'             => (string)($p['note'] ?? ''),
+        'ioss'             => isset($p['ioss']) ? shop_bool($p['ioss']) : null,
     ];
 }

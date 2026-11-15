@@ -28,7 +28,15 @@ if (!$bc || $bc['status'] !== 'LN' || empty($bc['gc_account_id'])) {
 $date_from = date('Y-m-d', strtotime('-90 days'));
 $date_to   = date('Y-m-d');
 
-$transactions = eb_get_transactions($bc['gc_account_id'], $date_from, $date_to);
+$transactions = eb_get_transactions($bc['gc_account_id'], $date_from, $date_to, $eb_error);
+if ($eb_error !== null) {
+    $eb_status = (int)($eb_error['_status'] ?? 0);
+    log_action($conn, 'SYNC_BANK_FAILED', 'bank_connections', $conn_id, null, ['http_status' => $eb_status, 'error' => $eb_error['error'] ?? $eb_error['message'] ?? null]);
+    $eb_detail = htmlspecialchars(substr((string)($eb_error['message'] ?? $eb_error['error'] ?? ('HTTP ' . $eb_status)), 0, 200));
+    redirect('bank_integration.php', lang(in_array($eb_status, [401, 403], true)
+        ? '@The bank refused the access - the consent has probably expired. Reconnect the bank.'
+        : '@The transactions could not be fetched from the bank. Try again later.') . ' <span style="font-family:monospace; font-size:0.85em;">' . $eb_detail . '</span>', 'error');
+}
 
 $imported = 0;
 foreach ($transactions as $t) {
@@ -51,7 +59,9 @@ foreach ($transactions as $t) {
     $remittance = $t['remittance_information'] ?? [];
     $text = is_array($remittance) && !empty($remittance) ? implode(' ', $remittance) : null;
     if (!$text) {
-        $party = $t['creditor']['name'] ?? $t['debtor']['name'] ?? null;
+        // Modparten: ved en indbetaling er det debitor (afsenderen) - creditor er kontohaveren selv, så alle indbetalinger
+        // fik før virksomhedens eget navn som tekst
+        $party = eb_signed_amount($t) < 0 ? ($t['creditor']['name'] ?? null) : ($t['debtor']['name'] ?? null);
         $text  = $party ?: lang('@Bank transaction');
     }
 

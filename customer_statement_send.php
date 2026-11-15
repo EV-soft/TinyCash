@@ -19,6 +19,7 @@ require_once 'inc/db_connect.inc.php';
 require_once 'inc/mail_handler.lib.php';
 require_once 'inc/audit.inc.php';
 require_once 'inc/customer_statement.inc.php';
+require_once 'inc/doc_paper.inc.php';      // (doc_uploaded_pdf())
 require_once 'inc/invoice_layouts.inc.php';  // il_column_exists()
 
 /**
@@ -26,7 +27,8 @@ require_once 'inc/invoice_layouts.inc.php';  // il_column_exists()
  * af: 'sent', 'no_email' (kunden har ingen mailadresse), 'error' (kunden
  * findes ikke, eller mailen fejlede reelt).
  */
-function send_single_statement($conn, array $s, int $cust_id, string $from = '', string $to = ''): string {
+// $pdf: kontoudtoget som blanket-PDF (fra customer_statement_view.php) - vedhæftes mailen
+function send_single_statement($conn, array $s, int $cust_id, string $from = '', string $to = '', ?string $pdf = null): string {
     if ($cust_id <= 0) return 'error';
 
     // RETTET: kontoudtoget (også rækketeksterne, som get_customer_statement_data() bygger) blev altid skrevet på
@@ -34,8 +36,9 @@ function send_single_statement($conn, array $s, int $cust_id, string $from = '',
     // Skiftes midlertidigt, og rulles tilbage når mailen er bygget.
     $st_lang_orig = $_SESSION['lang'] ?? 'da';
     if (il_column_exists($conn, 'customers', 'cust_language')) {
-        $st_lang = DB::fetch_row(DB::query($conn, "SELECT cust_language FROM customers WHERE cust_id = $cust_id"));
-        if (!empty($st_lang[0])) $_SESSION['lang'] = $st_lang[0];
+        require_once __DIR__ . '/inc/doc_paper.inc.php';
+        $st_lang = doc_customer_lang($conn, (int)$cust_id);      // (udenlandsk kunde uden valgt sprog: engelsk)
+        if ($st_lang !== '') $_SESSION['lang'] = $st_lang;
     }
     $stmt = get_customer_statement_data($conn, $cust_id, $from, $to);
     if ($stmt === null || empty($stmt['cust']['cust_email'])) {
@@ -72,6 +75,7 @@ function send_single_statement($conn, array $s, int $cust_id, string $from = '',
     }
 
     $subject = lang('@Account Statement') . ': ' . $cust['cust_name'] . $period_label;
+    $st_label = tc_mail_doc_label('Kontoudtog', '@Account Statement');
 
     $body  = '<p>' . sprintf(lang('@Hi %s,'), htmlspecialchars($cust['cust_name'])) . '</p>';
     $body .= '<p>' . lang('@Please find your account statement below.') . '</p>';
@@ -87,7 +91,7 @@ function send_single_statement($conn, array $s, int $cust_id, string $from = '',
     $body .= '<p>' . lang('@Best regards,') . '</p>';
     $_SESSION['lang'] = $st_lang_orig;
 
-    $result = sendTinyMail($cust['cust_email'], $cust['cust_name'], $subject, $body);
+    $result = sendTinyMail($cust['cust_email'], $cust['cust_name'], $subject, $body, $pdf, (string)$cust_id, $st_label);
 
     if (isset($result['success']) && $result['success'] == true) {
         log_action($conn, 'SEND_STATEMENT', 'customers', $cust_id, null, ['to' => $cust['cust_email'], 'from' => $from, 'to_date' => $to]);
@@ -123,9 +127,23 @@ if ($from !== '' && $to !== '' && $from > $to) [$from, $to] = [$to, $from];     
 
 if ($cust_id <= 0) { redirect("sales_hub.php"); }
 
+// Fra blanketten: kontoudtoget som PDF vedhæftes, svaret er JSON (docPdfSend() i inc/doc_design.inc.php)
+if (!empty($_POST['ajax'])) {
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    $pdf = doc_uploaded_pdf();
+    if ($pdf === null) { echo json_encode(['success' => false, 'error' => lang('@The PDF could not be made - nothing was sent.')]);  exit; }
+    $status = send_single_statement($conn, $s, $cust_id, $from, $to, $pdf);
+    if ($status === 'sent') flash(lang('@Account statement sent successfully.'));
+    echo json_encode($status === 'sent' ? ['success' => true, 'redirect' => "customer_statement_view.php?id=$cust_id&from=" . urlencode($from) . "&to=" . urlencode($to)]
+        : ['success' => false, 'error' => lang($status === 'no_email' ? '@The customer has no email address - add one on the customer card first.' : '@Could not send the account statement. Check your mail settings.')]);
+    exit;
+}
+
 $status = send_single_statement($conn, $s, $cust_id, $from, $to);
+// En kunde uden mailadresse er ikke en mailfejl - "tjek mailopsætningen" sendte brugeren det forkerte sted hen
 redirect("customer_statement.php?id=$cust_id&from=" . urlencode($from) . "&to=" . urlencode($to),
-    $status === 'sent' ? '@Account statement sent successfully.' : '@Could not send the account statement. Check your mail settings.',
+    $status === 'sent' ? '@Account statement sent successfully.' : ($status === 'no_email' ? '@The customer has no email address - add one on the customer card first.' : '@Could not send the account statement. Check your mail settings.'),
     $status === 'sent' ? 'success' : 'error');
 ob_end_flush();
 exit;

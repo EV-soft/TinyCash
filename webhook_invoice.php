@@ -178,7 +178,8 @@ foreach ($lines_in as $i => $l) {
         exit;
     }
     $price = isset($l['price_each']) ? ((is_int($l['price_each']) || is_float($l['price_each'])) ? (float)$l['price_each'] : parse_dk_number((string)$l['price_each'])) : (float)$prod['prod_price'];
-    $vat   = isset($l['vat_rate'])   ? (float)$l['vat_rate']   : (($prod['vat_rate'] !== null) ? (float)$prod['vat_rate'] : 25.0);
+    // (samme talfortolkning som antal og pris: "12,5" som tekst blev til 12 %)
+    $vat   = isset($l['vat_rate'])   ? ((is_int($l['vat_rate']) || is_float($l['vat_rate'])) ? (float)$l['vat_rate'] : parse_dk_number((string)$l['vat_rate'])) : (($prod['vat_rate'] !== null) ? (float)$prod['vat_rate'] : tc_vat_std_rate());
     // RETTET: pris og momssats fra butikken blev ikke kontrolleret - en negativ pris (en "rabatlinje") eller en
     // momssats på fx 250 eller -25 gav en kladde, hvis beløb og moms var forkerte, men så rigtige nok ud til at blive
     // bogført. Et tal der ikke er et tal (NaN/INF) gav en ugyldig SQL.
@@ -187,7 +188,7 @@ foreach ($lines_in as $i => $l) {
         echo json_encode(['success' => false, 'error' => "lines[$i]: price_each must be 0 or more and vat_rate between 0 and 100."]);
         exit;
     }
-    $resolved_lines[] = ['prod_id' => (int)$prod['prod_id'], 'text' => (string)$prod['prod_name'], 'qty' => $qty, 'price' => $price, 'vat' => $vat];
+    $resolved_lines[] = ['prod_id' => (int)$prod['prod_id'], 'text' => (string)$prod['prod_name'], 'qty' => $qty, 'price' => $price, 'vat' => $vat, 'vat_given' => isset($l['vat_rate'])];
 }
 
 // --- 6. Kunde: match på e-mail (case-insensitive), opret automatisk hvis
@@ -250,7 +251,12 @@ if (!$ins) {
 }
 $inv_id = DB::insert_id($conn);
 
+// EU-OSS: en eksisterende privatkunde i et andet EU-land får modtagerlandets standardsats på linjer uden egen
+// momssats (som tilbud -> faktura og faste fakturaer) - ellers afviste bogføringen kladden, til hver linje var rettet
+require_once __DIR__ . '/inc/oss.inc.php';
+$wh_oss_cc = oss_ready($conn) ? oss_dest_for_customer($conn, (int)$cust_id, $inv_date) : null;
 foreach ($resolved_lines as $rl) {
+    if ($wh_oss_cc !== null && !$rl['vat_given']) $rl['vat'] = oss_map_rate($wh_oss_cc, (float)$rl['vat']);
     $txt = DB::escape($conn, $rl['text']);
     if (!DB::query($conn, "INSERT INTO invoice_lines (inv_id, line_text, quantity, price_each, line_vat_rate, prod_id)
         VALUES ($inv_id, '$txt', {$rl['qty']}, {$rl['price']}, {$rl['vat']}, {$rl['prod_id']})")) {

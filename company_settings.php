@@ -60,14 +60,73 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_settings'])) {
     // RETTET (leverandørmodul, se db-setup/migrate_suppliers.php): tilføjet conf_acc_creditor til revisionslisten
     // - styrer, hvor "Ikke betalt endnu"-udgifter krediteres i stedet for banken, lige så følsom som de øvrige
     // særlige posteringskonti.
-    $conf_acc_keys = ['conf_acc_bank', 'conf_acc_debitor', 'conf_acc_creditor', 'conf_acc_sales', 'conf_acc_vat', 'conf_acc_purchase_vat', 'conf_acc_fx', 'conf_acc_bad_debt'];
+    $conf_acc_keys = ['conf_acc_bank', 'conf_acc_debitor', 'conf_acc_creditor', 'conf_acc_sales', 'conf_acc_vat', 'conf_acc_purchase_vat', 'conf_acc_fx', 'conf_acc_bad_debt', 'conf_acc_reminder_fee', 'conf_acc_inventory', 'conf_acc_stock_adjust', 'conf_acc_oss_sales', 'conf_acc_oss_vat', 'conf_acc_ioss_sales', 'conf_acc_ioss_vat'];
     $before_settings = get_settings($conn);
+    if (isset($_POST['set']['oss_registered']) && !in_array($_POST['set']['oss_registered'], ['0', '1'], true)) unset($_POST['set']['oss_registered']);
+    if (isset($_POST['set']['oss_from']) && trim((string)$_POST['set']['oss_from']) !== '' && !tc_is_date(trim((string)$_POST['set']['oss_from']))) unset($_POST['set']['oss_from']);
+    // Momsnummeret: tomt = udledes af firma-id'et (tc_company_vat_id()); et nummer der ikke passer til landets form, gemmes ikke
+    if (isset($_POST['set']['company_vat_id'])) {
+        $cv_raw = (string)$_POST['set']['company_vat_id'];
+        $cv = (string)(tc_vat_id_clean($cv_raw) ?? '#');
+        $cv_re = (string)tc_country_pack('vat_id.regex', '');
+        if ($cv !== '' && ($cv === '#' || ($cv_re !== '' && !preg_match('/' . str_replace('/', '\/', $cv_re) . '/', $cv)))) {
+            unset($_POST['set']['company_vat_id']);
+            flash(sprintf(lang('@The VAT number "%s" was not saved - it does not have the form of your country.'), htmlspecialchars(mb_substr(trim($cv_raw), 0, 30))), 'warning');
+        } else {
+            $_POST['set']['company_vat_id'] = $cv;
+        }
+    }
+    // IOSS-nummeret: IM + 10 cifre (tomt = ikke registreret); et ugyldigt nummer gemmes ikke. Alt andet end bogstaver og
+    // cifre fjernes først - et kopieret nummer har ofte punktum, bindestreger eller usynlige tegn (hårdt mellemrum) med.
+    if (isset($_POST['set']['ioss_number'])) {
+        $ioss_raw = (string)$_POST['set']['ioss_number'];
+        $_POST['set']['ioss_number'] = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $ioss_raw));
+        if ($_POST['set']['ioss_number'] !== '' && !ioss_number_ok($_POST['set']['ioss_number'])) {
+            unset($_POST['set']['ioss_number']);
+            flash(sprintf(lang('@The IOSS number "%s" was not saved - it is IM followed by 10 digits, e.g. IM2080000123.'), htmlspecialchars(mb_substr(trim($ioss_raw), 0, 40))), 'warning');
+        }
+    }
 
-    // RETTET: navn/adresse/CVR-nr må kun opdateres via et officielt CVR-opslag (company_cvr_sync_action.php),
-    // ALDRIG ved frit indtastet tekst - heller ikke via et forfalsket POST-kald direkte mod denne handler.
-    // Felterne er ganske vist readonly/styret i selve formularen (se nedenfor), men det er kun kosmetisk
-    // beskyttelse; springes derfor eksplicit over her, uanset hvad der måtte stå i $_POST['set'].
-    $cvr_locked_keys = ['company_cvr', 'company_name', 'company_address', 'company_zip', 'company_city'];
+    // Navn/adresse/CVR-nr: med låsen slået til (BEK 811/2026 Bilag 3, krav fra 1/1-2028 for registrerede systemer)
+    // kun via officielt CVR-opslag - springes over her uanset $_POST, da readonly i formularen kun er kosmetisk.
+    // Låsen er det FØR gemningen, der gælder; uden lås gemmes felterne frit og hver ændring logges.
+    $cvr_master_keys = ['company_cvr', 'company_name', 'company_address', 'company_zip', 'company_city'];
+    $cvr_lock_before = tc_pack_feature('cvr_lock') && ($before_settings['cvr_master_data_lock'] ?? '0') === '1';
+    // Bogføringsvalutaen kan ikke skiftes, når der er bogført: beløbene omregnes ikke, så hele historikken stod bagefter i
+    // den nye valuta (og momsangivelsen og rapporterne var forkerte). Advarslen i browseren kunne bare klikkes væk.
+    if (isset($_POST['set']['currency']) && strtoupper(trim((string)$_POST['set']['currency'])) !== strtoupper((string)($before_settings['currency'] ?? 'DKK'))
+        && (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM ledger"))[0] ?? 0) > 0) {
+        unset($_POST['set']['currency']);
+        $cs_lock_err = trim(($cs_lock_err ?? '') . ' ' . lang('@The base currency cannot be changed once there are postings - the amounts are not converted. Use a new ledger for another currency.'));
+    }
+    // Landepakken: kun en pakke der findes (ellers bevares den gamle); skiftet logges
+    if (isset($_POST['set']['country'])) {
+        $ctry_new = strtolower(trim((string)$_POST['set']['country']));
+        if (!isset(tc_country_list()[$ctry_new])) unset($_POST['set']['country']);
+        elseif ($ctry_new !== tc_country()) log_action($conn, 'CHANGE_COUNTRY', 'settings', 0, ['country' => tc_country()], ['country' => $ctry_new]);
+    }
+    // Betalingsreference: kun en kendt ordning; FIK-kreditornummer = 8 cifre; IBAN/BIC uden mellemrum, store bogstaver
+    if (isset($_POST['set']['payment_ref']) && (!is_string($_POST['set']['payment_ref']) || !isset(tc_payment_ref_labels()[$_POST['set']['payment_ref']]))) unset($_POST['set']['payment_ref']);
+    if (isset($_POST['set']['fik_creditor'])) {
+        $fik = preg_replace('/\D/', '', (string)$_POST['set']['fik_creditor']);
+        if ($fik !== '' && strlen($fik) !== 8) { unset($_POST['set']['fik_creditor']);  $cs_lock_err = lang('@The FIK creditor number must have 8 digits.'); }
+        else $_POST['set']['fik_creditor'] = $fik;
+    }
+    if (isset($_POST['set']['timezone']) && (!is_string($_POST['set']['timezone']) || ($_POST['set']['timezone'] !== '' && !in_array($_POST['set']['timezone'], timezone_identifiers_list(), true)))) unset($_POST['set']['timezone']);
+    foreach (['bank_iban', 'bank_bic'] as $k) if (isset($_POST['set'][$k])) $_POST['set'][$k] = strtoupper(preg_replace('/\s+/', '', (string)$_POST['set'][$k]));
+    if (isset($_POST['set']['bank_iban']) && $_POST['set']['bank_iban'] !== '' && !tc_iban_ok($_POST['set']['bank_iban'])) {
+        $cs_lock_err = trim(($cs_lock_err ?? '') . ' ' . sprintf(lang('@The IBAN %s is not valid (wrong length or check digits) - it was not saved.'), htmlspecialchars($_POST['set']['bank_iban'])));
+        unset($_POST['set']['bank_iban']);
+    }
+    // En låsedato der ikke er en dato, låste INTET (strtotime() gav false i is_date_locked()) - afvises nu
+    if (isset($_POST['set']['accounting_lock_date']) && trim((string)$_POST['set']['accounting_lock_date']) !== '' && !tc_is_date(trim((string)$_POST['set']['accounting_lock_date']))) {
+        $cs_lock_err = trim(($cs_lock_err ?? '') . ' ' . lang('@The lock date is not a valid date - it was not changed.'));
+        unset($_POST['set']['accounting_lock_date']);
+    }
+    $cvr_locked_keys = $cvr_lock_before ? $cvr_master_keys : [];
+    if (isset($_POST['set']['cvr_master_data_lock']) && !in_array($_POST['set']['cvr_master_data_lock'], ['0', '1'], true)) {
+        unset($_POST['set']['cvr_master_data_lock']);
+    }
 
     // RETTET: låsedatoen kunne flyttes BAGUD eller slettes her - også til før et regnskabsår der er lukket ved
     // årsafslutning (year_end_close.php sætter den), så en lukket periode kunne bogføres i igen. Og ændringen
@@ -127,6 +186,35 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_settings'])) {
         log_action($conn, 'UPDATE_POSTING_ACCOUNTS', 'settings', 0, $acc_old, $acc_new);
     }
 
+    // Stamoplysninger rettet i hånden (kun muligt uden lås) og selve låsen logges altid med før/efter
+    $md_old = []; $md_new = [];
+    foreach (array_merge($cvr_lock_before ? [] : $cvr_master_keys, ['cvr_master_data_lock']) as $k) {
+        if (!isset($_POST['set'][$k])) continue;
+        $old_val = (string)($before_settings[$k] ?? '');
+        $new_val = trim((string)$_POST['set'][$k]);
+        if ($k === 'cvr_master_data_lock' && $old_val === '') $old_val = '0';
+        if ($old_val !== $new_val) { $md_old[$k] = $old_val; $md_new[$k] = $new_val; }
+    }
+    if (!empty($md_new)) {
+        log_action($conn, 'UPDATE_COMPANY_MASTER_DATA', 'settings', 0, $md_old, $md_new);
+    }
+
+    // Nyt land: opret pakkens momskoder der mangler (eksisterende koder røres ikke)
+    if (isset($ctry_new) && $ctry_new !== strtolower((string)($before_settings['country'] ?? TC_COUNTRY_DEFAULT)) && tc_country() === $ctry_new) {
+        $vs_log = tc_apply_pack_vat_setup($conn);
+        if ($vs_new = count(preg_grep('/^momskode/', $vs_log))) flash(sprintf(lang('@%d VAT codes from the country pack were added - check them under VAT Codes.'), $vs_new), 'info');
+        // Indtægtskonti med en sats landet ikke har (fx 25 % fra Danmark i Tyskland): fakturaerne afvises ved bogføringen,
+        // indtil kontoen er rettet - før kom det som en overraskelse ved den første faktura
+        require_once __DIR__ . '/inc/accounts.inc.php';      // (acc_status_col)
+        $cs_bad = 0;
+        $cs_r = DB::query($conn, "SELECT vat_rate FROM accounts WHERE acc_type = 'income' AND vat_rate IS NOT NULL" . (acc_status_col($conn) !== '' ? " AND COALESCE(acc_status, 'active') <> 'off'" : ''));
+        while ($cs_r && ($cs_a = DB::fetch_row($cs_r))) if (!tc_home_rate_ok($conn, (float)$cs_a[0])) $cs_bad++;
+        if ($cs_bad > 0) flash(sprintf(lang('@%d income account(s) have a VAT rate the selected country does not use - invoices on them cannot be posted until the rate is changed in the chart of accounts.'), $cs_bad), 'warning');
+    }
+    // Postnummeret skal have landets form - ellers kan e-fakturaer ikke dannes (gemmes alligevel, det er kun en advarsel)
+    $zip_now = (string)setting('company_zip', '');
+    if (!tc_zip_ok($zip_now, (string)tc_country_pack('iso', 'DK')))
+        flash(sprintf(lang('@The postal code %s does not have the form used in the selected country - e-invoices need a valid postal code.'), htmlspecialchars($zip_now)), 'warning');
     if (!empty($cs_lock_err)) flash($cs_lock_err, 'error');
     redirect('company_settings.php', '@Settings updated successfully');
 }
@@ -184,18 +272,24 @@ csrf_field();
 // =====================================================================
 htm_Card_(capt: '@Company - Information', wdth: 650);
 
-// RETTET: firmanavn/CVR-nr/adresse/postnr/by må ikke længere frit kunne indtastes - de må kun opdateres via et
-// officielt CVR-opslag (company_cvr_sync_action.php), som slår nummeret op SERVER-SIDE og skriver kun det, det
-// officielle svar faktisk indeholder. Firmanavn/adresse/postnr/by er derfor readonly; CVR-nummerfeltet er bevidst
-// stadig et almindeligt tekstfelt (det er selve opslagsnøglen), men gemmes KUN via knappen nedenfor - den
-// almindelige Gem-knap ignorerer det (se skip-listen i gemme-handleren ovenfor).
-htm_Field(icon: 'fa-building', labl: '@Company Name', name: 'set[company_name]', valu: $comp['company_name'] ?? '', legd:'align-left', extr: 'readonly', hint: '@Locked - can only be updated via an official CVR lookup (see the button next to the CVR Number field).');
+// Med CVR-låsen slået til er navn/adresse/postnr/by readonly og kan kun opdateres via CVR-knappen
+// (company_cvr_sync_action.php); CVR-nummerfeltet er opslagsnøglen og forbliver et tekstfelt, men den almindelige
+// Gem-knap ignorerer det. Uden lås er alle felter frie, og CVR-knappen er blot en hurtig udfyldning.
+$cvr_lock    = tc_pack_feature('cvr_lock') && ($comp['cvr_master_data_lock'] ?? '0') === '1';      // (låsen er dansk - BEK 811/2026)
+$cvr_ro      = $cvr_lock ? 'readonly frame' : 'frame';      // ramme: felterne CVR-låsen omfatter
+$cvr_ro_hint = $cvr_lock ? '@Locked - can only be updated via an official CVR lookup.' : '';
+htm_Note(lang($cvr_lock
+    ? '@The company master data is locked: name, address, zip and city can only be changed through an official CVR lookup (the button next to the CVR Number field).'
+    : '@Name, address and CVR number can be edited freely. Every change is recorded in the audit log. The CVR button fills them in from the official register.'),
+    'font-size:0.9em; margin-top:-5px;');
+htm_Field(icon: 'fa-building', labl: '@Company Name', name: 'set[company_name]', valu: $comp['company_name'] ?? '', legd:'align-left', extr: $cvr_ro, hint: $cvr_lock ? '@Locked - can only be updated via an official CVR lookup (see the button next to the CVR Number field).' : '');
 echo "<div style='display:flex; width:100%; gap:6px; align-items:flex-end;'>";
     echo '<div style="width:34%; display:flex; gap:4px; align-items:flex-end;">';
     echo '<div style="flex:1;">';
-    htm_Field(icon: 'fa-id-card', labl: '@CVR Number', name: 'set[company_cvr]', valu: $comp['company_cvr'] ?? '', extr: 'align-left', wdth: '100%', legd:'align-left', hint: '@Enter the CVR number and press the button to fetch and lock the official name/address. The ordinary Save button below does not change this field.');
+    htm_Field(icon: 'fa-id-card', labl: (string)tc_country_pack('company_id.label', '@CVR Number'), name: 'set[company_cvr]', valu: $comp['company_cvr'] ?? '', extr: 'align-left frame', wdth: '100%', legd:'align-left', hint: $cvr_lock ? '@Enter the CVR number and press the button to fetch and lock the official name/address. The ordinary Save button below does not change this field.' : '@Press the button to fill in name and address from the official CVR register.');
     echo '</div>';
-    echo '<button type="button" onclick="companyCvrLookup(this)" class="tc-info-fill" style="flex-shrink:0; margin-bottom:2px; padding:9px 10px; background:var(--color-info); color:var(--text-light); border:none; border-radius:4px; cursor:pointer;" data-hint="'.lang('@Fetch and lock company name, address, zip and city from the official CVR register').'"><i class="fa-solid fa-magnifying-glass"></i></button>';
+    if (tc_registry() !== null)
+    echo '<button type="button" onclick="companyCvrLookup(this)" class="tc-info-fill" style="flex-shrink:0; margin-bottom:2px; padding:9px 10px; background:var(--color-info); color:var(--text-light); border:none; border-radius:4px; cursor:pointer;" data-hint="'.lang('@Fetch and lock company name, address, zip and city from the official company register').'"><i class="fa-solid fa-magnifying-glass"></i></button>';
     echo '</div>';
     htm_Field(icon: 'fa-envelope', labl: '@Email', name: 'set[company_email]', valu: $comp['company_email'] ?? '', type: 'email', wdth: '66%', legd:'align-left');
 echo "</div>";
@@ -214,15 +308,15 @@ htm_Field(
         'A/S' => 'A/S',
         'Andet' => lang('@Other'),
     ],
-    wdth: '48%',
+    wdth: '50%',
     legd:'align-left',
     hint: '@Used on the annual report cover page.'
 );
-htm_Field(icon: 'fa-user-tie', labl: '@Management Name (for signing)', name: 'set[company_management_name]', valu: $comp['company_management_name'] ?? '', wdth: '52%', legd:'align-left', hint: '@Name of the director/owner who signs the annual report.');
-htm_Field(icon: 'fa-city', labl: '@City (for signing location)', name: 'set[company_city]', valu: $comp['company_city'] ?? '', wdth: '30%', legd:'align-left', extr: 'readonly', hint: '@Locked - can only be updated via an official CVR lookup.');
+htm_Field(icon: 'fa-user-tie', labl: '@Management Name (for signing)', name: 'set[company_management_name]', valu: $comp['company_management_name'] ?? '', wdth: '50%', legd:'align-left', hint: '@Name of the director/owner who signs the annual report.');
+htm_Field(icon: 'fa-city', labl: '@City (for signing location)', name: 'set[company_city]', valu: $comp['company_city'] ?? '', wdth: '50%', legd:'align-left', extr: $cvr_ro, hint: $cvr_ro_hint);
 // NYT: company_zip blev allerede læst af export_oioubl.php, men havde intet indtastningsfelt nogen steder i UI'et
 // - kunne kun sættes ved direkte databaseadgang. En OIOUBL-e-faktura ville derfor altid have et tomt postnummer.
-htm_Field(icon: 'fa-mail-bulk', labl: '@Postal Code', name: 'set[company_zip]', valu: $comp['company_zip'] ?? '', wdth: '18%', legd:'align-left', extr: 'readonly', hint: '@Locked - can only be updated via an official CVR lookup.');
+htm_Field(icon: 'fa-mail-bulk', labl: '@Postal Code', name: 'set[company_zip]', valu: $comp['company_zip'] ?? '', wdth: '25%', legd:'align-left', extr: $cvr_ro, hint: $cvr_ro_hint);
 htm_Field(
     icon: 'fa-map-marker-alt',
     labl: '@Address',
@@ -230,15 +324,36 @@ htm_Field(
     valu: $comp['company_address'] ?? '',
     type: 'textarea',
     legd: 'align-left',
-    extr: 'readonly',
-    hint: '@Locked - can only be updated via an official CVR lookup.'
+    extr: $cvr_ro,
+    hint: $cvr_ro_hint
 );
+if (tc_pack_feature('cvr_lock'))
+htm_Field(
+    icon: 'fa-lock',
+    labl: '@CVR lock on company master data',
+    name: 'set[cvr_master_data_lock]',
+    valu: $cvr_lock ? '1' : '0',
+    type: 'sele',
+    opti: ['0' => '⬜ ' . lang('@Off - name and address can be edited freely'), '1' => '🔒 ' . lang('@On - only via official CVR lookup')],
+    legd: 'align-left',
+    extr: 'frame',
+    hint: '@Why: The executive order on digital standard bookkeeping systems (BEK no. 97 of 26 January 2023, amended by BEK no. 811 of 22 September 2026, Annex 3) requires that a registered system takes the company name, address and CVR number from the CVR register and does not allow them to be changed by hand. The requirement takes effect on 1 January 2028 and only applies to systems registered with the Danish Business Authority - until then, and for companies without a CVR number, the lock can stay off.'
+);
+// Kontaktperson: kræves i norsk SAF-T (for- og efternavn) og er nyttig på dokumenter
+htm_Field(icon: 'fa-user-tie', labl: '@Contact person', name: 'set[company_contact_person]', valu: $comp['company_contact_person'] ?? '', legd: 'align-left', hint: '@The person the tax authority can contact about the accounts. Required in the Norwegian SAF-T file.');
 htm_Field(icon: 'fa-phone', labl: '@Phone Number', name: 'set[company_phone]', valu: $comp['company_phone'] ?? '', wdth: '33%', extr:'align-right', legd:'align-center');
 htm_Field(icon: 'fa-university', labl: '@Reg. No.', name: 'set[bank_reg]', valu: $comp['bank_reg'] ?? '', wdth: '34%', legd:'align-left');
 htm_Field(icon: 'fa-piggy-bank', labl: '@Account No.', name: 'set[bank_acc]', valu: $comp['bank_acc'] ?? '', wdth: '33%', legd:'align-left');
 // NYT (bruger-anmodet, samme fund som betalingsblokken på fakturaen): begge
 // blev allerede læst af invoice_view.php's "Online"-fodfelt med falske
 // fallbacks ('00000'/'www.company.com') - manglede helt et indtastningsfelt.
+htm_Field(icon: 'fa-building-columns', labl: '@IBAN', name: 'set[bank_iban]', valu: $comp['bank_iban'] ?? '', wdth: '67%', legd:'align-left', hint: '@For payments from abroad and on Peppol e-invoices. Leave empty if you only have Danish customers.');
+htm_Field(icon: 'fa-building-columns', labl: '@BIC / SWIFT', name: 'set[bank_bic]', valu: $comp['bank_bic'] ?? '', wdth: '33%', legd:'align-left');
+htm_Field(icon: 'fa-barcode', labl: '@Payment reference on invoices', name: 'set[payment_ref]', valu: $comp['payment_ref'] ?? 'auto', type: 'sele',
+    opti: tc_payment_ref_labels(), wdth: '67%', legd: 'align-left',
+    hint: '@A reference made from the invoice number with a check digit. The customer types it when paying, and the bank sends it back with the payment, so the bank reconciliation can find the invoice.');
+htm_Field(icon: 'fa-hashtag', labl: '@FIK creditor number (+71)', name: 'set[fik_creditor]', valu: $comp['fik_creditor'] ?? '', wdth: '33%', legd: 'align-left',
+    hint: '@The 8-digit creditor number from your bank agreement on payment slips (FI-kort 71). Without it no FIK line is shown.');
 htm_Field(icon: 'fa-mobile-screen', labl: '@MobilePay Number', name: 'set[company_mobilepay]', valu: $comp['company_mobilepay'] ?? '', wdth: '50%', legd:'align-left');
 htm_Field(icon: 'fa-globe', labl: '@Website', name: 'set[company_web]', valu: $comp['company_web'] ?? '', wdth: '50%', legd:'align-left');
 htm_Field(icon: 'fa-info-circle', labl: '@Extra Info', name: 'set[company_extra]', valu: $comp['company_extra'] ?? '', wdth: '100%', legd:'align-left');
@@ -246,7 +361,7 @@ htm_Field(icon: 'fa-info-circle', labl: '@Extra Info', name: 'set[company_extra]
 // overført til vores bankkonto."), men feltet fandtes ingen steder i UI'et - kunne kun sættes ved direkte
 // databaseadgang. Hver eneste OIOUBL-e-faktura ville derfor altid vise nøjagtig samme betalingstekst, uanset
 // virksomhedens reelle betalingsbetingelser.
-htm_Field(icon: 'fa-file-invoice-dollar', labl: '@Payment Terms (shown on OIOUBL e-invoices)', name: 'set[default_payment_terms]', valu: $comp['default_payment_terms'] ?? 'Betaling bedes overført til vores bankkonto.', type: 'textarea', legd: 'align-left', extr: 'rows="2"');
+htm_Field(icon: 'fa-file-invoice-dollar', labl: '@Payment Terms (shown on OIOUBL e-invoices)', name: 'set[default_payment_terms]', valu: $comp['default_payment_terms'] ?? lang('@Please transfer the payment to our bank account.'),      /* (forslaget var altid dansk - og blev gemt) */ type: 'textarea', legd: 'align-left', extr: 'rows="2"');
 echo '<br><br><hr><br>';
 htm_Field(icon: 'fa-comment-alt', labl: '@Default Email Message', name: 'set[default_mail_body]', valu: tc_custom_mail_body($comp), type: 'textarea', legd: 'align-left', extr: 'rows="3" placeholder="' . htmlspecialchars(lang('@Empty: a translated standard text in the language of the customer')) . '"');      // RETTET: var forudfyldt med engelsk tekst, der blev gemt og overstyrede den oversatte
 // NYT (bruger-anmodet, "kan bogholderen ønske sig mere"): invoice_footer
@@ -267,20 +382,17 @@ htm_Card_(capt: '@Accounting - Settings / Export', wdth: 650);
 
 echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-sizing: border-box;">';
 
+    // Landepakken: talformat, standard-momssats og -koder, firmaregister, rykkerregler (inc/country.inc.php)
     htm_Field(
-        icon: 'fa-calendar-days',
-        labl: '@Date Format',
-        name: 'set[date_format]',
-        valu: CONF_DATE_FORMAT,
+        icon: 'fa-flag',
+        labl: '@Country',
+        name: 'set[country]',
+        valu: tc_country(),
         type: 'sele',
-        opti: [
-            'd.m.Y' => '09.06.2026 (DD.MM.ÅÅÅÅ)',
-            'Y-m-d' => '2026-06-09 (ÅÅÅÅ-MM-DD)',
-            'd/m/Y' => '09/06/2026 (DD/MM/ÅÅÅÅ)',
-            'd-m-Y' => '09-06-2026 (DD-MM-ÅÅÅÅ)'
-        ],
+        opti: array_map(fn($n) => $n, tc_country_list()),
         wdth: 'calc(50% - 8px)',
-        legd: 'align-left'
+        legd: 'align-left',
+        hint: '@The country the company is in. Decides number format, standard VAT rate and codes, company register lookup and reminder fee rules. Changing it does not change anything already posted.'
     );
 
     // RETTET: var før en fastlåst, hardkodet 5-valuta-liste (kun dansk tekst, aldrig kørt gennem lang). Udleder nu
@@ -306,6 +418,16 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
             'NOK' => 'NOK - Norske Kroner'
         ];
     }
+    // Hver landepakkes egen valuta skal kunne vælges (fx ISK), også når intet sprog bruger den
+    $pack_defaults = [];
+    foreach (array_keys(tc_country_list()) as $pc) {
+        $pj = json_decode((string)file_get_contents(tc_country_dir() . $pc . '.json'), true) ?: [];
+        $pack_defaults[$pc] = ['currency' => strtoupper((string)($pj['currency'] ?? '')), 'date_format' => (string)($pj['date_format'] ?? '')];
+        $pcur = $pack_defaults[$pc]['currency'];
+        if ($pcur !== '' && !isset($currency_options[$pcur])) $currency_options[$pcur] = $pcur;
+    }
+    $cur_now = strtoupper((string)($comp['currency'] ?? 'DKK'));
+    if (!isset($currency_options[$cur_now])) $currency_options[$cur_now] = $cur_now;
 
     htm_Field(
         icon: 'fa-money-bill-wave',
@@ -318,6 +440,43 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
         legd: 'align-left',
         hint: '<span style="color:var(--color-warning); font-weight:bold;">' . lang('@Warning: Changing currency may affect historical data visibility.') . '</span>'
     );
+    htm_Field(
+        icon: 'fa-calendar-days',
+        labl: '@Date Format',
+        name: 'set[date_format]',
+        valu: CONF_DATE_FORMAT,
+        type: 'sele',
+        // (forkortelserne var faste danske "ÅÅÅÅ" - også for en tysk eller engelsk bruger)
+        opti: array_map(fn($f) => date($f, mktime(0, 0, 0, 6, 9, 2026)) . ' (' . strtr($f, ['d' => lang('@DD'), 'm' => lang('@MM'), 'Y' => lang('@YYYY')]) . ')',
+            ['d.m.Y' => 'd.m.Y', 'Y-m-d' => 'Y-m-d', 'd/m/Y' => 'd/m/Y', 'd-m-Y' => 'd-m-Y']),
+        wdth: 'calc(50% - 8px)',
+        legd: 'align-left'
+    );
+    // Tidszone pr. regnskab (anvendes i inc/db_connect.inc.php); tom = TIMEZONE i env.ini, ellers landepakkens
+    $tz_auto = trim((string)($config['TIMEZONE'] ?? '')) ?: (string)tc_country_pack('timezone', 'Europe/Copenhagen');
+    $tz_opts = ['' => sprintf(lang('@Automatic (%s)'), $tz_auto)];
+    foreach (array_merge(timezone_identifiers_list(DateTimeZone::EUROPE), ['Atlantic/Faroe', 'America/Nuuk', 'Atlantic/Reykjavik', 'UTC']) as $tz) $tz_opts[$tz] = $tz;
+    if (!empty($comp['timezone'])) $tz_opts[$comp['timezone']] = $comp['timezone'];
+    htm_Field(
+        icon: 'fa-clock',
+        labl: '@Time Zone',
+        name: 'set[timezone]',
+        valu: $comp['timezone'] ?? '',
+        type: 'sele',
+        opti: $tz_opts,
+        wdth: 'calc(50% - 8px)',
+        legd: 'align-left',
+        hint: '@Used for dates and times on vouchers, logs and documents. Automatic = the server setting or the country pack.'
+    );
+    // Et udkast er ikke gennemgået af en revisor i landet; pakkens valuta/tidszone/datoformat er kun forslag
+    $pk = tc_country_pack();
+    $pk_hint = [];
+    // (en pakke kan have en egen advarsel, fx Polens pligt til e-faktura via KSeF, som TinyCash ikke understøtter)
+    if (!empty($pk['legal']['warning']) && is_string($pk['legal']['warning'])) $pk_hint[] = '⚠️ ' . lang($pk['legal']['warning']);
+    if (!empty($pk['draft'])) $pk_hint[] = '⚠️ ' . lang('@This country pack is a draft: the VAT return boxes, VAT codes and reminder rules have not yet been checked by an accountant in the country. Check them before you file.');
+    if (strtoupper((string)($comp['currency'] ?? 'DKK')) !== strtoupper((string)($pk['currency'] ?? '')))
+        $pk_hint[] = sprintf(lang('@The country\'s currency is %s, but the base currency is %s - the VAT return is only available in the country\'s own currency.'), htmlspecialchars((string)($pk['currency'] ?? '')), htmlspecialchars(strtoupper((string)($comp['currency'] ?? 'DKK'))));
+    if ($pk_hint) echo '<div style="width:100%;">' . htm_Note(implode('<br>', $pk_hint), 'font-size:0.9em;', false) . '</div>';
 
     require_once __DIR__ . '/inc/accounts.inc.php';     // valglisten: slukkede konti udeladt (de valgte beholdes), dæmpede nederst
     $accounts_res = DB::query($conn, "SELECT acc_id, acc_name" . acc_status_col($conn) . " FROM accounts WHERE " . acc_visible_sql($conn, '', array_keys(acc_protected_ids($conn))) . " ORDER BY " . acc_order_sql($conn) . "acc_id ASC");
@@ -330,13 +489,15 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
     // helt anden ændring, fx adressen), blev bank-/kreditorkontoen stille skiftet til den. Den gemte værdi
     // vises nu som sit eget, tydeligt markerede valg, så intet ændres uden at brugeren vælger det.
     $cs_defaults = ['conf_acc_bank' => 5000, 'conf_acc_debitor' => 8100, 'conf_acc_creditor' => 4000, 'conf_acc_sales' => 1000,
-                    'conf_acc_vat' => 6900, 'conf_acc_purchase_vat' => 6910, 'conf_acc_fx' => 7200, 'conf_acc_bad_debt' => 7100];
+                    'conf_acc_vat' => 6900, 'conf_acc_purchase_vat' => 6910, 'conf_acc_fx' => 7200, 'conf_acc_bad_debt' => 7100, 'conf_acc_reminder_fee' => 1090, 'conf_acc_inventory' => 8150, 'conf_acc_stock_adjust' => 2100];
     foreach ($cs_defaults as $cs_k => $cs_def) {
         $cs_v = (int)($comp[$cs_k] ?? $cs_def);
         if ($cs_v > 0 && !isset($account_options[$cs_v])) $account_options[$cs_v] = $cs_v . ' - ⚠ ' . lang('@not in the chart of accounts');
     }
     ksort($account_options);
 
+    // Konti TinyCash bogfører på automatisk (bank, debitor, moms, kursdifference, tab, gebyr, lager ...)
+    htm_Fieldset_(labl: '@Automatic posting', icon: 'fa-gears', hint: '@The accounts TinyCash posts to by itself when invoices, payments, expenses, reminder fees and stock counts are posted.');
     htm_Field(
         icon: 'fa-university',
         labl: '@Default Bank Account',
@@ -434,10 +595,48 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
             hint: lang('@Used when an uncollectible invoice is formally written off as a bad debt loss (invoice_view.php -> "Write Off as Bad Debt").')
         );
     }, true); // has_own_box: htm_Field() tegner allerede sin egen fieldset-kant
+    // Rykkergebyrer bogføres på denne konto (momsfrit) - se inc/reminder.inc.php
+    render_hideable_field($fv_overrides, 'company_settings.conf_acc_reminder_fee', $fv_is_admin, $fv_uLev, function() use ($comp, $account_options) {
+        htm_Field(icon: 'fa-coins', labl: '@Reminder Fee Account', name: 'set[conf_acc_reminder_fee]', valu: $comp['conf_acc_reminder_fee'] ?? 1090,
+            type: 'sele', opti: $account_options, wdth: 'calc(50% - 8px)', legd: 'align-left',
+            hint: lang('@A reminder fee is posted here (no VAT) when a reminder with a fee is sent or registered as sent by post.'));
+    }, true);
+    // Lagerværdien (stock_count.php): varelager (balance) mod regulering (vareforbrug) - se inc/stock.inc.php
+    render_hideable_field($fv_overrides, 'company_settings.conf_acc_inventory', $fv_is_admin, $fv_uLev, function() use ($comp, $account_options) {
+        htm_Field(icon: 'fa-boxes-stacked', labl: '@Inventory Account', name: 'set[conf_acc_inventory]', valu: $comp['conf_acc_inventory'] ?? 8150,
+            type: 'sele', opti: $account_options, wdth: 'calc(50% - 8px)', legd: 'align-left',
+            hint: lang('@Balance sheet account for the inventory value - set to the value at cost price when a stock count is posted.'));
+    }, true);
+    render_hideable_field($fv_overrides, 'company_settings.conf_acc_stock_adjust', $fv_is_admin, $fv_uLev, function() use ($comp, $account_options) {
+        htm_Field(icon: 'fa-scale-balanced', labl: '@Stock Adjustment Account', name: 'set[conf_acc_stock_adjust]', valu: $comp['conf_acc_stock_adjust'] ?? 2100,
+            type: 'sele', opti: $account_options, wdth: 'calc(50% - 8px)', legd: 'align-left',
+            hint: lang('@The counter account when the inventory value is posted - typically cost of goods sold.'));
+    }, true);
+    // EU-OSS: salg til private i andre EU-lande bogføres på egne konti (inc/oss.inc.php)
+    if (oss_available()) {
+        $oss_opts = ['' => '-- ' . lang('@Not chosen') . ' --'] + $account_options;
+        htm_Field(icon: 'fa-earth-europe', labl: '@EU-OSS Sales Account', name: 'set[conf_acc_oss_sales]', valu: $comp['conf_acc_oss_sales'] ?? '',
+            type: 'sele', opti: $oss_opts, wdth: 'calc(50% - 8px)', legd: 'align-left',
+            hint: '@Sales to private customers in other EU countries (EU-OSS). Use an income account without a VAT code, so the sales stay out of the domestic VAT return.');
+        htm_Field(icon: 'fa-earth-europe', labl: '@EU-OSS VAT Account', name: 'set[conf_acc_oss_vat]', valu: $comp['conf_acc_oss_vat'] ?? '',
+            type: 'sele', opti: $oss_opts, wdth: 'calc(50% - 8px)', legd: 'align-left',
+            hint: '@The foreign VAT on EU-OSS sales - a liability account of its own, paid through the OSS return, not the domestic VAT return.');
+    }
+    // IOSS: varer sendt fra et land uden for EU til forbrugere i EU - egne konti, egen (månedlig) angivelse
+    if (ioss_available() && ioss_registered()) {
+        $ioss_opts = ['' => '-- ' . lang('@Not chosen') . ' --'] + $account_options;
+        htm_Field(icon: 'fa-box', labl: '@IOSS Sales Account', name: 'set[conf_acc_ioss_sales]', valu: $comp['conf_acc_ioss_sales'] ?? '',
+            type: 'sele', opti: $ioss_opts, wdth: 'calc(50% - 8px)', legd: 'align-left',
+            hint: '@Sales under IOSS (goods sent from outside the EU to consumers in the EU). When the goods are sent from abroad, use an income account without a VAT code. When they leave your own country (e.g. from Norway), they are an export: use an account with the export VAT code, so they appear in the export box of the VAT return.');
+        htm_Field(icon: 'fa-box', labl: '@IOSS VAT Account', name: 'set[conf_acc_ioss_vat]', valu: $comp['conf_acc_ioss_vat'] ?? '',
+            type: 'sele', opti: $ioss_opts, wdth: 'calc(50% - 8px)', legd: 'align-left',
+            hint: '@The VAT on IOSS sales - a liability account of its own, paid through the monthly IOSS return.');
+    }
+    htm_Fieldset_end();
 
     htm_Field(
         icon: 'fa-paperclip',
-        labl: '@Attachment required above (kr)',
+        labl: sprintf(lang('@Attachment required above (%s)'), tc_cur_label()),
         name: 'set[conf_attachment_limit]',
         valu: $comp['conf_attachment_limit'] ?? 500,
         type: 'text',
@@ -446,6 +645,20 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
         legd: 'align-left'
     );
 
+    if (oss_available()) {
+        htm_Field(icon: 'fa-earth-europe', labl: '@Registered for EU-OSS', name: 'set[oss_registered]', valu: $comp['oss_registered'] ?? '0', type: 'sele',
+            opti: ['0' => lang('@No'), '1' => lang('@Yes')], wdth: 'calc(50% - 8px)', legd: 'align-left',
+            hint: '@When the company is registered for the EU One Stop Shop: invoices to private customers in other EU countries get the VAT of the customer\'s country and are reported on the quarterly OSS return.');
+        htm_Field(icon: 'fa-calendar', labl: '@EU-OSS from', name: 'set[oss_from]', valu: $comp['oss_from'] ?? '', type: 'date', wdth: 'calc(50% - 8px)', legd: 'align-left',
+            hint: '@The date the OSS registration applies from - usually the first day of the quarter after you registered. Invoices dated before it are ordinary sales with your own VAT. Empty = all invoices.');
+    }
+    htm_Field(icon: 'fa-receipt', labl: '@VAT Number', name: 'set[company_vat_id]', valu: $comp['company_vat_id'] ?? '', type: 'text', wdth: 'calc(50% - 8px)', legd: 'align-left',
+        plho: tc_company_vat_id(),
+        hint: '@Your VAT number with country code, as on invoices and e-invoices. Empty = made from your company number (e.g. SE...01, NO...MVA). In Iceland it is the VSK number, not the kennitala - enter it here.');
+    if (ioss_available()) {
+        htm_Field(icon: 'fa-box', labl: '@IOSS number', name: 'set[ioss_number]', valu: $comp['ioss_number'] ?? '', type: 'text', wdth: 'calc(50% - 8px)', legd: 'align-left',
+            hint: '@Only for goods sent from a country outside the EU to consumers in the EU, in consignments up to 150 EUR (not excise goods). With the number, an invoice can be marked as IOSS: it gets the VAT of the customer\'s country and goes on the monthly IOSS return. A seller outside the EU (except Norway) needs an intermediary.');
+    }
     htm_Field(
         icon: 'fa-lock',
         labl: '@Accounting Lock Date',
@@ -469,7 +682,8 @@ echo '<div style="display: flex; flex-wrap: wrap; gap: 0 15px; width: 100%; box-
         valu: $comp['next_vat_deadline'] ?? '',
         type: 'date',
         wdth: 'calc(50% - 8px)',
-        hint: '@When your next VAT return is due at SKAT. You set this manually - it is not calculated automatically. A dashboard warning appears when it is close or overdue.',
+        hint: tc_country() === 'dk' ? '@When your next VAT return is due at SKAT. You set this manually - it is not calculated automatically. A dashboard warning appears when it is close or overdue.'
+                                    : '@When your next VAT return is due. You set this manually - it is not calculated automatically. A dashboard warning appears when it is close or overdue.',
         legd: 'align-left'
     );
 
@@ -494,11 +708,8 @@ echo '</div>';
 // hovedbogen for et valgt år) - knappen linker til dens periode-valgsside i stedet for at forsøge et direkte
 // download.
 echo '<div style="margin-top:20px; border-top:1px solid var(--border-color); padding-top:15px; text-align:left;">';
-// RETTET: SAF-T er en dansk SKAT-specifik eksport - knappen er derfor grå/deaktiveret når firmaets
-// bogføringsvaluta ikke er DKK (siden selv spærrer stadig direkte adgang via require_dkk_base_currency, dette er
-// kun for at undgå en dødt link).
-$__base_currency_saft = strtoupper($comp['currency'] ?? 'DKK');
-if ($__base_currency_saft === 'DKK') {
+// SAF-T DK: kun når landepakken har den og bogføringsvalutaen er landets egen
+if (tc_pack_feature('saft_dk') || tc_pack_feature('saft_no')) {
     htm_Button(
         icon: 'fa-download',
         labl: '@Export SAF-T',
@@ -512,7 +723,7 @@ if ($__base_currency_saft === 'DKK') {
         labl: '@Export SAF-T',
         type: 'secondary',
         link: '',
-        attr: 'disabled data-hint="'.lang('@This feature follows Danish-specific tax and bookkeeping rules, and is only available when your company\'s base currency is DKK.').'"'
+        attr: 'disabled data-hint="'.lang('@This feature follows the tax and bookkeeping rules of another country, or needs the country\'s own currency as base currency.').'"'
     );
 }
 // NYT: modstykket til eksport-knappen ovenfor - lader en SAF-T-fil (egen eller et andet systems) blive uploadet og
@@ -611,6 +822,21 @@ echo '</div>';
 htm_Footer();
 ?>
 <script>
+// Landeskift: datoformatet følger med, hvis det stod på det gamle lands; valutaen kun i et regnskab uden posteringer
+// (bogføringsvalutaen kan ikke skiftes stille, når der er bogført - så viser siden blot en advarsel efter gemning)
+(function () {
+    var packs = <?= json_encode($pack_defaults) ?>, ledgerEmpty = <?= ((int)(DB::fetch_row(DB::query($conn, 'SELECT COUNT(*) FROM ledger'))[0] ?? 1)) === 0 ? 'true' : 'false' ?>;
+    var ctry = document.querySelector('select[name="set[country]"]');
+    if (!ctry) return;
+    var prev = ctry.value;
+    ctry.addEventListener('change', function () {
+        var o = packs[prev] || {}, n = packs[ctry.value] || {};
+        var df = document.querySelector('select[name="set[date_format]"]'), cur = document.querySelector('select[name="set[currency]"]');
+        if (df && n.date_format && df.value === o.date_format) df.value = n.date_format;
+        if (cur && ledgerEmpty && n.currency && cur.value === o.currency) cur.value = n.currency;
+        prev = ctry.value;
+    });
+})();
 document.querySelector('form').addEventListener('submit', function(e) {
     const currencyInput = document.querySelector('select[name="set[currency]"]');
     const originalValue = "<?php echo $comp['currency'] ?? 'DKK'; ?>";
@@ -633,8 +859,8 @@ document.querySelector('form').addEventListener('submit', function(e) {
 function companyCvrLookup(btn) {
     var cvrField = document.querySelector('[name="set[company_cvr]"]');
     var cvr = (cvrField.value || '').replace(/\D/g, '');
-    if (cvr.length !== 8) {
-        sysAlert(<?php echo json_encode(lang('@Please enter a valid 8-digit CVR number first.')); ?>);
+    if (cvr.length !== <?= tc_company_id_digits() ?>) {
+        sysAlert(<?php echo json_encode(sprintf(lang('@Please enter a valid %s first.'), tc_company_id_label())); ?>);
         return;
     }
     var icon = btn.querySelector('i');

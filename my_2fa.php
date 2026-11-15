@@ -78,6 +78,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['regenerate_codes']) &
     }
 }
 
+// --- Eget kodeord: en bruger kunne slet ikke skifte sin adgangskode (kun en administrator via user_edit.php) - en
+// midlertidig kode fra administratoren kunne aldrig udskiftes af brugeren selv ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
+    $pw_old = (string)($_POST['current_password'] ?? '');  $pw1 = (string)($_POST['new_password'] ?? '');  $pw2 = (string)($_POST['confirm_new_password'] ?? '');
+    if (!password_verify($pw_old, (string)$u['password_hash'])) {
+        $err = lang('@Incorrect password.');
+    } elseif ($pw1 !== $pw2) {
+        $err = lang('@Passwords do not match');
+    } elseif (strlen($pw1) < 8) {
+        $err = lang('@Password must be at least 8 characters long');
+    } else {
+        $hash = password_hash($pw1, PASSWORD_DEFAULT);
+        DB::prepare_and_execute($conn, "UPDATE users SET password_hash = ? WHERE user_id = ?", [$hash, $user_id]);
+        $_SESSION['pw_fp'] = tc_pw_fingerprint($hash);      // (denne session fortsætter; andre sessioner logges ud)
+        log_action($conn, 'CHANGE_OWN_PASSWORD', 'users', $user_id, null, ['password_changed' => true]);
+        $u['password_hash'] = $hash;
+        $msg = lang('@Password changed');
+    }
+}
+
 htm_Header('@Two-Factor Login');
 showMenu();
 
@@ -136,6 +156,16 @@ if ($totp_enabled) {
     echo '</form>';
 }
 
+htm_Card_end();
+
+htm_Card_(capt: '@Change Password', wdth: 650);
+echo '<form method="post">';
+csrf_field();
+htm_Field(icon: 'fa-lock', labl: '@Current password', name: 'current_password', type: 'password', extr: 'autocomplete="current-password" required');
+htm_Field(icon: 'fa-key', labl: '@New Password', name: 'new_password', type: 'password', extr: 'autocomplete="new-password" minlength="8" required');
+htm_Field(icon: 'fa-key', labl: '@Confirm new password', name: 'confirm_new_password', type: 'password', extr: 'autocomplete="new-password" minlength="8" required');
+htm_Button(icon: 'fa-save', labl: '@Change Password', type: 'primary', link: '', attr: 'name="change_password"');
+echo '</form>';
 htm_Card_end();
 htm_Footer();
 ob_end_flush();

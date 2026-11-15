@@ -9,6 +9,7 @@
 # minutter. Sat eksplicit til 15 sekunder.
 
 function auto_backup_check($conn) {
+    if (!empty($GLOBALS['tc_test_db'])) return;      // (testpakkens isolerede database tages ikke backup af - backups/ er den rigtige)
     global $db_type, $pdo, $db_settings;
     if (!$conn) return;
 
@@ -16,6 +17,9 @@ function auto_backup_check($conn) {
     $last_ts = (int)(get_settings($conn)['auto_backup_last'] ?? 0);
 
     if ((time() - $last_ts) / 86400 < 7) return;
+    // Et forsøg der døde midt i (fx memory_limit) nåede aldrig at gemme auto_backup_last og startede så forfra på
+    // HVER sidevisning - med en ny 50 MB temp-fil og en 500-fejl hver gang. Højst ét forsøg i timen.
+    if (time() - (int)(get_settings($conn)['auto_backup_attempt'] ?? 0) < 3600) return;
 
     // ── 2. Er der ændringer siden seneste backup? ─────────────────────────────
     $last_dt = date('Y-m-d H:i:s', $last_ts ?: 0);
@@ -79,7 +83,12 @@ function auto_backup_check($conn) {
         return;
     }
 
+    _ab_save($conn, 'auto_backup_attempt', time());
     $tmp_dir    = rtrim(sys_get_temp_dir(), '/') . '/';
+    // Rester fra afbrudte forsøg (ældre end et døgn - en samtidig kørsel kan stadig være i gang med sin)
+    foreach (glob($tmp_dir . 'tc_backup_*.zip*') ?: [] as $old_tmp) {
+        if (filemtime($old_tmp) < time() - 86400) @unlink($old_tmp);
+    }
     $date_stamp = date('Y-m-d_His');
     $is_sqlite  = DB::is_sqlite();
     $engine     = $is_sqlite ? 'sqlite' : 'mysql';
@@ -187,17 +196,12 @@ function auto_backup_check($conn) {
 
     if (function_exists('openssl_encrypt') && !empty($backup_pass)) {
         $enc_file  = $zip_file . '.enc';
-        $salt      = random_bytes(8);
-        $key_iv    = hash_pbkdf2('sha256', $backup_pass, $salt, 10000, 48, true); // 32 nøgle + 16 IV
-        $key       = substr($key_iv, 0, 32);
-        $iv        = substr($key_iv, 32, 16);
-        $zip_data  = file_get_contents($zip_file);
-        $cipher    = openssl_encrypt($zip_data, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
-        if ($cipher !== false) {
-            file_put_contents($enc_file, "Salted__" . $salt . $cipher);
+        if (_ab_encrypt_file($zip_file, $enc_file, $backup_pass)) {
             @unlink($zip_file);
             $send_file = $enc_file;
             $encrypted = true;
+        } else {
+            @unlink($enc_file);
         }
     }
 
@@ -334,6 +338,33 @@ function auto_backup_check($conn) {
 }
 
 // ── Hjælpefunktioner ─────────────────────────────────────────────────────────
+// Krypterer en fil i bidder til `openssl enc -aes-256-cbc -pbkdf2 -md sha256`-format ("Salted__" + salt + ciffertekst).
+// Hele ZIP'en (inkl. programkopien) i hukommelsen sprængte memory_limit ved ~50 MB; CBC kædes i stedet over bidderne
+// (sidste cifferblok er næste bids IV), og kun sidste bid får PKCS#7-padding - samme bytes som ét openssl_encrypt-kald.
+function _ab_encrypt_file(string $in_file, string $out_file, string $pass): bool {
+    $in  = @fopen($in_file, 'rb');
+    $out = @fopen($out_file, 'wb');
+    if (!$in || !$out) { if ($in) fclose($in); if ($out) fclose($out); return false; }
+    $salt   = random_bytes(8);
+    $key_iv = hash_pbkdf2('sha256', $pass, $salt, 10000, 48, true);     // 32 nøgle + 16 IV
+    $key    = substr($key_iv, 0, 32);
+    $iv     = substr($key_iv, 32, 16);
+    $ok     = fwrite($out, 'Salted__' . $salt) === 16;
+    $chunk  = 1048576;                                                  // 1 MB - et multiplum af blokstørrelsen 16
+    while ($ok) {
+        $data = fread($in, $chunk);
+        if ($data === false) { $ok = false; break; }
+        $last = feof($in) || strlen($data) < $chunk;
+        $enc  = openssl_encrypt($data, 'AES-256-CBC', $key, OPENSSL_RAW_DATA | ($last ? 0 : OPENSSL_ZERO_PADDING), $iv);
+        if ($enc === false || fwrite($out, $enc) !== strlen($enc)) { $ok = false; break; }
+        if ($last) break;
+        $iv = substr($enc, -16);
+    }
+    fclose($in);
+    fclose($out);
+    return $ok;
+}
+
 function _ab_save($conn, $key, $value) {
     global $db_type;
     $safe_val = DB::real_escape_string($conn, (string)$value);

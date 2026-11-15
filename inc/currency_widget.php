@@ -144,8 +144,10 @@
 
                 var fromSel = document.getElementById('cm-from');
                 var toSel   = document.getElementById('cm-to');
-                buildOptions(fromSel, 'EUR');
-                buildOptions(toSel,   'DKK');
+                // (til: regnskabets valuta - fra: EUR, eller USD når regnskabet selv er i EUR)
+                var own = <?php echo json_encode(strtoupper((string)(function_exists('setting') ? setting('currency', 'DKK') : 'DKK'))); ?>;
+                buildOptions(fromSel, own === 'EUR' ? 'USD' : 'EUR');
+                buildOptions(toSel,   own);
                 convertCurrency();
             })
             .catch(function() {
@@ -173,9 +175,9 @@
         var rate   = fromEUR(toEUR(1, from), to);
 
         document.getElementById('cm-result').textContent =
-            result.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + ' ' + to;
+            result.toLocaleString(window.tcLocale || 'da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + ' ' + to;
         document.getElementById('cm-rate').textContent =
-            '1 ' + from + ' = ' + rate.toLocaleString('da-DK', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) + ' ' + to;
+            '1 ' + from + ' = ' + rate.toLocaleString(window.tcLocale || 'da-DK', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) + ' ' + to;
     };
 
     window.swapCurrencies = function() {

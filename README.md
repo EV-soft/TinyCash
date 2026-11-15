@@ -11,13 +11,15 @@
 
 **It provides a fast, efficient, and self-reliant solution for invoicing, inventory management, VAT handling, and more.**
 
-Latest release: **[v.1.3](https://github.com/EV-soft/TinyCash/releases/latest)** – see the release notes for what is new.
+Latest release: **[v.1.5](https://github.com/EV-soft/TinyCash/releases/latest)** – see the release notes for what is new.
 
 ### Core Features & Strengths
 
 - 🌍 **Smart Language Engine:** TinyCash supports automated translation via OpenAI (or DeepL). The system automatically scans the source code for English strings and provides a central management page for translations – now with 13 languages prepared.
 
 - 📒 **Danish Standard Chart of Accounts:** The official standard chart of accounts 2026 (Erhvervsstyrelsen) is built in – start with it, import it, or switch to it from a date with balances transferred. Every account can be mapped for the SAF-T export.
+
+- 🇪🇺 **Country Packs:** Denmark, Sweden, Norway, Finland, Iceland, Germany, the Netherlands, Belgium, Estonia, Latvia, Lithuania, Poland and Greenland – VAT codes and VAT return, number and date formats, company-ID checks, payment references and reminder rules per country. The packs outside Denmark are drafts to be checked by a local accountant. EU OSS and IOSS returns, the EU sales list and VIES checks are included.
 
 - 🛒 **Web Shops:** WooCommerce and Shopify send their orders straight to TinyCash; PrestaShop orders are fetched by TinyCash. An invoice per order or the sales of a day booked together – and the payouts from the payment provider are reconciled with the fee.
 
@@ -37,11 +39,11 @@ Latest release: **[v.1.3](https://github.com/EV-soft/TinyCash/releases/latest)**
 
 - **Customers & Suppliers:** Customer and supplier registers with contacts, CVR lookup, statements, credit limits and a trash bin.
 
-- **Sales:** Quotes with follow-up, invoices with several layouts and line discounts, recurring invoices, credit notes (also partial), reminders with fees, payment registration and bad-debt write-off. E-invoices (OIOUBL) and a PDF archive.
+- **Sales:** Quotes with follow-up, invoices with several layouts and line discounts, recurring invoices, credit notes (also partial), reminders with fees, payment registration and bad-debt write-off. E-invoices (OIOUBL 2.1 and Peppol BIS 3, validated against the official schematrons), delivery notes and a PDF archive.
 
 - **Purchases:** Expenses with voucher requirement, split on several accounts, recurring expenses, duplicate check and supplier payment export.
 
-- **Inventory:** Real-time tracking with automatic stock deduction upon sales, cost price and margin.
+- **Inventory:** Real-time tracking with automatic stock deduction upon sales, cost price and margin, goods receipts, stock counts (also back-dated), a stock movement log and a picking list.
 
 - **Document Management:** AI-assisted scanning, interpretation, bookkeeping, and electronic archiving of documents.
 
@@ -97,13 +99,15 @@ Systemet er udviklet med henblik på at opfylde de danske lovkrav der stilles ti
 
 Det løser dine behov for hurtig, effektiv og selvhjulpen håndtering af fakturering, lagerstyring, momshåndtering m.v.
 
-Seneste udgivelse: **[v.1.3](https://github.com/EV-soft/TinyCash/releases/latest)** – se udgivelsesnoterne for nyhederne.
+Seneste udgivelse: **[v.1.5](https://github.com/EV-soft/TinyCash/releases/latest)** – se udgivelsesnoterne for nyhederne.
 
 ### **Kerneegenskaber & Styrker**
 
 - 🌍 **Smart Sprog-motor:** TinyCash understøtter automatiseret oversættelse via OpenAI (eller DeepL). Systemet scanner automatisk kildekoden for sætninger (på engelsk) og giver dig en central redigeringsside til at administrere oversættelser – nu med 13 forberedte sprog.
 
 - 📒 **Standardkontoplanen:** Erhvervsstyrelsens standardkontoplan 2026 er bygget ind – start med den, importér den, eller skift til den fra en dato med overførsel af saldi. Alle konti kan knyttes til standarden til SAF-T-eksporten.
+
+- 🇪🇺 **Landepakker:** Danmark, Sverige, Norge, Finland, Island, Tyskland, Holland, Belgien, Estland, Letland, Litauen, Polen og Grønland – momskoder og momsangivelse, tal- og datoformat, kontrol af firma-id, betalingsreferencer og rykkerregler pr. land. Pakkerne uden for Danmark er udkast, som en lokal revisor bør gennemgå. EU-OSS og -IOSS, EU-salgslisten og VIES-opslag er med.
 
 - 🛒 **Webbutikker:** WooCommerce og Shopify sender deres ordrer direkte til TinyCash; PrestaShops ordrer henter TinyCash selv. En faktura pr. ordre eller dagens salg bogført samlet – og udbetalingerne fra betalingsudbyderen afstemmes med gebyret.
 
@@ -123,11 +127,11 @@ Seneste udgivelse: **[v.1.3](https://github.com/EV-soft/TinyCash/releases/latest
 
 - **Kunder & Leverandører:** Kunde- og leverandørregister med kontaktpersoner, CVR-opslag, kontoudtog, kreditgrænser og papirkurv.
 
-- **Salg:** Tilbud med opfølgning, fakturaer med flere layouts og linjerabat, faste fakturaer, kreditnotaer (også delvise), rykkere med gebyr, registrering af betaling og afskrivning af tab. E-fakturaer (OIOUBL) og PDF-arkiv.
+- **Salg:** Tilbud med opfølgning, fakturaer med flere layouts og linjerabat, faste fakturaer, kreditnotaer (også delvise), rykkere med gebyr, registrering af betaling og afskrivning af tab. E-fakturaer (OIOUBL 2.1 og Peppol BIS 3, valideret mod de officielle schematroner), følgesedler og PDF-arkiv.
 
 - **Køb:** Udgifter med bilagskrav, fordeling på flere konti, faste udgifter, dubletkontrol og eksport af leverandørbetalinger.
 
-- **Lagerstyring:** Realtidssporing med automatisk nedskrivning af beholdning ved salg, kostpris og avance.
+- **Lagerstyring:** Realtidssporing med automatisk nedskrivning af beholdning ved salg, kostpris og avance, varemodtagelse, optælling (også bagudrettet), log over lagerbevægelser og plukliste.
 
 - **Bilagsstyring:** AI-skanning og tolkning af bilag, samt journalisering og elektronisk arkivering af disse.
 

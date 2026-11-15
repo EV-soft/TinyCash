@@ -5,6 +5,8 @@
 # Kalderen styrer transaktionen (DB::begin_transaction / commit / rollback) - funktionerne kaster en
 # Exception ved fejl, så kalderen kan rulle det hele tilbage.
 require_once __DIR__ . '/audit.inc.php';
+require_once __DIR__ . '/stock.inc.php';      // (lagerbevægelser ved salg og kreditnota)
+require_once __DIR__ . '/oss.inc.php';        // (EU-OSS: salg til private i andre EU-lande på egne konti)
 if (!function_exists('lang')) require_once __DIR__ . '/php2htm.lib.php';     // lang() (kreditnotaens tekster) - også fra webhook_invoice.php, der ikke har siden
 
 // RETTET: hele omsætningen blev bogført på Firmaindstillingernes salgskonto - varens egen konto (Varekartotek ->
@@ -15,12 +17,16 @@ function invoice_sales_split($conn, int $inv_id, int $default_acc, float $total_
     $disc = invoice_discount_sql($conn, 'il.');
     $exch = DB::fetch_assoc(DB::query($conn, "SELECT exch_rate FROM invoices WHERE inv_id = $inv_id"));
     $rate = (float)($exch['exch_rate'] ?? 0);
-    $res = DB::query($conn, "SELECT il.quantity * il.price_each $disc AS net, a.acc_id AS pacc, a.acc_type
+    // (en linje MED moms hører ikke på en konto med en momsfri salgskode - EU-salg, eksport, omvendt betalingspligt - ellers
+    // talte momsangivelsens rubrik B/C et momspligtigt salg som momsfrit; den går på standard-salgskontoen)
+    $has_vt = db_has_column($conn, 'vat_codes', 'vat_type');
+    $res = DB::query($conn, "SELECT il.quantity * il.price_each $disc AS net, a.acc_id AS pacc, a.acc_type, COALESCE(il.line_vat_rate, 0) AS rate" . ($has_vt ? ', v.vat_type' : '') . "
                              FROM invoice_lines il LEFT JOIN products p ON p.prod_id = il.prod_id AND il.prod_id > 0
-                             LEFT JOIN accounts a ON a.acc_id = p.acc_id WHERE il.inv_id = $inv_id");
+                             LEFT JOIN accounts a ON a.acc_id = p.acc_id" . ($has_vt ? ' LEFT JOIN vat_codes v ON v.vat_id = a.vat_code' : '') . " WHERE il.inv_id = $inv_id");
     $raw = [];
     while ($res && ($r = DB::fetch_assoc($res))) {
         $acc = ((int)($r['pacc'] ?? 0) > 0 && ($r['acc_type'] ?? '') === 'income') ? (int)$r['pacc'] : $default_acc;
+        if (abs((float)$r['rate']) >= 0.001 && in_array($r['vat_type'] ?? null, TC_VAT_ZERO_SALE_TYPES, true)) $acc = $default_acc;
         $raw[$acc] = ($raw[$acc] ?? 0.0) + (float)$r['net'];
     }
     $out = [];
@@ -41,14 +47,18 @@ function invoice_sales_split($conn, int $inv_id, int $default_acc, float $total_
 
 // Bogfører en kladde: fakturanummer, journal + hovedbog (debitor / salg / moms), lager ($track_stock) og
 // layoutet stemples. Returnerer fakturanummeret.
+// Atomisk: hele bilaget eller intet (indlejret i kalderens transaktion bliver det et savepoint) - se DB::transaction()
 function invoice_post($conn, int $inv_id, bool $track_stock = true): int {
+    return DB::transaction($conn, fn() => invoice_post_steps($conn, $inv_id, $track_stock));
+}
+function invoice_post_steps($conn, int $inv_id, bool $track_stock = true): int {
     global $global_settings;
     $acc_debitor = (int)($global_settings['conf_acc_debitor'] ?? 8100); // Tilgodehavender (debitor)
     $acc_sales   = (int)($global_settings['conf_acc_sales']   ?? 1000); // Omsætning / salg
     $acc_vat     = (int)($global_settings['conf_acc_vat']     ?? 6900); // Moms, salg (udgående)
 
     // 1. Tjek status + hent dato + valutakurs.
-    $row = DB::fetch_assoc(DB::query($conn, "SELECT inv_status, inv_date, exch_rate, cust_id FROM invoices WHERE inv_id = $inv_id"));
+    $row = DB::fetch_assoc(DB::query($conn, "SELECT inv_status, inv_date, exch_rate, cust_id" . (ioss_ready($conn) ? ', inv_ioss' : '') . (oss_off_ready($conn) ? ', inv_oss_off' : '') . " FROM invoices WHERE inv_id = $inv_id"));
     if (!$row) {
         throw new Exception(lang('@The invoice was not found.'));
     }
@@ -56,7 +66,7 @@ function invoice_post($conn, int $inv_id, bool $track_stock = true): int {
     // formularen vs. 'draft' i backend/rapporter). strtolower gør posteringen
     // robust uanset skrivemåde.
     if (strtolower($row['inv_status']) !== 'draft') {
-        throw new Exception('Fakturaen er allerede bogført (Status: ' . $row['inv_status'] . ')');
+        throw new Exception(sprintf(lang('@The invoice is already posted (status: %s).'), $row['inv_status']));
     }
     $inv_date = $row['inv_date'];
     if (!tc_is_date(substr((string)$inv_date, 0, 10))) throw new Exception(lang('@Please enter a valid date.'));      // (en kladde med ugyldig dato bogføres ikke)
@@ -84,6 +94,28 @@ function invoice_post($conn, int $inv_id, bool $track_stock = true): int {
     $total_vat  = $totals['vat'];
     $total_incl = $totals['incl'];
 
+    // EU-OSS: privat kunde i et andet EU-land - modtagerlandets moms, egne konti (uden for den hjemlige angivelse)
+    // IOSS (fakturaen er markeret: varerne sendes fra et land uden for EU) går forud - modtagerlandets moms, IOSS-konti
+    $ioss = trim((string)($row['inv_ioss'] ?? '')) !== '' ? ioss_check_invoice($conn, $inv_id, (int)$row['cust_id']) : null;
+    // (inv_oss_off: en ydelse beskattet i eget land - så gælder hjemlandets satser og konti)
+    $oss = !$ioss && empty($row['inv_oss_off']) && oss_ready($conn) ? oss_dest_for_customer($conn, (int)$row['cust_id'], (string)$row['inv_date']) : null;
+    if ($oss) {
+        oss_check_lines($conn, $inv_id, $oss);
+        [$acc_sales, $acc_vat] = oss_accounts($conn);
+    }
+    if ($ioss) [$acc_sales, $acc_vat] = ioss_accounts($conn);
+    // Ellers kun hjemlandets satser: en udenlandsk sats (fx 19 % til en tysk privatkunde uden EU-OSS) landede på den
+    // hjemlige salgsmomskonto og dermed på momsangivelsen
+    if (!$oss && !$ioss) {
+        $res_r = DB::query($conn, "SELECT DISTINCT line_vat_rate FROM invoice_lines WHERE inv_id = $inv_id");
+        while ($res_r && ($rr = DB::fetch_row($res_r))) {
+            if (!tc_home_rate_ok($conn, (float)$rr[0])) {
+                throw new Exception(sprintf(lang('@A line has %s %% VAT, which is not a VAT rate of %s. A sale with the VAT of another EU country needs EU-OSS (Company Settings) and the customer\'s country on the customer card.'),
+                    fmt_pct((float)$rr[0]), strtoupper((string)tc_country_pack('iso', 'DK'))));
+            }
+        }
+    }
+
     // 3. Find næste fakturanummer - atomisk tæller (samme mønster som
     // next_voucher_no()), FØR blot "SELECT MAX(invoice_no)+1" uden nogen
     // låsning, sårbart for at to samtidige bogføringer kunne få samme
@@ -103,7 +135,7 @@ function invoice_post($conn, int $inv_id, bool $track_stock = true): int {
     // klausulen tjekker nu status ATOMISK sammen med selve skrivningen, og
     // et 0-rækker-resultat (nogen nåede først) afbryder øjeblikkeligt, FØR
     // noget som helst posteres til hovedbogen.
-    DB::query($conn, "UPDATE invoices SET invoice_no = $next_invoice_no, inv_status = 'sent' WHERE inv_id = $inv_id AND inv_status = 'draft'");
+    DB::query($conn, "UPDATE invoices SET invoice_no = $next_invoice_no, inv_status = 'sent'" . ($oss ? ", inv_oss = '$oss'" : '') . ($ioss ? ", inv_ioss = '$ioss'" : '') . " WHERE inv_id = $inv_id AND inv_status = 'draft'");
     // Flere fakturalayouts: layoutet stemples på fakturaen ved bogføringen - den bevarer sit
     // udseende, også hvis kundens layout eller standarden senere skiftes (inc/invoice_layouts.inc.php)
     require_once __DIR__ . '/invoice_layouts.inc.php';
@@ -132,16 +164,19 @@ function invoice_post($conn, int $inv_id, bool $track_stock = true): int {
     // bruger-id for hvem der bogførte, direkte på journal-raden.
     $cb = journal_created_by_sql($conn);
     if (DB::query($conn, "INSERT INTO journal (jou_date, jou_text, voucher_no, currency{$cb['col']}) VALUES ('$jou_date', '$journal_text', $voucher_no, '$jou_currency'{$cb['val']})") === false) {
-        throw new Exception('Kunne ikke oprette journalpost: ' . DB::error($conn));
+        throw new Exception(lang('@Could not create the journal entry:') . ' ' . DB::error($conn));
     }
     $jou_id = DB::insert_id($conn);
+    // (fakturaen husker sin postering - SAF-T knytter debitorlinjen til kunden)
+    if (db_has_column($conn, 'invoices', 'jou_id')) DB::query($conn, "UPDATE invoices SET jou_id = " . (int)$jou_id . " WHERE inv_id = $inv_id");
 
     // Momskorrekt dobbeltpostering (balancerer til 0):
     //   DEBET  debitor        = total inkl. moms
     //   KREDIT omsætning      = netto (ekskl. moms)
     //   KREDIT udgående moms  = momsbeløb
     ledger_post($conn, $jou_id, $acc_debitor, $total_incl);
-    foreach (invoice_sales_split($conn, $inv_id, $acc_sales, $total_excl) as $s_acc => $s_amt) ledger_post($conn, $jou_id, $s_acc, $s_amt * -1);
+    if ($oss || $ioss) ledger_post($conn, $jou_id, $acc_sales, $total_excl * -1);      // (OSS/IOSS: hele salget på ordningens salgskonto)
+    else foreach (invoice_sales_split($conn, $inv_id, $acc_sales, $total_excl) as $s_acc => $s_amt) ledger_post($conn, $jou_id, $s_acc, $s_amt * -1);
     if ($total_vat != 0) {
         ledger_post($conn, $jou_id, $acc_vat, $total_vat * -1);
     }
@@ -156,9 +191,8 @@ function invoice_post($conn, int $inv_id, bool $track_stock = true): int {
     $stock_lines = $track_stock ? DB::query($conn, "SELECT prod_id, quantity FROM invoice_lines WHERE inv_id = $inv_id AND prod_id > 0") : false;
     if ($stock_lines) {
         while ($sl = DB::fetch_assoc($stock_lines)) {
-            $sp_id = (int)$sl['prod_id'];
-            $sqty  = (float)$sl['quantity'];
-            DB::query($conn, "UPDATE products SET prod_stock = prod_stock - $sqty WHERE prod_id = $sp_id");
+            // (logges som lagerbevægelse på fakturadatoen - varekortets historik og beholdningen pr. en dato, se inc/stock.inc.php)
+            stock_move($conn, (int)$sl['prod_id'], -(float)$sl['quantity'], 'sale', (string)$row['inv_date'], ['reference' => '#' . str_pad((string)$next_invoice_no, 6, '0', STR_PAD_LEFT)]);
         }
     }
 
@@ -172,7 +206,11 @@ function invoice_post($conn, int $inv_id, bool $track_stock = true): int {
 // journal + hovedbog (DEBET $debit_acc - fx en mellemregningskonto for en betalingsudbyder - KREDIT debitor),
 // invoice_payments, og status 'paid' når intet er åbent. Samme posteringer som bankafstemningen
 // (reconcile_one_bank_line()), blot uden en banklinje.
+// Atomisk: hele bilaget eller intet (indlejret i kalderens transaktion bliver det et savepoint) - se DB::transaction()
 function invoice_register_payment($conn, int $inv_id, string $date, float $amount, int $debit_acc, string $note = ''): void {
+    DB::transaction($conn, fn() => invoice_register_payment_steps($conn, $inv_id, $date, $amount, $debit_acc, $note));
+}
+function invoice_register_payment_steps($conn, int $inv_id, string $date, float $amount, int $debit_acc, string $note = ''): void {
     global $global_settings;
     $amount = round($amount, 2);
     if (abs($amount) < 0.005) return;
@@ -189,7 +227,7 @@ function invoice_register_payment($conn, int $inv_id, string $date, float $amoun
     $cb = journal_created_by_sql($conn);
     if (DB::query($conn, "INSERT INTO journal (jou_date, jou_text, voucher_no, currency{$cb['col']})
                           VALUES ('$date', '$text', $voucher_no, '$currency'{$cb['val']})") === false) {
-        throw new Exception('Kunne ikke oprette journalpost: ' . DB::error($conn));
+        throw new Exception(lang('@Could not create the journal entry:') . ' ' . DB::error($conn));
     }
     $jou_id = DB::insert_id($conn);
     ledger_post($conn, $jou_id, $debit_acc, $amount);
@@ -197,7 +235,7 @@ function invoice_register_payment($conn, int $inv_id, string $date, float $amoun
     $note_sql = DB::escape($conn, $note);
     if (DB::query($conn, "INSERT INTO invoice_payments (inv_id, payment_date, amount, note, created_by)
                           VALUES ($inv_id, '$date', $amount, '$note_sql', " . (int)($_SESSION['user_id'] ?? 0) . ")") === false) {
-        throw new Exception('Kunne ikke registrere betalingen: ' . DB::error($conn));
+        throw new Exception(lang('@Could not register the payment:') . ' ' . DB::error($conn));
     }
     $open = invoice_open_dkk($conn, $inv_id);
     $status = strtolower((string)$inv['inv_status']);
@@ -217,13 +255,17 @@ function invoice_is_written_off($conn, int $inv_id): bool {
     return false;
 }
 
+// Atomisk: hele bilaget eller intet (indlejret i kalderens transaktion bliver det et savepoint) - se DB::transaction()
 function invoice_create_credit($conn, int $credit_ref, array $qtys, string $credit_date_raw, string $credit_note_raw, ?bool $track_stock = null): int {
+    return DB::transaction($conn, fn() => invoice_create_credit_steps($conn, $credit_ref, $qtys, $credit_date_raw, $credit_note_raw, $track_stock));
+}
+function invoice_create_credit_steps($conn, int $credit_ref, array $qtys, string $credit_date_raw, string $credit_note_raw, ?bool $track_stock = null): int {
     global $global_settings;
     $orig = DB::fetch_assoc(DB::query($conn, "SELECT i.*, c.cust_name FROM invoices i JOIN customers c ON i.cust_id = c.cust_id WHERE i.inv_id = $credit_ref"));
     if (!$orig) throw new Exception(lang('@The invoice does not exist.'));
     if (strtolower((string)$orig['inv_status']) === 'draft') throw new Exception(lang('@A draft cannot be credited.'));
     if (!empty($orig['credit_ref'])) throw new Exception(lang('@A credit note cannot itself be credited.'));
-    if (DB::fetch_assoc(DB::query($conn, "SELECT inv_id FROM invoices WHERE credit_ref = $credit_ref LIMIT 1"))) throw new Exception('Fakturaen er allerede krediteret.');
+    if (DB::fetch_assoc(DB::query($conn, "SELECT inv_id FROM invoices WHERE credit_ref = $credit_ref LIMIT 1"))) throw new Exception(lang('@The invoice has already been credited.'));
     if (invoice_is_written_off($conn, $credit_ref)) throw new Exception(lang('@This invoice has been written off as bad debt and cannot be credited - the receivable is already closed.'));
     if (!tc_is_date($credit_date_raw)) throw new Exception(lang('@Invalid credit note date.'));
     if (is_date_locked($conn, $credit_date_raw)) throw new Exception(lang('@The credit note date is in a locked accounting period.'));
@@ -253,6 +295,12 @@ function invoice_create_credit($conn, int $credit_ref, array $qtys, string $cred
         '{$credit_note}', '{$orig['currency']}', $credit_ref,
         " . ($orig['proj_id'] ? $orig['proj_id'] : 'NULL') . ", $orig_currency_sql, $exch_rate_sql)");
     $new_inv_id = DB::insert_id($conn);
+    $oss = !empty($orig['inv_oss']) ? strtoupper((string)$orig['inv_oss']) : null;      // (EU-OSS: samme land og konti som fakturaen)
+    if ($oss && preg_match('/^[A-Z]{2}$/', $oss)) DB::query($conn, "UPDATE invoices SET inv_oss = '$oss' WHERE inv_id = $new_inv_id");
+    if (!empty($orig['inv_oss_off'])) DB::query($conn, "UPDATE invoices SET inv_oss_off = 1 WHERE inv_id = $new_inv_id");      // (ydelse i eget land: også kreditnotaen - tæller ikke i OSS-tærsklen)
+    $ioss = !empty($orig['inv_ioss']) ? strtoupper((string)$orig['inv_ioss']) : null;   // (IOSS ligeså)
+    if ($ioss && preg_match('/^[A-Z]{2}$/', $ioss)) DB::query($conn, "UPDATE invoices SET inv_ioss = '$ioss' WHERE inv_id = $new_inv_id");
+    else $ioss = null;
     // Flere fakturalayouts: kreditnotaen får samme layout som fakturaen den krediterer
     require_once __DIR__ . '/invoice_layouts.inc.php';
     if (il_ready($conn)) DB::query($conn, "UPDATE invoices SET inv_layout_id = " . il_for_invoice($conn, $orig) . " WHERE inv_id = $new_inv_id");
@@ -329,7 +377,7 @@ function invoice_create_credit($conn, int $credit_ref, array $qtys, string $cred
         // tilbage på lager - modposten til trækket der sker i
         // invoice_post_action.php ved selve bogføringen.
         if ($pid > 0 && $track_stock) {
-            DB::query($conn, "UPDATE products SET prod_stock = prod_stock + $credit_qty WHERE prod_id = $pid");
+            stock_move($conn, $pid, $credit_qty, 'credit', $credit_date_raw, ['reference' => $cn_no !== null ? 'KN-' . str_pad((string)$cn_no, 6, '0', STR_PAD_LEFT) : null]);
         }
     }
 
@@ -391,6 +439,7 @@ function invoice_create_credit($conn, int $credit_ref, array $qtys, string $cred
     DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, currency{$cb['col']})
         VALUES ('$credit_date', '$jou_text', 'credit_note', $cn_voucher_no, '$jou_currency'{$cb['val']})");
     $jou_id = DB::insert_id($conn);
+    if (db_has_column($conn, 'invoices', 'jou_id')) DB::query($conn, "UPDATE invoices SET jou_id = " . (int)$jou_id . " WHERE inv_id = " . (int)$new_inv_id);
 
     // 5. Ledger-modposteringer (nulstiller debitor og omsætning)
     // Debit: omsætningskonto (negativ = kreditering af omsætning)
@@ -425,6 +474,8 @@ function invoice_create_credit($conn, int $credit_ref, array $qtys, string $cred
     $acc_debitor = (int)($global_settings['conf_acc_debitor'] ?? 8100);
     $acc_sales   = (int)($global_settings['conf_acc_sales']   ?? 1000);
     $acc_vat     = (int)($global_settings['conf_acc_vat']     ?? 6900);
+    if ($oss) [$acc_sales, $acc_vat] = oss_accounts($conn);
+    if ($ioss) [$acc_sales, $acc_vat] = ioss_accounts($conn);
 
     // Kreditnota vender salget (modsatte fortegn af en normal postering): KREDIT debitor = − total inkl. moms
     // (reducerer tilgodehavende) DEBET omsætning = + netto (reducerer omsætning) DEBET udgående moms = + momsbeløb
@@ -433,7 +484,8 @@ function invoice_create_credit($conn, int $credit_ref, array $qtys, string $cred
     // allerede negative. "* -1" vendte dem en gang til: siden da bogførte en kreditnota som en faktura (DEBET
     // debitor, KREDIT omsætning/moms) - tilgodehavende, omsætning og moms steg i stedet for at falde.
     ledger_post($conn, $jou_id, $acc_debitor, $total_incl_vat);
-    foreach (invoice_sales_split($conn, $new_inv_id, $acc_sales, $total_excl_vat) as $s_acc => $s_amt) ledger_post($conn, $jou_id, $s_acc, $s_amt * -1);      // (samme konti som fakturaen)
+    if ($oss || $ioss) ledger_post($conn, $jou_id, $acc_sales, $total_excl_vat * -1);
+    else foreach (invoice_sales_split($conn, $new_inv_id, $acc_sales, $total_excl_vat) as $s_acc => $s_amt) ledger_post($conn, $jou_id, $s_acc, $s_amt * -1);      // (samme konti som fakturaen)
     if ($total_vat != 0) {
         ledger_post($conn, $jou_id, $acc_vat, $total_vat * -1);
     }

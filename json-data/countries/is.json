@@ -1,0 +1,196 @@
+{
+    "code": "is",
+    "iso": "IS",
+    "name": "Ísland",
+    "name_en": "Iceland",
+    "language": "is",
+    "locale": "is-IS",
+    "currency": "ISK",
+    "currency_symbol": "kr.",
+    "timezone": "Atlantic/Reykjavik",
+    "date_format": "d.m.Y",
+    "number": {
+        "dec": ",",
+        "thou": "."
+    },
+    "company_id": {
+        "label": "@Kennitala (company ID)",
+        "short": "Kt.",
+        "regex": "^[0-9]{6}-?[0-9]{4}$",
+        "registry": null,
+        "checksum": "is_kennitala"
+    },
+    "vat_id": {
+        "prefix": "IS",
+        "regex": "^IS[0-9]{5,6}$"
+    },
+    "zip": {
+        "regex": "^[0-9]{3}$",
+        "prefix": "IS-"
+    },
+    "vat_portal": "Skatturinn (þjónustuvefur)",
+    "draft": true,
+    "vat": {
+        "period": "bimonth",
+        "standard_rate": 24,
+        "codes": [
+            {
+                "id": "U24",
+                "name": "Útskattur 24%",
+                "rate": 24,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "U11",
+                "name": "Útskattur 11%",
+                "rate": 11,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "I24",
+                "name": "Innskattur 24%",
+                "rate": 24,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "I11",
+                "name": "Innskattur 11%",
+                "rate": 11,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "EXP",
+                "name": "Útflutningur (0%)",
+                "rate": 0,
+                "type": "export"
+            },
+            {
+                "id": "UND",
+                "name": "Undanþegin velta",
+                "rate": 0,
+                "type": "exempt"
+            },
+            {
+                "id": "IUT",
+                "name": "Kaup á þjónustu erlendis frá (öfug skattskylda)",
+                "rate": 24,
+                "type": "noneu_services_purchase"
+            }
+        ],
+        "std_account_codes": []
+    },
+    "reminders": {
+        "fee_from_reminder": 1,
+        "fee_until_reminder": 99,
+        "min_days_between": 10,
+        "max_fee": 950,
+        "max_fee_currency": "ISK",
+        "law": "innheimtulög nr. 95/2008 og reglugerð nr. 37/2009 (innheimtuviðvörun)"
+    },
+    "chart": null,
+    "chart_classes": null,
+    "einvoice": [
+        "peppol_bis3"
+    ],
+    "payment_ref": "none",
+    "saft": null,
+    "legal": {
+        "annual_report": null,
+        "cvr_lock": false,
+        "oss": false,
+        "ioss": true
+    },
+    "vat_return": [
+        {
+            "box": "24_base",
+            "label": "@Turnover at 24 % (excl. VAT)",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "rates": [
+                24
+            ],
+            "sign": -1
+        },
+        {
+            "box": "11_base",
+            "label": "@Turnover at 11 % (excl. VAT)",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "rates": [
+                11
+            ],
+            "sign": -1
+        },
+        {
+            "box": "zero",
+            "label": "@Exempt and zero-rated turnover (incl. export)",
+            "rule": "net",
+            "types": [
+                "export",
+                "exempt"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "24_vat",
+            "label": "@Output VAT 24 %",
+            "rule": "vat_of_net",
+            "types": [
+                "sales"
+            ],
+            "rates": [
+                24
+            ],
+            "sign": -1
+        },
+        {
+            "box": "11_vat",
+            "label": "@Output VAT 11 %",
+            "rule": "vat_of_net",
+            "types": [
+                "sales"
+            ],
+            "rates": [
+                11
+            ],
+            "sign": -1
+        },
+        {
+            "box": "sales_vat",
+            "label": "@Output VAT in the ledger (check: 24 % + 11 %)",
+            "rule": "setting_acc",
+            "setting": "conf_acc_vat",
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "rc_services",
+            "label": "@VAT on services bought from abroad (reverse charge)",
+            "rule": "rc_vat",
+            "types": [
+                "noneu_services_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "purchase_vat",
+            "label": "@Input VAT",
+            "rule": "setting_acc",
+            "setting": "conf_acc_purchase_vat",
+            "sign": 1,
+            "payable": -1
+        }
+    ],
+    "peppol": {
+        "endpoint_scheme": "0196"
+    }
+}

@@ -14,6 +14,16 @@ $preview_data = [];
 $msg_html = '';
 $original_filename = '';
 
+// Bankkontoen kontoudtoget hører til - afstemningen bogfører på den (inc/reconcile.inc.php, tc_bank_line_account()).
+// Før landede et udtog fra fx opsparingskontoen altid på standard-bankkontoen.
+require_once 'inc/accounts.inc.php';
+$bi_std   = (int)setting('conf_acc_bank', 5000);
+$bi_banks = [];
+$bi_res = DB::query($conn, "SELECT acc_id, acc_name" . acc_status_col($conn) . " FROM accounts WHERE acc_type = 'bank' AND " . acc_visible_sql($conn, '', [$bi_std]) . " ORDER BY " . acc_order_sql($conn) . "acc_id");
+while ($bi_res && ($br = DB::fetch_assoc($bi_res))) $bi_banks[(int)$br['acc_id']] = $br['acc_id'] . ' - ' . acc_label($br['acc_name'], $br['acc_status'] ?? null);
+$bi_acc = (int)($_POST['import_acc'] ?? 0);
+if (!isset($bi_banks[$bi_acc]) || $bi_acc === $bi_std) $bi_acc = 0;
+
 // --- 1. GEM PROFIL LOGIK ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['profile_name'])) {
     $p_name = strtolower(DB::real_escape_string($conn, $_POST['profile_name']));
@@ -47,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['profile_name'])) {
     $save_ok = DB::query($conn, $upsert_sql);
     $msg_html = $save_ok
         ? htm_Alert(text: '@Profile saved successfully!', type: 'success', echo: false)
-        : htm_Alert(text: '@Error: Could not save profile.' . ' (' . DB::error($conn) . ')', type: 'danger', echo: false);
+        : htm_Alert(text: lang('@Error: Could not save profile.') . ' (' . htmlspecialchars((string)DB::error($conn)) . ')', type: 'danger', echo: false);
 }
 
 // --- 2. HENT PROFIL LOGIK ---
@@ -71,8 +81,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
     // ukontrolleret, lige ind i stien i uploads/ (offentligt tilgængelig uden login). uploads/.htaccess blokerer
     // nu også farlige endelser direkte på Apache-niveau som endnu et lag.
     $ext = strtolower(pathinfo($original_filename, PATHINFO_EXTENSION));
+    // Et CAMT-kontoudtog (ISO 20022 XML) har fast struktur - indlæses direkte uden kolonnevalg (inc/camt.inc.php)
+    if ($ext === 'xml') {
+        require_once 'inc/camt.inc.php';
+        try {
+            if ((int)($_FILES['csv_file']['error'] ?? 1) !== UPLOAD_ERR_OK) throw new Exception(lang('@Error: Could not save file.'));
+            $camt = camt_import($conn, camt_parse((string)file_get_contents($_FILES['csv_file']['tmp_name'])), 'camt', $bi_acc);
+        } catch (Exception $e) {
+            redirect('bank_import_step1.php', lang('@CAMT import failed:') . ' ' . htmlspecialchars($e->getMessage()), 'error');
+        }
+        flash(sprintf(lang('@%d transaction(s) imported.'), $camt['imported']));
+        if ($camt['duplicates'] > 0) flash(sprintf(lang('@%d row(s) were skipped because a transaction with the same date, text and amount was already imported previously.'), $camt['duplicates']), 'info');
+        if ($camt['foreign'] > 0) flash(sprintf(lang('@%d transaction(s) are in another currency than the accounts - marked with the currency code in the text.'), $camt['foreign']), 'warning');
+        redirect('reconcile_list.php');
+    }
     if ($ext !== 'csv') {
-        die(lang('@Error: Only CSV files can be imported.'));
+        redirect('bank_import_step1.php', '@Error: Only CSV or CAMT (XML) bank statements can be imported.', 'error');      // (var en hvid side)
     }
     // Tilfældigt filnavn i stedet for det forudsigelige "time()_originalnavn"
     // - samme begrundelse som expense_edit.php's bilags-upload (se
@@ -82,11 +106,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
     if (move_uploaded_file($_FILES['csv_file']['tmp_name'], $file_path)) {
         $handle = fopen($file_path, "r");
-        $first_line = fgets($handle);
-        $delimiter = (strpos($first_line, ';') !== false) ? ';' : ',';
+        // Skilletegnet: det af ; TAB , der deler de første linjer i lige mange kolonner (flest) - tabulator med, da flere
+        // nordiske bankers .txt-udtræk er tabulatorseparerede. Kun at tælle tegnet i første linje valgte komma i en
+        // semikolonfil uden overskrift, hvor tekst og beløb ("Husleje, jan";"-1.234,56") selv har kommaer.
+        $dl_lines = [];
+        while (count($dl_lines) < 6 && ($dl_l = fgets($handle)) !== false) if (trim($dl_l) !== '') $dl_lines[] = $dl_l;
+        $delimiter = ',';  $dl_best = -1;
+        foreach ([';', "\t", ','] as $dl_c) {
+            $dl_cols = array_map(fn($l) => count(str_getcsv($l, $dl_c, '"', '')), $dl_lines);
+            if (!$dl_cols || max($dl_cols) < 2) continue;
+            $dl_score = (count(array_unique($dl_cols)) === 1 ? 1000 : 0) + min($dl_cols);      // ensartet først, så flest kolonner
+            if ($dl_score > $dl_best) { $dl_best = $dl_score;  $delimiter = $dl_c; }
+        }
         rewind($handle);
 
-        while (($data = fgetcsv($handle, 0, $delimiter, '"')) !== FALSE) {
+        while (($data = fgetcsv($handle, 0, $delimiter, '"', '')) !== FALSE) {
             // (samme omkodning som bank_import_process.php - ellers var forhåndsvisningen af æøå-tekster tom)
             if (empty($preview_data) && isset($data[0])) $data[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$data[0]);
             foreach ($data as $di => $dv) if ($dv !== null && !mb_check_encoding((string)$dv, 'UTF-8')) $data[$di] = mb_convert_encoding((string)$dv, 'UTF-8', 'Windows-1252');
@@ -144,8 +178,14 @@ echo '</form>';
     <form method="post" enctype="multipart/form-data" style="text-align:center; padding:40px;">
         <?php csrf_field(); ?>
         <div style="margin-bottom: 25px;">
-            <input type="file" name="csv_file" required style="font-size: 1.1em;">
+            <input type="file" name="csv_file" accept=".csv,.xml,text/csv,text/xml,application/xml" required style="font-size: 1.1em;">
         </div>
+        <?php htm_Note(lang('@CSV from any bank (you choose the columns), or a CAMT.053 bank statement in XML (ISO 20022) - read directly without setup.'), 'font-size:0.9em; margin:-10px 0 20px;'); ?>
+        <?php if (count($bi_banks) > 1): ?>
+            <div style="max-width:420px; margin:0 auto 20px; text-align:left;">
+                <?php htm_Field(icon: 'fa-building-columns', labl: '@Bank account of the statement', name: 'import_acc', valu: (string)$bi_std, type: 'sele', opti: $bi_banks, hint: '@The account the statement comes from - the lines are posted to it during the bank reconciliation.', echo: true); ?>
+            </div>
+        <?php endif; ?>
         <?php 
         htm_Button(
             icon: 'fa-upload',
@@ -197,6 +237,7 @@ echo '</form>';
         <?php csrf_field(); ?>
         <input type="hidden" name="file_path" value="<?php echo htmlspecialchars($file_path); ?>">
         <input type="hidden" name="delimiter" value="<?php echo htmlspecialchars($delimiter); ?>">
+        <input type="hidden" name="import_acc" value="<?php echo (int)$bi_acc; ?>">
         <input type="hidden" name="col_count" value="<?php echo count($preview_data[0]); ?>">
 
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:20px;">

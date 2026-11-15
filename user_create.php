@@ -39,6 +39,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_user'])) {
 
     if (empty($username) || empty($pw1)) {
         $err = lang('@All fields are required');
+    } elseif (!in_array((string)($_POST['user_role'] ?? ''), ['admin', 'accountant', 'user'], true)) {
+        $err = lang('@Invalid role');      // (en ukendt rolle blev gemt som tekst med niveau 1)
     } elseif ($pw1 !== $pw2) {
         $err = lang('@Passwords do not match');
     } elseif (strlen($pw1) < 8) {
@@ -62,6 +64,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_user'])) {
                     VALUES ('$username', '$hash', '$role', $level)";
             
             if (DB::query($conn, $sql)) {
+                // Oprettelse af en bruger (og dermed nye rettigheder) skal stå i revisionssporet - som ændring/sletning
+                require_once 'inc/audit.inc.php';
+                log_action($conn, 'CREATE_USER', 'users', (int)DB::insert_id($conn), null,
+                    ['username' => trim((string)$_POST['username']), 'user_role' => (string)$_POST['user_role'], 'user_level' => $level]);
                 // RETTET: i selve bootstrap-tilfældet (den aktuelle bruger er ikke selv admin, men fik lov til at
                 // oprette den allerførste admin ovenfor) peger dette ellers direkte på user_list.php - som
                 // ØJEBLIKKELIGT ville afvise dem igen, fordi DERES session stadig er den oprindelige, ikke-admin

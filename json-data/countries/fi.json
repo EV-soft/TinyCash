@@ -1,0 +1,318 @@
+{
+    "code": "fi",
+    "iso": "FI",
+    "name": "Suomi",
+    "name_en": "Finland",
+    "language": "fi",
+    "locale": "fi-FI",
+    "currency": "EUR",
+    "currency_symbol": "€",
+    "timezone": "Europe/Helsinki",
+    "date_format": "d.m.Y",
+    "number": {
+        "dec": ",",
+        "thou": " "
+    },
+    "company_id": {
+        "label": "@Business ID (Y-tunnus)",
+        "short": "Y-tunnus",
+        "regex": "^[0-9]{7}-[0-9]$",
+        "registry": "fi_prh",
+        "checksum": "fi_ytunnus"
+    },
+    "vat_id": {
+        "prefix": "FI",
+        "regex": "^FI[0-9]{8}$"
+    },
+    "zip": {
+        "regex": "^[0-9]{5}$",
+        "prefix": "FI-"
+    },
+    "vat_portal": "OmaVero",
+    "draft": true,
+    "vat": {
+        "standard_rate": 25.5,
+        "codes": [
+            {
+                "id": "M255",
+                "name": "Myynnin ALV 25,5 %",
+                "rate": 25.5,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "M135",
+                "name": "Myynnin ALV 13,5 %",
+                "rate": 13.5,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "M10",
+                "name": "Myynnin ALV 10 %",
+                "rate": 10,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "O255",
+                "name": "Oston ALV 25,5 %",
+                "rate": 25.5,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "O135",
+                "name": "Oston ALV 13,5 %",
+                "rate": 13.5,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "O10",
+                "name": "Oston ALV 10 %",
+                "rate": 10,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "EUV",
+                "name": "Tavaroiden myynti muihin EU-maihin",
+                "rate": 0,
+                "type": "eu_goods_sale"
+            },
+            {
+                "id": "EUP",
+                "name": "Palveluiden myynti muihin EU-maihin",
+                "rate": 0,
+                "type": "eu_services_sale"
+            },
+            {
+                "id": "EXP",
+                "name": "Vienti EU:n ulkopuolelle (0 %)",
+                "rate": 0,
+                "type": "export"
+            },
+            {
+                "id": "KAA",
+                "name": "Rakentamispalvelut, käännetty verovelvollisuus",
+                "rate": 0,
+                "type": "reverse_domestic"
+            },
+            {
+                "id": "VAP",
+                "name": "Veroton myynti",
+                "rate": 0,
+                "type": "exempt"
+            },
+            {
+                "id": "IEUV",
+                "name": "Tavaraostot muista EU-maista",
+                "rate": 25.5,
+                "type": "eu_goods_purchase",
+                "rc_account": 2939
+            },
+            {
+                "id": "IEUP",
+                "name": "Palveluostot muista EU-maista",
+                "rate": 25.5,
+                "type": "eu_services_purchase",
+                "rc_account": 2939
+            },
+            {
+                "id": "IUV",
+                "name": "Tavaroiden maahantuonti EU:n ulkopuolelta",
+                "rate": 25.5,
+                "type": "noneu_goods_purchase",
+                "rc_account": 2939
+            },
+            {
+                "id": "IUP",
+                "name": "Palveluostot EU:n ulkopuolelta",
+                "rate": 25.5,
+                "type": "noneu_services_purchase",
+                "rc_account": 2939
+            }
+        ],
+        "std_account_codes": []
+    },
+    "reminders": {
+        "fee_from_reminder": 1,
+        "fee_until_reminder": 3,
+        "min_days_between": 14,
+        "max_fee": 5,
+        "max_fee_currency": "EUR",
+        "law": "laki saatavien perinnästä 10 § (kuluttaja: enintään 5 €)"
+    },
+    "chart": null,
+    "chart_classes": null,
+    "einvoice": [
+        "peppol_bis3"
+    ],
+    "payment_ref": "fi_ref",
+    "saft": null,
+    "legal": {
+        "annual_report": null,
+        "cvr_lock": false,
+        "oss": true,
+        "ioss": true,
+        "eu_sales_list": {
+            "name": "@Yhteenvetoilmoitus (OmaVero)",
+            "boxes": {"goods": "311", "services": "312"}
+        }
+    },
+    "vat_return": [
+        {
+            "box": "301",
+            "label": "@301: VAT on domestic sales 25.5 %",
+            "rule": "vat_of_net",
+            "types": [
+                "sales"
+            ],
+            "rates": [
+                25.5
+            ],
+            "sign": -1
+        },
+        {
+            "box": "302",
+            "label": "@302: VAT on domestic sales 13.5 %",
+            "rule": "vat_of_net",
+            "types": [
+                "sales"
+            ],
+            "rates": [
+                13.5
+            ],
+            "sign": -1
+        },
+        {
+            "box": "303",
+            "label": "@303: VAT on domestic sales 10 %",
+            "rule": "vat_of_net",
+            "types": [
+                "sales"
+            ],
+            "rates": [
+                10
+            ],
+            "sign": -1
+        },
+        {
+            "box": "sales_vat",
+            "label": "@Output VAT in the ledger (check: 301 + 302 + 303)",
+            "rule": "setting_acc",
+            "setting": "conf_acc_vat",
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "305",
+            "label": "@305: VAT on purchases of goods from other EU countries",
+            "rule": "rc_vat",
+            "types": [
+                "eu_goods_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "306",
+            "label": "@306: VAT on purchases of services from other EU countries",
+            "rule": "rc_vat",
+            "types": [
+                "eu_services_purchase",
+                "noneu_services_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "340",
+            "label": "@340: VAT on imports of goods from outside the EU",
+            "rule": "rc_vat",
+            "types": [
+                "noneu_goods_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "307",
+            "label": "@307: Deductible VAT for the period",
+            "rule": "setting_acc",
+            "setting": "conf_acc_purchase_vat",
+            "sign": 1,
+            "payable": -1
+        },
+        {
+            "box": "304",
+            "label": "@304: Zero-rated turnover",
+            "rule": "net",
+            "types": [
+                "export",
+                "exempt"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "311",
+            "label": "@311: Sales of goods to other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_goods_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "312",
+            "label": "@312: Sales of services to other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_services_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "313",
+            "label": "@313: Purchases of goods from other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_goods_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "314",
+            "label": "@314: Purchases of services from other EU countries",
+            "rule": "net",
+            "types": [
+                "eu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "337",
+            "label": "@337: Imports of goods from outside the EU",
+            "rule": "net",
+            "types": [
+                "noneu_goods_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "319",
+            "label": "@319: Sales of construction services (reverse charge)",
+            "rule": "net",
+            "types": [
+                "reverse_domestic"
+            ],
+            "sign": -1
+        }
+    ],
+    "peppol": {
+        "endpoint_scheme": "0216",
+        "endpoint_prefix": "0037",
+        "legal_scheme": "0037"
+    }
+}

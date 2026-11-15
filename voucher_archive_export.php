@@ -21,15 +21,15 @@ function csv_safe($v) {
     return (strpbrk($v[0], '=+-@') !== false) ? "'" . $v : $v;
 }
 
-$year = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
+// Året er regnskabsåret (opkaldt efter sit slutår) - før altid 1/1-31/12, også ved et forskudt regnskabsår
+$year = isset($_GET['year']) ? (int)$_GET['year'] : (int)substr(tc_fiscal_year_bounds($conn)[1], 0, 4);
 
 if (isset($_GET['download']) && $_GET['download'] == '1') {
     if (!class_exists('ZipArchive')) {
         die(lang('@PHP ZipArchive extension is not enabled on this server.'));
     }
 
-    $ys = "$year-01-01";
-    $ye = "$year-12-31";
+    [$ys, $ye] = tc_fiscal_year_of($conn, $year);
     $backupDir = 'backups/';
     if (!is_dir($backupDir)) mkdir($backupDir, 0755);
     $zipName = "Bilagsarkiv_{$year}_" . date('Y-m-d_Hi') . '.zip';
@@ -78,10 +78,13 @@ if (isset($_GET['download']) && $_GET['download'] == '1') {
     require_once __DIR__ . '/inc/invoice_pdf_archive.inc.php';
     // RETTET: en faktura i fremmed valuta stod med sit valutabeløb uden kurs - oversigtens øvrige beløb (udgifterne)
     // er i bogføringsvalutaen, så kolonnen blandede valutaer. Nu omregnet med fakturaens kurs, som i hovedbogen.
-    $res_i = DB::query($conn, "SELECT i.inv_id, i.invoice_no, i.credit_ref, i.credit_note_no, i.inv_date, c.cust_name,
+    // Kolonnen "Bilagsnr." er bogføringens bilagsnummer (journal.voucher_no) - før stod faktura-/kreditnotanummeret (en
+    // anden nummerserie) i samme kolonne som udgifternes bilagsnumre; dokumentnummeret står nu ved typen
+    $va_jou = db_has_column($conn, 'invoices', 'jou_id');
+    $res_i = DB::query($conn, "SELECT i.inv_id, i.invoice_no, i.credit_ref, i.credit_note_no, i.inv_date, c.cust_name, " . ($va_jou ? "j.voucher_no" : "NULL AS voucher_no") . ",
             (SELECT COALESCE(SUM(quantity * price_each " . invoice_discount_sql($conn) . " * (100 + line_vat_rate) / 100.0), 0)
              FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1) AS total
-        FROM invoices i JOIN customers c ON i.cust_id = c.cust_id
+        FROM invoices i JOIN customers c ON i.cust_id = c.cust_id" . ($va_jou ? " LEFT JOIN journal j ON j.jou_id = i.jou_id" : "") . "
         WHERE LOWER(i.inv_status) != 'draft' AND i.inv_date BETWEEN '$ys' AND '$ye'
         ORDER BY i.inv_date ASC");
     if ($res_i) {
@@ -91,14 +94,29 @@ if (isset($_GET['download']) && $_GET['download'] == '1') {
             if ($pdf_ok) { $zip->addFile($pdf, 'fakturaer/' . basename($pdf));  $attached_count++; }
             $is_cn = !empty($i['credit_ref']);
             $csv_rows[] = [
-                lang($is_cn ? '@Credit Note' : '@Invoice'),
-                csv_safe($is_cn ? (!empty($i['credit_note_no']) ? 'KN-' . $i['credit_note_no'] : '') : ($i['invoice_no'] ?? '')),
+                lang($is_cn ? '@Credit Note' : '@Invoice') . ' ' . ($is_cn ? (!empty($i['credit_note_no']) ? 'KN-' . str_pad((string)$i['credit_note_no'], 6, '0', STR_PAD_LEFT) : '') : '#' . str_pad((string)($i['invoice_no'] ?? ''), 6, '0', STR_PAD_LEFT)),
+                (string)($i['voucher_no'] ?? ''),
                 $i['inv_date'],
                 csv_safe($i['cust_name'] ?? ''),
                 fmt_dk_input((float)$i['total']),
                 $pdf_ok ? lang('@Included in ZIP') : lang('@View/print from Invoice View in the system'),
             ];
         }
+    }
+
+    // De øvrige bilag (manuelle posteringer, bankbetalinger, afskrivninger, rykkergebyrer, årsafslutning ...) - LÆS MIG
+    // lover "hvert bilag i året", men oversigten havde kun udgifter og fakturaer. Beløbet er bilagets debetsum.
+    $va_seen = [];
+    foreach (array_slice($csv_rows, 1) as $r) if ((string)$r[1] !== '') $va_seen[(string)$r[1]] = true;
+    $res_j = DB::query($conn, "SELECT j.voucher_no, MIN(j.jou_date) AS jou_date, MIN(j.jou_text) AS jou_text,
+            SUM(CASE WHEN l.amount > 0 THEN l.amount ELSE 0 END) AS debit
+        FROM journal j JOIN ledger l ON l.jou_id = j.jou_id
+        WHERE j.voucher_no IS NOT NULL AND j.jou_date BETWEEN '$ys' AND '$ye'
+        GROUP BY j.voucher_no ORDER BY MIN(j.jou_date), j.voucher_no");
+    while ($res_j && ($j = DB::fetch_assoc($res_j))) {
+        if (isset($va_seen[(string)$j['voucher_no']])) continue;
+        $csv_rows[] = [lang('@Journal entry'), (string)$j['voucher_no'], $j['jou_date'], csv_safe((string)$j['jou_text']),
+                       fmt_dk_input((float)$j['debit']), lang('@View/print from the general ledger in the system')];
     }
 
     $csv_out = chr(0xEF) . chr(0xBB) . chr(0xBF);

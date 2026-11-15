@@ -21,7 +21,16 @@ if ($action === 'add') {
     $email = trim($_POST['contact_email'] ?? '');
     $phone = trim($_POST['contact_phone'] ?? '');
     $note  = trim($_POST['contact_note'] ?? '');
-    if ($name !== '' || $email !== '') {
+    // (som kunde- og leverandørkortet: en ugyldig adresse - og en kunde der ikke findes - afvises på serveren, ikke kun i browseren)
+    if (!tc_customer_ok($conn, $cust_id)) redirect('sales_hub.php', '@Not found - it may already have been deleted.', 'error');
+    if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+        redirect("customer_edit.php?id=$cust_id", '@Please enter a valid email address.', 'error');
+    }
+    // En kontakt med kun et telefonnummer blev stille smidt væk (ingen besked) - nu gemmes den, og en tom formular afvises
+    if ($name === '' && $email === '' && $phone === '') {
+        redirect("customer_edit.php?id=$cust_id#contacts", '@Enter at least a name, an email address or a phone number for the contact.', 'error');
+    }
+    if ($name !== '' || $email !== '' || $phone !== '') {
         DB::insert($conn, 'customer_contacts', [
             'cust_id'       => $cust_id,
             'contact_name'  => $name !== '' ? $name : null,

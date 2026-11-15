@@ -14,6 +14,9 @@ $recur_id = (int)($_GET['id'] ?? 0);
 
 // --- GEM ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recur'])) {
+    // En afvist formular beholder det indtastede (før kom man tilbage til en tom/gammel formular og skulle starte forfra)
+    $_SESSION['re_form_' . $recur_id] = array_intersect_key($_POST, array_flip(['supplier', 'supplier_id', 'account_id', 'amount', 'description', 'exp_type', 'interval_type', 'next_run_date', 'proj_id']))
+        + ['is_active' => isset($_POST['is_active']) ? 1 : 0];
     $supplier      = DB::escape($conn, trim($_POST['supplier'] ?? ''));
     $account_id    = (int)$_POST['account_id'];
     $amount        = parse_dk_number($_POST['amount'] ?? '0');      // RETTET: (float)str_replace(',', '.') gjorde "1.500,00" til 1,50
@@ -55,8 +58,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recur'])) {
     }
 
     if (!$save_ok) {
-        die(lang('@Error saving expense: ') . DB::error($conn));
+        redirect("recurring_expense_edit.php?id=$recur_id", lang('@Error saving expense: ') . htmlspecialchars((string)DB::error($conn)), 'error');      // (var en hvid side)
     }
+    unset($_SESSION['re_form_' . $recur_id]);
     redirect("recurring_expense_edit.php?id=$recur_id", '@Changes saved successfully');
 }
 
@@ -70,6 +74,11 @@ if ($recur_id > 0) {
         'description' => '', 'exp_type' => 'expense', 'interval_type' => 'monthly',
         'next_run_date' => date('Y-m-d'), 'is_active' => 1, 'proj_id' => 0,
     ];
+}
+
+if (!empty($_SESSION['re_form_' . $recur_id]) && is_array($_SESSION['re_form_' . $recur_id])) {
+    $tmpl = array_merge($tmpl, $_SESSION['re_form_' . $recur_id]);
+    unset($_SESSION['re_form_' . $recur_id]);
 }
 
 htm_Header($recur_id > 0 ? lang('@Edit Recurring Expense') : lang('@New Recurring Expense'));
@@ -143,7 +152,7 @@ function updateRecurPreview() {
     var d = new Date(dateField.value + 'T00:00:00');
     var dates = [];
     for (var i = 0; i < 4; i++) {
-        dates.push(d.toLocaleDateString('da-DK'));
+        dates.push(d.toLocaleDateString(window.tcLocale || 'da-DK'));
         // Samme regel som recurring_next_date(): samme dag, højst månedens sidste - den sidste forbliver den sidste
         var day = d.getDate(), wasLast = day === new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
         var last = new Date(d.getFullYear(), d.getMonth() + months + 1, 0).getDate();

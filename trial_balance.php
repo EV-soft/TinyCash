@@ -39,8 +39,9 @@ $default_from = tc_fiscal_year_bounds($conn)[0];      // (regnskabsårets start 
 $default_to   = date('Y-m-d');
 $from = $_GET['from'] ?? $default_from;
 $to   = $_GET['to']   ?? $default_to;
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) $from = $default_from;
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $to))   $to   = $default_to;
+if (!tc_is_date((string)$from)) $from = $default_from;      // (tc_is_date: "2026-02-31" bestod formattjekket)
+if (!tc_is_date((string)$to))   $to   = $default_to;
+if ($from > $to) [$from, $to] = [$to, $from];      // (en omvendt periode viste saldo primo fra slutdatoen og ingen bevægelser)
 
 htm_Header('@Trial Balance');
 showMenu();
@@ -60,15 +61,23 @@ $pe = DB::escape($conn, $to);
 
 // RETTET: "JOIN accounts" skjulte posteringer på et kontonummer der ikke findes i kontoplanen - saldobalancen
 // balancerede så ikke, uden at vise hvorfor. Nu LEFT JOIN: kontoen vises, markeret "findes ikke".
+// Indtægts- og udgiftskonti nulstilles ved hvert regnskabsår: deres primo regnes fra starten af det regnskabsår $from
+// ligger i, og ultimo fra starten af det år $to ligger i - som kontokortet. Før tog de alle tidligere års bevægelser
+// med, når et år ikke var afsluttet. Tidligere års resultat (ikke afsluttet) står i stedet på sin egen linje, så
+// kolonnerne stadig går i nul.
+$fy_from = DB::escape($conn, tc_fiscal_year_bounds($conn, $from)[0]);
+$fy_to   = DB::escape($conn, tc_fiscal_year_bounds($conn, $to)[0]);
+$tb_pl   = "a.acc_type IN ('income', 'expense')";
+$tb_bal  = "COALESCE(a.acc_type, '') NOT IN ('income', 'expense')";
 $sql = "SELECT l.acc_id, COALESCE(a.acc_name, '" . DB::escape($conn, '⚠ ' . lang('@not in the chart of accounts')) . "') AS acc_name, a.acc_type,
-        SUM(CASE WHEN j.jou_date < '$ps' THEN l.amount ELSE 0 END) AS primo,
+        SUM(CASE WHEN ($tb_bal AND j.jou_date < '$ps') OR ($tb_pl AND j.jou_date >= '$fy_from' AND j.jou_date < '$ps') THEN l.amount ELSE 0 END) AS primo,
         SUM(CASE WHEN j.jou_date BETWEEN '$ps' AND '$pe'
                  AND (j.trans_type IS NULL OR j.trans_type != 'year_end_close')
                  AND l.amount > 0 THEN l.amount ELSE 0 END) AS debit,
         SUM(CASE WHEN j.jou_date BETWEEN '$ps' AND '$pe'
                  AND (j.trans_type IS NULL OR j.trans_type != 'year_end_close')
                  AND l.amount < 0 THEN -l.amount ELSE 0 END) AS credit,
-        SUM(CASE WHEN j.jou_date <= '$pe' THEN l.amount ELSE 0 END) AS ultimo
+        SUM(CASE WHEN ($tb_bal AND j.jou_date <= '$pe') OR ($tb_pl AND j.jou_date >= '$fy_to' AND j.jou_date <= '$pe') THEN l.amount ELSE 0 END) AS ultimo
         FROM ledger l
         JOIN journal j ON l.jou_id = j.jou_id
         LEFT JOIN accounts a ON l.acc_id = a.acc_id
@@ -80,8 +89,16 @@ $res = DB::query($conn, $sql);
 $rows = [];
 $tot_primo = $tot_debit = $tot_credit = $tot_ultimo = 0.0;
 if ($res) {
-    while ($r = DB::fetch_assoc($res)) {
-        $rows[] = $r;
+    while ($r = DB::fetch_assoc($res)) $rows[] = $r;
+    // Resultatet af tidligere regnskabsår der ikke er afsluttet (efter en årsafslutning er det 0 og vises ikke)
+    $tb_prev = DB::fetch_assoc(DB::query($conn, "SELECT SUM(CASE WHEN j.jou_date < '$fy_from' THEN l.amount ELSE 0 END) AS primo,
+            SUM(CASE WHEN j.jou_date < '$fy_to' THEN l.amount ELSE 0 END) AS ultimo
+        FROM ledger l JOIN journal j ON l.jou_id = j.jou_id JOIN accounts a ON l.acc_id = a.acc_id WHERE $tb_pl AND j.jou_date < '$fy_to'"));
+    if (abs((float)($tb_prev['primo'] ?? 0)) >= 0.005 || abs((float)($tb_prev['ultimo'] ?? 0)) >= 0.005) {
+        $rows[] = ['acc_id' => '', 'acc_name' => lang('@Result of earlier fiscal years (not closed)'), 'acc_type' => 'prev_result',
+                   'primo' => (float)$tb_prev['primo'], 'debit' => 0, 'credit' => 0, 'ultimo' => (float)$tb_prev['ultimo']];
+    }
+    foreach ($rows as $r) {
         $tot_primo  += (float)$r['primo'];
         $tot_debit  += (float)$r['debit'];
         $tot_credit += (float)$r['credit'];
@@ -93,7 +110,8 @@ if ($res) {
 // til 0 på tværs af ALLE konti (hver postering balancerer i sig selv), og
 // periodens samlede debet = samlede kredit. Et afvig her er et reelt signal
 // om en postering lavet uden om de normale flows (fx direkte SQL).
-$is_balanced = (abs($tot_primo) < 0.01) && (abs($tot_ultimo) < 0.01) && (abs($tot_debit - $tot_credit) < 0.01);
+// (< 0.01 godtog en difference på præcis 1 øre - flydende tal: 0,29 - 0,28 = 0,00999...)
+$is_balanced = (abs(round($tot_primo, 2)) < 0.005) && (abs(round($tot_ultimo, 2)) < 0.005) && (abs(round($tot_debit - $tot_credit, 2)) < 0.005);
 if ($is_balanced) {
     htm_Alert(lang('@The trial balance balances correctly: opening and closing balances net to zero, and debit equals credit for the period.'), 'success');
 } else {
@@ -109,9 +127,12 @@ if (empty($rows)) {
     $data = [];
     foreach ($rows as $r) {
         $card_link = 'account_card.php?acc_id=' . (int)$r['acc_id'] . '&from=' . urlencode($from) . '&to=' . urlencode($to);
+        $name_cell = ($r['acc_type'] ?? '') === 'prev_result'
+            ? '<a href="year_end_close.php" data-hint="' . htmlspecialchars(lang('@The income and expense accounts of an earlier fiscal year have not been closed - close the year to move the result to equity')) . '"><em>' . htmlspecialchars($r['acc_name']) . '</em></a>'
+            : '<a href="' . htmlspecialchars($card_link) . '" data-hint="' . htmlspecialchars(lang('@View Account Card')) . '">' . htmlspecialchars($r['acc_name']) . '</a>';
         $data[] = [
             $r['acc_id'],
-            '<a href="' . htmlspecialchars($card_link) . '" data-hint="' . htmlspecialchars(lang('@View Account Card')) . '">' . htmlspecialchars($r['acc_name']) . '</a>',
+            $name_cell,
             '<div style="text-align:right;">' . fmt_dk((float)$r['primo']) . '</div>',
             '<div style="text-align:right; color:green;">' . fmt_dk((float)$r['debit']) . '</div>',
             '<div style="text-align:right; color:red;">' . fmt_dk((float)$r['credit']) . '</div>',

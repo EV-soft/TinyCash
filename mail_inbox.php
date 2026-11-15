@@ -157,10 +157,22 @@ if ($mbox && $view_id > 0) {
         ];
 
         $structure = imap_fetchstructure($mbox, $msg_no);
-        $body_raw = imap_fetchbody($mbox, $msg_no, 1);
-        if (isset($structure->encoding) && $structure->encoding == 3) $mail_body = base64_decode($body_raw);
-        elseif (isset($structure->encoding) && $structure->encoding == 4) $mail_body = quoted_printable_decode($body_raw);
+        // Teksten er del 1 - i en multipart-mail med DENS egen kodning og tegnsæt (før blev mailens ydre kodning brugt,
+        // så en base64-/quoted-printable-tekst stod som rå kode, og en ISO-8859-1-tekst blev tom i htmlspecialchars)
+        $body_part = '1';  $body_struct = $structure;
+        if (!empty($structure->parts)) {
+            $body_struct = $structure->parts[0];
+            if (!empty($body_struct->parts)) { $body_part = '1.1';  $body_struct = $body_struct->parts[0]; }      // (multipart/alternative: den rene tekst)
+        }
+        $body_raw = empty($structure->parts) ? imap_body($mbox, $msg_no) : imap_fetchbody($mbox, $msg_no, $body_part);
+        $body_enc = (int)($body_struct->encoding ?? 0);
+        if ($body_enc === 3) $mail_body = base64_decode($body_raw);
+        elseif ($body_enc === 4) $mail_body = quoted_printable_decode($body_raw);
         else $mail_body = $body_raw;
+        $body_cs = '';
+        foreach ((!empty($body_struct->ifparameters) ? $body_struct->parameters : []) as $bp) if (strtolower($bp->attribute) === 'charset') $body_cs = strtoupper((string)$bp->value);
+        if ($body_cs !== '' && $body_cs !== 'UTF-8' && $body_cs !== 'US-ASCII' && in_array($body_cs, array_map('strtoupper', mb_list_encodings()), true)) $mail_body = mb_convert_encoding($mail_body, 'UTF-8', $body_cs);
+        elseif (!mb_check_encoding($mail_body, 'UTF-8')) $mail_body = mb_convert_encoding($mail_body, 'UTF-8', 'Windows-1252');
 
         $mail_body = nl2br(htmlspecialchars(strip_tags($mail_body)));
 
@@ -267,7 +279,8 @@ if (!$mbox) {
     $max_emails = 15; // Mails pr. side
 
     $current_page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-    $total_pages = max(1, ceil($total_messages / $max_emails));
+    $total_pages = max(1, (int)ceil($total_messages / $max_emails));
+    $current_page = min($current_page, $total_pages);      // (en side ud over den sidste gav en ugyldig IMAP-sekvens)
 
     $start = $total_messages - (($current_page - 1) * $max_emails);
     $end = max(1, $start - $max_emails + 1);
@@ -394,7 +407,7 @@ echo '<div class="mail-workspace">';
 
             echo '    <div class="preview-top-bar">';
             echo '      <span><i class="fa-regular fa-file"></i> ' . htmlspecialchars($selected_part_name) . '</span>';
-            echo '      <a href="' . $preview_url . '" target="_blank" style="color:white; text-decoration:none; background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:3px;"><i class="fa-solid fa-expand"></i> Fuld skærm</a>';
+            echo '      <a href="' . $preview_url . '" target="_blank" style="color:white; text-decoration:none; background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:3px;"><i class="fa-solid fa-expand"></i> ' . lang('@Full screen') . '</a>';
             echo '    </div>';
 
             if ($selected_part_ext === 'pdf') {

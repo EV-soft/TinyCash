@@ -29,10 +29,12 @@ if (isset($_GET['del']) && $_GET['del'] == 1) {
     // som om intet var galt.
     if (!$del_row) redirect('time_list.php', '@Not found - it may already have been deleted.', 'error');      // (fik før beskeden "allerede faktureret")
     if ((int)$del_row['is_invoiced'] === 0) {
-        if (DB::query($conn, "DELETE FROM time_entries WHERE entry_id = $id")) {
+        // (betingelsen gentages i selve sletningen: blev timen faktureret i en anden fane imens, slettes den ikke)
+        $te_del = DB::prepare_and_execute($conn, "DELETE FROM time_entries WHERE entry_id = ? AND is_invoiced = 0", [$id]);
+        if ($te_del && DB::affected_rows($conn, $te_del) > 0) {
             log_action($conn, 'DELETE_TIME_ENTRY', 'time_entries', $id, $del_row, null);
+            redirect('time_list.php', '@Deleted successfully');
         }
-        redirect('time_list.php', '@Deleted successfully');
     }
     redirect('time_list.php', '@This time entry has already been invoiced and cannot be deleted.', 'error');
 }
@@ -44,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_entry'])) {
     if ($id > 0) {
         $existing = DB::fetch_assoc(DB::query($conn, "SELECT is_invoiced, proj_id FROM time_entries WHERE entry_id = $id"));
         if ($existing && (int)$existing['is_invoiced'] === 1) {
-            die(lang('@This time entry has already been invoiced and can no longer be edited.'));
+            redirect("time_entry_edit.php?id=$id", '@This time entry has already been invoiced and can no longer be edited.', 'error');      // (var en hvid side)
         }
     }
 
@@ -53,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_entry'])) {
     $description  = DB::escape($conn, trim($_POST['description'] ?? ''));
     $hours        = parse_dk_number($_POST['hours'] ?? 0);
     $hourly_rate  = parse_dk_number($_POST['hourly_rate'] ?? 0);
-    $vat_rate     = parse_dk_number($_POST['line_vat_rate'] ?? 25);
+    $vat_rate     = parse_dk_number($_POST['line_vat_rate'] ?? tc_vat_std_rate());
     // Ikke-fakturerbart tvinges igennem uden projekt - der er ingen kunde at
     // fakturere til uden et projekt, så "fakturerbar" ville være meningsløst.
     $is_billable  = ($proj_id > 0 && isset($_POST['is_billable'])) ? 1 : 0;
@@ -73,7 +75,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_entry'])) {
     // fakturalinjen, og fx moms 250 % eller en negativ timesats gik direkte videre til fakturakladden
     } elseif (!tc_is_date($entry_date)) {
         $err = lang('@Please enter a valid date.');
-    } elseif ($hourly_rate < 0 || $vat_rate < 0 || $vat_rate > 100) {
+    // ("abc" eller "500 kr" i timesats/moms blev stille til 0 kr / 0 % på fakturaen - kun et rigtigt tal godtages)
+    } elseif ($hourly_rate < 0 || $vat_rate < 0 || $vat_rate > 100
+              || (trim((string)($_POST['hourly_rate'] ?? '')) !== '' && tc_num($_POST['hourly_rate'], 0) === null)
+              || tc_pct($_POST['line_vat_rate'] ?? tc_vat_std_rate()) === null) {
         $err = lang('@Please enter a valid amount.');
     } else {
         $proj_sql = $proj_id > 0 ? $proj_id : 'NULL';
@@ -81,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_entry'])) {
             DB::query($conn, "UPDATE time_entries SET
                 proj_id = $proj_sql, entry_date = '$entry_date', description = '$description',
                 hours = $hours, hourly_rate = $hourly_rate, line_vat_rate = $vat_rate, is_billable = $is_billable
-                WHERE entry_id = $id");
+                WHERE entry_id = $id AND is_invoiced = 0");      // (en time faktureret imens ændres ikke bagom fakturaen)
         } else {
             DB::query($conn, "INSERT INTO time_entries
                 (proj_id, user_id, entry_date, description, hours, hourly_rate, line_vat_rate, is_billable)
@@ -99,9 +104,16 @@ if ($id > 0) {
 } else {
     $t = [
         'entry_id' => 0, 'proj_id' => (int)($_GET['proj_id'] ?? 0), 'entry_date' => date('Y-m-d'),
-        'description' => '', 'hours' => '', 'hourly_rate' => '', 'line_vat_rate' => 25,
+        'description' => '', 'hours' => '', 'hourly_rate' => '', 'line_vat_rate' => tc_vat_std_rate(),
         'is_billable' => 1, 'is_invoiced' => 0, 'inv_id' => null,
     ];
+}
+// En afvist registrering vises med det brugeren skrev - før var formularen tom igen (en ny) eller viste de gamle værdier
+if ($err !== '' && empty($t['is_invoiced'])) {
+    foreach (['proj_id', 'entry_date', 'description', 'hours', 'hourly_rate', 'line_vat_rate'] as $te_k) {
+        if (isset($_POST[$te_k])) $t[$te_k] = (string)$_POST[$te_k];
+    }
+    $t['is_billable'] = isset($_POST['is_billable']) ? 1 : 0;
 }
 $is_locked = !empty($t['is_invoiced']);
 
@@ -125,7 +137,10 @@ echo "<div style='max-width:600px; margin:20px auto;'>";
 htm_Card_(capt: $id > 0 ? '@Edit Time Entry' : '@Log Time', wdth: 600, form: 'time_form');
 
 if ($is_locked) {
-    htm_Banner('<i class="fa fa-lock"></i> ' . sprintf(lang('@This time entry has already been billed on invoice #%s and cannot be changed here.'), (int)$t['inv_id']), 'info');
+    // Fakturanummeret - ikke det interne id (faktura #1005 stod som "#7"); en kladde har intet nummer endnu
+    $te_inv_no = !empty($t['inv_id']) ? (string)(DB::fetch_row(DB::query($conn, "SELECT invoice_no FROM invoices WHERE inv_id = " . (int)$t['inv_id']))[0] ?? '') : '';
+    $te_inv_label = $te_inv_no !== '' ? $te_inv_no : lang('@draft') . ' (' . (int)$t['inv_id'] . ')';
+    htm_Banner('<i class="fa fa-lock"></i> ' . sprintf(lang('@This time entry has already been billed on invoice #%s and cannot be changed here.'), '<a href="invoice_view.php?id=' . (int)$t['inv_id'] . '">' . htmlspecialchars($te_inv_label) . '</a>'), 'info');
 }
 
 echo '<input type="hidden" name="entry_id" value="'.(int)$t['entry_id'].'">';
@@ -174,7 +189,7 @@ function applyDefaultRate() {
     if (!sel || !rateField) return;
     var rate = projRateMap[sel.value];
     if (rate && !rateField.value) {
-        rateField.value = rate.toLocaleString('da-DK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        rateField.value = rate.toLocaleString(window.tcLocale || 'da-DK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     }
 }
 </script>

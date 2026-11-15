@@ -1,0 +1,62 @@
+{
+    "code": "gl",
+    "iso": "GL",
+    "name": "Kalaallit Nunaat / Grønland",
+    "name_en": "Greenland",
+    "language": "kl",
+    "locale": "kl-GL",
+    "currency": "DKK",
+    "currency_symbol": "kr.",
+    "timezone": "America/Nuuk",
+    "date_format": "d.m.Y",
+    "number": {
+        "dec": ",",
+        "thou": "."
+    },
+    "company_id": {
+        "label": "@CVR/GER number (Greenland)",
+        "short": "CVR/GER",
+        "regex": "^[0-9]{8}$",
+        "registry": null,
+        "checksum": null
+    },
+    "vat_id": {
+        "prefix": "",
+        "regex": "^$"
+    },
+    "zip": {
+        "regex": "^39[0-9]{2}$",
+        "prefix": "GL-"
+    },
+    "vat_portal": "Akileraartarnermut Aqutsisoqarfik (Skattestyrelsen)",
+    "draft": true,
+    "vat": {
+        "standard_rate": 0,
+        "codes": [],
+        "std_account_codes": []
+    },
+    "reminders": {
+        "fee_from_reminder": 2,
+        "fee_until_reminder": 3,
+        "min_days_between": 10,
+        "max_fee": 100,
+        "max_fee_currency": "DKK",
+        "law": "Som i Danmark (renteloven § 9b) - kontrollér, at reglen gælder i Grønland"
+    },
+    "chart": null,
+    "chart_classes": null,
+    "einvoice": [],
+    "payment_ref": "fik71",
+    "saft": null,
+    "legal": {
+        "annual_report": null,
+        "cvr_lock": false,
+        "oss": false,
+        "ioss": false,
+        "warning": "@Greenland has no VAT: invoices are made without VAT and there is no VAT return. An existing chart of accounts with VAT rates on the accounts must be changed to 0 %."
+    },
+    "vat_return": [],
+    "peppol": {
+        "endpoint_scheme": "0184"
+    }
+}

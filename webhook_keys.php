@@ -33,7 +33,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_key'])) {
         // ind PÅ det pågældende regnskab.
         $target_account_id = $_SESSION['account_id'] ?? null;
         $newly_generated_key = webhook_key_generate($label, $target_account_id);
-        log_action($conn, 'CREATE_WEBHOOK_KEY', 'webhook_keys', 0, null, ['label' => $label]);
+        if ($newly_generated_key === '') {
+            $newly_generated_key = null;
+            $msg = lang('@The key file could not be saved - no key was created.');  $msg_type = 'error';
+        } else {
+            log_action($conn, 'CREATE_WEBHOOK_KEY', 'webhook_keys', 0, null, ['label' => $label]);
+        }
     }
 }
 
@@ -48,10 +53,14 @@ if (isset($_GET['revoke'])) {
     $all = wk_mine(webhook_key_list());
     $target = null;
     foreach ($all as $k) { if (($k['id'] ?? null) === $id) { $target = $k; break; } }
-    if ($target && webhook_key_revoke($id)) {
+    // (en ukendt nøgle - eller en der ikke kunne skrives - viste bare siden igen, uden at sige at intet blev tilbagekaldt)
+    if (!$target) redirect('webhook_keys.php', '@Not found - it may already have been deleted.', 'error');
+    if (!empty($target['revoked'])) redirect('webhook_keys.php', '@The key is already revoked.', 'info');
+    if (webhook_key_revoke($id)) {
         log_action($conn, 'REVOKE_WEBHOOK_KEY', 'webhook_keys', 0, ['label' => $target['label'] ?? null], ['revoked' => true]);
         redirect('webhook_keys.php', '@Key revoked - any integration using it will stop working immediately.');
     }
+    redirect('webhook_keys.php', '@The key file could not be saved - the key was not revoked.', 'error');
 }
 
 htm_Header(capt: '@Webhook API Keys', mwidth: 1000);

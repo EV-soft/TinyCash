@@ -80,7 +80,11 @@ function _help_get_content($current_page, $target_lang) {
         } else {
             // Sektionen mangler! Vi oversætter automatisk via OpenAI API
             $apiKey = _help_get_openai_key();
-            
+            // Et mislykket forsøg prøves først igen efter en time - før blev det gentaget ved HVER sidevisning (op til 15 s
+            // ekstra ventetid pr. side, når tjenesten var nede eller nøglen ugyldig)
+            $fail_mark = sys_get_temp_dir() . '/tc_help_fail_' . md5(dirname(__DIR__) . '|' . $lang . '|' . $current_page);
+            if (is_file($fail_mark) && time() - (int)@filemtime($fail_mark) < 3600) $apiKey = '';
+
             if (!empty($apiKey)) {
                 $payload = [
                     "model" => "gpt-4o-mini", // Hurtig og præcis til strukturerede tekst-oversættelser
@@ -103,7 +107,6 @@ function _help_get_content($current_page, $target_lang) {
                 curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
                 curl_setopt($ch, CURLOPT_TIMEOUT, 15);
                 $response = curl_exec($ch);
-                curl_close($ch);
 
                 if ($response) {
                     $res_data = json_decode($response, true);
@@ -121,6 +124,7 @@ function _help_get_content($current_page, $target_lang) {
                         $help_lines = $translated_lines;
                     }
                 }
+                if (!isset($translated_lines) || !is_array($translated_lines)) @touch($fail_mark);
             }
         }
     }
@@ -161,29 +165,7 @@ function htm_HelpSystem() {
         </div>
     </div>';
     ?>
-    <script>
-    if (typeof interact === 'undefined') {
-        var script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js';
-        document.head.appendChild(script);
-    }
-    function initHelpDrag() {
-        if (typeof interact === 'undefined') { setTimeout(initHelpDrag, 100); return; }
-        if (window.helpDragInitialized) return;
-        window.helpDragInitialized = true;
-        interact('#help-modal-container').draggable({
-            allowFrom: '#help-modal-header',
-            listeners: {
-                move(event) {
-                    var target = event.target, x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx, y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
-                    target.style.transform = 'translate(' + x + 'px, ' + y + 'px)'; target.setAttribute('data-x', x); target.setAttribute('data-y', y);
-                }
-            }
-        });
-    }
-    function openHelpSystem() { var c = document.getElementById('help-modal-container'); if (c) { c.style.display = 'block'; initHelpDrag(); } }
-    function closeHelpSystem() { var c = document.getElementById('help-modal-container'); if (c) c.style.display = 'none'; }
-    </script>
+    <script src="<?php echo tc_asset('assets/tc-help.js'); ?>"></script>
     <?php
 }
 
@@ -340,7 +322,6 @@ function scanBilagMedOpenAI($file_path) {
     $response   = curl_exec($ch);
     $curl_error = curl_error($ch);
     $http_status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
 
     if ($response === false) {
         return ['error' => 'Kunne ikke kontakte OpenAI: ' . $curl_error];

@@ -110,7 +110,7 @@ if ($res) {
              'hint' => $row['is_active'] ? '@Pause' : '@Resume', 'type' => 'warning'];
 
         $data[] = [
-            htmlspecialchars($row['supplier'] ?: '---') . '<br><small style="color:var(--text-muted);">' . fmt_dk((float)$row['amount']) . ' DKK/' . lang($interval_labels[$row['interval_type']] ?? $row['interval_type']) . '</small>',
+            htmlspecialchars($row['supplier'] ?: '---') . '<br><small style="color:var(--text-muted);">' . fmt_dk((float)$row['amount']) . ' ' . htmlspecialchars(setting('currency', 'DKK')) . '/' . lang($interval_labels[$row['interval_type']] ?? $row['interval_type']) . '</small>',
             $row['account_id'] . ' - ' . htmlspecialchars($row['acc_name'] ?? '---'),
             lang($interval_labels[$row['interval_type']] ?? $row['interval_type']),
             $row['next_run_date'] ? date(CONF_DATE_FORMAT, strtotime($row['next_run_date'])) : '-',

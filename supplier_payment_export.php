@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['exp_ids']) && is_arra
         // RETTET: beløbet var altid udgiftens KRONEbeløb uden valuta - en regning på 1.000 EUR stod som "7460,00" og
         // ville blive betalt med 7.460 i leverandørens valuta. Nu fakturaens eget beløb og valuta (kolonnen Valuta).
         $base_cur = strtoupper((string)($global_settings['currency'] ?? 'DKK'));
-        fputcsv($output, [lang('@Supplier'), lang('@Reg. No.'), lang('@Account No.'), lang('@Amount'), lang('@Currency'), lang('@Reference')], ';');
+        fputcsv($output, [lang('@Supplier'), lang('@Reg. No.'), lang('@Account No.'), lang('@Amount'), lang('@Currency'), lang('@Reference')], ';', '"', '');
         $id_list = implode(',', $ids);
         $res = DB::query($conn, "SELECT e.*, s.supplier_name, s.supplier_reg_no, s.supplier_account_no
             FROM expenses e JOIN suppliers s ON e.supplier_id = s.supplier_id
@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['exp_ids']) && is_arra
                     fmt_dk_input(!empty($r['orig_currency']) && (float)($r['orig_amount'] ?? 0) != 0 ? (float)$r['orig_amount'] : (float)$r['amount']),
                     !empty($r['orig_currency']) && (float)($r['orig_amount'] ?? 0) != 0 ? strtoupper($r['orig_currency']) : $base_cur,
                     lang('@Voucher') . ' ' . $r['voucher_no'],
-                ], ';');
+                ], ';', '"', '');
             }
         }
         fclose($output);
@@ -79,7 +79,8 @@ if (!$supplier_module_ready) {
 } elseif (!$has_bank_cols) {
     htm_Banner('<i class="fa fa-triangle-exclamation"></i> ' . lang('@Supplier bank details are not set up yet. Run the migration under System -> Maintenance -> Database migration, then add reg./account numbers on each supplier.'), 'warning');
 } else {
-    $res = DB::query($conn, "SELECT e.exp_id, e.amount, e.voucher_no, e.due_date, s.supplier_name, s.supplier_reg_no, s.supplier_account_no
+    $spe_fx = db_has_column($conn, 'expenses', 'orig_currency') && db_has_column($conn, 'expenses', 'orig_amount');
+    $res = DB::query($conn, "SELECT e.exp_id, e.amount, e.voucher_no, e.due_date" . ($spe_fx ? ", e.orig_currency, e.orig_amount" : "") . ", s.supplier_name, s.supplier_reg_no, s.supplier_account_no
         FROM expenses e JOIN suppliers s ON e.supplier_id = s.supplier_id
         WHERE e.is_cancelled = 0 AND e.voucher_no IS NOT NULL AND e.due_date IS NOT NULL AND e.paid_date IS NULL
           AND (e.exp_type IS NULL OR e.exp_type != 'income') AND e.amount > 0
@@ -93,7 +94,10 @@ if (!$supplier_module_ready) {
             '<input type="checkbox" name="exp_ids[]" value="' . (int)$r['exp_id'] . '" ' . ($has_bank_details ? '' : 'disabled') . ' onchange="updateSpeCount()">',
             htmlspecialchars($r['supplier_name']) . ($has_bank_details ? '' : ' <span style="color:var(--color-danger); font-size:0.8em;" data-hint="' . htmlspecialchars(lang('@No bank details registered for this supplier')) . '">(' . lang('@No bank details') . ')</span>'),
             date(CONF_DATE_FORMAT, strtotime($r['due_date'])),
-            fmt_dk((float)$r['amount']) . ' ' . $cur,
+            // Samme beløb og valuta som betalingsfilen (en regning på 1.000 EUR viste her 7.460 DKK)
+            !empty($r['orig_currency']) && (float)($r['orig_amount'] ?? 0) != 0
+                ? fmt_dk((float)$r['orig_amount']) . ' ' . htmlspecialchars(strtoupper($r['orig_currency'])) . ' <span style="color:var(--text-muted); font-size:0.85em;">(' . fmt_dk((float)$r['amount']) . ' ' . $cur . ')</span>'
+                : fmt_dk((float)$r['amount']) . ' ' . $cur,
         ];
     }
     if (empty($rows)) {

@@ -26,14 +26,16 @@ if (isset($_GET['lang'])) {
 } */
 
 // --- 2. GLOBAL DEBUG CONTROL ---
-if (isset($_GET['Debug']) && $_GET['Debug'] === 'true') {
+// Fejl VISES kun med ?Debug=true for en indlogget bruger (eller den lokale udviklingsserver) - før kunne enhver, også
+// uden login, få filstier og SQL-fejl vist. Fejl LOGGES altid: error_reporting(0) slog også logningen fra, så hverken
+// advarsler eller fatale fejl (en hvid side) nogensinde kom i system_errors.log eller systemsundhedens tjek.
+error_reporting(E_ALL);
+if (isset($_GET['Debug']) && $_GET['Debug'] === 'true' && (!empty($_SESSION['user_id']) || PHP_SAPI === 'cli-server')) {
     ini_set('display_errors', 1);
     ini_set('display_startup_errors', 1);
-    error_reporting(E_ALL);
     $GLOBAL_DEBUG_ALERT = '<div style="background:red; color:white; padding:5px; position:fixed; bottom:0; right:0; z-index:9999; font-size:10px; opacity:0.7;">DEBUG ACTIVE</div>';
 } else {
     ini_set('display_errors', 0);
-    error_reporting(0);
 }
 
 // --- 3. DYNAMISK KONFIGURATIONSLÆSER ---
@@ -141,6 +143,21 @@ if (session_status() === PHP_SESSION_ACTIVE) {
     $_SESSION['db_type'] = $db_type;
 }
 
+// Testpakken (tools/tests/run_tests.php): en isoleret SQLite-database via miljøvariablen TINYCASH_TEST_DB - kun fra
+// kommandolinjen og PHP's indbyggede testserver, aldrig under en rigtig webserver
+$tc_test_db = in_array(PHP_SAPI, ['cli', 'cli-server'], true) ? (string)getenv('TINYCASH_TEST_DB') : '';
+if ($tc_test_db !== '') $db_type = 'sqlite';
+// ... eller en isoleret MySQL-database: mysql://bruger:kode@vært:port/tinycash_test_xxx (navnet SKAL starte med
+// tinycash_test, så testpakken aldrig kan ramme en rigtig database)
+if (str_starts_with($tc_test_db, 'mysql://')) {
+    $tc_u = parse_url($tc_test_db);
+    $tc_name = ltrim((string)($tc_u['path'] ?? ''), '/');
+    if (!preg_match('/^tinycash_test\w*$/', $tc_name)) die("TINYCASH_TEST_DB: MySQL-databasens navn skal starte med tinycash_test\n");
+    $db_type = 'mysql';
+    $db_settings = ['DB_HOST' => ($tc_u['host'] ?? '127.0.0.1') . (isset($tc_u['port']) ? ':' . $tc_u['port'] : ''), 'DB_USER' => urldecode($tc_u['user'] ?? 'root'),
+                    'DB_PASS' => urldecode($tc_u['pass'] ?? ''), 'DB_NAME' => $tc_name];
+}
+
 // --- 5. DATABASE CONNECTION (DYNAMISK MOTOR) ---
 if ($db_type === 'sqlite') {
     // SQLite Engine
@@ -156,11 +173,15 @@ if ($db_type === 'sqlite') {
     }
 
     $db_path_abs = realpath($db_dir_abs) . '/' . basename($db_path_rel);
+    if ($tc_test_db !== '') $db_path_abs = $tc_test_db;      // (testpakken - se ovenfor)
 
-    $pdo = new PDO('sqlite:' . $db_path_abs);
+    // PHP 8.4+: PDO::connect() giver Pdo\Sqlite med createFunction(); sqliteCreateFunction() er forældet fra 8.5
+    $pdo = class_exists('Pdo\Sqlite') ? PDO::connect('sqlite:' . $db_path_abs) : new PDO('sqlite:' . $db_path_abs);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     // SQLite's LOWER()/LIKE kender kun A-Z - "ælling" fandt ikke "Ælling". tc_lower() er Unicode (bruges af search.php)
-    $pdo->sqliteCreateFunction('tc_lower', fn($v) => $v === null ? null : mb_strtolower((string)$v, 'UTF-8'), 1);
+    $tc_lower = fn($v) => $v === null ? null : mb_strtolower((string)$v, 'UTF-8');
+    if ($pdo instanceof Pdo\Sqlite) $pdo->createFunction('tc_lower', $tc_lower, 1);
+    else                            $pdo->sqliteCreateFunction('tc_lower', $tc_lower, 1);
 
     // Global $conn skal være vores PDO objekt for at Shim virker
     $conn = $pdo;
@@ -179,7 +200,9 @@ if ($db_type === 'sqlite') {
     // fejlede:..."-besked nedenfor - denne try/catch fanger begge fejltilstande (den ældre false-retur OG den
     // nyere kastede undtagelse) ens.
     try {
-        $conn = @mysqli_connect($db_host, $db_user, $db_pass, $db_name);
+        $db_port = null;      // ("vært:port" - fx testpakkens lokale MariaDB)
+        if (preg_match('/^(.+):(\d+)$/', $db_host, $hp)) { $db_host = $hp[1];  $db_port = (int)$hp[2]; }
+        $conn = @mysqli_connect($db_host, $db_user, $db_pass, $db_name, $db_port);
     } catch (\Throwable $e) {
         die("MySQL forbindelse fejlede: " . $e->getMessage());
     }
@@ -213,7 +236,11 @@ function db_ts_param(string $local): string {
 // flyttet til inc/data/, som allerede har sit eget "Require all denied"
 // (se inc/data/.htaccess) og rummer databasen i forvejen.
 ini_set('log_errors', 1);
-ini_set('error_log', __DIR__ . '/data/system_errors.log');
+// (testpakken logger ved siden af sin testdatabase - ellers fyldte hver testkørsel den rigtige fejllog med forventede fejl)
+ini_set('error_log', $tc_test_db !== '' ? sys_get_temp_dir() . '/tinycash_test_errors.log' : __DIR__ . '/data/system_errors.log');
+// Loggen roteres ved 5 MB (den forrige del gemmes som .1) - ellers voksede den uden grænse på webhotellet
+$tc_err_log = (string)ini_get('error_log');
+if ($tc_err_log !== '' && @filesize($tc_err_log) > 5 * 1048576) @rename($tc_err_log, $tc_err_log . '.1');
 
 // Indstillingerne hentes én gang pr. forespørgsel; enhver skrivning til settings gennem DB-klassen glemmer dem igen
 // (tc_settings_touched()). setting('nøgle', standard) giver standardværdien hvis nøglen mangler eller er tom.
@@ -244,10 +271,16 @@ function tc_settings_touched($sql): void {
     if (isset($GLOBALS['tc_settings_cache']) && preg_match('/^\s*(INSERT|UPDATE|DELETE|REPLACE)\b[\s\S]*\bsettings\b/i', (string)$sql)) tc_settings_forget();
 }
 
+require_once __DIR__ . '/country.inc.php';      // landepakken (talformat, momssats, ...) - læses først når den bruges
+
 // --- 6. INDSTILLINGER  ---
 $global_settings = get_settings($conn);
 $current_date_format = (!empty($global_settings['date_format'])) ? $global_settings['date_format'] : 'd.m.Y';
 define('CONF_DATE_FORMAT', $current_date_format);
+// Tidszonen pr. regnskab (Firmaindstillinger); ellers TIMEZONE i env.ini, ellers landepakkens
+$tc_tz_set = trim((string)($global_settings['timezone'] ?? ''));
+if ($tc_tz_set === '' && trim((string)($config['TIMEZONE'] ?? '')) === '') $tc_tz_set = (string)tc_country_pack('timezone', '');
+if ($tc_tz_set !== '' && $tc_tz_set !== date_default_timezone_get() && in_array($tc_tz_set, timezone_identifiers_list(), true)) date_default_timezone_set($tc_tz_set);
 
 // SPROG-LOGIK ER FJERNET HERFRA. STYRES UDELUKKENDE AF AUTH.INC.PHP.
 
@@ -278,8 +311,8 @@ function parse_dk_number($s): float {
             $s = str_replace(',', '', $s);   // komma var tusindtalsseparator (fx "1,500.00")
         }
     } elseif ($has_comma) {
-        // Kun komma til stede - dansk konvention, det er decimal-tegnet.
-        $s = str_replace(',', '.', $s);
+        // Kun komma til stede: decimaltegnet i lande med komma-decimal (Danmark), ellers tusindtalsseparatoren
+        $s = tc_num_sep()[0] === '.' ? str_replace(',', '', $s) : str_replace(',', '.', $s);
     }
     // Kun punktum (eller intet separator-tegn) til stede: allerede gyldig
     // float-syntaks (matcher hvad en native <input type="number"> selv ville
@@ -309,7 +342,29 @@ function tc_num($raw, ?float $min = null, ?float $max = null): ?float {
 function tc_pct($raw): ?float {
     return tc_num($raw, 0, 100);
 }
+// EAN-/GLN-lokationsnummer (13 cifre med GS1-kontrolciffer, fx en offentlig myndigheds e-faktura-adresse).
+// Returnerer de 13 cifre, '' for tomt, null for ugyldigt.
+function tc_ean($raw): ?string {
+    $d = preg_replace('/[\s-]/', '', (string)$raw);
+    if ($d === '') return '';
+    if (!preg_match('/^\d{13}$/', $d)) return null;
+    $sum = 0;
+    for ($i = 0; $i < 12; $i++) $sum += (int)$d[$i] * ($i % 2 ? 3 : 1);
+    return (10 - $sum % 10) % 10 === (int)$d[12] ? $d : null;
+}
 // Findes kontoen i kontoplanen? (en konto der er slået fra, findes stadig - den må bare ikke vælges i nye bilag)
+// Resultatet før $date, der ikke er lukket ind på egenkapitalen (resultatkontienes samlede saldo før datoen, uden
+// årsafslutning har den ikke været 0), og egenkapitalkontoen det hører til (den laveste) - til SAF-T-primo. [beløb, konto|0]
+function saft_prior_result($conn, string $date): array {
+    $d = DB::escape($conn, $date);
+    $r = DB::fetch_row(DB::query($conn, "SELECT COALESCE(SUM(l.amount), 0) FROM ledger l JOIN journal j ON j.jou_id = l.jou_id JOIN accounts a ON a.acc_id = l.acc_id
+                                       WHERE a.acc_type IN ('income', 'expense') AND j.jou_date < '$d'"));
+    $prior = round((float)($r[0] ?? 0), 2);
+    if (abs($prior) < 0.005) return [0.0, 0];
+    $eq = DB::fetch_row(DB::query($conn, "SELECT MIN(acc_id) FROM accounts WHERE acc_type = 'equity'"));
+    return [$prior, (int)($eq[0] ?? 0)];
+}
+
 function tc_account_ok($conn, $acc_id): bool {
     $acc_id = (int)$acc_id;
     return $acc_id > 0 && (bool)DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = $acc_id"));
@@ -337,6 +392,9 @@ function tc_invoice_status_label(?string $status): string {
     return isset($keys[$s]) ? lang($keys[$s]) : htmlspecialchars(ucfirst($s));
 }
 
+// Et kort fingeraftryk af en brugers kodeords-hash (gemt i sessionen ved login; ændres kodeordet, passer det ikke længere)
+function tc_pw_fingerprint(string $hash): string { return $hash === '' ? '' : substr(hash('sha256', $hash), 0, 16); }
+
 // Regnskabsåret (fiscal_years) der indeholder $date - ellers kalenderåret. [start, slut]. Rapporternes standardperiode:
 // date('Y-01-01') var forkert for et forskudt regnskabsår (fx 1/7-30/6)
 function tc_fiscal_year_bounds($conn, ?string $date = null): array {
@@ -345,22 +403,52 @@ function tc_fiscal_year_bounds($conn, ?string $date = null): array {
         $d = DB::escape($conn, $date);
         $r = DB::fetch_assoc(DB::query($conn, "SELECT start_date, end_date FROM fiscal_years WHERE start_date <= '$d' AND end_date >= '$d' ORDER BY start_date DESC LIMIT 1"));
         if ($r && tc_is_date((string)$r['start_date'])) return [(string)$r['start_date'], (string)$r['end_date']];
+        // Ikke oprettet endnu (det nye år oprettes først ved lukningen af det gamle): det nærmeste kendte regnskabsår
+        // forskudt hele år - ellers blev 1/7-31/12 i et forskudt år regnet som en del af kalenderåret
+        if ($fy = tc_fiscal_year_extrapolate($conn, $date)) return $fy;
     }
     return [substr($date, 0, 4) . '-01-01', substr($date, 0, 4) . '-12-31'];
 }
+// Det regnskabsår der indeholder $date, udledt af det nærmeste oprettede år (samme start-dag, hele år frem/tilbage), eller null
+function tc_fiscal_year_extrapolate($conn, string $date): ?array {
+    $d = DB::escape($conn, $date);
+    $r = DB::fetch_assoc(DB::query($conn, "SELECT start_date FROM fiscal_years WHERE start_date <= '$d' ORDER BY start_date DESC LIMIT 1"))
+      ?: DB::fetch_assoc(DB::query($conn, "SELECT start_date FROM fiscal_years ORDER BY start_date ASC LIMIT 1"));
+    $s = substr((string)($r['start_date'] ?? ''), 0, 10);
+    if (!tc_is_date($s) || substr($s, 5) === '01-01') return null;      // (et kalenderår giver samme svar som standarden)
+    $y = (int)substr($date, 0, 4);
+    $start = $y . substr($s, 4);
+    if ($start > $date) $start = ($y - 1) . substr($s, 4);
+    if (!tc_is_date($start)) return null;      // (29/2 som startdag)
+    return [$start, date('Y-m-d', strtotime("$start +1 year -1 day"))];
+}
+// Regnskabsåret "$year" = det regnskabsår der slutter i $year (1/7/2025-30/6/2026 er 2026); ellers kalenderåret
+function tc_fiscal_year_of($conn, int $year): array {
+    if (db_has_table($conn, 'fiscal_years')) {
+        $r = DB::fetch_assoc(DB::query($conn, "SELECT start_date, end_date FROM fiscal_years WHERE end_date >= '$year-01-01' AND end_date <= '$year-12-31' ORDER BY end_date DESC LIMIT 1"));
+        if ($r && tc_is_date((string)$r['start_date']) && tc_is_date((string)$r['end_date'])) return [(string)$r['start_date'], (string)$r['end_date']];
+        // (ikke oprettet endnu: regnskabsåret der slutter i $year, udledt af de oprettede år)
+        if ($fy = tc_fiscal_year_extrapolate($conn, "$year-12-31")) {
+            if ((int)substr($fy[1], 0, 4) === $year) return $fy;
+            if ($fy2 = tc_fiscal_year_extrapolate($conn, ($year - 1) . "-12-31")) if ((int)substr($fy2[1], 0, 4) === $year) return $fy2;
+        }
+    }
+    return ["$year-01-01", "$year-12-31"];
+}
 
-// Tal i dansk format. fmt_dk(): til visning, 1.234,56. fmt_dk_input(): til et inputfelt eller en CSV-celle,
-// 1234,56 (ingen tusindtalsseparator - læses igen af parse_dk_number() og af dansk Excel).
-// Maskinformat (OIOUBL/XML, 1234.56) er stadig number_format($n, 2, '.', '').
+// Tal i landets format (landepakkens number.dec/thou - i Danmark 1.234,56). fmt_dk(): til visning.
+// fmt_dk_input(): til et inputfelt eller en CSV-celle, uden tusindtalsseparator (1234,56) - læses igen af
+// parse_dk_number() og af landets Excel. Maskinformat (OIOUBL/XML, 1234.56) er stadig number_format($n, 2, '.', '').
 function fmt_dk($n, int $dec = 2): string {
-    return number_format((float)$n, $dec, ',', '.');
+    [$d, $t] = tc_num_sep();
+    return number_format((float)$n, $dec, $d, $t);
 }
 // En sats/procent uden overflødige nuller: 25 -> "25", 12.5 -> "12,5". (fmt_dk($rate, 0) viste 12,5 % som "13 %")
 function fmt_pct($n): string {
-    return rtrim(rtrim(fmt_dk($n, 2), '0'), ',');
+    return rtrim(rtrim(fmt_dk($n, 2), '0'), tc_num_sep()[0]);
 }
 function fmt_dk_input($n, int $dec = 2): string {
-    return number_format((float)$n, $dec, ',', '');
+    return number_format((float)$n, $dec, tc_num_sep()[0], '');
 }
 
 // Findes tabellen/kolonnen (er migrationen kørt)? Begge motorer, uden fejl hvis tabellen mangler. Kolonnelisten
@@ -545,6 +633,7 @@ class DB {
                 }
                 return $stmt;
             } else {
+                self::$stmt_affected = null;
                 return mysqli_query($conn, $sql);
             }
         } catch (Exception $e) {
@@ -572,13 +661,13 @@ class DB {
     // via layout_settings). Guard tilføjet alle fire steder.
     public static function fetch_assoc($result) {
         global $db_type;
-        if ($result === false || $result === null) return false;
+        if ($result === false || $result === null || $result === true) return false;      // (true = en skrivning uden resultatsæt)
         if ($result instanceof SQLiteBufferedResult) return $result->fetch('assoc');
         return ($db_type === 'sqlite') ? $result->fetch(PDO::FETCH_ASSOC) : mysqli_fetch_assoc($result);
     }
     public static function fetch_row($result) {
         global $db_type;
-        if ($result === false || $result === null) return false;
+        if ($result === false || $result === null || $result === true) return false;      // (true = en skrivning uden resultatsæt)
         if ($result instanceof SQLiteBufferedResult) return $result->fetch('num');
         return ($db_type === 'sqlite') ? $result->fetch(PDO::FETCH_NUM) : mysqli_fetch_row($result);
     }
@@ -595,6 +684,7 @@ class DB {
     public static function insert($conn, $table, $data) {
             global $db_type;
             if ($table === 'settings') tc_settings_forget();
+            self::$stmt_affected = null;
             $keys = array_keys($data);
             $fields = implode(", ", $keys);
             // Lav pladsholdere: SQLite/PDO bruger '?', MySQLi bruger '?' (hvis vi bruger prepared statements)
@@ -623,16 +713,23 @@ class DB {
             return $stmt;
         } else {
             $stmt = mysqli_prepare($conn, $sql);
+            if (!$stmt) return false;
             // Her forenkler vi: Vi antager kun strenge for nu, eller du kan udvide
-            $types = str_repeat("s", count($params)); 
-            mysqli_stmt_bind_param($stmt, $types, ...$params);
-            mysqli_stmt_execute($stmt);
-            return mysqli_stmt_get_result($stmt);
+            $types = str_repeat("s", count($params));
+            if ($params) mysqli_stmt_bind_param($stmt, $types, ...$params);
+            if (!mysqli_stmt_execute($stmt)) return false;
+            // En UPDATE/DELETE/INSERT har intet resultatsæt - mysqli_stmt_get_result() giver da false, også når den lykkedes.
+            // Alle "claim"-mønstre (if (!$claim || DB::affected_rows(...) < 1)) fejlede derfor altid på MySQL: en udgift
+            // kunne ikke betales, et tilbud ikke skifte status osv. Som på SQLite: noget sandt ved succes.
+            // (antallet tages fra statementet - mysqli_affected_rows($conn) giver -1 efter et prepared statement på PHP 8.5)
+            self::$stmt_affected = (int)mysqli_stmt_affected_rows($stmt);
+            $res = mysqli_stmt_get_result($stmt);
+            return ($res === false && mysqli_stmt_errno($stmt) === 0) ? true : $res;
         }
     }
     public static function num_rows($result) {
         global $db_type;
-        if ($result === false || $result === null) return 0;
+        if ($result === false || $result === null || $result === true) return 0;
         if ($result instanceof SQLiteBufferedResult) return $result->numRows();
         if ($db_type === 'sqlite') {
             // Fallback for evt. resultater der ikke gik gennem DB::query()
@@ -646,17 +743,61 @@ class DB {
     // NYT: Transaktionsstøtte - kræves af expense_actions.php (og ethvert andet sted, der skal garantere flere
     // sammenhørende opdateringer enten lykkes helt eller fortrydes helt, fx annullering af en bogført udgift +
     // synkronisering af journalen i samme operation).
+    // Indlejring: en bogføringsfunktion kan selv starte en transaktion, også når kalderen allerede har en - den inderste
+    // bliver et SAVEPOINT (begge motorer), så den kan rulles tilbage alene, og kun den yderste committer rigtigt.
+    private static int $tx_depth = 0;
     public static function begin_transaction($conn) {
         global $pdo, $db_type;
-        return ($db_type === 'sqlite') ? $pdo->beginTransaction() : mysqli_begin_transaction($conn);
+        if (self::$tx_depth > 0) {
+            self::exec_raw($conn, 'SAVEPOINT tc_sp' . self::$tx_depth);
+            self::$tx_depth++;
+            return true;
+        }
+        $ok = ($db_type === 'sqlite') ? $pdo->beginTransaction() : mysqli_begin_transaction($conn);
+        if ($ok) self::$tx_depth = 1;
+        return $ok;
     }
     public static function commit($conn) {
         global $pdo, $db_type;
+        if (self::$tx_depth > 1) {
+            self::$tx_depth--;
+            self::exec_raw($conn, 'RELEASE SAVEPOINT tc_sp' . self::$tx_depth);
+            return true;
+        }
+        self::$tx_depth = 0;
         return ($db_type === 'sqlite') ? $pdo->commit() : mysqli_commit($conn);
     }
     public static function rollback($conn) {
         global $pdo, $db_type;
-        return ($db_type === 'sqlite') ? $pdo->rollBack() : mysqli_rollback($conn);
+        if (self::$tx_depth > 1) {
+            self::$tx_depth--;
+            self::exec_raw($conn, 'ROLLBACK TO SAVEPOINT tc_sp' . self::$tx_depth);
+            self::exec_raw($conn, 'RELEASE SAVEPOINT tc_sp' . self::$tx_depth);
+            return true;
+        }
+        self::$tx_depth = 0;
+        if ($db_type === 'sqlite') return $pdo->inTransaction() ? $pdo->rollBack() : false;
+        return mysqli_rollback($conn);
+    }
+    public static function in_transaction(): bool {
+        return self::$tx_depth > 0;
+    }
+    // Kører $fn i en transaktion (indlejret = savepoint): alt eller intet. Returnerer $fn's værdi; en fejl ruller tilbage og
+    // kastes videre. Brug den i enhver funktion der skriver et bilag (journal + ledger + evt. følgetabeller).
+    public static function transaction($conn, callable $fn) {
+        self::begin_transaction($conn);
+        try {
+            $result = $fn();
+            self::commit($conn);
+            return $result;
+        } catch (\Throwable $e) {
+            self::rollback($conn);
+            throw $e;
+        }
+    }
+    private static function exec_raw($conn, string $sql): void {
+        global $pdo, $db_type;
+        if ($db_type === 'sqlite') $pdo->exec($sql); else mysqli_query($conn, $sql);
     }
     public static function prepare($conn, $sql) {
         global $pdo, $db_type;
@@ -671,6 +812,7 @@ class DB {
     public static function update($conn, $table, $data, $where_field, $where_value) {
         global $db_type;
         if ($table === 'settings') tc_settings_forget();
+        self::$stmt_affected = null;
         $fields = "";
         foreach (array_keys($data) as $key) {
             $fields .= "$key = ?, ";
@@ -717,6 +859,10 @@ class DB {
             // (backup_restore_worker.php: DROP TABLE + reimport) ville derfor stille
             // fjerne beskyttelsen igen, selvom selve tabellerne kom tilbage korrekt.
             // Fundet ved samme arbejde som selve append-only-triggerne blev tilføjet.
+            // Indeksene manglede også - efter en gendannelse var bl.a. de unikke indeks væk (webbutikkens ordre-id, så en
+            // genfremsendt ordre blev bogført to gange, og varenummeret). (sql er NULL for SQLite's egne autoindeks.)
+            $idxRes = $pdo->query("SELECT sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%'");
+            foreach ($idxRes as $idx) $sqlDump .= $idx['sql'] . ";\n";
             $trigRes = $pdo->query("SELECT sql FROM sqlite_master WHERE type='trigger'");
             foreach ($trigRes as $trig) {
                 if (!empty($trig['sql'])) $sqlDump .= $trig['sql'] . ";\n";
@@ -804,9 +950,10 @@ class DB {
         if ($db_type === 'sqlite') {
             return ($result instanceof PDOStatement) ? $result->rowCount() : 0;
         } else {
-            return mysqli_affected_rows($conn);
+            return ($result === true && self::$stmt_affected !== null) ? self::$stmt_affected : mysqli_affected_rows($conn);
         }
     }
+    private static ?int $stmt_affected = null;      // (kun sat af den seneste prepare_and_execute - DB::query() nulstiller)
     public static function stmt_bind_param(&$stmt, $types, ...$params) {
         global $db_type;
         if ($db_type !== 'sqlite') {
@@ -1153,12 +1300,19 @@ function expense_get_lines($conn, int $exp_id): array {
         $gross  = (float)$r['amount'];
         $rate   = (isset($r['line_vat_rate']) && $r['line_vat_rate'] !== null && $r['line_vat_rate'] !== '') ? (float)$r['line_vat_rate'] : null;
         if ($rate === null) {
-            $acc_row = DB::fetch_assoc(DB::query($conn, "SELECT vat_rate FROM accounts WHERE acc_id = $acc_id"));
-            $rate = (float)($acc_row['vat_rate'] ?? 0);
+            $acc_row = DB::fetch_assoc(DB::query($conn, "SELECT vat_rate, acc_type FROM accounts WHERE acc_id = $acc_id"));
+            // (en salgskonto uden sats har landets standardsats, som på fakturaen og i bankafstemningen)
+            $rate = ($acc_row && $acc_row['vat_rate'] === null && $acc_row['acc_type'] === 'income') ? tc_vat_std_rate() : (float)($acc_row['vat_rate'] ?? 0);
         }
         $vat = ($rate > 0) ? round($gross * $rate / (100 + $rate), 2) : 0.0;
         $net = round($gross - $vat, 2);
-        $result[] = ['account_id' => $acc_id, 'gross' => $gross, 'vat_rate' => $rate, 'vat' => $vat, 'net' => $net, 'description' => $r['description'] ?? null];
+        // Omvendt betalingspligt (EU-køb m.m.): fakturaen er uden moms, så beløbet er netto. Momsen beregnes oven i
+        // og bogføres både som skyldig (rc_acc) og som købsmoms - rc_vat, uden at ændre betalingen. Se tc_vat_rc_info().
+        $rc = tc_vat_rc_info($conn, $acc_id);
+        $rc_vat = 0.0;
+        if ($rc) { $vat = 0.0;  $net = $gross;  $rate = 0.0;  $rc_vat = round($gross * $rc['rate'] / 100, 2); }
+        $result[] = ['account_id' => $acc_id, 'gross' => $gross, 'vat_rate' => $rate, 'vat' => $vat, 'net' => $net, 'description' => $r['description'] ?? null,
+                     'rc_vat' => $rc_vat, 'rc_acc' => $rc ? $rc['acc'] : 0, 'rc_type' => $rc ? $rc['type'] : null];
     }
     return $result;
 }
@@ -1228,16 +1382,56 @@ function invoice_credited_dkk($conn, int $inv_id): float {
     if ($res) while ($r = DB::fetch_assoc($res)) $sum += invoice_dkk_totals($conn, (int)$r['inv_id'])['incl'];
     return round($sum, 2);
 }
-// Det åbne beløb på en faktura (DKK): total + kreditnotaer - betalinger
+// Bogførte rykkergebyrer på en faktura (DKK) - en del af det kunden skylder på fakturaen (se inc/reminder.inc.php)
+function invoice_fees_dkk($conn, int $inv_id): float {
+    if (!db_has_table($conn, 'invoice_fees')) return 0.0;
+    return round((float)(DB::fetch_row(DB::query($conn, "SELECT COALESCE(SUM(amount), 0) FROM invoice_fees WHERE inv_id = $inv_id"))[0] ?? 0), 2);
+}
+// Samme som SQL-udtryk til lister (fakturaen har alias $alias); 0 uden tabellen
+// Dubletkontrollen ved bankimport (CSV, CAMT) gælder kun linjer på samme bankkonto - en linje uden konto (NULL/0) hører
+// til standard-bankkontoen. Før blev en ens linje på en anden konto (samme dato, tekst og beløb) afvist som dublet.
+function tc_bank_dup_acc_sql(int $acc_id): string {
+    $def = (int)setting('conf_acc_bank', 5000);
+    return "COALESCE(NULLIF(acc_id, 0), $def) = " . ($acc_id > 0 ? $acc_id : $def);
+}
+function invoice_fees_sql($conn, string $alias = 'i'): string {
+    return db_has_table($conn, 'invoice_fees') ? "(SELECT COALESCE(SUM(fe.amount), 0) FROM invoice_fees fe WHERE fe.inv_id = $alias.inv_id)" : '0';
+}
+// Det åbne beløb på en faktura (DKK): total + kreditnotaer + rykkergebyrer - betalinger
 function invoice_open_dkk($conn, int $inv_id): float {
     $paid = DB::fetch_assoc(DB::query($conn, "SELECT COALESCE(SUM(amount), 0) AS paid FROM invoice_payments WHERE inv_id = $inv_id"));
-    return round(invoice_dkk_totals($conn, $inv_id)['incl'] + invoice_credited_dkk($conn, $inv_id) - (float)($paid['paid'] ?? 0), 2);
+    return round(invoice_dkk_totals($conn, $inv_id)['incl'] + invoice_credited_dkk($conn, $inv_id) + invoice_fees_dkk($conn, $inv_id) - (float)($paid['paid'] ?? 0), 2);
 }
 // Samme kreditnotabeløb som et SQL-udtryk til lister (fakturaen har alias $alias)
 function invoice_credited_sql($conn, string $alias = 'i'): string {
     $disc = invoice_discount_sql($conn, 'cl.');
     return "(SELECT COALESCE(SUM(cl.quantity * cl.price_each $disc * (100 + cl.line_vat_rate) / 100.0 * COALESCE(NULLIF(ci.exch_rate, 0), 1)), 0)"
          . " FROM invoices ci JOIN invoice_lines cl ON cl.inv_id = ci.inv_id WHERE ci.credit_ref = $alias.inv_id)";
+}
+
+// ÅBNE FAKTURAER - den ene definition alle lister og rapporter bruger (før havde hver side sin egen kopi af formlen og sit
+// eget statusfilter, og de gik i utakt: et gebyr manglede ét sted, en krediteret faktura med et skyldigt gebyr et andet).
+// Som SQL-udtryk for fakturaen med alias $alias, i bogføringsvalutaen (samme beløb som invoice_open_dkk() pr. faktura):
+//   invoice_total_sql = linjer inkl. moms x kurs + kreditnotaer (negative) + bogførte rykkergebyrer
+//   invoice_paid_sql  = registrerede betalinger
+//   invoice_open_sql  = total - betalt (negativt = kunden har penge til gode)
+function invoice_total_sql($conn, string $alias = 'i'): string {
+    $disc = invoice_discount_sql($conn, 'tl.');
+    return "((SELECT COALESCE(SUM(tl.quantity * tl.price_each $disc * (100 + tl.line_vat_rate) / 100.0), 0) FROM invoice_lines tl WHERE tl.inv_id = $alias.inv_id)"
+         . " * COALESCE(NULLIF($alias.exch_rate, 0), 1) + " . invoice_credited_sql($conn, $alias) . " + " . invoice_fees_sql($conn, $alias) . ")";
+}
+function invoice_paid_sql(string $alias = 'i'): string {
+    return "(SELECT COALESCE(SUM(tp.amount), 0) FROM invoice_payments tp WHERE tp.inv_id = $alias.inv_id)";
+}
+function invoice_open_sql($conn, string $alias = 'i'): string {
+    return "(" . invoice_total_sql($conn, $alias) . " - " . invoice_paid_sql($alias) . ")";
+}
+// De fakturaer der kan have et restbeløb: bogførte originaler (ikke kladder, ikke kreditnotaerne selv - de indgår i
+// originalens total). Status alene siger ikke om der er noget åbent: 'credited' kan stadig skylde et gebyr eller have
+// en betaling der skal tilbage, og 'paid' kan være overbetalt. Brug "... AND " . invoice_open_sql(...) . " > 0.01" for
+// det kunden skylder.
+function invoice_open_where(string $alias = 'i'): string {
+    return "$alias.credit_ref IS NULL AND LOWER($alias.inv_status) <> 'draft'";
 }
 
 // Nummerserie til Tilbud/Ordrebekræftelse (quotes) - egen tæller
@@ -1264,14 +1458,22 @@ function next_quote_no($conn) {
     }
 
     $row = DB::fetch_assoc(DB::query($conn, "SELECT next_no FROM quote_no_counter WHERE id = 1"));
+    $q_max = fn() => (int)(DB::fetch_row(DB::query($conn, "SELECT MAX(quote_no) FROM quotes"))[0] ?? 0);
     if (!$row) {
-        DB::insert($conn, 'quote_no_counter', ['id' => 1, 'next_no' => 1]);
+        DB::insert($conn, 'quote_no_counter', ['id' => 1, 'next_no' => $q_max() + 1]);
     }
 
-    // Samme atomiske UPDATE-mønster som next_voucher_no()/next_invoice_no().
-    DB::query($conn, "UPDATE quote_no_counter SET next_no = next_no + 1 WHERE id = 1");
-    $row = DB::fetch_assoc(DB::query($conn, "SELECT next_no FROM quote_no_counter WHERE id = 1"));
-    return (int)$row['next_no'] - 1;
+    // Samme atomiske UPDATE-mønster som next_voucher_no()/next_invoice_no(). Et brugt nummer springes over - en
+    // nulstillet tæller (fx efter flytning af data mellem regnskaber) gav ellers to tilbud med samme nummer.
+    for ($guard = 0; $guard < 3; $guard++) {
+        DB::query($conn, "UPDATE quote_no_counter SET next_no = next_no + 1 WHERE id = 1");
+        $row = DB::fetch_assoc(DB::query($conn, "SELECT next_no FROM quote_no_counter WHERE id = 1"));
+        $no  = (int)$row['next_no'] - 1;
+        if (!DB::fetch_assoc(DB::query($conn, "SELECT quote_id FROM quotes WHERE quote_no = $no LIMIT 1"))) return $no;
+        $max = $q_max();
+        DB::query($conn, "UPDATE quote_no_counter SET next_no = " . ($max + 1) . " WHERE id = 1 AND next_no <= $max");
+    }
+    return $q_max() + 1;
 }
 
 // -----------------------------------------------------------------------

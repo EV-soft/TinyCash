@@ -37,6 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_dispose'])) {
     $fa_floor = max((string)$asset['acquisition_date'], (string)($asset['last_depreciated_date'] ?? ''));
     if (!tc_is_date($dispose_date)) {
         $err = lang('@Please enter a valid date.');
+    } elseif (trim((string)($_POST['disposal_proceeds'] ?? '')) !== '' && tc_num($_POST['disposal_proceeds']) === null) {      // ("12.500 kr" blev til 12,50)
+        $err = lang('@Please enter a valid amount.');
     // RETTET: et negativt salgsprovenu (fx "-5.000" tastet for et tab) blev taget imod - banken blev KREDITERET
     // som om virksomheden betalte køberen, og tabet blev dobbelt så stort. Et tab beregnes selv ud fra restværdien.
     } elseif ($proceeds < 0) {
@@ -63,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_dispose'])) {
             // 25 % moms til salgsmomskontoen; fjern fluebenet ved fx salg af et aktiv, der er købt uden
             // momsfradrag.
             $ds_settings = get_settings($conn);
-            $sale_vat   = !empty($_POST['proceeds_incl_vat']) ? round($proceeds * 25 / 125, 2) : 0.0;
+            $sale_vat   = !empty($_POST['proceeds_incl_vat']) ? tc_vat_of_gross((float)$proceeds) : 0.0;
             $net_proceeds = round($proceeds - $sale_vat, 2);
             $gain_loss  = round($net_proceeds - $nbv, 2);
             $acc_bank   = (int)($ds_settings['conf_acc_bank'] ?? 5000);
@@ -123,11 +125,13 @@ echo '</div>';
 
 echo '<form method="post">';
 csrf_field();
-htm_Field(icon: 'fa-calendar', labl: '@Disposal Date', name: 'disposed_date', valu: date('Y-m-d'), type: 'date', extr: 'required leg:left', wdth: '50%');
-htm_Field(icon: 'fa-money-bill-wave', labl: '@Sale Proceeds', name: 'disposal_proceeds', valu: '0,00', type: 'text',
+// (efter en fejl beholdes det indtastede - før stod salgsprisen igen på 0,00)
+$fa_posted = ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_dispose']));
+htm_Field(icon: 'fa-calendar', labl: '@Disposal Date', name: 'disposed_date', valu: (string)($_POST['disposed_date'] ?? date('Y-m-d')), type: 'date', extr: 'required leg:left', wdth: '50%');
+htm_Field(icon: 'fa-money-bill-wave', labl: '@Sale Proceeds', name: 'disposal_proceeds', valu: (string)($_POST['disposal_proceeds'] ?? '0,00'), type: 'text',
     extr: 'leg:left style="text-align:right;"', wdth: '50%', hint: '@Enter 0 if the asset was scrapped with no sale value.');
-echo '<label style="display:block; margin:6px 0 0; font-size:0.9em;"><input type="checkbox" name="proceeds_incl_vat" value="1" checked> '
-   . lang('@The sale price includes 25 % VAT (posted as output VAT)') . '</label>';
+echo '<label style="display:block; margin:6px 0 0; font-size:0.9em;"><input type="checkbox" name="proceeds_incl_vat" value="1"' . ($fa_posted && empty($_POST['proceeds_incl_vat']) ? '' : ' checked') . '> '
+   . sprintf(lang('@The sale price includes %s %% VAT (posted as output VAT)'), fmt_pct(tc_vat_std_rate())) . '</label>';
 
 echo '<div style="margin-top:20px; display:flex; gap:10px; border-top:1px solid var(--border-color); padding-top:20px;">';
 echo '<button type="submit" name="confirm_dispose" value="1" style="flex:2; background:var(--color-danger); color:white; border:none; padding:12px; border-radius:4px; font-weight:bold; cursor:pointer;">'

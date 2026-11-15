@@ -41,7 +41,8 @@ doc_profile_banner($s);
 doc_toolbar_();
 if (!empty($cust['cust_email'])) {
     htm_Button(icon: 'fa-envelope', labl: '@Send by Mail', type: 'info',
-        attr: 'onclick="' . htm_confirm_js(sprintf(lang('@Send this account statement to %s?'), $cust['cust_email']), "tcPost('customer_statement_send.php?id=$cust_id$period_qs')") . '" data-hint="' . lang('@Email this account statement to the customer') . '"');
+        attr: 'onclick="docPdfSend(\'statement-page\', \'customer_statement_send.php?id=' . $cust_id . htmlspecialchars($period_qs, ENT_QUOTES) . '\', \'' . doc_file_label('Kontoudtog', '@Account Statement') . '_' . $cust_id . '.pdf\', '
+            . htmlspecialchars(json_encode(sprintf(lang('@Send this account statement to %s?'), $cust['cust_email'])), ENT_QUOTES) . ', this); return false;" data-hint="' . lang('@Email the account statement with this letter attached as a PDF (you are asked first)') . '"');      // (blanketten som PDF)
 }
 if ($lay['on']) {
     htm_Button(icon: 'fa-pencil-ruler', labl: '@Design Mode', type: 'secondary', attr: 'onclick="docToggleDesign()" id="sDesignBtn" data-hint="' . lang('@Move, resize and hide the blocks of the account statement - saved in the layout shown') . '"');
@@ -58,8 +59,9 @@ doc_lang_push($cust_lang);
 $co = doc_company($s);
 $layouts = $lay['blocks'];
 echo '<div class="doc-paper" id="statement-page">';
+echo doc_shapes_html(il_shapes($conn, (int)$lay['id']));      // (layoutets grafik - bag teksten)
 doc_head_blocks($layouts, $co, $cust['cust_name'], $cust['cust_address'] ?? '',
-    !empty($cust['cust_cvr']) ? '<br>' . lang('@CVR') . ': ' . htmlspecialchars($cust['cust_cvr']) : '');
+    !empty($cust['cust_cvr']) ? '<br>' . tc_company_id_short() . ': ' . htmlspecialchars($cust['cust_cvr']) : '');
 
 // Titel + kundenummer, dato, periode
 doc_block('block-inv-no', '<div style="font-size:20px; font-weight:bold; text-transform:uppercase;">' . lang('@Account Statement') . '</div>'
@@ -103,6 +105,6 @@ doc_lang_pop();
 $GLOBALS['no_floating_menu'] = true;
 echo doc_flow_js('statement-page', 'block-lines');
 echo doc_pdf_js();
-if ($lay['on']) echo doc_design_js(['paper' => 'statement-page', 'layout' => $lay['id'], 'doc' => 'statement', 'btn' => 'sDesignBtn',
+if ($lay['on']) echo doc_design_js(['paper' => 'statement-page', 'layout' => $lay['id'], 'doc' => 'statement', 'shapes' => il_shapes_ready($conn), 'btn' => 'sDesignBtn',
     'url' => 'customer_statement_view.php?id=' . $cust_id . $period_qs, 'names' => array_map(fn($l) => $l['name'], $lay['list'])]);
 htm_Footer();

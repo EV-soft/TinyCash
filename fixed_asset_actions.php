@@ -102,6 +102,7 @@ $assets = [];
 if ($res) { while ($row = DB::fetch_assoc($res)) { $assets[] = $row; } }
 
 $posted_count = 0;
+$failed_names = [];      // (en fejlet afskrivning blev kun logget - siden sagde "ingen afskrivning var forfalden")
 
 foreach ($assets as $asset) {
     $due = fa_calculate_due_depreciation($asset, $today);
@@ -134,12 +135,12 @@ foreach ($assets as $asset) {
 
         // RETTET: alle skyldige måneder blev bogført som ÉT beløb med DAGS dato - kørt i januar for
         // oktober-december, landede hele afskrivningen i det nye år (forkert regnskabsår, forkert resultat i begge
-        // år). Nu én postering pr. kalenderår, dateret på den sidste afskrevne måned i året.
+        // år). Nu én postering pr. regnskabsår, dateret på den sidste afskrevne måned i året.
         $monthly = round(round((float)$asset['acquisition_cost'] - (float)$asset['residual_value'], 2) / ((int)$asset['useful_life_years'] * 12), 2);
         $chunks = [];      // år => ['date' => sidste afskrevne måneds dato, 'months' => n]
         for ($mi = 1; $mi <= $months; $mi++) {
             $md = fa_add_months($start_from, $mi);
-            $yk = substr($md, 0, 4);
+            $yk = tc_fiscal_year_bounds($conn, $md)[1];      // (pr. REGNSKABSÅR - et forskudt år 1/7-30/6 blev før delt ved nytår)
             $chunks[$yk] = ['date' => $md, 'months' => ($chunks[$yk]['months'] ?? 0) + 1];
         }
         $parts = [];  $carry = 0;  $left = $amount;  $keys = array_keys($chunks);
@@ -175,12 +176,17 @@ foreach ($assets as $asset) {
 
         DB::commit($conn);
         $posted_count++;
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         DB::rollback($conn);
         // En fejlet postering for ÉT aktiv skal ikke stoppe resten af
         // batch-kørslen for de øvrige aktiver.
         error_log('[fixed_asset_actions] Afskrivning fejlede for asset_id ' . $asset['asset_id'] . ': ' . $e->getMessage());
+        $failed_names[] = $asset['asset_name'] . ' (' . $e->getMessage() . ')';
     }
 }
 
+if ($failed_names) {
+    if ($posted_count > 0) flash(sprintf(lang('@Depreciation posted for %d asset(s).'), $posted_count), 'success');
+    redirect('fixed_asset_list.php', htmlspecialchars(sprintf(lang('@Depreciation could not be posted for: %s'), implode('; ', $failed_names))), 'error');
+}
 redirect('fixed_asset_list.php', $posted_count > 0 ? sprintf(lang('@Depreciation posted for %d asset(s).'), $posted_count) : '@No depreciation was due for any active asset.');

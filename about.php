@@ -97,7 +97,7 @@ htm_Card_(capt: '@TinyCash Accounting System', wdth: '500'); // fold: kun releva
               color: inherit;"> <strong>TinyCash </strong> 
               <?php echo
                 lang('@is a lightweight accounting system designed for small/smaller businesses, that want full control over their own data.').
-                '<br>'. lang('@Supports invoicing in foreign currencies with automatic exchange rate lookup and currency gain/loss posting on settlement - the ledger itself is always kept in DKK.');
+                '<br>'. lang('@Supports invoicing in foreign currencies with automatic exchange rate lookup and currency gain/loss posting on settlement - the ledger is kept in the base currency chosen under Settings.');
               ?>
     </p>
 

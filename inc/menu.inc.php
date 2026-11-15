@@ -31,14 +31,16 @@
 // login) - modul-baserede punkter (Projekter) udelades i så fald.
 function get_menu_structure($conn): array {
     $module_projects = false;
-    // NYT: momsrapporten (vat_report.php) er formet efter dansk momsindberetning (TastSelv-afrunding) og udelades
-    // derfor af menuen for en virksomhed, der bruger en anden bogføringsvaluta end DKK - siden selv spærrer stadig
-    // direkte adgang via require_dkk_base_currency.
-    $is_dkk_base = true;
+    // Momsangivelse og årsrapport følger landepakken (tc_pack_feature); siderne spærrer selv via require_country_feature
+    $has_vat_report = true;  $has_annual = true;  $has_oss = false;  $has_ioss = false;  $has_eu_list = false;
     if ($conn) {
         $company_settings = get_settings($conn);
         $module_projects  = !empty($company_settings['module_projects']) && $company_settings['module_projects'] == '1';
-        $is_dkk_base      = strtoupper($company_settings['currency'] ?? 'DKK') === 'DKK';
+        $has_vat_report   = tc_pack_feature('vat_report');
+        $has_annual       = tc_pack_feature('annual_report');
+        $has_oss          = tc_pack_feature('oss');
+        $has_ioss         = ioss_registered();      // (kun når virksomheden har et IOSS-nummer - ordningen er sjælden)
+        $has_eu_list      = tc_pack_feature('eu_sales_list');
     }
 
     $menu = [
@@ -90,6 +92,9 @@ function get_menu_structure($conn): array {
         'inventory'  => ['label' => '📦 ' . lang('@Inventory'),   'hint' => lang('@Stock levels and products'),
             'submenu' => [
                 'inventory_status.php'       => '📉 ' . lang('@Stock Status'),
+                'picking_list.php'           => '📋 ' . lang('@Picking and Packing List'),
+                'stock_receipt.php'          => '📥 ' . lang('@Goods Receipt'),
+                'stock_count.php'            => '🧮 ' . lang('@Stock Count'),
                 'product_edit.php?id=0'      => '➕ ' . lang('@Create New Product'),
             ]],
         'accounting' => ['label' => '💰 ' . lang('@Accounting'),  'hint' => lang('@Ledger, banking, reports and settings'),
@@ -148,15 +153,18 @@ function get_menu_structure($conn): array {
                         ],
                         ['ledger_view.php'        => '📖 ' . lang('@General Ledger'),
                          'journal_entry.php'      => '✍️ ' . lang('@Manual Journal Entry')],
-                        $is_dkk_base ? ['vat_report.php' => '🧾 ' . lang('@VAT Report')] : [],
+                        $has_vat_report ? ['vat_report.php' => '🧾 ' . lang('@VAT Report')] : [],
+                        $has_eu_list ? ['eu_sales_list.php' => '📋 ' . lang('@EU sales without VAT')] : [],
+                        $has_oss ? ['oss_report.php' => '🇪🇺 ' . lang('@EU-OSS Return')] : [],
+                        $has_ioss ? ['ioss_report.php' => '📦 ' . lang('@IOSS Return')] : [],
                         [
                             'aging_report.php'       => '📆 ' . lang('@Aging Report'),
                             'report_income.php'      => '📊 ' . lang('@Profit & Loss Report'),
                             // NYT: budget_edit.php -.php's nye afvigelseskolonne.
                             'budget_edit.php'        => '🎯 ' . lang('@Account Budgets'),
                             'balance_sheet.php'      => '⚖️ ' . lang('@Balance Sheet'),
-                            'annual_report.php'      => '📜 ' . lang('@Annual Report'),
-                        ]
+                        ],
+                        $has_annual ? ['annual_report.php' => '📜 ' . lang('@Annual Report')] : []
                     )],
                 '---_1'                      => '---',
                 'bank_import_step1.php'      => '📥 ' . lang('@Import Bank File'),
@@ -196,7 +204,7 @@ function get_menu_structure($conn): array {
                 'company_settings.php'       => '🏢 ' . lang('@Settings'),
                 'vat_codes.php'              => '🧾 ' . lang('@VAT Codes & Rates'),
                 'user_list.php'              => '🔑 ' . lang('@User Management'),
-                'my_2fa.php'                 => '🔐 ' . lang('@Two-Factor Login'),
+                'my_2fa.php'                 => '🔐 ' . lang('@Password and Two-Factor Login'),      // (også skift af eget kodeord)
                 'storage_browser.php'        => '📁 ' . lang('@Storage Browser'),
                 'webhook_keys.php'           => '🔗 ' . lang('@Webhook API Keys'),
                 'shop_connections.php'       => '🛒 ' . lang('@Web Shops'),
@@ -425,211 +433,12 @@ function showMenu() {
     // ═════════════════════════════════════════════════════════════════════════
     // CSS
     // ═════════════════════════════════════════════════════════════════════════
-    echo '<style>
-    /* ── Topnav ── */
-    .submenu { display:none; position:absolute; top:100%; left:0; background:var(--bg-submenu);
-        min-width:240px; box-shadow:0 8px 16px rgba(0,0,0,0.4); z-index:9100; border-radius:4px;
-        border:1px solid var(--border-subtle); pointer-events:auto; }
-    .has-sub:hover > .sub-submenu { display:block; }
-    .sub-submenu { display:none; position:absolute; left:100%; top:0; background:var(--bg-submenu);
-        min-width:220px; border:1px solid var(--border-subtle); border-radius:4px;
-        box-shadow:8px 0 16px rgba(0,0,0,0.4); }
-    .dropdown-item { display:block; padding:12px 15px; color:white; text-decoration:none; font-size:14px; cursor:pointer; }
-    .dropdown-item:hover { background:var(--bg-nav-hover); }
-    .nav-main-link { display:flex; flex-direction:column; align-items:center; text-decoration:none;
-        color:white; padding:8px 12px; min-width:80px; cursor:pointer; }
-    .lang-button { background:rgba(0,0,0,0.2); padding:8px 12px; border-radius:20px;
-        border:1px solid rgba(255,255,255,0.1); cursor:pointer; font-size:13px;
-        display:flex; align-items:center; gap:8px; }
-    .lang-dropdown-box { display:none; position:absolute; top:110%; right:0; background:var(--bg-submenu);
-        min-width:160px; box-shadow:0 8px 16px rgba(0,0,0,0.4); z-index:9500; border-radius:4px;
-        border:1px solid var(--border-subtle); }
-
-    /* ── Layout toggle-knap i topnav ── */
-    #menu-layout-toggle { background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.2);
-        color:white; cursor:pointer; font-size:18px; line-height:1; padding:5px 8px;
-        border-radius:5px; flex-shrink:0; margin-right:10px; }
-    #menu-layout-toggle:hover { background:rgba(0,0,0,0.45); }
-
-    /* ── Sidebar ── */
-    body.sidebar-mode { margin-left:214px !important; margin-right:20px !important; margin-top:4px !important; }
-    body.sidebar-mode #top-nav { display:none !important; }
-
-    /* z-index hævet fra 9200 til 10001 (bruger-rapporteret): sidebaren spænder
-       height:100vh med .sb-utils/.sb-logout nederst (margin-top:auto), som
-       dermed lå i samme skærmområde som den faste .floating-action-bar
-       (z-index:10000) og blev dækket af den - samme mønster som tidligere
-       fundet på notepad-knappen og tip-boksen i backup.php, se
-       floating-bar-overlap i hukommelsen. */
-    #tc-sidebar { display:none; position:fixed; top:0; left:0; width:215px; height:100vh;
-        box-sizing:border-box; background:var(--bg-nav); z-index:10001; overflow-y:auto; overflow-x:hidden;
-        flex-direction:column; box-shadow:4px 0 12px rgba(0,0,0,0.35); font-family:sans-serif; color:white; }
-    body.sidebar-mode #tc-sidebar { display:flex; }
-
-    /* RETTET (bruger-rapporteret: "menuens indikator for undermenu skjules
-       bag warning") - sb-item-elementets højrestillede pil (margin-left:auto) endte
-       lige inde under #sb-backup-warning-strimlen, som optager de yderste
-       22px af sidepanelets bredde. box-sizing:border-box ovenfor sikrer at
-       denne padding-right IKKE gør selve sidepanelet bredere (215px i alt,
-       stadig) - den presser i stedet det almindelige indhold (menu-punkter,
-       pile, firmanavn m.m.) 22px længere ind, så det aldrig overlapper
-       strimlen. Klassen sættes kun i PHP når advarslen rent faktisk vises. */
-    #tc-sidebar.has-backup-warning { padding-right:22px; }
-
-    /* Backup-advarsel i sidepanel-visning (bruger-anmodet: "90-grader
-       roteret langs menuens højre kant") - position:absolute ankrer til
-       #tc-sidebar selv (position:fixed er allerede en positioneringskontekst),
-       så strimlen ligger INDENFOR sidepanelets egen 215px bredde, ikke ud
-       over kanten ind over sideindholdet. writing-mode roterer teksten (og
-       ikonet) 90 grader i stedet for en transform:rotate()-krykke - det
-       giver naturlig topb-til-bund tekstflow uden manuel bredde-/højde-
-       ombytning. $backup_alert_short (kun første sætning) bruges her, da
-       den fulde advarselstekst ikke kan stå læsbart i en så smal bane - den
-       fulde tekst er stadig tilgængelig som data-hint (tooltip). */
-    /* RETTET (bruger-rapporteret: "hvid forgrund på gul bg er vanskelig at
-       læse på varselsbanner") - var(--color-warning) er gul/orange i alle 3
-       temaer (#f1c40f/#f39c12), hvid tekst derpå giver alt for lav kontrast.
-       Sort tekst giver solid kontrast (samme "sort på gul"-princip som
-       almindelig advarselsskiltning) uafhængigt af hvilket tema der er
-       aktivt. */
-    /* RETTET (bruger-anmodet): cursor:default -> pointer - stribens tekst
-       ("Backup er X dage gammel") var ren tekst uden noget link, selvom
-       den er altid synlig lige så længe backuppen faktisk er gammel. Et
-       klik fører nu direkte til backup.php i stedet for at kræve at
-       brugeren selv finder derhen gennem System-menuen. */
-    #sb-backup-warning { position:absolute; top:0; right:0; width:22px; height:100%;
-        box-sizing:border-box; background:var(--color-warning); color:#000; z-index:2;
-        writing-mode:sideways-lr; text-orientation:mixed;
-        display:flex; align-items:center; justify-content:center; text-align:center;
-        font-size:12px; font-weight:bold; padding:10px 0; overflow:hidden;
-        box-shadow:-2px 0 6px rgba(0,0,0,0.25); cursor:pointer; text-decoration:none; }
-
-    #tc-sidebar .sb-logo { padding:14px 12px 10px; border-bottom:1px solid rgba(255,255,255,0.1);
-        display:flex; flex-direction:row; align-items:center; gap:10px; }
-    #tc-sidebar .sb-toggle { background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.2);
-        color:white; cursor:pointer; font-size:16px; padding:5px 8px; border-radius:4px; flex-shrink:0; line-height:1; }
-    #tc-sidebar .sb-toggle:hover { background:rgba(0,0,0,0.5); }
-    #tc-sidebar .sb-logo-block { display:flex; flex-direction:column; gap:2px; min-width:0; }
-    #tc-sidebar .sb-logo-text { font-size:1.3em; font-weight:bold; line-height:1.1; }
-    #tc-sidebar .sb-logo-text span { color:var(--color-primary); }
-    #tc-sidebar .sb-company { font-size:10px; color:var(--text-light); opacity:0.85;
-        white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; }
-
-    #tc-sidebar .sb-item { display:flex; align-items:center; gap:9px; padding:10px 14px;
-        color:white; text-decoration:none; font-size:13.5px; cursor:pointer;
-        border-left:3px solid transparent; }
-    #tc-sidebar .sb-item:hover { background:var(--bg-nav-hover); }
-    #tc-sidebar .sb-item.active { border-left-color:var(--color-primary); background:rgba(0,0,0,0.15); }
-    #tc-sidebar .sb-item .sb-arrow { margin-left:auto; font-size:11px; opacity:0.6; transition:transform 0.2s; }
-    #tc-sidebar .sb-item.open .sb-arrow { transform:rotate(90deg); }
-
-    #tc-sidebar .sb-sub { display:none; background:rgba(0,0,0,0.25);
-        border-left:3px solid var(--color-primary); margin-left:10px; }
-    #tc-sidebar .sb-sub.open { display:block; }
-    #tc-sidebar .sb-sub a { display:block; padding:9px 12px 9px 14px;
-        color:rgba(255,255,255,0.9); text-decoration:none; font-size:13px;
-        border-bottom:1px solid rgba(255,255,255,0.05); }
-    #tc-sidebar .sb-sub a:hover { background:var(--bg-nav-hover); color:white; padding-left:18px; transition:padding 0.1s; }
-    #tc-sidebar .sb-sub a.active { color:white; font-weight:600; background:rgba(52,152,219,0.15); }
-    #tc-sidebar .sb-sub hr { border:0; border-top:1px solid rgba(255,255,255,0.15); margin:4px 0; }
-    #tc-sidebar .sb-subsub-toggle { cursor:pointer; display:flex; align-items:center;
-        padding:9px 12px 9px 14px; color:rgba(255,255,255,0.9); font-size:13px; gap:6px;
-        border-bottom:1px solid rgba(255,255,255,0.05); }
-    #tc-sidebar .sb-subsub-toggle:hover { background:var(--bg-nav-hover); }
-    #tc-sidebar .sb-subsub { display:none; background:rgba(0,0,0,0.2); }
-    #tc-sidebar .sb-subsub.open { display:block; }
-    #tc-sidebar .sb-subsub a { padding-left:24px; font-size:12px; }
-
-    #tc-sidebar .sb-utils { margin-top:auto; border-top:1px solid rgba(255,255,255,0.1);
-        padding:10px 10px 14px; display:flex; flex-direction:column; gap:8px; }
-    #tc-sidebar .sb-util-row { display:flex; align-items:center; gap:8px; font-size:12px; }
-    #tc-sidebar .sb-util-row button { background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.15);
-        color:white; border-radius:4px; cursor:pointer; font-size:13px; padding:3px 7px; }
-    #tc-sidebar .sb-util-row button:hover { background:rgba(0,0,0,0.4); }
-    #tc-sidebar .sb-logout { display:block; text-align:center; background:var(--color-danger);
-        color:white; text-decoration:none; padding:7px; border-radius:4px; font-size:13px; font-weight:bold; }
-    </style>';
+    echo '<link rel="stylesheet" href="' . tc_asset('assets/tc-menu.css') . '">';
 
     // ═════════════════════════════════════════════════════════════════════════
     // JavaScript
     // ═════════════════════════════════════════════════════════════════════════
-    echo '<script>
-    function adjustZoom(d) { document.body.style.zoom = (parseFloat(document.body.style.zoom || 1) + d); }
-    function toggleSub(el) {
-        var sub = el.nextElementSibling;
-        document.querySelectorAll(".submenu").forEach(s => { if (s !== sub) s.style.display = "none"; });
-        if (sub) sub.style.display = (sub.style.display === "block") ? "none" : "block";
-    }
-    function toggleTestLevel(currentLevel) {
-        var next = currentLevel + 1; if (next > 3) next = 1;
-        // RETTET: byggede FØR URL\x27en som href.split("?")[0] + "?set_level=" - men et "#" i adressen (fx efter et
-        // klik paa et href="#"-undermenu-/hjaelpe-link) blev haengende, saa "?set_level=" endte INDE i fragmentet
-        // ("side#?set_level=2") og aldrig naaede serveren: niveauet skiftede ikke. URL-API\x27et fjerner fragmentet
-        // og saetter parameteren korrekt, uanset hvad der ellers staar i adressen.
-        try {
-            var u = new URL(window.location.href);
-            u.hash = "";
-            u.searchParams.set("set_level", next);
-            window.location.href = u.toString();
-        } catch (e) {
-            window.location.href = window.location.pathname + "?set_level=" + next;
-        }
-    }
-    function toggleLangMenu(e) {
-        e.stopPropagation();
-        var m = document.getElementById("lang-options");
-        document.querySelectorAll(".submenu").forEach(s => s.style.display = "none");
-        m.style.display = (m.style.display === "block") ? "none" : "block";
-    }
-    function toggleTheme() {
-        var themes = ["light","custom","dark"];
-        var current = document.documentElement.getAttribute("data-theme") || "light";
-        if (!themes.includes(current)) current = "light";
-        var next = themes[(themes.indexOf(current) + 1) % themes.length];
-        document.documentElement.setAttribute("data-theme", next);
-        var d = new Date(); d.setTime(d.getTime() + 365*24*60*60*1000);
-        document.cookie = "theme=" + next + ";expires=" + d.toUTCString() + ";path=/;SameSite=Strict";
-        var icons = {light:"☀️", custom:"✨", dark:"🌙"};
-        ["theme-toggle-btn","sb-theme-btn"].forEach(id => {
-            var btn = document.getElementById(id);
-            if (btn) btn.innerText = icons[next];
-        });
-        fetch(window.location.href.split("?")[0] + "?set_theme_session=" + next + "&t=" + Date.now(),
-            {method:"GET", headers:{"X-Requested-With":"XMLHttpRequest"}}).catch(() => {});
-    }
-    function toggleFullscreen() {
-        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
-        else document.exitFullscreen();
-    }
-    function sbToggleSub(el) {
-        el.classList.toggle("open");
-        var sub = el.nextElementSibling;
-        if (sub) sub.classList.toggle("open");
-    }
-    function sbToggleSubSub(el) {
-        var sub = el.nextElementSibling;
-        if (sub) sub.classList.toggle("open");
-    }
-    function toggleMenuLayout() {
-        var next = (localStorage.getItem("tc_menu_layout") === "sidebar") ? "top" : "sidebar";
-        localStorage.setItem("tc_menu_layout", next);
-        document.body.classList.toggle("sidebar-mode", next === "sidebar");
-    }
-    // Anvend gemt layout straks (undgår flash)
-    (function() {
-        if (localStorage.getItem("tc_menu_layout") === "sidebar")
-            document.body.classList.add("sidebar-mode");
-    })();
-    window.onclick = function(e) {
-        if (!e.target.closest(".dropdown") && !e.target.closest(".custom-lang-dropdown"))
-            document.querySelectorAll(".submenu, #lang-options, #sb-lang-options").forEach(m => m.style.display = "none");
-    };
-    function toggleSbLang(e) {
-        e.stopPropagation();
-        var m = document.getElementById("sb-lang-options");
-        if (m) m.style.display = (m.style.display === "block") ? "none" : "block";
-    }
-    </script>';
+    echo '<script src="' . tc_asset('assets/tc-menu.js') . '"></script>';
 
     // ═════════════════════════════════════════════════════════════════════════ RENDER-HJÆLPER: sub-menu items
     // (bruges af BEGGE layouts) ═════════════════════════════════════════════════════════════════════════ Renderes
@@ -928,52 +737,7 @@ function showMenu() {
     // [data-menukey]-mærkning tilføjet ovenfor i denne funktion.
     if (($_SESSION['user_role'] ?? '') === 'admin') {
         ?>
-        <style>
-        /* RETTET (bruger-rapporteret: "ses ikke på sort baggrund"): manglede
-           en EKSPLICIT lys tekstfarve - arvede i stedet body's --text-main,
-           som i lys-temaet er MØRK tekst (#333) på selve --bg-submenu, der
-           bevidst ER en mørk baggrundsfarve i alle temaer (samme farve som
-           .dropdown-item/.nav-main-link allerede bruger --text-light til,
-           se disse klassers egen definition). */
-        #tc-menu-ctx { position:fixed; z-index:99999; background:var(--bg-submenu); color:var(--text-light);
-            border:1px solid var(--border-subtle); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,0.4);
-            min-width:270px; padding:6px; display:none; font-size:13px; }
-        #tc-menu-ctx label { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:4px;
-            cursor:pointer; color:var(--text-light); }
-        #tc-menu-ctx label:hover { background:rgba(255,255,255,0.1); }
-        #tc-menu-ctx input[type="checkbox"] { width:16px; height:16px; cursor:pointer; }
-        #tc-menu-ctx button { display:block; width:100%; text-align:left; background:none; border:none; color:var(--text-light);
-            padding:8px 10px; border-radius:4px; cursor:pointer; font-size:inherit; margin-top:4px; }
-        #tc-menu-ctx button:hover { background:rgba(255,255,255,0.1); }
-        #tc-menu-ctx hr { border:0; border-top:1px solid rgba(255,255,255,0.15); margin:6px 0; }
-        #tc-menu-ctx .tc-menu-ctx-label { padding:6px 10px 4px; font-size:11px; color:var(--text-light); opacity:0.7;
-            text-transform:uppercase; font-weight:bold; }
-        /* NYT (bruger-anmodet): markerer et højreklik-skjulbart FELT (ikke et
-           menupunkt) - samme kontekstmenu genbruges, se JS'en nedenfor. Kun
-           synlig for admins (hele denne blok er allerede admin-only).
-           RETTET (bruger-rapporteret, to runder):
-           1) "jeg ser ikke stiplet blå ramme" - brugte FØR var(--color-info),
-              som er en mørk gråblå (#34495e) i lys-temaet og en lysegrå
-              (#c4c6c8) i dark-temaet til badge-/tekstbrug, hverken tydeligt
-              "blå" eller kraftig nok. Erstattet med en FAST, tema-uafhængig
-              blå (#2196f3, altid blå uanset tema).
-           2) "det var ikke meningen at tilføje en ramme men at den
-              eksisterende blot ændrede udseende" - et almindeligt htm_Field()
-              har allerede sin egen <fieldset>-kant; at pakke DEN ind i endnu
-              en boks med sin egen kant gav en dobbelt/indlejret ramme-effekt.
-              ".tc-hideable-field fieldset" omfarver nu den EKSISTERENDE
-              fieldset-kant i stedet for at tilføje en ny udenom. Kun felter
-              der slet IKKE har nogen boks i forvejen (klassen "tc-no-
-              existing-box", se inc/field_visibility.inc.php's $has_own_box)
-              får en helt ny ramme tilføjet. */
-        .tc-hideable-field { display:inline-block; vertical-align:top; position:relative; max-width:100%; }
-        /* RETTET (bruger-anmodet, runde 28-opfølgning): fjernet den blålige
-           baggrundstoning på tillægsfelter - kun den stiplede blå kant er nu
-           tilbage som markering. */
-        .tc-hideable-field fieldset { border:2px dashed #2196f3 !important; }
-        .tc-hideable-field.tc-no-existing-box { border:2px dashed #2196f3; border-radius:6px; padding:6px 8px;
-            margin:3px; }
-        </style>
+        <link rel="stylesheet" href="<?php echo tc_asset('assets/tc-menuctx.css'); ?>">
         <div id="tc-menu-ctx">
             <div class="tc-menu-ctx-label"></div>
             <label><input type="checkbox" id="tc-menu-ctx-l1"> <span id="tc-menu-ctx-l1-txt"></span></label>
@@ -983,25 +747,9 @@ function showMenu() {
             <button type="button" id="tc-menu-ctx-restore"></button>
         </div>
         <script>
-        (function() {
-            // NYT (bruger-anmodet: "Det skal være valgbart L1 / L2 alene
-            // eller begge"): L1 og L2 kan nu skjules/vises helt uafhængigt
-            // af hinanden via to separate afkrydsningsfelter, i stedet for
-            // den tidligere ene "skjul begge på én gang"-knap. Nuværende
-            // tilstand kommer fra data-hidden-l1/data-hidden-l2 (udskrevet
-            // server-side ud fra det allerede indlæste $overrides, se
-            // $ctxAttrs() ovenfor i denne fil) - intet AJAX-kald nødvendigt
-            // bare for at ÅBNE menuen og se hvad der allerede er skjult.
-            var ctxKey = null, ctxHasChildren = false, ctxL1Initial = false, ctxL2Initial = false, ctxTarget = 'menu';
-            var menu = document.getElementById('tc-menu-ctx');
-            var labelEl = menu.querySelector('.tc-menu-ctx-label');
-            var l1Box = document.getElementById('tc-menu-ctx-l1');
-            var l2Box = document.getElementById('tc-menu-ctx-l2');
-            var l1Txt = document.getElementById('tc-menu-ctx-l1-txt');
-            var l2Txt = document.getElementById('tc-menu-ctx-l2-txt');
-            var saveBtn = document.getElementById('tc-menu-ctx-save');
-            var restoreBtn = document.getElementById('tc-menu-ctx-restore');
-            var TXT = {
+        window.tcMenuCtx = {
+            tok: <?php echo json_encode(csrf_token()); ?>,
+            txt: {
                 hideL1: <?php echo json_encode(lang('@Hidden for L1 (Minimal View)')); ?>,
                 hideL2: <?php echo json_encode(lang('@Hidden for L2 (Custom View)')); ?>,
                 save: <?php echo json_encode(lang('@Save')); ?>,
@@ -1011,100 +759,10 @@ function showMenu() {
                 doneField: <?php echo json_encode(lang('@Field visibility updated. Only an administrator can change it back (right-click the field again).')); ?>,
                 restored: <?php echo json_encode(lang('@Visibility restored to default.')); ?>,
                 error: <?php echo json_encode(lang('@Could not save this change.')); ?>
-            };
-            l1Txt.textContent = TXT.hideL1;
-            l2Txt.textContent = TXT.hideL2;
-            saveBtn.textContent = TXT.save;
-            restoreBtn.textContent = TXT.restore;
-            document.addEventListener('contextmenu', function(e) {
-                // NYT (bruger-anmodet): samme kontekstmenu genbruges nu til to
-                // FORSKELLIGE ting - et menupunkt ([data-menukey], mod
-                // menu_hide_action.php) eller et enkelt, markeret formularfelt
-                // ([data-fieldkey], mod field_hide_action.php, se inc/field_
-                // visibility.inc.php). closest() prøver menupunktet FØRST, da
-                // et felt aldrig kan ligge inden i et menupunkt, men et
-                // menupunkt (i sjældne tilfælde) teoretisk kunne indeholde et
-                // markeret felt - menupunktet skal derfor vinde ved en reel
-                // konflikt, ikke omvendt.
-                var el = e.target.closest('[data-menukey]');
-                var isField = false;
-                if (!el) {
-                    el = e.target.closest('[data-fieldkey]');
-                    isField = !!el;
-                }
-                if (!el) return;
-                e.preventDefault();
-                ctxTarget = isField ? 'field' : 'menu';
-                ctxKey = el.getAttribute(isField ? 'data-fieldkey' : 'data-menukey');
-                // Felter har ingen undermenupunkter - kaskade-advarslen er
-                // udelukkende relevant for menupunkter.
-                ctxHasChildren = !isField && el.getAttribute('data-haschildren') === '1';
-                labelEl.textContent = ctxKey;
-                l1Box.checked = el.getAttribute('data-hidden-l1') === '1';
-                l2Box.checked = el.getAttribute('data-hidden-l2') === '1';
-                ctxL1Initial = l1Box.checked;
-                ctxL2Initial = l2Box.checked;
-                menu.style.display = 'block';
-                var x = e.clientX, y = e.clientY;
-                var mw = 280, mh = 160;
-                if (x + mw > window.innerWidth) x = window.innerWidth - mw - 10;
-                if (y + mh > window.innerHeight) y = window.innerHeight - mh - 10;
-                menu.style.left = x + 'px';
-                menu.style.top = y + 'px';
-            });
-            document.addEventListener('click', function(e) {
-                if (!menu.contains(e.target)) menu.style.display = 'none';
-            });
-            function callAction(action, extra) {
-                var fd = new FormData();
-                fd.append('key', ctxKey);
-                fd.append('action', action);
-                if (extra) { for (var k in extra) fd.append(k, extra[k]); }
-                fd.append('csrf_token', <?php echo json_encode(csrf_token()); ?>);
-                var endpoint = (ctxTarget === 'field') ? 'field_hide_action.php' : 'menu_hide_action.php';
-                fetch(endpoint, { method: 'POST', body: fd })
-                    .then(function(r) { return r.json(); })
-                    .then(function(data) {
-                        menu.style.display = 'none';
-                        if (data.success) {
-                            alert(action === 'set_levels' ? (ctxTarget === 'field' ? TXT.doneField : TXT.doneMenu) : TXT.restored);
-                            window.location.reload();
-                        } else {
-                            alert(TXT.error + (data.error ? ' (' + data.error + ')' : ''));
-                        }
-                    })
-                    .catch(function() { menu.style.display = 'none'; alert(TXT.error); });
             }
-            saveBtn.addEventListener('click', function() {
-                // RETTET (selv-fanget, "find fem fejl"): sendte FØR altid
-                // BEGGE niveauers tilstand, uanset om brugeren reelt havde
-                // rørt ved dem - baseret på et snapshot taget da menuen blev
-                // åbnet. To administratorer der samtidig højreklikkede samme
-                // punkt og hver især kun ændrede ÉT niveau kunne dermed
-                // tabe hinandens ændring (den anden admins snapshot af det
-                // niveau VEDKOMMENDE ikke rørte var forældet og overskrev
-                // stille den første admins reelle ændring). Sender nu KUN
-                // det/de niveauer der faktisk blev ændret siden menuen blev
-                // åbnet - serveren beholder den aktuelle, friskt-læste værdi
-                // for et niveau der slet ikke indgår i requesten (se
-                // menu_hide_action.php's tilsvarende rettelse).
-                var l1Changed = l1Box.checked !== ctxL1Initial;
-                var l2Changed = l2Box.checked !== ctxL2Initial;
-                if (!l1Changed && !l2Changed) { menu.style.display = 'none'; return; }
-                // Advar kun om kaskaden når et niveau reelt SKIFTER fra synlig
-                // til skjult her og nu - ikke blot fordi det (evt. allerede
-                // fra før) står som skjult i det snapshot menuen blev åbnet med.
-                var newlyHidingChildren = ctxHasChildren &&
-                    ((l1Changed && l1Box.checked) || (l2Changed && l2Box.checked));
-                if (newlyHidingChildren && !confirm(TXT.warnChildren)) { menu.style.display = 'none'; return; }
-                var extra = {};
-                if (l1Changed) extra.hide_l1 = l1Box.checked ? '1' : '0';
-                if (l2Changed) extra.hide_l2 = l2Box.checked ? '1' : '0';
-                callAction('set_levels', extra);
-            });
-            restoreBtn.addEventListener('click', function() { callAction('restore'); });
-        })();
+        };
         </script>
+        <script src="<?php echo tc_asset('assets/tc-menuctx.js'); ?>"></script>
         <?php
     }
 }

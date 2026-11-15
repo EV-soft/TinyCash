@@ -1,0 +1,289 @@
+{
+    "code": "nl",
+    "iso": "NL",
+    "name": "Nederland",
+    "name_en": "Netherlands",
+    "language": "nl",
+    "locale": "nl-NL",
+    "currency": "EUR",
+    "currency_symbol": "€",
+    "timezone": "Europe/Amsterdam",
+    "date_format": "d-m-Y",
+    "number": {
+        "dec": ",",
+        "thou": "."
+    },
+    "company_id": {
+        "label": "@Chamber of Commerce number (KvK)",
+        "short": "KvK",
+        "regex": "^[0-9]{8}$",
+        "registry": null,
+        "checksum": null
+    },
+    "vat_id": {
+        "prefix": "NL",
+        "regex": "^NL[0-9]{9}B[0-9]{2}$"
+    },
+    "zip": {
+        "regex": "^[0-9]{4} ?[A-Za-z]{2}$",
+        "prefix": "NL-"
+    },
+    "vat_portal": "Mijn Belastingdienst Zakelijk (btw-aangifte)",
+    "vat": {
+        "standard_rate": 21,
+        "period": "quarter",
+        "codes": [
+            {
+                "id": "BTW21",
+                "name": "Btw hoog tarief 21%",
+                "rate": 21,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "BTW9",
+                "name": "Btw laag tarief 9%",
+                "rate": 9,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "VB21",
+                "name": "Voorbelasting 21%",
+                "rate": 21,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "VB9",
+                "name": "Voorbelasting 9%",
+                "rate": 9,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "ICL",
+                "name": "Intracommunautaire levering van goederen",
+                "rate": 0,
+                "type": "eu_goods_sale"
+            },
+            {
+                "id": "ICD",
+                "name": "Diensten aan ondernemers in andere EU-landen",
+                "rate": 0,
+                "type": "eu_services_sale"
+            },
+            {
+                "id": "EXP",
+                "name": "Uitvoer buiten de EU (0%)",
+                "rate": 0,
+                "type": "export"
+            },
+            {
+                "id": "VERL",
+                "name": "Binnenlandse verleggingsregeling (btw verlegd)",
+                "rate": 0,
+                "type": "reverse_domestic"
+            },
+            {
+                "id": "VRIJ",
+                "name": "Vrijgestelde omzet",
+                "rate": 0,
+                "type": "exempt"
+            },
+            {
+                "id": "ICV21",
+                "name": "Intracommunautaire verwerving van goederen 21%",
+                "rate": 21,
+                "type": "eu_goods_purchase"
+            },
+            {
+                "id": "ICD21",
+                "name": "Diensten uit andere EU-landen 21%",
+                "rate": 21,
+                "type": "eu_services_purchase"
+            },
+            {
+                "id": "IMP21",
+                "name": "Invoer van goederen met vergunning artikel 23 (21%)",
+                "rate": 21,
+                "type": "noneu_goods_purchase"
+            },
+            {
+                "id": "BED21",
+                "name": "Diensten van buiten de EU 21%",
+                "rate": 21,
+                "type": "noneu_services_purchase"
+            }
+        ],
+        "std_account_codes": []
+    },
+    "reminders": {
+        "fee_from_reminder": 99,
+        "fee_until_reminder": 99,
+        "min_days_between": 14,
+        "max_fee": 0,
+        "max_fee_currency": "EUR",
+        "law": "Besluit vergoeding voor buitengerechtelijke incassokosten (geen herinneringskosten; incassokosten pas na een veertiendagenbrief)"
+    },
+    "einvoice": [
+        "peppol_bis3"
+    ],
+    "payment_ref": "rf",
+    "legal": {
+        "annual_report": null,
+        "cvr_lock": false,
+        "oss": true,
+        "ioss": true,
+        "eu_sales_list": {
+            "name": "@Opgaaf intracommunautaire prestaties (ICP)",
+            "boxes": {
+                "all": "3b"
+            }
+        }
+    },
+    "vat_return": [
+        {
+            "box": "1a",
+            "label": "@1a: Supplies/services taxed at the standard rate 21 % (turnover)",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                21
+            ]
+        },
+        {
+            "box": "1a_vat",
+            "label": "@1a: VAT at 21 %",
+            "rule": "vat_of_net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                21
+            ]
+        },
+        {
+            "box": "1b",
+            "label": "@1b: Supplies/services taxed at the reduced rate 9 % (turnover)",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                9
+            ]
+        },
+        {
+            "box": "1b_vat",
+            "label": "@1b: VAT at 9 %",
+            "rule": "vat_of_net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                9
+            ]
+        },
+        {
+            "box": "sales_vat",
+            "label": "@Output VAT in the ledger (check: 1a + 1b)",
+            "rule": "setting_acc",
+            "sign": -1,
+            "setting": "conf_acc_vat",
+            "payable": 1
+        },
+        {
+            "box": "1e",
+            "label": "@1e: Supplies/services taxed at 0 % or not taxed with you (reverse charge)",
+            "rule": "net",
+            "types": [
+                "reverse_domestic"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "3a",
+            "label": "@3a: Supplies to countries outside the EU (exports)",
+            "rule": "net",
+            "types": [
+                "export"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "3b",
+            "label": "@3b: Supplies/services to countries within the EU",
+            "rule": "net",
+            "types": [
+                "eu_goods_sale",
+                "eu_services_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "4a",
+            "label": "@4a: Supplies/services from countries outside the EU",
+            "rule": "net",
+            "types": [
+                "noneu_goods_purchase",
+                "noneu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "4a_vat",
+            "label": "@4a: VAT on supplies/services from outside the EU",
+            "rule": "rc_vat",
+            "types": [
+                "noneu_goods_purchase",
+                "noneu_services_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "4b",
+            "label": "@4b: Supplies/services from countries within the EU",
+            "rule": "net",
+            "types": [
+                "eu_goods_purchase",
+                "eu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "4b_vat",
+            "label": "@4b: VAT on supplies/services from within the EU",
+            "rule": "rc_vat",
+            "types": [
+                "eu_goods_purchase",
+                "eu_services_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "5b",
+            "label": "@5b: Input VAT (voorbelasting)",
+            "rule": "setting_acc",
+            "sign": 1,
+            "setting": "conf_acc_purchase_vat",
+            "payable": -1
+        }
+    ],
+    "peppol": {
+        "endpoint_scheme": "0106",
+        "legal_scheme": "0106"
+    },
+    "chart": null,
+    "chart_classes": null,
+    "saft": null,
+    "draft": true
+}

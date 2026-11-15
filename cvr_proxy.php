@@ -48,11 +48,10 @@ ob_start();
 require_once 'inc/auth.inc.php';
 require_once 'inc/db_connect.inc.php';
 require_once 'inc/php2htm.lib.php';
-require_once 'inc/cvr_lookup.inc.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
 $cvr = preg_replace('/\D/', '', $_GET['cvr'] ?? '');
-echo json_encode(cvr_lookup_by_number($conn, $cvr), JSON_UNESCAPED_UNICODE);
+echo json_encode(tc_registry_lookup($conn, $cvr), JSON_UNESCAPED_UNICODE);      // landets firmaregister (inc/country.inc.php)
 ob_end_flush();
 ?>

@@ -40,19 +40,31 @@ if (!$table_exists) {
 if (isset($_GET['del']) && $_GET['del'] == 1) {
     $quote_id = (int)$_GET['id'];
     $del_row = DB::fetch_assoc(DB::query($conn, "SELECT status, cust_id, quote_date FROM quotes WHERE quote_id = $quote_id"));
-    if ($del_row && $del_row['status'] !== 'draft') {
+    if (!$del_row) redirect('quote_list.php', '@Not found - it may already have been deleted.', 'error');      // (meldte "slettet", selv om intet fandtes)
+    if ($del_row['status'] !== 'draft') {
+        redirect("quote_edit.php?id=$quote_id", '@This quote has already been sent and cannot be deleted. Reopen it to draft first if you need to remove it.', 'error');
+    }
+    // Statussen tjekkes i selve DELETE (et tilbud sendt i en anden fane efter tjekket blev ellers slettet), linjerne kun med
+    DB::begin_transaction($conn);
+    $qd_res = DB::query($conn, "DELETE FROM quotes WHERE quote_id = $quote_id AND status = 'draft'");
+    if (!$qd_res || DB::affected_rows($conn, $qd_res) < 1) {
+        DB::rollback($conn);
         redirect("quote_edit.php?id=$quote_id", '@This quote has already been sent and cannot be deleted. Reopen it to draft first if you need to remove it.', 'error');
     }
     DB::query($conn, "DELETE FROM quote_lines WHERE quote_id=$quote_id");
-    if (DB::query($conn, "DELETE FROM quotes WHERE quote_id=$quote_id") && $del_row) {
-        log_action($conn, 'DELETE_DRAFT_QUOTE', 'quotes', $quote_id, $del_row, null);
-    }
+    log_action($conn, 'DELETE_DRAFT_QUOTE', 'quotes', $quote_id, $del_row, null);
+    DB::commit($conn);
     redirect('quote_list.php', '@Deleted successfully');
 }
 
 // 2. HÅNDTER GEM / OPDATER
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_quote'])) {
     // Linjens momssats er et frit talfelt - en tastefejl som 250 eller -25 må ikke bogføres (tom linje = 0 %)
+    // Prisen og antallet var lige så frie - "abc" eller "500 kr" blev stille til 0 kr på linjen (et negativt beløb, fx en
+    // rabatlinje, er stadig tilladt)
+    foreach (['price_each', 'quantity'] as $nf) foreach ((array)($_POST[$nf] ?? []) as $nchk) {
+        if (trim((string)$nchk) !== '' && tc_num($nchk) === null) redirect("quote_edit.php?id=" . (int)($_POST['quote_id'] ?? 0), '@Please enter a valid amount.', 'error');
+    }
     foreach ((array)($_POST['line_vat'] ?? []) as $vchk) {
         if (trim((string)$vchk) !== '' && tc_pct($vchk) === null) redirect("quote_edit.php?id=" . (int)($_POST['quote_id'] ?? 0), '@The VAT rate must be between 0 and 100 %.', 'error');
     }
@@ -90,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_quote'])) {
             cust_id=$cust_id, quote_date='$quote_date', valid_until=$vu_sql,
             cust_reference='$cust_ref', quote_note='$quote_note', delivery_address='$deliv_addr',
             proj_id=$proj_sql
-            WHERE quote_id=$quote_id");
+            WHERE quote_id=$quote_id AND status = 'draft'");      // (et tilbud sendt/accepteret imens fik ellers ny kunde og nye datoer)
     } else {
         $quote_no = next_quote_no($conn);
         $save_ok = DB::query($conn, "INSERT INTO quotes
@@ -102,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_quote'])) {
     }
 
     if (!$save_ok) {
-        die(lang('@Error saving invoice: ') . DB::error($conn)); // samme fejltekst-nøgle som invoice_edit.php, generisk nok til begge
+        redirect($quote_id > 0 ? "quote_edit.php?id=$quote_id" : 'quote_list.php', lang('@Error saving to database:') . ' ' . htmlspecialchars((string)DB::error($conn)), 'error');      // (var en hvid side)
     }
 
     // Linjer - ryd og genskriv, samme mønster som invoice_edit.php
@@ -112,7 +124,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_quote'])) {
     // aldrig kunne bevares ved et almindeligt Gem her, selvom den findes i databasen. line_desc[] (et skjult felt
     // uafhængigt af select'ens værdi, se build_quote_line_row nedenfor) bærer nu linjens faktisk gemte tekst, så
     // en fritekst-linje hverken mistes eller ombyttes til selve select-værdien ved gem.
-    DB::query($conn, "DELETE FROM quote_lines WHERE quote_id=$quote_id");
+    // (som fakturaen: kun et tilbud der stadig er en kladde, får nye linjer - også hvis det blev sendt/accepteret imens)
+    DB::begin_transaction($conn);
+    DB::query($conn, "DELETE FROM quote_lines WHERE quote_id=$quote_id AND EXISTS (SELECT 1 FROM quotes WHERE quote_id=$quote_id AND status = 'draft')");
+    $qe_still = DB::fetch_row(DB::query($conn, "SELECT status FROM quotes WHERE quote_id=$quote_id" . (DB::is_sqlite() ? '' : ' FOR UPDATE')));
+    if (($qe_still[0] ?? '') !== 'draft') {
+        DB::rollback($conn);
+        redirect("quote_view.php?id=$quote_id", '@The quote was sent or accepted in the meantime - the lines were not changed.', 'error');
+    }
     if (isset($_POST['line_text']) && is_array($_POST['line_text'])) {
         foreach ($_POST['line_text'] as $k => $v) {
             $pid = isset($_POST['prod_id'][$k]) ? (int)$_POST['prod_id'][$k] : 0;
@@ -130,11 +149,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_quote'])) {
             }
             if ($qty <= 0 && ($pid > 0 || $existing_desc !== '')) $GLOBALS['tc_dropped_lines'] = ($GLOBALS['tc_dropped_lines'] ?? 0) + 1;      // RETTET: en udfyldt linje med antal 0 eller negativt forsvandt stille - nu en advarsel efter gem
             if ($qty <= 0 || ($pid <= 0 && $existing_desc === '')) continue;
-            DB::query($conn, "INSERT INTO quote_lines
+            if (!DB::query($conn, "INSERT INTO quote_lines
                 (quote_id, line_text, quantity, price_each, line_vat_rate, prod_id, proj_id)
-                VALUES ($quote_id, '$txt', $qty, $prc, $vat, $pid, $proj_sql)");
+                VALUES ($quote_id, '$txt', $qty, $prc, $vat, $pid, $proj_sql)")) {
+                $qe_err = (string)DB::error($conn);  DB::rollback($conn);
+                redirect("quote_edit.php?id=$quote_id", lang('@Error saving to database:') . ' ' . htmlspecialchars($qe_err), 'error');
+            }
         }
     }
+    DB::commit($conn);
     if (!empty($GLOBALS['tc_dropped_lines'])) flash(sprintf(lang('@%d line(s) with a quantity of 0 or less were not saved - use a credit note to reduce an invoice.'), $GLOBALS['tc_dropped_lines']), 'warning');
     redirect("quote_edit.php?id=$quote_id", '@Changes saved successfully');
 }
@@ -150,7 +173,7 @@ $default_currency = $s['currency'] ?? 'DKK';
 
 if ($quote_id > 0) {
     $q = DB::fetch_assoc(DB::query($conn, "SELECT * FROM quotes WHERE quote_id=$quote_id"));
-    if (!$q) redirect("quote_edit.php?id=" . (int)($_POST['quote_id'] ?? 0), '@Invoice not found', 'error'); // delt nøgle med invoice_edit.php ("Faktura ikke fundet" - dækker begge her)
+    if (!$q) redirect('quote_list.php', '@Not found - it may already have been deleted.', 'error');      // (åbnede et tomt nyt tilbud med fejlen "Faktura ikke fundet")
     $quote_lines = [];
     $lines_res = DB::query($conn, "SELECT * FROM quote_lines WHERE quote_id=$quote_id ORDER BY line_id");
     while ($l = DB::fetch_assoc($lines_res)) { $quote_lines[] = $l; }
@@ -195,10 +218,14 @@ if ($q['cust_id'] && !isset($cust_opt[$q['cust_id']])) {
     $del_cust = DB::fetch_assoc(DB::query($conn, "SELECT cust_name FROM customers WHERE cust_id = " . (int)$q['cust_id']));
     if ($del_cust) $cust_opt[$q['cust_id']] = $del_cust['cust_name'] . ' (' . lang('@Deleted') . ')';
 }
+// EU-OSS: en privat kunde i et andet EU-land får modtagerlandets moms - samme som fakturaen (assets/tc-oss.js)
+require_once __DIR__ . '/inc/oss.inc.php';
+$oss_cust_map = $is_locked ? [] : oss_customer_map($conn);
 htm_Field(icon:'fa-user', labl:'@Customer', name:'cust_id', valu:$q['cust_id'], type:'sele',
-    opti:$cust_opt, extr:($is_locked ? 'disabled required' : 'required'), wdth:'70%', echo:true);
+    opti:$cust_opt, extr:($is_locked ? 'disabled required' : 'required onchange="ossApply(this.value)"'), wdth:'70%', echo:true);
 if ($module_projects) htm_ProjektCodeField($conn, $proj_id ?: null, '30%');
 if ($is_locked) echo '<input type="hidden" name="cust_id" value="'.$q['cust_id'].'">';
+echo '<div id="oss-note" style="display:none; width:100%; margin:4px 0; padding:6px 10px; border-left:4px solid var(--color-info); background:var(--bg-hover); font-size:0.9em;"></div>';
 
 // Datoer
 echo '<div style="display:flex; gap:10px; margin:15px 0;">';
@@ -213,10 +240,10 @@ echo '<h3 style="margin:20px 0 10px 0;">'.lang('@Quote Lines').'</h3>';
 
 $prod_res = DB::query($conn, "SELECT p.prod_id, p.prod_name, p.prod_price, a.vat_rate FROM products p LEFT JOIN accounts a ON p.acc_id = a.acc_id ORDER BY p.prod_name");
 $prod_opt = [0 => '-- '.lang('@Select Product/Description').' --'];
-$prod_vat_map = [0 => 25]; $prod_price_map = [0 => 0.00];
+$prod_vat_map = [0 => tc_vat_std_rate()]; $prod_price_map = [0 => 0.00];
 while ($p = DB::fetch_assoc($prod_res)) {
     $prod_opt[$p['prod_id']] = $p['prod_name'];
-    $prod_vat_map[$p['prod_id']]   = ($p['vat_rate']   !== null) ? (float)$p['vat_rate']   : 25.00;
+    $prod_vat_map[$p['prod_id']]   = ($p['vat_rate']   !== null) ? (float)$p['vat_rate']   : tc_vat_std_rate();
     $prod_price_map[$p['prod_id']] = ($p['prod_price'] !== null) ? (float)$p['prod_price'] : 0.00;
 }
 
@@ -247,7 +274,7 @@ for ($i = 0; $i < $line_render_count; $i++) {
     $prod_id    = isset($quote_lines[$i]['prod_id'])       ? (int)$quote_lines[$i]['prod_id']       : 0;
     $line_qty   = isset($quote_lines[$i]['quantity'])      ? $quote_lines[$i]['quantity']            : '';
     $line_price = isset($quote_lines[$i]['price_each'])    ? $quote_lines[$i]['price_each']          : '';
-    $line_vat   = isset($quote_lines[$i]['line_vat_rate']) ? $quote_lines[$i]['line_vat_rate']       : 25;
+    $line_vat   = isset($quote_lines[$i]['line_vat_rate']) ? $quote_lines[$i]['line_vat_rate']       : tc_vat_std_rate();
     $existing_line_text = ($prod_id <= 0 && isset($quote_lines[$i]['line_text'])) ? $quote_lines[$i]['line_text'] : '';
     $tbl_data[] = build_quote_line_row($i, $prod_id, $line_qty, $line_price, $line_vat, $existing_line_text, $prod_opt, $row_extr);
 }
@@ -265,7 +292,7 @@ if (!$is_locked) {
 // Skabelon til en frisk, tom linje - 'IDX' erstattes med det reelle
 // rækkenummer i JS (se addQuoteLine() nedenfor). Bygget med nøjagtig samme
 // funktion som de rigtige rækker ovenfor.
-$template_row = build_quote_line_row('IDX', 0, '', '', 25, '', $prod_opt, $row_extr);
+$template_row = build_quote_line_row('IDX', 0, '', '', tc_vat_std_rate(), '', $prod_opt, $row_extr);
 $template_row_html = '<tr><td style="width:55%;">'.$template_row[0].'</td><td style="width:15%;">'.$template_row[1]
     .'</td><td style="width:15%;">'.$template_row[2].'</td><td style="width:15%;">'.$template_row[3].'</td></tr>';
 
@@ -285,6 +312,11 @@ if (!$is_locked) {
 htm_Card_end();
 ?>
 <script>
+window.tcOss = {map: <?php echo json_encode((object)$oss_cust_map); ?>, home: <?php echo json_encode(tc_vat_std_rate()); ?>, totals: 'calculateQuoteTotals',
+    note: <?php echo json_encode(lang('@EU-OSS: private customer in %s - the lines get the VAT of the customer\'s country (standard rate %s %). Reduced rates are entered by hand.')); ?>};
+</script>
+<script src="<?php echo tc_asset('assets/tc-oss.js'); ?>"></script>
+<script>
 const vatMap   = <?php echo json_encode($prod_vat_map); ?>;
 const priceMap = <?php echo json_encode($prod_price_map); ?>;
 const lineRowTemplate = <?php echo json_encode($template_row_html); ?>;
@@ -297,13 +329,17 @@ function addQuoteLine() {
     const wrapper  = document.createElement('tbody');
     wrapper.innerHTML = lineRowTemplate.replace(/IDX/g, newIndex);
     document.querySelector('#line_tbl tbody').appendChild(wrapper.firstElementChild);
+    const nv = document.getElementsByName('line_vat[]')[newIndex], ossR = nv ? ossRateFor(nv.value) : null;
+    if (ossR !== null) nv.value = ossR;
     calculateQuoteTotals();
 }
 
 function updateVatRate(selectElement, rowIndex) {
     const pid = selectElement.value;
     document.getElementsByName('prod_id[]')[rowIndex].value       = pid;
-    document.getElementsByName('line_vat[]')[rowIndex].value      = vatMap[pid]   !== undefined ? vatMap[pid]   : 25;
+    document.getElementsByName('line_vat[]')[rowIndex].value      = vatMap[pid]   !== undefined ? vatMap[pid]   : <?= json_encode(tc_vat_std_rate()) ?>;
+    const ossR = ossRateFor(document.getElementsByName('line_vat[]')[rowIndex].value);
+    if (ossR !== null) document.getElementsByName('line_vat[]')[rowIndex].value = ossR;
     document.getElementsByName('price_each[]')[rowIndex].value    = priceMap[pid] !== undefined ? priceMap[pid] : 0.00;
     calculateQuoteTotals();
 }
@@ -321,9 +357,9 @@ function calculateQuoteTotals() {
         vat += q * p * (v / 100);
     }
     const fmt = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
-    document.getElementById('total_sub').innerText   = sub.toLocaleString('da-DK', fmt);
-    document.getElementById('total_vat').innerText   = vat.toLocaleString('da-DK', fmt);
-    document.getElementById('total_grand').innerText = (sub + vat).toLocaleString('da-DK', fmt);
+    document.getElementById('total_sub').innerText   = sub.toLocaleString(window.tcLocale || 'da-DK', fmt);
+    document.getElementById('total_vat').innerText   = vat.toLocaleString(window.tcLocale || 'da-DK', fmt);
+    document.getElementById('total_grand').innerText = (sub + vat).toLocaleString(window.tcLocale || 'da-DK', fmt);
 }
 
 document.addEventListener('input', function(e) {

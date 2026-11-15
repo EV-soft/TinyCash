@@ -36,13 +36,12 @@ $today = date('Y-m-d');
 $has_no_rem_col = db_has_column($conn, 'customers', 'cust_no_reminders');
 $no_rem_select = $has_no_rem_col ? ", c.cust_no_reminders" : "";
 
-$rem_disc = invoice_discount_sql($conn);
+// Restbeløbet: den fælles definition (invoice_total_sql()/invoice_paid_sql(), inc/db_connect.inc.php). Der rykkes kun for
+// 'sent' - samme regel som reminder_due() (inc/reminder.inc.php)
 $sql = "SELECT i.inv_id, i.invoice_no, i.inv_date, i.inv_due_date, i.reminder_sent_at, i.reminder_count,
                c.cust_name, c.cust_email
                $no_rem_select,
-               (SELECT COALESCE(SUM(quantity * price_each $rem_disc * (100 + line_vat_rate) / 100.0), 0)
-                FROM invoice_lines WHERE inv_id = i.inv_id) * COALESCE(NULLIF(i.exch_rate, 0), 1) + " . invoice_credited_sql($conn) . " AS total,
-               (SELECT COALESCE(SUM(amount), 0) FROM invoice_payments WHERE inv_id = i.inv_id) AS paid
+               " . invoice_total_sql($conn) . " AS total, " . invoice_paid_sql() . " AS paid
         FROM invoices i
         JOIN customers c ON i.cust_id = c.cust_id
         WHERE i.inv_status = 'sent' AND i.inv_due_date IS NOT NULL AND i.inv_due_date <> '' AND i.inv_due_date < '$today'

@@ -76,6 +76,11 @@ if ($id > 0) {
         // conf_acc_creditor blev fundet at have i Tilføjet fra dag ét denne gang i stedet for at vente på et fund.
         (int)($company_settings['conf_acc_fx']           ?? 7200),
         (int)($company_settings['conf_acc_bad_debt']     ?? 7100),      // RETTET: manglede - uden den kan intet afskrives (invoice_writeoff.php)
+        // Standardkonti, der bruges selv om de aldrig er gemt i indstillingerne - slettet faldt rykkergebyret, lageret
+        // og lagerreguleringen stille bort (rf_ready(), inc/stock.inc.php)
+        (int)($company_settings['conf_acc_reminder_fee'] ?? 1090),
+        (int)($company_settings['conf_acc_inventory']    ?? 8150),
+        (int)($company_settings['conf_acc_stock_adjust'] ?? 2100),
     ]);
     $is_special_account = in_array($id, $special_accounts, true);
     // RETTET: listen ovenfor er fast - en konto som en ANDEN indstilling (fx conf_acc_bad_debt, tab på
@@ -103,7 +108,8 @@ if ($id > 0) {
     if (!$used_by_asset) {
         foreach ([['vat_codes', 'vat_account'], ['bank_match_rules', 'acc_id'], ['recurring_expenses', 'account_id'], ['bank_connections', 'acc_id'],
                   ['account_budgets', 'acc_id'], ['expenses', 'account_id'], ['expense_lines', 'account_id'],
-                  ['products', 'acc_id'], ['invoice_lines', 'acc_id']] as [$rt, $rc]) {      // RETTET: varens salgskonto - ellers bogføres varens salg stille på standard-salgskontoen i stedet
+                  ['products', 'acc_id'], ['invoice_lines', 'acc_id'],
+                  ['bank_statement_temp', 'is_processed = 0 AND acc_id']] as [$rt, $rc]) {      // (uafstemte banklinjer importeret til kontoen - afstemningen fejlede bagefter)      // RETTET: varens salgskonto - ellers bogføres varens salg stille på standard-salgskontoen i stedet
             $rr = @DB::query($conn, "SELECT 1 FROM $rt WHERE $rc = $id LIMIT 1");
             if ($rr && DB::fetch_assoc($rr)) { $used_by_asset = true;  $used_by_other = $rt;  break; }
         }
@@ -164,7 +170,7 @@ if ($id > 0) {
             // i denne fil ovenfor, som alle viser en ordentlig, chromet fejlside. Ensrettet til samme mønster.
             htm_Header('@Error');
             echo "<div style='max-width:600px; margin:50px auto;'>";
-            htm_Alert(lang('@Error deleting account:') . ' ' . DB::error($conn), 'error');
+            htm_Alert(lang('@Error deleting account:') . ' ' . htmlspecialchars((string)DB::error($conn)), 'error');
             htm_Button('fa-arrow-left', '@Back', 'secondary', 'chart_of_accounts.php', '', 'data-hint="'.lang('@Return to the chart of accounts').'"');
             echo "</div>";
             htm_Footer();

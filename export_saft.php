@@ -21,13 +21,16 @@ require_once 'inc/db_connect.inc.php';
 // NYT (§currency-setting-is-cosmetic-label, Fase 2): SAF-T er en dansk
 // SKAT-specifik eksport og giver ikke mening for en virksomhed, der bruger
 // en anden bogføringsvaluta end DKK.
-require_dkk_base_currency($conn);
+// Norge har sit eget SAF-T-format (Skatteetaten v1.30, inc/saft_no.inc.php); ellers den danske
+$saft_no = tc_pack_feature('saft_no');
+if (!$saft_no) require_country_feature($conn, 'saft_dk');
 
 function saft_esc($s) { return htmlspecialchars((string)$s, ENT_XML1 | ENT_QUOTES, 'UTF-8'); }
 function saft_amt($v) { return number_format((float)$v, 2, '.', ''); }
 
 $download = isset($_GET['download']) && $_GET['download'] == '1';
-$year     = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
+// Året er REGNSKABSÅRET, opkaldt efter sit slutår (1/7/2025-30/6/2026 = 2026) - SAF-T dækker et regnskabsår; før altid 1/1-31/12
+$year     = isset($_GET['year']) ? (int)$_GET['year'] : (int)substr(tc_fiscal_year_bounds($conn)[1], 0, 4);
 
 if (!$download) {
     // --- VALG AF PERIODE (år) FØR selve eksporten, samme princip som
@@ -37,9 +40,14 @@ if (!$download) {
     require_once 'inc/menu.inc.php';
     require_once 'inc/php2htm.lib.php';
 
-    $years_res = DB::query($conn, "SELECT DISTINCT substr(jou_date, 1, 4) AS y FROM journal ORDER BY y DESC");
+    // De regnskabsår der har posteringer (hver dato hører til regnskabsåret der indeholder den)
+    $years_res = DB::query($conn, "SELECT MIN(jou_date) AS a, MAX(jou_date) AS b FROM journal");
     $years = [];
-    if ($years_res) { while ($r = DB::fetch_assoc($years_res)) { if (!empty($r['y'])) $years[] = (int)$r['y']; } }
+    $yr = $years_res ? DB::fetch_assoc($years_res) : null;
+    if ($yr && tc_is_date(substr((string)$yr['a'], 0, 10)) && tc_is_date(substr((string)$yr['b'], 0, 10))) {
+        for ($d = substr($yr['a'], 0, 10); $d <= substr($yr['b'], 0, 10); $d = date('Y-m-d', strtotime(tc_fiscal_year_bounds($conn, $d)[1] . ' +1 day'))) $years[] = (int)substr(tc_fiscal_year_bounds($conn, $d)[1], 0, 4);
+        $years = array_values(array_unique(array_reverse($years)));
+    }
     if (empty($years)) $years = [(int)date('Y')];
     if (!in_array($year, $years, true)) $year = $years[0];
 
@@ -47,14 +55,25 @@ if (!$download) {
     showMenu();
     htm_Card_(capt: '@Export SAF-T', wdth: 700);
 
+    if ($saft_no) {
+        require_once 'inc/saft_no.inc.php';
+        htm_Note(lang('@Exports the chart of accounts, customers, suppliers, VAT codes and every posted general ledger entry for the selected year in the Norwegian SAF-T Financial format (version 1.30, Skatteetaten). Every account must have a grouping code from the business specification (næringsspesifikasjon).'), 'font-size:0.9em;');
+        $unsure = count(array_filter(saft_no_mapping($conn), fn($m) => in_array($m['how'], ['near', 'type'], true)));
+        if ($unsure) echo '<p style="color:var(--color-warning); font-size:0.85em;"><i class="fa-solid fa-triangle-exclamation"></i> '
+            . sprintf(lang('@%d accounts have only a suggested grouping code - check them under SAF-T mapping.'), $unsure) . '</p>';
+        if (trim((string)setting('company_contact_person', '')) === '' || trim((string)setting('company_phone', '')) === '')
+            echo '<p style="color:var(--color-warning); font-size:0.85em;"><i class="fa-solid fa-triangle-exclamation"></i> ' . lang('@SAF-T needs a contact person and a phone number for the company (Company Settings).') . '</p>';
+        htm_Button(icon: 'fa-sitemap', labl: '@SAF-T mapping', type: 'secondary', link: 'saft_no_mapping.php');
+    } else {
     htm_Note(lang('@Exports the full chart of accounts, customers, suppliers and every posted general ledger entry for the selected year as an OECD SAF-T Financial (v2.0) style audit file.'), 'font-size:0.9em;');
     echo '<p style="color:var(--color-warning); font-size:0.85em;"><i class="fa-solid fa-triangle-exclamation"></i> ' .
         lang('@This is a good-faith export of your real data, not formally validated against the official SAF-T XSD. Check with your accountant/SKAT whether a specific submission requires more than this.') .
         '</p>';
+    }
 
     echo '<form method="get" style="display:flex; gap:10px; align-items:flex-end; margin-top:15px;">';
     $opti = [];
-    foreach ($years as $y) { $opti[$y] = (string)$y; }
+    foreach ($years as $y) { [$fs, $fe] = tc_fiscal_year_of($conn, $y);  $opti[$y] = $y . ($fs !== "$y-01-01" ? ' (' . date(CONF_DATE_FORMAT, strtotime($fs)) . ' - ' . date(CONF_DATE_FORMAT, strtotime($fe)) . ')' : ''); }
     htm_Field(icon: 'fa-calendar', labl: '@Year', name: 'year', valu: $year, type: 'sele', opti: $opti, wdth: '160px');
     echo '<input type="hidden" name="download" value="1">';
     htm_Button(icon: 'fa-download', labl: '@Export SAF-T', type: 'success', attr: 'type="submit" data-hint="'.lang('@Download the SAF-T audit file for the selected year').'"');
@@ -67,8 +86,21 @@ if (!$download) {
 }
 
 // --- SELVE EKSPORTEN ---
-$period_start = "$year-01-01";
-$period_end   = "$year-12-31";
+if ($saft_no) {
+    require_once 'inc/php2htm.lib.php';
+    require_once 'inc/saft_no.inc.php';
+    try { $doc = saft_no_document($conn, $year); }
+    catch (Exception $e) { redirect('export_saft.php?year=' . $year, htmlspecialchars($e->getMessage()), 'error'); }
+    $archive_dir = rtrim(tc_account_storage_dir(__DIR__ . '/storage/saf-t'), '/');
+    if (is_dir($archive_dir) && is_writable($archive_dir)) @file_put_contents($archive_dir . '/' . $doc['filename'], $doc['xml']);
+    ob_end_clean();
+    header('Content-Type: application/xml; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="' . $doc['filename'] . '"');
+    header('Content-Length: ' . strlen($doc['xml']));
+    echo $doc['xml'];
+    exit;
+}
+[$period_start, $period_end] = tc_fiscal_year_of($conn, $year);
 $settings     = get_settings($conn);
 
 $co_name = $settings['company_name'] ?? '';
@@ -118,9 +150,19 @@ $bres = DB::query($conn, "SELECT l.acc_id,
         COALESCE(SUM(CASE WHEN j.jou_date <= '$saft_pe' THEN l.amount ELSE 0 END), 0) AS ultimo
     FROM ledger l JOIN journal j ON j.jou_id = l.jou_id GROUP BY l.acc_id");
 while ($bres && ($b = DB::fetch_assoc($bres))) $saft_bal[(int)$b['acc_id']] = [round((float)$b['primo'], 2), round((float)$b['ultimo'], 2)];
+// (en resultatkonto starter regnskabsåret på 0 - tidligere års resultat står på egenkapitalen, ikke i primo)
+$saft_per = [];
+$pres = DB::query($conn, "SELECT l.acc_id, COALESCE(SUM(l.amount), 0) AS p FROM ledger l JOIN journal j ON j.jou_id = l.jou_id
+    WHERE j.jou_date BETWEEN '$saft_ps' AND '$saft_pe' GROUP BY l.acc_id");
+while ($pres && ($b = DB::fetch_assoc($pres))) $saft_per[(int)$b['acc_id']] = round((float)$b['p'], 2);
+// Tidligere års resultat, der ikke er lukket ind på egenkapitalen (ingen årsafslutning): det hører til egenkapitalens primo
+// og ultimo - ellers summede filens saldi ikke til 0, når resultatkontiene starter på 0
+[$saft_prior, $saft_eq] = saft_prior_result($conn, $period_start);
 $res = DB::query($conn, "SELECT acc_id, acc_name, acc_type, std_ref_id FROM accounts ORDER BY acc_id ASC");
 while ($res && ($a = DB::fetch_assoc($res))) {
     [$o_bal, $c_bal] = $saft_bal[(int)$a['acc_id']] ?? [0.0, 0.0];
+    if (in_array($a['acc_type'], ['income', 'expense'], true)) { $o_bal = 0.0;  $c_bal = $saft_per[(int)$a['acc_id']] ?? 0.0; }
+    if ((int)$a['acc_id'] === $saft_eq) { $o_bal = round($o_bal + $saft_prior, 2);  $c_bal = round($c_bal + $saft_prior, 2); }
     $x .= '      <Account>' . "\n";
     $x .= '        <AccountID>' . saft_esc($a['acc_id']) . '</AccountID>' . "\n";
     $x .= '        <AccountDescription>' . saft_esc($a['acc_name']) . '</AccountDescription>' . "\n";
@@ -134,13 +176,15 @@ $x .= '    </GeneralLedgerAccounts>' . "\n";
 
 // --- MASTERFILES: KUNDER ---
 $x .= '    <Customers>' . "\n";
-$res = DB::query($conn, "SELECT cust_id, cust_name, cust_cvr, cust_address, cust_email FROM customers ORDER BY cust_id ASC");
+// (kundens/leverandørens eget land - tomt = Danmark)
+$saft_cc = fn($v) => preg_match('/^[A-Z]{2}$/', strtoupper(trim((string)$v))) ? strtoupper(trim((string)$v)) : 'DK';
+$res = DB::query($conn, "SELECT cust_id, cust_name, cust_cvr, cust_address, cust_email" . (db_has_column($conn, 'customers', 'cust_country') ? ', cust_country' : '') . " FROM customers ORDER BY cust_id ASC");
 while ($res && ($c = DB::fetch_assoc($res))) {
     $x .= '      <Customer>' . "\n";
     $x .= '        <CustomerID>' . saft_esc($c['cust_id']) . '</CustomerID>' . "\n";
     $x .= '        <CompanyName>' . saft_esc($c['cust_name']) . '</CompanyName>' . "\n";
     if (!empty($c['cust_cvr'])) $x .= '        <CustomerTaxID>' . saft_esc(preg_replace('/\D/', '', $c['cust_cvr'])) . '</CustomerTaxID>' . "\n";
-    $x .= '        <Address><StreetName>' . saft_esc($c['cust_address']) . '</StreetName><Country>DK</Country></Address>' . "\n";
+    $x .= '        <Address><StreetName>' . saft_esc($c['cust_address']) . '</StreetName><Country>' . $saft_cc($c['cust_country'] ?? '') . '</Country></Address>' . "\n";
     if (!empty($c['cust_email'])) $x .= '        <Email>' . saft_esc($c['cust_email']) . '</Email>' . "\n";
     $x .= '      </Customer>' . "\n";
 }
@@ -161,7 +205,7 @@ $supplier_ids = []; // navn/id => SAF-T SupplierID, bruges til krydsreferencen n
 $has_supplier_table = db_has_table($conn, 'suppliers');
 
 if ($has_supplier_table) {
-    $res = DB::query($conn, "SELECT supplier_id, supplier_name, cvr, address, email FROM suppliers ORDER BY supplier_id ASC");
+    $res = DB::query($conn, "SELECT supplier_id, supplier_name, cvr, address, email" . (db_has_column($conn, 'suppliers', 'country') ? ', country' : '') . " FROM suppliers ORDER BY supplier_id ASC");
     while ($res && ($sp = DB::fetch_assoc($res))) {
         $real_sid = (int)$sp['supplier_id'];
         $supplier_ids['id:' . $real_sid] = $real_sid;
@@ -169,7 +213,7 @@ if ($has_supplier_table) {
         $x .= '        <SupplierID>' . $real_sid . '</SupplierID>' . "\n";
         $x .= '        <CompanyName>' . saft_esc($sp['supplier_name']) . '</CompanyName>' . "\n";
         if (!empty($sp['cvr'])) $x .= '        <SupplierTaxID>' . saft_esc(preg_replace('/\D/', '', $sp['cvr'])) . '</SupplierTaxID>' . "\n";
-        if (!empty($sp['address'])) $x .= '        <Address><StreetName>' . saft_esc($sp['address']) . '</StreetName><Country>DK</Country></Address>' . "\n";
+        if (!empty($sp['address'])) $x .= '        <Address><StreetName>' . saft_esc($sp['address']) . '</StreetName><Country>' . $saft_cc($sp['country'] ?? '') . '</Country></Address>' . "\n";
         if (!empty($sp['email'])) $x .= '        <Email>' . saft_esc($sp['email']) . '</Email>' . "\n";
         $x .= '      </Supplier>' . "\n";
     }

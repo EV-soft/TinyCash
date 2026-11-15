@@ -29,6 +29,10 @@ if (!$proj) {
 if (empty($proj['cust_id'])) {
     redirect("time_list.php?proj_id=$proj_id", '@This project has no customer - choose a customer on the project before invoicing its hours.', 'error');
 }
+// (som duplikering og tilbud: ingen ny faktura til en kunde i papirkurven)
+if (!tc_customer_ok($conn, (int)$proj['cust_id'])) {
+    redirect("time_list.php?proj_id=$proj_id", '@The customer is in the trash bin - restore the customer first.', 'error');
+}
 
 DB::begin_transaction($conn);
 try {
@@ -36,7 +40,8 @@ try {
     // vi forsøger at tage (claimet nedenfor bruger denne liste, ikke en frisk
     // SELECT - undgår at "vinde" nogle rækker der kom til efter selve claimet).
     $entries = [];
-    $res = DB::query($conn, "SELECT * FROM time_entries WHERE proj_id = $proj_id AND is_billable = 1 AND is_invoiced = 0");
+    // I datoorden - uden ORDER BY kom fakturalinjerne i tilfældig rækkefølge (typisk oprettelsesordenen, ikke datoerne)
+    $res = DB::query($conn, "SELECT * FROM time_entries WHERE proj_id = $proj_id AND is_billable = 1 AND is_invoiced = 0 ORDER BY entry_date ASC, entry_id ASC");
     while ($row = DB::fetch_assoc($res)) { $entries[] = $row; }
 
     if (empty($entries)) {
@@ -73,6 +78,10 @@ try {
         VALUES (" . (int)$proj['cust_id'] . ", '$inv_date', '$due_date', 'draft', '$inv_currency', $proj_id)");
     if (!$ok) throw new Exception('Kunne ikke oprette fakturakladde: ' . DB::error($conn));
     $inv_id = DB::insert_id($conn);
+    // Timer er ydelser, som til en privatkunde i et andet EU-land beskattes i eget land (art. 45) - ikke EU-OSS. Kan ændres på fakturaen.
+    require_once 'inc/oss.inc.php';
+    // (også før en OSS-registrering: ydelserne tæller ikke i OSS-tærsklen på 10.000 EUR, som kun gælder fjernsalg af varer m.m.)
+    if (oss_off_ready($conn) && oss_is_eu_b2c_customer($conn, (int)$proj['cust_id'])) DB::query($conn, "UPDATE invoices SET inv_oss_off = 1 WHERE inv_id = " . (int)$inv_id);
 
     foreach ($entries as $e) {
         $txt = DB::escape($conn, date(CONF_DATE_FORMAT, strtotime($e['entry_date'])) . ' - ' . $e['description']);
@@ -88,9 +97,9 @@ try {
         ['invoice_id' => $inv_id, 'entry_count' => count($ids), 'entry_ids' => $ids_list]);
 
     DB::commit($conn);
-    redirect("invoice_edit.php?id=$inv_id", '@Changes saved successfully');
+    redirect("invoice_edit.php?id=$inv_id", '@Draft invoice created from the hours - review it and post it.');
 } catch (Exception $e) {
     DB::rollback($conn);
-    die(lang('@Error:') . ' ' . $e->getMessage());
+    redirect("time_list.php?proj_id=$proj_id", lang('@Error:') . ' ' . htmlspecialchars($e->getMessage()), 'error');      // (var en hvid side - fx "timerne er allerede faktureret af en samtidig anmodning")
 }
 ?>

@@ -56,32 +56,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect("vat_codes.php");
     }
 
+    // Omvendt betalingspligt: den skyldige moms skal på en egen konto (fx 7700) - på købsmomskontoen udlignede den fradraget
+    // (og angivelsens felt talte al købsmoms), på salgsmomskontoen kom den med to gange i momstilsvaret
+    if ($vat_account !== "NULL" && in_array($_POST['vat_type'] ?? '', TC_VAT_RC_TYPES, true)) {
+        $vs_own = array_map('intval', array_merge(explode(',', tc_vat_acc_list($conn, (int)setting('conf_acc_vat', 6900))), explode(',', tc_vat_acc_list($conn, (int)setting('conf_acc_purchase_vat', 6910)))));
+        if (in_array((int)$vat_account, $vs_own, true)) {
+            flash(sprintf(lang('@Account %d is your output or input VAT account. With reverse charge, the VAT owed must go to an account of its own (e.g. "VAT on purchases abroad").'), (int)$vat_account), 'error');
+            redirect("vat_codes.php");
+        }
+    }
+
     // Hent momskodens data FØR en evt. opdatering, til revisionssporet -
     // samme mønster som vat_codes.php's egen sletning og account_edit.php.
     $before_row = null;
     if ($is_update) {
-        $before_res = DB::query($conn, "SELECT vat_name, vat_rate, vat_account FROM vat_codes WHERE vat_id = '$vat_id'");
+        $before_res = DB::query($conn, "SELECT * FROM vat_codes WHERE vat_id = '$vat_id'");
         $before_row = $before_res ? DB::fetch_assoc($before_res) : null;
     }
 
+    // Momskodens type (salg/køb/EU/...) - kun en kendt type; uden kolonnen (migreringen ikke kørt) gemmes den ikke
+    $vt_ok  = db_has_column($conn, 'vat_codes', 'vat_type') && in_array($_POST['vat_type'] ?? '', TC_VAT_TYPES, true);
+    $vt_val = $vt_ok ? "'" . DB::escape($conn, $_POST['vat_type']) . "'" : '';
     if ($is_update) {
         // UPDATE eksisterende
         $sql = "UPDATE vat_codes SET
                 vat_name = '$vat_name',
                 vat_rate = $vat_rate,
-                vat_account = $vat_account
+                vat_account = $vat_account" . ($vt_ok ? ", vat_type = $vt_val" : '') . "
                 WHERE vat_id = '$vat_id'";
     } else {
         // INSERT ny
-        $sql = "INSERT INTO vat_codes (vat_id, vat_name, vat_rate, vat_account)
-                VALUES ('$vat_id', '$vat_name', $vat_rate, $vat_account)";
+        $sql = "INSERT INTO vat_codes (vat_id, vat_name, vat_rate, vat_account" . ($vt_ok ? ', vat_type' : '') . ")
+                VALUES ('$vat_id', '$vat_name', $vat_rate, $vat_account" . ($vt_ok ? ", $vt_val" : '') . ")";
     }
 
     // 3. Eksekver
     if (DB::query($conn, $sql)) {
-        $new_values = ['vat_name' => $_POST['vat_name'], 'vat_rate' => $vat_rate, 'vat_account' => $vat_account];
+        $new_values = ['vat_name' => $_POST['vat_name'], 'vat_rate' => $vat_rate, 'vat_account' => $vat_account] + ($vt_ok ? ['vat_type' => $_POST['vat_type']] : []);
         if ($is_update) {
             log_action($conn, 'UPDATE_VAT_CODE', 'vat_codes', 0, $before_row, $new_values);
+            // Kontiene har en kopi af satsen (accounts.vat_rate, den der bruges ved bogføring) - uden dette blev en
+            // ændret sats på koden aldrig til noget: kontiene med koden bogførte stille videre med den gamle sats
+            if ($before_row && round((float)$before_row['vat_rate'], 4) !== round((float)$vat_rate, 4)) {
+                $n_acc = (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM accounts WHERE vat_code = '$vat_id'"))[0] ?? 0);
+                if ($n_acc > 0) {
+                    DB::query($conn, "UPDATE accounts SET vat_rate = " . (float)$vat_rate . " WHERE vat_code = '$vat_id'");
+                    log_action($conn, 'UPDATE_ACCOUNT', 'accounts', 0, ['vat_code' => $_POST['vat_id'], 'vat_rate' => (float)$before_row['vat_rate']], ['vat_rate' => (float)$vat_rate, 'accounts' => $n_acc]);
+                    redirect('vat_codes.php', sprintf(lang('@VAT code saved - the new rate now applies to the %d account(s) that use the code.'), $n_acc));
+                }
+            }
         } else {
             log_action($conn, 'CREATE_VAT_CODE', 'vat_codes', 0, null, array_merge(['vat_id' => $vat_id], $new_values));
         }

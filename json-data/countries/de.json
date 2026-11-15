@@ -1,0 +1,296 @@
+{
+    "code": "de",
+    "iso": "DE",
+    "name": "Deutschland",
+    "name_en": "Germany",
+    "language": "de",
+    "locale": "de-DE",
+    "currency": "EUR",
+    "currency_symbol": "€",
+    "timezone": "Europe/Berlin",
+    "date_format": "d.m.Y",
+    "number": {
+        "dec": ",",
+        "thou": "."
+    },
+    "company_id": {
+        "label": "@Tax number (Steuernummer)",
+        "short": "St.-Nr.",
+        "regex": "^[0-9][0-9/ ]{8,14}[0-9]$",
+        "registry": null,
+        "checksum": null
+    },
+    "vat_id": {
+        "prefix": "DE",
+        "regex": "^DE[0-9]{9}$"
+    },
+    "zip": {
+        "regex": "^[0-9]{5}$",
+        "prefix": "D-"
+    },
+    "vat_portal": "ELSTER (Umsatzsteuer-Voranmeldung)",
+    "vat": {
+        "standard_rate": 19,
+        "period": "quarter",
+        "codes": [
+            {
+                "id": "USt19",
+                "name": "Umsatzsteuer 19 %",
+                "rate": 19,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "USt7",
+                "name": "Umsatzsteuer 7 %",
+                "rate": 7,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "VSt19",
+                "name": "Vorsteuer 19 %",
+                "rate": 19,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "VSt7",
+                "name": "Vorsteuer 7 %",
+                "rate": 7,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "IGL",
+                "name": "Innergemeinschaftliche Lieferung (steuerfrei)",
+                "rate": 0,
+                "type": "eu_goods_sale"
+            },
+            {
+                "id": "SLEU",
+                "name": "Sonstige Leistung an Unternehmer im EU-Ausland (§ 3a)",
+                "rate": 0,
+                "type": "eu_services_sale"
+            },
+            {
+                "id": "AUS",
+                "name": "Ausfuhrlieferung (steuerfrei)",
+                "rate": 0,
+                "type": "export"
+            },
+            {
+                "id": "13B",
+                "name": "Umsatz, für den der Empfänger die Steuer schuldet (§ 13b)",
+                "rate": 0,
+                "type": "reverse_domestic"
+            },
+            {
+                "id": "FREI",
+                "name": "Steuerfreier Umsatz ohne Vorsteuerabzug",
+                "rate": 0,
+                "type": "exempt"
+            },
+            {
+                "id": "IGE19",
+                "name": "Innergemeinschaftlicher Erwerb 19 %",
+                "rate": 19,
+                "type": "eu_goods_purchase",
+                "rc_account": 1774
+            },
+            {
+                "id": "RC19EU",
+                "name": "Leistung eines EU-Unternehmers, § 13b Abs. 1 (19 %)",
+                "rate": 19,
+                "type": "eu_services_purchase",
+                "rc_account": 1785
+            },
+            {
+                "id": "RC19",
+                "name": "Leistung eines Unternehmers aus einem Drittland, § 13b Abs. 2 (19 %)",
+                "rate": 19,
+                "type": "noneu_services_purchase",
+                "rc_account": 1785
+            }
+        ],
+        "std_account_codes": []
+    },
+    "reminders": {
+        "fee_from_reminder": 2,
+        "fee_until_reminder": 3,
+        "min_days_between": 14,
+        "max_fee": 2.5,
+        "max_fee_currency": "EUR",
+        "law": "§§ 286, 288 BGB (Mahnkosten als Verzugsschaden; die erste, verzugsbegründende Mahnung ist kostenfrei)"
+    },
+    "einvoice": [
+        "peppol_bis3"
+    ],
+    "payment_ref": "none",
+    "legal": {
+        "annual_report": null,
+        "cvr_lock": false,
+        "oss": true,
+        "ioss": true,
+        "eu_sales_list": {
+            "name": "@Zusammenfassende Meldung (BZSt)",
+            "boxes": {
+                "goods": "41",
+                "services": "21"
+            }
+        }
+    },
+    "vat_return": [
+        {
+            "box": "81",
+            "label": "@81: Taxable sales at 19 % (net)",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                19
+            ]
+        },
+        {
+            "box": "86",
+            "label": "@86: Taxable sales at 7 % (net)",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                7
+            ]
+        },
+        {
+            "box": "sales_vat",
+            "label": "@Output VAT in the ledger (VAT on 81 and 86)",
+            "rule": "setting_acc",
+            "sign": -1,
+            "setting": "conf_acc_vat",
+            "payable": 1
+        },
+        {
+            "box": "41",
+            "label": "@41: Intra-Community supplies to buyers with a VAT number",
+            "rule": "net",
+            "types": [
+                "eu_goods_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "21",
+            "label": "@21: Services to businesses in other EU countries (not taxable in Germany)",
+            "rule": "net",
+            "types": [
+                "eu_services_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "43",
+            "label": "@43: Other tax-free sales with input tax deduction (exports)",
+            "rule": "net",
+            "types": [
+                "export"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "48",
+            "label": "@48: Tax-free sales without input tax deduction",
+            "rule": "net",
+            "types": [
+                "exempt"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "60",
+            "label": "@60: Sales where the recipient owes the VAT (section 13b)",
+            "rule": "net",
+            "types": [
+                "reverse_domestic"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "89",
+            "label": "@89: Intra-Community acquisitions at 19 % (net)",
+            "rule": "net",
+            "types": [
+                "eu_goods_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "89_vat",
+            "label": "@VAT on intra-Community acquisitions (box 89)",
+            "rule": "rc_vat",
+            "types": [
+                "eu_goods_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "46",
+            "label": "@46: Services from businesses in other EU countries, section 13b (1) (net)",
+            "rule": "net",
+            "types": [
+                "eu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "47",
+            "label": "@47: VAT on box 46",
+            "rule": "rc_vat",
+            "types": [
+                "eu_services_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "84",
+            "label": "@84: Other services under section 13b (net)",
+            "rule": "net",
+            "types": [
+                "noneu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "85",
+            "label": "@85: VAT on box 84",
+            "rule": "rc_vat",
+            "types": [
+                "noneu_services_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "66",
+            "label": "@66: Deductible input tax (including 61 and 67)",
+            "rule": "setting_acc",
+            "sign": 1,
+            "setting": "conf_acc_purchase_vat",
+            "payable": -1
+        }
+    ],
+    "peppol": {
+        "endpoint_scheme": "9930",
+        "endpoint_id": "vat",
+        "legal_scheme": ""
+    },
+    "chart": null,
+    "chart_classes": null,
+    "saft": null,
+    "draft": true
+}

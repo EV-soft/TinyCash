@@ -34,12 +34,17 @@ if ($id > 0) {
     
     $item['prod_id'] = 0;
     $item['prod_name'] = $item['prod_name'] . ' (Variant)';
+    // Varianten starter uden lager - før fulgte grundvarens beholdning med og blev gemt som "Åbningslager" på den nye
+    // vare: varer der ikke fandtes, talte med i lagerværdien. Uden SKU på grundvaren foreslås heller ikke et "-2"
+    $item['prod_stock'] = 0;
+    if (array_key_exists('prod_ean', $item)) $item['prod_ean'] = null;      // (en stregkode hører til én vare - to varer med samme EAN)
     // RETTET: foreslog altid det samme faste "-2"-suffiks, uanset hvor mange varianter der allerede findes af det
     // samme grundprodukt - to varianter oprettet efter hinanden fik derfor samme foreslåede SKU ("ABC-2" begge
     // gange), og intet i skemaet håndhæver unikke SKU'er. Finder nu det laveste ledige "-N"-suffiks i stedet.
-    $base_sku = $item['prod_sku'] ?? '';
+    $base_sku = (string)($item['prod_sku'] ?? '');
     $suffix = 2;
-    do {
+    $candidate = '';
+    if ($base_sku !== '') do {
         $candidate = $base_sku . '-' . $suffix;
         $exists = DB::num_rows(DB::query($conn, "SELECT prod_id FROM products WHERE prod_sku = '" . DB::escape($conn, $candidate) . "'")) > 0;
         $suffix++;
@@ -305,6 +310,26 @@ if ($id > 0) {
         htm_Card_end();
         echo "</div>";
     }
+    // Lagerbevægelser: alle ændringer af beholdningen (modtagelse, optælling, rettelser, salg, kreditnotaer, webbutik)
+    require_once __DIR__ . '/inc/stock.inc.php';
+    if (stock_ready($conn)) {
+        $mv_res = DB::query($conn, "SELECT m.move_date, m.kind, m.qty, m.unit_cost, m.reference, s.supplier_name FROM stock_movements m
+            LEFT JOIN suppliers s ON s.supplier_id = m.supplier_id WHERE m.prod_id = $id ORDER BY m.move_id DESC LIMIT 100");
+        $mv_rows = [];
+        while ($mv_res && ($mv = DB::fetch_assoc($mv_res))) {
+            $mv_rows[] = [date(CONF_DATE_FORMAT, strtotime($mv['move_date'])), stock_kind_label((string)$mv['kind']),
+                          ((float)$mv['qty'] > 0 ? '+' : '') . rtrim(rtrim(fmt_dk((float)$mv['qty'], 3), '0'), ','),
+                          $mv['unit_cost'] !== null ? fmt_dk((float)$mv['unit_cost']) : '', htmlspecialchars(trim(($mv['supplier_name'] ?? '') . ' ' . ($mv['reference'] ?? '')))];
+        }
+        if ($mv_rows) {
+            echo "<div style='max-width:900px; margin:20px auto;'>";
+            htm_Card_(capt: '@Stock Movements', wdth: 900);
+            htm_Table(['@Date', '@Type', '@Qty', '@Purchase price per unit', '@Supplier'], $mv_rows, 'prod_moves_tbl', 100, '', true,
+                ['', '', 'text-align:right;', 'text-align:right;', ''], '400px', 'lagerbevaegelser.csv');
+            htm_Card_end();
+            echo "</div>";
+        }
+    }
 }
 ?>
 <script>
@@ -322,7 +347,7 @@ function updateMargin() {
     var margin = price - cost;
     var pct = price > 0 ? (margin / price * 100) : 0;
     var color = margin >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-    box.innerHTML = '<span style="color:' + color + '; font-weight:bold;">' + margin.toLocaleString('da-DK', {minimumFractionDigits:2, maximumFractionDigits:2})
+    box.innerHTML = '<span style="color:' + color + '; font-weight:bold;">' + margin.toLocaleString(window.tcLocale || 'da-DK', {minimumFractionDigits:2, maximumFractionDigits:2})
         + ' ' + <?php echo json_encode($cur); ?> + ' (' + pct.toFixed(1) + '%)</span> ' + <?php echo json_encode(lang('@margin')); ?>;
 }
 document.addEventListener('DOMContentLoaded', updateMargin);

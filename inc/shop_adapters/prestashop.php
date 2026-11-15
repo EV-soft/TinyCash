@@ -30,7 +30,6 @@ function ps_get(array $shop, string $path, array $query = []): array {
     $body = curl_exec($ch);
     $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $err  = curl_error($ch);
-    curl_close($ch);
     if ($body === false) throw new Exception('PrestaShop could not be reached: ' . $err);
     if ($code === 401) throw new Exception('PrestaShop refused the API key (401) - check the key and that the Webservice is enabled.');
     if ($code === 403) throw new Exception('The API key has no access to "' . strtok($path, '/') . '" (403) - give it GET rights on orders, customers and addresses.');
@@ -46,7 +45,9 @@ function ps_get(array $shop, string $path, array $query = []): array {
 function ps_rate(float $incl, float $excl): float {
     if (abs($excl) < 0.005) return 0.0;
     $r = ($incl / $excl - 1) * 100;
-    return abs($r - round($r)) < 0.2 ? (float)round($r) : round($r, 2);
+    // (øreafrunding giver fx 13,47 - nærmeste halve procent, så også Finlands 25,5 og 13,5 % genkendes)
+    $h = round($r * 2) / 2;
+    return abs($r - $h) < 0.2 ? (float)$h : round($r, 2);
 }
 
 // Nye ordrer efter $last_id (stigende): [['remote_id', 'order' => fælles format | null, 'ignore' => grund, 'wait' => bool]]
@@ -56,7 +57,7 @@ function shop_pull_prestashop(array $shop, string $last_id, int $limit = 50): ar
     $orders = (array)($j['orders'] ?? []);
     usort($orders, fn($a, $b) => (int)$a['id'] <=> (int)$b['id']);
     $out = [];
-    $cust_cache = [];  $addr_cache = [];
+    $cust_cache = [];  $addr_cache = [];  $ctry_cache = [];
     foreach ($orders as $o) {
         $id = (string)(int)$o['id'];
         $state = (int)($o['current_state'] ?? 0);
@@ -89,6 +90,11 @@ function shop_pull_prestashop(array $shop, string $last_id, int $limit = 50): ar
         if ($cid && !isset($cust_cache[$cid])) $cust_cache[$cid] = (array)(ps_get($shop, 'customers/' . $cid)['customer'] ?? []);
         foreach ([$aid, $did] as $a) if ($a && !isset($addr_cache[$a])) $addr_cache[$a] = (array)(ps_get($shop, 'addresses/' . $a)['address'] ?? []);
         $c = $cust_cache[$cid] ?? [];  $ai = $addr_cache[$aid] ?? [];  $ad = $addr_cache[$did] ?? [];
+        // (landets ISO-kode - til EU-OSS og omvendt betalingspligt)
+        $ctry = function (int $id) use ($shop, &$ctry_cache): string {
+            if ($id <= 0) return '';
+            return $ctry_cache[$id] ??= strtoupper((string)(ps_get($shop, 'countries/' . $id)['country']['iso_code'] ?? ''));
+        };
         $addr = fn(array $a) => trim(implode(', ', array_filter([trim(($a['address1'] ?? '') . ' ' . ($a['address2'] ?? '')), trim(($a['postcode'] ?? '') . ' ' . ($a['city'] ?? ''))])));
         $name = trim(($c['firstname'] ?? '') . ' ' . ($c['lastname'] ?? ''));
         $company = trim((string)($ai['company'] ?? ($c['company'] ?? '')));
@@ -101,7 +107,7 @@ function shop_pull_prestashop(array $shop, string $last_id, int $limit = 50): ar
             'paid'             => true,
             'prices_incl_vat'  => true,
             'customer'         => ['email' => (string)($c['email'] ?? ''), 'name' => $name, 'phone' => (string)($ai['phone_mobile'] ?? '') ?: (string)($ai['phone'] ?? ''),
-                                   'address' => $addr($ai), 'cvr' => (string)($ai['vat_number'] ?? '')],
+                                   'address' => $addr($ai), 'cvr' => (string)($ai['vat_number'] ?? ''), 'country' => $ctry((int)($ai['id_country'] ?? 0))],
             'delivery_address' => ($did && $did !== $aid) ? $addr($ad) : '',
             'lines'            => $lines,
             'total'            => shop_num($o['total_paid_tax_incl'] ?? 0),

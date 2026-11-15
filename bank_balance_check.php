@@ -40,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recon'])) {
     // genberegnes nu her, SERVER-SIDE, fra journal/ledger - nøjagtig samme forespørgsel som selve
     // sammenlignings-visningen ovenfor bruger.
     $p_stmt_bal  = (float)($_POST['stmt_balance'] ?? 0);
+    if (!is_numeric((string)($_POST['stmt_balance'] ?? ''))) redirect('bank_balance_check.php', '@Please enter a valid amount.', 'error');
     $p_note      = trim($_POST['note'] ?? '');
 
     // RETTET: kontoudtogsdatoen blev ikke kontrolleret - en ugyldig dato ("2026-02-31", "abc") blev gemt i den
@@ -61,7 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recon'])) {
             'created_by'   => (int)($_SESSION['user_id'] ?? 0),
             'created_at'   => date('Y-m-d H:i:s'),
         ]);
-        log_action($conn, 'SAVE_BANK_RECONCILIATION', 'bank_reconciliations', 0, null,
+        $bb_rid = (int)DB::insert_id($conn);      // (revisionssporet pegede på række 0 - ikke den gemte afstemning)
+        log_action($conn, 'SAVE_BANK_RECONCILIATION', 'bank_reconciliations', $bb_rid, null,
             ['acc_id' => $p_acc_id, 'stmt_date' => $p_stmt_date, 'difference' => $p_diff]);
     }
     redirect('bank_balance_check.php?acc_id=' . $p_acc_id . '&stmt_date=' . urlencode($p_stmt_date) . '&stmt_bal=' . urlencode(fmt_dk_input($p_stmt_bal)),
@@ -79,7 +81,11 @@ while ($ar = DB::fetch_assoc($acc_res)) { $acc_options[$ar['acc_id']] = $ar['acc
 
 $acc_id    = isset($_GET['acc_id']) ? (int)$_GET['acc_id'] : (int)($s['conf_acc_bank'] ?? 0);
 $stmt_date = isset($_GET['stmt_date']) && tc_is_date($_GET['stmt_date']) ? $_GET['stmt_date'] : date('Y-m-d');
-$stmt_bal  = isset($_GET['stmt_bal']) && $_GET['stmt_bal'] !== '' ? parse_dk_number($_GET['stmt_bal']) : null;
+// (et ugyldigt beløb - "abc", "12.500 kr" - blev læst som 0 eller et forkert tal, og kunne gemmes som en permanent
+// afstemningspost, der ikke kan rettes bagefter)
+$stmt_bal_raw = trim((string)($_GET['stmt_bal'] ?? ''));
+$stmt_bal  = $stmt_bal_raw !== '' ? tc_num($stmt_bal_raw) : null;
+$stmt_bal_bad = $stmt_bal_raw !== '' && $stmt_bal === null;
 
 htm_Header('@Bank Balance Reconciliation');
 showMenu();
@@ -106,6 +112,7 @@ if (empty($acc_options)) {
     htm_Button(labl: '@Compare', type: 'primary', attr: 'data-hint="'.lang('@Compare the ledger balance against this statement balance').'"');
     echo '</form>';
 
+    if ($stmt_bal_bad) htm_Alert(lang('@Please enter a valid amount.'), 'error', 800, true);
     if ($acc_id > 0 && $stmt_bal !== null) {
         $ds = DB::escape($conn, $stmt_date);
         $gl_row = DB::fetch_assoc(DB::query($conn, "SELECT SUM(l.amount) AS bal FROM ledger l JOIN journal j ON l.jou_id = j.jou_id WHERE l.acc_id = $acc_id AND j.jou_date <= '$ds'"));

@@ -52,7 +52,7 @@ if (isset($_GET['gen']) && (int)$_GET['gen'] > 0) {
     $gid = (int)$_GET['gen'];
     $new_inv_id = generate_recurring_invoice($conn, $gid);
     if ($new_inv_id) {
-        redirect("invoice_edit.php?id=$new_inv_id", '@Changes saved successfully');
+        redirect("invoice_edit.php?id=$new_inv_id", '@Draft invoice created from the recurring invoice - review it and post it.');      // ("Ændringer gemt" passede ikke)
     } else {
         redirect('recurring_invoices.php', '@Could not generate an invoice from this template', 'error');
     }
@@ -122,7 +122,7 @@ if ($res) {
              'hint' => $row['is_active'] ? '@Pause' : '@Resume', 'type' => 'warning'];
 
         $data[] = [
-            htmlspecialchars($row['cust_name'] ?? '---') . '<br><small style="color:var(--text-muted);">' . fmt_dk($total) . ' DKK/' . lang($interval_labels[$row['interval_type']] ?? $row['interval_type']) . '</small>',
+            htmlspecialchars($row['cust_name'] ?? '---') . '<br><small style="color:var(--text-muted);">' . fmt_dk($total) . ' ' . htmlspecialchars(setting('currency', 'DKK')) . '/' . lang($interval_labels[$row['interval_type']] ?? $row['interval_type']) . '</small>',
             lang($interval_labels[$row['interval_type']] ?? $row['interval_type']),
             $row['next_run_date'] ? date(CONF_DATE_FORMAT, strtotime($row['next_run_date'])) : '-',
             $row['last_run_date'] ? date(CONF_DATE_FORMAT, strtotime($row['last_run_date'])) : lang('@Never'),

@@ -1,0 +1,341 @@
+{
+    "code": "pl",
+    "iso": "PL",
+    "name": "Polska",
+    "name_en": "Poland",
+    "language": "pl",
+    "locale": "pl-PL",
+    "currency": "PLN",
+    "currency_symbol": "zł",
+    "timezone": "Europe/Warsaw",
+    "date_format": "d.m.Y",
+    "number": {
+        "dec": ",",
+        "thou": " "
+    },
+    "company_id": {
+        "label": "@Tax identification number (NIP)",
+        "short": "NIP",
+        "regex": "^[0-9]{3}-?[0-9]{3}-?[0-9]{2}-?[0-9]{2}$",
+        "registry": null,
+        "checksum": "pl_nip"
+    },
+    "vat_id": {
+        "prefix": "PL",
+        "regex": "^PL[0-9]{10}$"
+    },
+    "zip": {
+        "regex": "^[0-9]{2}-[0-9]{3}$",
+        "prefix": "PL-"
+    },
+    "vat_portal": "e-Urząd Skarbowy (JPK_V7M / JPK_V7K)",
+    "vat": {
+        "standard_rate": 23,
+        "period": "month",
+        "codes": [
+            {
+                "id": "V23",
+                "name": "VAT należny 23%",
+                "rate": 23,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "V8",
+                "name": "VAT należny 8%",
+                "rate": 8,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "V5",
+                "name": "VAT należny 5%",
+                "rate": 5,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "N23",
+                "name": "VAT naliczony 23%",
+                "rate": 23,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "N8",
+                "name": "VAT naliczony 8%",
+                "rate": 8,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "N5",
+                "name": "VAT naliczony 5%",
+                "rate": 5,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "WDT",
+                "name": "Wewnątrzwspólnotowa dostawa towarów (0%)",
+                "rate": 0,
+                "type": "eu_goods_sale"
+            },
+            {
+                "id": "NPUE",
+                "name": "Świadczenie usług poza krajem, art. 100 ust. 1 pkt 4",
+                "rate": 0,
+                "type": "eu_services_sale"
+            },
+            {
+                "id": "EXP",
+                "name": "Eksport towarów (0%)",
+                "rate": 0,
+                "type": "export"
+            },
+            {
+                "id": "ZW",
+                "name": "Sprzedaż zwolniona",
+                "rate": 0,
+                "type": "exempt"
+            },
+            {
+                "id": "WNT23",
+                "name": "Wewnątrzwspólnotowe nabycie towarów 23%",
+                "rate": 23,
+                "type": "eu_goods_purchase"
+            },
+            {
+                "id": "IU28B",
+                "name": "Import usług z art. 28b 23%",
+                "rate": 23,
+                "type": "eu_services_purchase"
+            },
+            {
+                "id": "IU23",
+                "name": "Import usług spoza UE 23%",
+                "rate": 23,
+                "type": "noneu_services_purchase"
+            }
+        ],
+        "std_account_codes": []
+    },
+    "reminders": {
+        "fee_from_reminder": 99,
+        "fee_until_reminder": 99,
+        "min_days_between": 14,
+        "max_fee": 0,
+        "max_fee_currency": "PLN",
+        "law": "Kodeks cywilny art. 481 (odsetki); w transakcjach handlowych rekompensata 40 EUR (ustawa o przeciwdziałaniu nadmiernym opóźnieniom, art. 10)"
+    },
+    "einvoice": [
+        "peppol_bis3"
+    ],
+    "payment_ref": "none",
+    "legal": {
+        "annual_report": null,
+        "cvr_lock": false,
+        "oss": true,
+        "ioss": true,
+        "warning": "@Poland: from 2026, B2B invoices must be issued through the national e-invoicing system KSeF (FA(3) format). TinyCash cannot send to KSeF - invoices made here are not valid B2B invoices in Poland.",
+        "eu_sales_list": {
+            "name": "@VAT-UE summary information (e-Urząd Skarbowy)",
+            "boxes": {
+                "goods": "K_21",
+                "services": "K_12"
+            }
+        }
+    },
+    "vat_return": [
+        {
+            "box": "K_19",
+            "label": "@K_19: Domestic supplies at 23 % (net)",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                23
+            ]
+        },
+        {
+            "box": "K_20",
+            "label": "@K_20: VAT at 23 %",
+            "rule": "vat_of_net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                23
+            ]
+        },
+        {
+            "box": "K_17",
+            "label": "@K_17: Domestic supplies at 8 % (net)",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                8
+            ]
+        },
+        {
+            "box": "K_18",
+            "label": "@K_18: VAT at 8 %",
+            "rule": "vat_of_net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                8
+            ]
+        },
+        {
+            "box": "K_15",
+            "label": "@K_15: Domestic supplies at 5 % (net)",
+            "rule": "net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                5
+            ]
+        },
+        {
+            "box": "K_16",
+            "label": "@K_16: VAT at 5 %",
+            "rule": "vat_of_net",
+            "types": [
+                "sales"
+            ],
+            "sign": -1,
+            "rates": [
+                5
+            ]
+        },
+        {
+            "box": "sales_vat",
+            "label": "@Output VAT in the ledger (check: K_16 + K_18 + K_20)",
+            "rule": "setting_acc",
+            "sign": -1,
+            "setting": "conf_acc_vat",
+            "payable": 1
+        },
+        {
+            "box": "K_10",
+            "label": "@K_10: Exempt supplies",
+            "rule": "net",
+            "types": [
+                "exempt"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "K_12",
+            "label": "@K_12: Services supplied in other EU countries (art. 100)",
+            "rule": "net",
+            "types": [
+                "eu_services_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "K_21",
+            "label": "@K_21: Intra-Community supplies of goods",
+            "rule": "net",
+            "types": [
+                "eu_goods_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "K_22",
+            "label": "@K_22: Exports of goods",
+            "rule": "net",
+            "types": [
+                "export"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "K_23",
+            "label": "@K_23: Intra-Community acquisitions of goods (net)",
+            "rule": "net",
+            "types": [
+                "eu_goods_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "K_24",
+            "label": "@K_24: VAT on intra-Community acquisitions",
+            "rule": "rc_vat",
+            "types": [
+                "eu_goods_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "K_27",
+            "label": "@K_27: Import of services other than art. 28b (net)",
+            "rule": "net",
+            "types": [
+                "noneu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "K_28",
+            "label": "@K_28: VAT on import of services other than art. 28b",
+            "rule": "rc_vat",
+            "types": [
+                "noneu_services_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "K_29",
+            "label": "@K_29: Import of services under art. 28b (net)",
+            "rule": "net",
+            "types": [
+                "eu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "K_30",
+            "label": "@K_30: VAT on import of services under art. 28b",
+            "rule": "rc_vat",
+            "types": [
+                "eu_services_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "K_43",
+            "label": "@K_43: Input VAT on other purchases",
+            "rule": "setting_acc",
+            "sign": 1,
+            "setting": "conf_acc_purchase_vat",
+            "payable": -1
+        }
+    ],
+    "peppol": {
+        "endpoint_scheme": "9945",
+        "endpoint_id": "vat",
+        "legal_scheme": ""
+    },
+    "chart": null,
+    "chart_classes": null,
+    "saft": null,
+    "draft": true
+}

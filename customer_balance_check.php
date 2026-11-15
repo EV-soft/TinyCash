@@ -51,6 +51,7 @@ if ($stmt['overdue_invoices'] <= 0 && !$over_limit) {
 echo json_encode([
     'overdue'        => $stmt['overdue_invoices'] > 0,
     'overdue_count'  => (int)$stmt['overdue_invoices'],
+    'overdue_amount' => (float)($stmt['overdue_amount'] ?? 0),
     'over_limit'     => $over_limit,
     'credit_limit'   => $credit_limit,
     'balance'        => $balance,

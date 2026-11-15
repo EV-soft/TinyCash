@@ -33,6 +33,15 @@ $max_validity_seconds = isset($_POST['max_validity_seconds']) && $_POST['max_val
 if ($institution_name === '' || $acc_id <= 0) {
     redirect('bank_integration.php', '@Could not connect to the bank. Please try again.', 'error');
 }
+// Kontoen blev ikke kontrolleret - en konto der ikke findes (eller ikke er en bankkonto) fik alle hentede banklinjer
+// (samme valg som listen på bank_integration.php: en bankkonto, standard-bankkontoen - eller enhver konto, hvis
+// kontoplanen slet ingen bankkonti har)
+$bic_any_bank = (bool)DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_type = 'bank' LIMIT 1"));
+$bic_ok = DB::fetch_assoc(DB::query($conn, "SELECT acc_id FROM accounts WHERE acc_id = $acc_id"
+    . ($bic_any_bank ? " AND (acc_type = 'bank' OR acc_id = " . (int)setting('conf_acc_bank', 5000) . ")" : "")));
+if (!$bic_ok) {
+    redirect('bank_integration.php', '@Please choose a bank account from the chart of accounts.', 'error');
+}
 
 // Et tilfældigt, uforudsigeligt state-token - Enable Banking bruger ÉN fast,
 // forudregistreret redirect-URL (ikke én pr. forbindelse), så konteksten

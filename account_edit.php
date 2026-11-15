@@ -18,6 +18,9 @@ $message = "";
 if (isset($_POST['save_account'])) {
     $new_id     = (int)$_POST['acc_id'];
     $name       = DB::escape($conn, $_POST['acc_name']);
+    // (en ukendt kontotype - fx fra en manipuleret formular - fik kontoen til at falde ud af balance og resultatopgørelse)
+    require_once __DIR__ . '/inc/chart_import.inc.php';      // (ACC_TYPE_KEYS)
+    if (!isset(ACC_TYPE_KEYS[(string)($_POST['acc_type'] ?? '')])) $_POST['acc_type'] = $id > 0 ? (string)(DB::fetch_row(DB::query($conn, "SELECT acc_type FROM accounts WHERE acc_id = $id"))[0] ?? 'expense') : 'expense';
     $type       = DB::escape($conn, $_POST['acc_type']);
     $vat_code   = trim(DB::escape($conn, $_POST['vat_code']));
     // RETTET: brugte (float) direkte i stedet for parse_dk_number, i modsætning til vat_save.php's egen håndtering
@@ -25,6 +28,9 @@ if (isset($_POST['save_account'])) {
     // risiko via et <input type=number> (accepterer typisk ikke komma), men samme
     // lave-risiko-men-ret-for-konsistens begrundelse som vat_save.php allerede gav.
     $vat_rate   = parse_dk_number($_POST['vat_rate']);
+    // Et tomt felt = ingen egen sats (NULL): en indtægtskonto bruger så standardsatsen. Før blev det 0, så at gemme fx et
+    // nyt navn på en importeret konto uden sats gjorde den stille momsfri
+    $vat_rate_sql = trim((string)($_POST['vat_rate'] ?? '')) === '' ? 'NULL' : (string)$vat_rate;
     // NYT: fri konteringsvejledning pr. konto - vises på chart_of_accounts.php (tooltip) og journal_entry.php
     // (direkte ved selve konteringen).
     $guidance   = trim($_POST['guidance'] ?? '');
@@ -60,13 +66,13 @@ if (isset($_POST['save_account'])) {
     if ($id == 0) {
         // OPRET NY KONTO
         $sql = "INSERT INTO accounts (acc_id, acc_name, acc_type, vat_rate, vat_code, std_ref_id, guidance)
-                VALUES ($new_id, '$name', '$type', $vat_rate, '$vat_code', $std_ref_sql, '$guidance_sql')";
+                VALUES ($new_id, '$name', '$type', $vat_rate_sql, '$vat_code', $std_ref_sql, '$guidance_sql')";
     } else {
         // OPDATER EKSISTERENDE
         $sql = "UPDATE accounts SET
                     acc_name = '$name',
                     acc_type = '$type',
-                    vat_rate = $vat_rate,
+                    vat_rate = $vat_rate_sql,
                     vat_code = '$vat_code',
                     std_ref_id = $std_ref_sql,
                     guidance = '$guidance_sql'
@@ -104,7 +110,7 @@ if ($id > 0) {
     $res = DB::query($conn, "SELECT * FROM accounts WHERE acc_id = $id");
     $row = DB::fetch_assoc($res);
     if (!$row) {
-        die(htm_Header('@Error') . htm_Alert('@Account not found', 'error') . htm_Footer());
+        redirect('chart_of_accounts.php', '@Account not found', 'error');      // (var en side uden menu)
     }
 } else {
     $row = [
@@ -218,7 +224,7 @@ echo $message;
         </div>
         <div style="flex: 1;">
             <label style="display:block; font-weight:bold; margin-bottom:5px;"><?php echo lang('@VAT Rate'); ?> (%):</label>
-            <input type="number" name="vat_rate" id="vat_rate_input" step="0.01" value="<?php echo (float)$row['vat_rate']; ?>" style="width:100%; padding:8px; border:1px solid var(--color-primary); border-radius:4px; background:var(--bg-card); color:var(--text-main); font-weight:bold;">
+            <input type="number" name="vat_rate" id="vat_rate_input" step="0.01" value="<?php echo $row['vat_rate'] === null || $row['vat_rate'] === '' ? '' : (float)$row['vat_rate']; ?>" placeholder="<?php echo htmlspecialchars(lang('@Standard rate')); ?>" style="width:100%; padding:8px; border:1px solid var(--color-primary); border-radius:4px; background:var(--bg-card); color:var(--text-main); font-weight:bold;">
         </div>
     </div>
 

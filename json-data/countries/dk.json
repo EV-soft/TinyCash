@@ -1,0 +1,262 @@
+{
+    "code": "dk",
+    "iso": "DK",
+    "name": "Danmark",
+    "name_en": "Denmark",
+    "language": "da",
+    "locale": "da-DK",
+    "currency": "DKK",
+    "currency_symbol": "kr",
+    "timezone": "Europe/Copenhagen",
+    "date_format": "d.m.Y",
+    "number": {
+        "dec": ",",
+        "thou": "."
+    },
+    "company_id": {
+        "label": "@CVR Number",
+        "short": "CVR",
+        "regex": "^[0-9]{8}$",
+        "registry": "dk_cvr",
+        "checksum": "dk_mod11"
+    },
+    "vat_id": {
+        "prefix": "DK",
+        "regex": "^DK[0-9]{8}$"
+    },
+    "zip": {
+        "regex": "^[0-9]{4}$",
+        "prefix": "DK-"
+    },
+    "vat_portal": "TastSelv Erhverv",
+    "draft": false,
+    "vat": {
+        "standard_rate": 25,
+        "codes": [
+            {
+                "id": "S25",
+                "name": "Salgsmoms 25%",
+                "rate": 25,
+                "type": "sales",
+                "role": "vat"
+            },
+            {
+                "id": "K25",
+                "name": "Købsmoms 25%",
+                "rate": 25,
+                "type": "purchase",
+                "role": "purchase_vat"
+            },
+            {
+                "id": "EUV",
+                "name": "EU-salg af varer (uden moms)",
+                "rate": 0,
+                "type": "eu_goods_sale"
+            },
+            {
+                "id": "EUVI",
+                "name": "EU-salg af varer, ikke listepligtigt (uden moms)",
+                "rate": 0,
+                "type": "eu_goods_sale_nonlisted"
+            },
+            {
+                "id": "EUY",
+                "name": "EU-salg af ydelser (uden moms)",
+                "rate": 0,
+                "type": "eu_services_sale"
+            },
+            {
+                "id": "EXP",
+                "name": "Eksport og salg uden for EU (uden moms)",
+                "rate": 0,
+                "type": "export"
+            },
+            {
+                "id": "IEUV",
+                "name": "EU-køb af varer (omvendt betalingspligt)",
+                "rate": 25,
+                "type": "eu_goods_purchase",
+                "rc_account": 7700
+            },
+            {
+                "id": "IEUY",
+                "name": "EU-køb af ydelser (omvendt betalingspligt)",
+                "rate": 25,
+                "type": "eu_services_purchase",
+                "rc_account": 7720
+            },
+            {
+                "id": "IUV",
+                "name": "Varekøb uden for EU (moms i momsangivelsen)",
+                "rate": 25,
+                "type": "noneu_goods_purchase",
+                "rc_account": 7700
+            },
+            {
+                "id": "IUY",
+                "name": "Ydelseskøb uden for EU (omvendt betalingspligt)",
+                "rate": 25,
+                "type": "noneu_services_purchase",
+                "rc_account": 7720
+            }
+        ],
+        "std_account_codes": {
+            "1050": [
+                "Salg af varer udland, EU",
+                "EUV"
+            ],
+            "1100": [
+                "Salg af varer udland, ikke-EU",
+                "EXP"
+            ],
+            "1150": [
+                "Salg af ydelser udland, EU",
+                "EUY"
+            ],
+            "1200": [
+                "Salg af ydelser udland, ikke-EU",
+                "EXP"
+            ],
+            "1630": [
+                "Varekøb udland, EU",
+                "IEUV"
+            ],
+            "1650": [
+                "Varekøb udland, ikke-EU",
+                "IUV"
+            ],
+            "1710": [
+                "Ydelseskøb udland, EU",
+                "IEUY"
+            ],
+            "1740": [
+                "Ydelseskøb, udland, ikke-EU",
+                "IUY"
+            ]
+        }
+    },
+    "reminders": {
+        "fee_from_reminder": 2,
+        "fee_until_reminder": 3,
+        "min_days_between": 10,
+        "max_fee": 100,
+        "max_fee_currency": "DKK",
+        "law": "renteloven § 9b"
+    },
+    "chart": "standardkontoplan_2026.json",
+    "chart_classes": null,
+    "einvoice": [
+        "oioubl21",
+        "peppol_bis3"
+    ],
+    "payment_ref": "fik71",
+    "saft": "dk",
+    "legal": {
+        "annual_report": "arl_b",
+        "cvr_lock": true,
+        "oss": true,
+        "ioss": true,
+        "eu_sales_list": {
+            "name": "@EU-salg uden moms (TastSelv Erhverv)",
+            "boxes": {"goods": "B_goods", "services": "B_services"}
+        }
+    },
+    "vat_return": [
+        {
+            "box": "sales_vat",
+            "label": "@Sales VAT (output VAT)",
+            "rule": "setting_acc",
+            "setting": "conf_acc_vat",
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "rc_goods_vat",
+            "label": "@VAT on purchases of goods abroad (both EU and non-EU)",
+            "rule": "rc_vat",
+            "types": [
+                "eu_goods_purchase",
+                "noneu_goods_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "rc_services_vat",
+            "label": "@VAT on purchases of services abroad with reverse charge",
+            "rule": "rc_vat",
+            "types": [
+                "eu_services_purchase",
+                "noneu_services_purchase"
+            ],
+            "sign": -1,
+            "payable": 1
+        },
+        {
+            "box": "purchase_vat",
+            "label": "@Purchase VAT (input VAT)",
+            "rule": "setting_acc",
+            "setting": "conf_acc_purchase_vat",
+            "sign": 1,
+            "payable": -1
+        },
+        {
+            "box": "A_goods",
+            "label": "@Box A - goods: purchases of goods from other EU countries (excl. VAT)",
+            "rule": "net",
+            "types": [
+                "eu_goods_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "A_services",
+            "label": "@Box A - services: purchases of services from other EU countries (excl. VAT)",
+            "rule": "net",
+            "types": [
+                "eu_services_purchase"
+            ],
+            "sign": 1
+        },
+        {
+            "box": "B_goods",
+            "label": "@Box B - goods: sales of goods to other EU countries (excl. VAT, reportable)",
+            "rule": "net",
+            "types": [
+                "eu_goods_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "B_goods_nonlisted",
+            "label": "@Box B - goods: sales of goods to other EU countries not reported to the EU sales list (excl. VAT)",
+            "rule": "net",
+            "types": [
+                "eu_goods_sale_nonlisted"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "B_services",
+            "label": "@Box B - services: sales of services to other EU countries (excl. VAT)",
+            "rule": "net",
+            "types": [
+                "eu_services_sale"
+            ],
+            "sign": -1
+        },
+        {
+            "box": "C",
+            "label": "@Box C: other goods and services supplied without VAT (e.g. export)",
+            "rule": "net",
+            "types": [
+                "export",
+                "reverse_domestic"
+            ],
+            "sign": -1
+        }
+    ],
+    "peppol": {
+        "endpoint_scheme": "0184"
+    }
+}

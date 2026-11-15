@@ -39,10 +39,13 @@ $layouts = [];      // Blokplaceringerne - hentes når fakturaen er læst (layou
 $has_cust_lang_col = db_has_column($conn, 'customers', 'cust_language');
 $cust_lang_select = $has_cust_lang_col ? ", c.cust_language" : "";
 
-$sql = "SELECT i.*, c.cust_name, c.cust_email, c.cust_address, c.cust_cvr $cust_lang_select FROM invoices i JOIN customers c ON i.cust_id = c.cust_id WHERE i.inv_id = $inv_id";
+$cust_vat_select = db_has_column($conn, 'customers', 'cust_vat_id') ? ', c.cust_vat_id, c.cust_country' : '';
+$sql = "SELECT i.*, c.cust_name, c.cust_email, c.cust_address, c.cust_cvr $cust_lang_select $cust_vat_select FROM invoices i JOIN customers c ON i.cust_id = c.cust_id WHERE i.inv_id = $inv_id";
 $res = DB::query($conn, $sql);
 $inv = DB::fetch_assoc($res);
 if (!$inv) redirect('sales_hub.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: hvid side uden menu
+require_once __DIR__ . '/inc/doc_paper.inc.php';
+if ($has_cust_lang_col) $inv['cust_language'] = doc_customer_lang($conn, (int)$inv['cust_id']);      // (en udenlandsk kunde uden valgt sprog: engelsk)
 
 // Flere fakturalayouts: fakturaens eget layout ($il_own) - eller et andet til
 // forhåndsvisning/redigering (?layout=). Ikke migreret: det ene fælles layout.
@@ -232,7 +235,7 @@ if ($is_sent_view) {
 if ($profile_incomplete) {
     echo '<div class="no-print" style="width:210mm; margin:5px auto; background:var(--bg-panel, #fff3cd); color:var(--text-alert-warning, #856404); border-left:4px solid var(--color-warning, #ffc107); border-radius:4px; padding:12px 15px; font-size:0.9em;">'
         . '<i class="fa-solid fa-triangle-exclamation"></i> '
-        . lang('@Your company profile is incomplete (name, CVR, address or city is missing). This invoice will show placeholder text where data is missing until you fill it in under Company Settings.')
+        . sprintf(lang('@Your company profile is incomplete (name, %s, address or city is missing). This invoice will show placeholder text where data is missing until you fill it in under Company Settings.'), tc_company_id_short())
         . ' <a href="company_settings.php" style="font-weight:bold;">' . lang('@Go to Company Settings') . '</a>'
         . '</div>';
 }
@@ -256,28 +259,37 @@ if (!$is_sent_view) {
     htm_Button(icon:'fa-pencil-ruler', labl:'@Design Mode',  type:'secondary', attr:'onclick="docToggleDesign()" id="designBtn" data-hint="'.lang('@Reposition invoice elements freely').'"');
     if (!$il_preview)      // (en forhåndsvisning af et andet layout må ikke blive den PDF kunden får)
     htm_Button(icon:'fa-envelope',     labl:'@Send via Mail', type:'info',      attr:'onclick="generateAndSendInvoice('.$inv_id.')" id="mailBtn" data-hint="'.lang('@Email this invoice to the customer').'"');
-    // RETTET: OIOUBL er et dansk e-faktura-format - knappen er grå/deaktiveret når firmaets bogføringsvaluta ikke
-    // er DKK (export_oioubl.php spærrer stadig selv direkte adgang, dette er kun for at undgå et dødt link).
-    if (strtoupper($global_settings['currency'] ?? 'DKK') === 'DKK') {
+    // OIOUBL er Danmarks e-fakturaformat: kun når landepakken har det; grå uden landets valuta som bogføringsvaluta
+    if (tc_pack_feature('oioubl')) {
         htm_Button(icon:'fa-file-code',    labl:'@OIOUBL XML',   type:'warning',   attr:'onclick="window.location.href=\'export_oioubl.php?id='.$inv_id.'\'" data-hint="'.lang('@Download this invoice as an OIOUBL e-invoice XML file').'"');
-    } else {
-        htm_Button(icon:'fa-file-code',    labl:'@OIOUBL XML',   type:'secondary', attr:'disabled data-hint="'.lang('@This feature follows Danish-specific tax and bookkeeping rules, and is only available when your company\'s base currency is DKK.').'"');
+    } elseif (in_array('oioubl21', (array)tc_country_pack('einvoice', []), true)) {
+        htm_Button(icon:'fa-file-code',    labl:'@OIOUBL XML',   type:'secondary', attr:'disabled data-hint="'.lang('@This feature follows the tax and bookkeeping rules of another country, or needs the country\'s own currency as base currency.').'"');
+    }
+    // Peppol BIS 3 - EU's og Nordens fælles e-fakturaformat (inc/peppol.inc.php), når landepakken tilbyder det
+    if (tc_pack_feature('peppol')) {
+        htm_Button(icon:'fa-file-code',    labl:'@Peppol XML',   type:'warning',   attr:'onclick="window.location.href=\'export_peppol.php?id='.$inv_id.'\'" data-hint="'.lang('@Download this invoice as a Peppol BIS 3 e-invoice XML file (EU / Nordic standard)').'"');
     }
     // NYT: export_oioubl.php arkiverer allerede en kopi i storage/einvoices/ ved hvert eksport (.php). Filnavnet
     // er deterministisk ($doc_id = invoice_no) og skrives via en almindelig file_put_contents (ingen
     // append/historik) - filens mtime er derfor præcis tidspunktet for SENESTE eksport, ikke den første.
-    if (!empty($inv['invoice_no'])) {
-        $einvoice_path = __DIR__ . '/storage/einvoices/' . tc_account_storage_subdir() . 'OIOUBL_Invoice_' . $inv['invoice_no'] . '.xml';
+    $einvoice_name = !empty($inv['credit_ref']) ? (!empty($inv['credit_note_no']) ? 'OIOUBL_CreditNote_KN-' . str_pad($inv['credit_note_no'], 6, '0', STR_PAD_LEFT) : '')
+                   : (!empty($inv['invoice_no']) ? 'OIOUBL_Invoice_' . $inv['invoice_no'] : '');      // (filnavnet fra inc/oioubl.inc.php)
+    if ($einvoice_name !== '') {
+        $einvoice_path = __DIR__ . '/storage/einvoices/' . tc_account_storage_subdir() . $einvoice_name . '.xml';
         if (file_exists($einvoice_path)) {
             echo '<span style="font-size:0.8em; color:var(--text-muted); align-self:center; margin-left:4px;">'
                 . '<i class="fa-solid fa-check"></i> ' . sprintf(lang('@Last exported as e-invoice: %s'), date(CONF_DATE_FORMAT . ' H:i', filemtime($einvoice_path)))
                 . '</span>';
         }
     }
+    // Automatisk opslag i Nemhandelsregistret ved fakturering: kan kunden modtage fakturaen elektronisk?
+    require_once __DIR__ . '/inc/nemhandel.inc.php';
+    echo htm_nemhandel_status((int)$inv['cust_id'], 'align-self:center; margin-left:6px;');
 }
 // NYT: "Dupliker faktura" - altid tilgængelig uanset status (også en betalt/krediteret faktura er en gyldig kilde
 // til gentagelse), i modsætning til Send/OIOUBL-knapperne ovenfor som kun giver mening før fakturaen er sendt.
 if (!$is_sent_view && empty($inv['credit_ref'])) {      // (en kreditnota kopieres ikke - se invoice_duplicate.php)
+    htm_Button(icon:'fa-truck', labl:'@Delivery Note', type:'secondary', link:'delivery_note_view.php?inv='.$inv_id, attr:'data-hint="'.lang('@The delivery note for the goods - items and quantities without prices').'"');
     htm_Button(icon:'fa-copy', labl:'@Duplicate Invoice', type:'secondary', attr:'onclick="' . htm_confirm_js('@Create a new draft invoice with the same customer and lines?', "tcPost('invoice_duplicate.php?id=$inv_id')") . '" data-hint="'.lang('@Create a new draft with the same customer, lines and settings - useful for repeat billing').'"');
 }
 // NYT: der var INGEN måde at markere en faktura som betalt uden om bankafstemning - en kunde der betaler
@@ -291,7 +303,8 @@ if (!$is_sent_view && empty($inv['credit_ref']) && !in_array(strtolower($inv['in
     && !invoice_is_written_off($conn, (int)$inv_id)) {
     htm_Button(icon:'fa-undo', labl:'@Create Credit Note', type:'warning', link:'invoice_credit.php?credit_ref='.$inv_id, attr:'data-hint="'.lang('@Credit this invoice (Auto-create)').'"');
 }
-if (!$is_sent_view && strtolower($inv['inv_status'] ?? '') === 'sent') {
+if (!$is_sent_view && (strtolower($inv['inv_status'] ?? '') === 'sent'
+        || (strtolower($inv['inv_status'] ?? '') === 'credited' && empty($inv['credit_ref']) && invoice_open_dkk($conn, (int)$inv_id) > 0.01))) {      // (krediteret, men et gebyr er stadig skyldigt)
     htm_Button(icon:'fa-money-bill-wave', labl:'@Register Payment', type:'success', attr:'onclick="window.location.href=\'invoice_mark_paid.php?id='.$inv_id.'\'" data-hint="'.lang('@Register a payment that did not come through a bank import (cash, MobilePay, etc.)').'"');
     // NYT: der var ingen formel måde at afskrive en uerholdelig faktura som et reelt tab - kun "marker betalt"
     // (forudsætter en reel indbetaling) eller kreditnota (som reelt fortryder salget). Samme betingelse ('sent' =
@@ -364,6 +377,7 @@ if ($inv_paper_lang_override) {
     ob_start();
 }
 echo '<div class="paper" id="invoice-page">';
+echo doc_shapes_html($il_on ? il_shapes($conn, $il_id) : []);      // (layoutets grafik - bag teksten)
 echo '<div class="design-zone zone-header" style="top:0; height:56.7px;">Header</div>';
 echo '<div class="design-zone zone-lines"  style="top:calc(100mm - 15mm); height:120mm;">Varelinjer</div>';
 echo '<div class="design-zone zone-totals" style="top:calc(230mm - 15mm); height:35mm;">Totaler &amp; noter</div>';
@@ -397,11 +411,20 @@ $logo_html = $logo_path
 echoBlock('block-logo', $logo_html);
 
 // Afsender
-$sender_html = '<div style="font-size:14px; color:var(--text-main);" contenteditable="'.($is_sent_view ? 'false' : 'true').'"><strong>'.htmlspecialchars($coName).'</strong><br>'.htmlspecialchars($coAddr).'<br>'.htmlspecialchars($coCity).'<br>'.lang('@CVR').': '.htmlspecialchars($coCVR).'</div>';
+// Sælgerens momsnummer: Sverige (momsreg.nr. SE...01), Norge (org.nr. + MVA), Finland og Island kræver det på fakturaen;
+// i Danmark er CVR-nummeret nok, undtagen ved salg til en kunde i et andet land (momssystemdirektivet art. 226 nr. 3)
+$co_vat_txt = tc_company_vat_id();
+$show_co_vat = $co_vat_txt !== '' && (strtoupper((string)tc_country_pack('iso', 'DK')) !== 'DK'
+    || (strtoupper(trim((string)($inv['cust_country'] ?? ''))) !== '' && strtoupper(trim((string)$inv['cust_country'])) !== 'DK'));
+$sender_html = '<div style="font-size:14px; color:var(--text-main);" contenteditable="'.($is_sent_view ? 'false' : 'true').'"><strong>'.htmlspecialchars($coName).'</strong><br>'.htmlspecialchars($coAddr).'<br>'.htmlspecialchars($coCity).'<br>'.tc_company_id_short().': '.htmlspecialchars($coCVR)
+    . ($show_co_vat ? '<br>' . lang('@VAT No.') . ': ' . htmlspecialchars($co_vat_txt) : '') . '</div>';
 echoBlock('block-sender', $sender_html);
 
 // Modtager
-$recip_html = '<div style="width:90mm; font-size:14px;"><small style="color:var(--text-muted);">'.lang('@Recipient').':</small><br><strong>'.htmlspecialchars($inv['cust_name'] ?? '').'</strong><br>'.nl2br(htmlspecialchars($inv['cust_address'] ?? '')).'</div>';
+// Køberens momsnummer står på fakturaen (momssystemdirektivet art. 226, nr. 4) - påkrævet ved salg uden moms til EU
+$cust_vat_txt = (string)(tc_vat_id_clean($inv['cust_vat_id'] ?? '') ?? '');
+$recip_html = '<div style="width:90mm; font-size:14px;"><small style="color:var(--text-muted);">'.lang('@Recipient').':</small><br><strong>'.htmlspecialchars($inv['cust_name'] ?? '').'</strong><br>'.nl2br(htmlspecialchars($inv['cust_address'] ?? ''))
+    . ($cust_vat_txt !== '' ? '<br>' . lang('@VAT No.') . ': ' . htmlspecialchars($cust_vat_txt) : '') . '</div>';
 echoBlock('block-recipient', $recip_html);
 
 // Leveringsadresse - egen designblok (altid i DOM, ligesom block-cust-ref/block-notes), så den kan placeres frit i
@@ -443,7 +466,15 @@ if ($is_credit_note) {
     $f_no_label = lang('@Invoice No');
     $f_no = $inv['invoice_no'] ? '#'.str_pad($inv['invoice_no'], 6, "0", STR_PAD_LEFT) : lang('@DRAFT');
 }
-echoBlock('block-inv-no',   '<strong>'.$f_no_label.':</strong><br><span style="font-size:16px;">'.$f_no.'</span>');
+// En kreditnota henviser altid til den faktura den krediterer (art. 219) - ikke kun via den frie note, som kan rettes
+$cn_ref_html = '';
+if ($is_credit_note) {
+    $cn_orig = DB::fetch_assoc(DB::query($conn, "SELECT invoice_no, inv_date FROM invoices WHERE inv_id = " . (int)$inv['credit_ref']));
+    if ($cn_orig && !empty($cn_orig['invoice_no'])) {
+        $cn_ref_html = '<br><small>' . sprintf(lang('@Credits invoice %s of %s'), '#' . str_pad((string)$cn_orig['invoice_no'], 6, '0', STR_PAD_LEFT), date(CONF_DATE_FORMAT, strtotime($cn_orig['inv_date']))) . '</small>';
+    }
+}
+echoBlock('block-inv-no',   '<strong>'.$f_no_label.':</strong><br><span style="font-size:16px;">'.$f_no.'</span>' . $cn_ref_html);
 echoBlock('block-inv-date', '<strong>'.lang('@Date').':</strong><br>'.date(CONF_DATE_FORMAT, strtotime($inv['inv_date'])));
 echoBlock('block-inv-due',  '<strong>'.lang('@Due Date').':</strong><br>'.(!empty($inv['inv_due_date']) ? date(CONF_DATE_FORMAT, strtotime($inv['inv_due_date'])) : '-'));      // (tomt forfald viste 01-01-1970)
 
@@ -464,12 +495,15 @@ while ($l = DB::fetch_assoc($res_l)) {
 $lines_html = '<table class="line-table"><thead><tr><th>'.lang('@Description').'</th><th style="text-align:right;">'.lang('@Qty').'</th><th style="text-align:right;">'.lang('@Price').'</th>'
     . ($has_any_discount ? '<th style="text-align:right;">'.lang('@Discount').'</th>' : '')
     . '<th style="text-align:right;">'.lang('@Line total').'</th></tr></thead><tbody>';
-$sub = 0; $vat = 0;
+$sub = 0; $vat = 0;  $vat_by_rate = [];      // (sats => [grundlag, moms] - fakturaen skal vise satsen og momsen pr. sats)
 foreach ($inv_lines_arr as $l) {
     $disc = (float)($l['discount_pct'] ?? 0);
     $lt   = $l['quantity'] * $l['price_each'] * (100 - $disc) / 100.0;
     $sub  += $lt;
     $vat  += ($lt * ($l['line_vat_rate'] / 100));
+    $vr_k = (string)(float)$l['line_vat_rate'];
+    $vat_by_rate[$vr_k][0] = ($vat_by_rate[$vr_k][0] ?? 0) + $lt;
+    $vat_by_rate[$vr_k][1] = ($vat_by_rate[$vr_k][1] ?? 0) + $lt * ($l['line_vat_rate'] / 100);
     $lines_html .= '<tr><td>'.htmlspecialchars($l['line_text']).'</td>'
         . '<td align="right">'.fmt_dk($l['quantity']).'</td>'
         . '<td align="right">'.fmt_dk($l['price_each']).'</td>'
@@ -477,12 +511,23 @@ foreach ($inv_lines_arr as $l) {
         . '<td align="right" style="font-weight:bold;">'.fmt_dk($lt).'</td></tr>';
 }
 $lines_html .= '</tbody></table>';
+// (netto og moms afrundes hver for sig, som ved bogføringen - ellers kunne totalen afvige 1 øre fra det kunden skylder)
+$sub = round($sub, 2);  $vat = round($vat, 2);
 echoBlock('block-lines', $lines_html);
 
 // Totaler
 $total_html  = '<table style="width:98%; margin-left:5%; border-collapse:collapse;">';
 $total_html .= '<tr><td>'.lang('@Subtotal').':</td><td align="right">'.fmt_dk($sub).'</td></tr>';
-$total_html .= '<tr><td>'.lang('@VAT').':</td><td align="right">'.fmt_dk($vat).'</td></tr>';
+// Momsen pr. sats (art. 226 nr. 8 og 10): én linje pr. sats med grundlaget; en enkelt sats står som "Moms 25 %"
+ksort($vat_by_rate, SORT_NUMERIC);
+if (count($vat_by_rate) <= 1) {
+    $only = array_key_first($vat_by_rate);
+    $total_html .= '<tr><td>'.lang('@VAT').($only !== null ? ' '.fmt_pct((float)$only).' %' : '').':</td><td align="right">'.fmt_dk($vat).'</td></tr>';
+} else {
+    foreach ($vat_by_rate as $vr => [$vr_base, $vr_vat]) {
+        $total_html .= '<tr><td>'.sprintf(lang('@VAT %s %% of %s'), fmt_pct((float)$vr), fmt_dk(round($vr_base, 2))).':</td><td align="right">'.fmt_dk(round($vr_vat, 2)).'</td></tr>';
+    }
+}
 $total_html .= '<tr style="font-size:1.2em;font-weight:bold;border-top:2px solid var(--border-dark);"><td>'.lang('@Total').':</td><td align="right">'.fmt_dk($sub+$vat).' '.$cur.'</td></tr>';
 // RETTET: en faktura i fremmed valuta viste kun momsen i fakturaens valuta - når der faktureres dansk moms
 // i fremmed valuta, skal momsbeløbet også angives i kroner (momsbekendtgørelsen), og kursen bør fremgå
@@ -495,26 +540,49 @@ if ($iv_rate > 0 && strtoupper((string)$cur) !== $iv_base && abs($vat) >= 0.005)
 $total_html .= '</table>';
 echoBlock('block-totals', $total_html);
 
-// Noter (altid i DOM)
+// Noter (altid i DOM). Salg uden moms til en virksomhed i et andet EU-land skal nævne omvendt betalingspligt
+// (momssystemdirektivet art. 226, nr. 11/11a) - teksten kommer foran fakturaens egen note.
+$rc_note = '';
+$inv_cc = strtoupper(trim((string)($inv['cust_country'] ?? '')));
+if ($cust_vat_txt !== '' && $inv_cc !== '' && $inv_cc !== strtoupper((string)tc_country_pack('iso', 'DK')) && in_array($inv_cc, TC_EU_COUNTRIES, true)
+    && in_array(strtoupper((string)tc_country_pack('iso', 'DK')), TC_EU_COUNTRIES, true)      // (kun en sælger i EU leverer inden for EU)
+    && (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM invoice_lines WHERE inv_id = $inv_id AND COALESCE(line_vat_rate, 0) = 0"))[0] ?? 0) > 0) {
+    // (EU-levering af varer er "intra-Community supply"; for ydelser hedder det kun omvendt betalingspligt - art. 196)
+    $rc_types = tc_invoice_line_vat_types($conn, $inv_id);
+    $rc_goods = array_intersect($rc_types, ['eu_goods_sale', 'eu_goods_sale_nonlisted']) !== [];
+    $rc_note = ($rc_goods || !in_array('eu_services_sale', $rc_types, true))
+        ? lang('@Reverse charge: intra-Community supply without VAT - the buyer accounts for the VAT.')
+        : lang('@Reverse charge: the buyer accounts for the VAT.');
+}
+// Indenlandsk omvendt betalingspligt (fx byggeydelser i Sverige/Finland) skal også stå på fakturaen
+$iv_types = tc_invoice_line_vat_types($conn, $inv_id);
+if ($rc_note === '' && in_array('reverse_domestic', $iv_types, true)) {
+    $rc_note = lang('@Reverse charge: the buyer accounts for the VAT.');
+}
+// Fritagelse skal også nævnes (art. 226 nr. 11): eksport ud af EU (art. 146) - en 0 %-linje til en kunde uden for EU eller
+// på en eksportkonto - og momsfritaget salg (fx husleje, sundhedsydelser)
+$iv_zero = (int)(DB::fetch_row(DB::query($conn, "SELECT COUNT(*) FROM invoice_lines WHERE inv_id = $inv_id AND COALESCE(line_vat_rate, 0) = 0"))[0] ?? 0) > 0;
+$iv_home = strtoupper((string)tc_country_pack('iso', 'DK'));
+$iv_export = $inv_cc !== '' && $inv_cc !== $iv_home && (!in_array($inv_cc, TC_EU_COUNTRIES, true) || !in_array($iv_home, TC_EU_COUNTRIES, true));      // (fra Norge/Island er alt salg til udlandet eksport)
+if ($rc_note === '' && $iv_zero && (in_array('export', $iv_types, true) || $iv_export)) {
+    $rc_note = lang('@Export - exempt from VAT.');
+} elseif ($rc_note === '' && in_array('exempt', $iv_types, true)) {
+    $rc_note = lang('@VAT exempt supply.');
+}
 $note_val     = trim($inv['inv_note'] ?? '');
-$note_content = !empty($note_val)
-    ? nl2br(htmlspecialchars($note_val))
+$note_content = ($rc_note !== '' || !empty($note_val))
+    ? ($rc_note !== '' ? '<strong>' . htmlspecialchars($rc_note) . '</strong>' . ($note_val !== '' ? '<br>' : '') : '') . nl2br(htmlspecialchars($note_val))
     : '<span class="design-placeholder">(' . lang('@Notes') . ')</span>';
-$note_empty   = empty($note_val) ? 'block-empty' : '';
+$note_empty   = ($rc_note === '' && empty($note_val)) ? 'block-empty' : '';
 echoBlock('block-notes',
     '<div style="border-top:1px solid var(--border-color); padding-top:5px;"><small>'.lang('@Notes').':</small><br>'.$note_content.'</div>',
     $note_empty
 );
 
 // Footer-blokke
-// RETTET: faldt tilbage til et OPDIGTET, ægte bankfilial-navn ("Nordea") plus falske reg./kontonumre
-// ('0000'/'00000000') hvis bankoplysningerne ikke var udfyldt i Firmaindstillinger - en kunde der forsøgte at
-// betale efter denne fakturas betalingsoplysninger ville få en reel, navngiven bank og et konkret (falsk)
-// kontonummer at indbetale til. Viser nu et ærligt "[mangler]"-mærke i stedet, samme princip som CVR-feltet.
-$bankName = ($settings['bank_name'] ?? '') ?: lang('@[Bank name missing]');
-$bankReg  = ($settings['bank_reg'] ?? '')  ?: lang('@[Reg. no. missing]');
-$bankAcc  = ($settings['bank_acc'] ?? '')  ?: lang('@[Account no. missing]');
-echoFooterBlock('foot-pay',     '@Payment', htmlspecialchars($bankName).'<br>'.lang('@Reg').': '.htmlspecialchars($bankReg).' '.lang('@Acc').': '.htmlspecialchars($bankAcc));
+// (betalingsreferencen kun på en bogført faktura - ikke en kladde uden nummer eller en kreditnota)
+$pay_ref = (!$is_credit_note && !$inv_is_draft && !empty($inv['invoice_no'])) ? tc_payment_ref($inv['invoice_no']) : null;
+echoFooterBlock('foot-pay',     '@Payment', doc_pay_html($settings, $pay_ref));
 echoFooterBlock('foot-contact', '@Contact', ($settings['company_phone'] ?? '').'<br>'.($settings['company_email'] ?? ''));
 // RETTET: faldt tilbage til et opdigtet MobilePay-nummer ('00000') og en falsk, plausibelt-udseende hjemmeside
 // ('www.company.com') - MobilePay/hjemmeside er reelt OPTIONELLE kontaktkanaler (ikke alle virksomheder har
@@ -527,7 +595,7 @@ echoFooterBlock('foot-online',  '@Online',  implode('<br>', $online_lines));
 // RETTET: samme falske CVR-fallback som $coCVR ovenfor, blot et ANDET falsk tal ('00000000' i stedet for
 // '12345678') - to indbyrdes uenige opdigtede CVR-numre samme faktura, afhængig af hvilken blok man kiggede på.
 // Genbruger nu $coName/$coCVR (allerede rettet ovenfor til ærlige "[mangler]"-mærker).
-echoFooterBlock('foot-legal',   '@Legal',   '<strong>'.htmlspecialchars($coName).'</strong><br>'.lang('@CVR').': '.htmlspecialchars($coCVR));
+echoFooterBlock('foot-legal',   '@Legal',   '<strong>'.htmlspecialchars($coName).'</strong><br>'.tc_company_id_short().': '.htmlspecialchars($coCVR) . (tc_register_text() !== '' ? '<br>' . htmlspecialchars(tc_register_text()) : ''));
 
 // NYT: invoice_footer fandtes allerede som en udfyldt værdi i settings-tabellen ("Tak fordi du handler i
 // eventyrbutikken."), men INTET sted i kodebasen læste den - reelt død data. Genopliver den her som en fri,
@@ -573,9 +641,15 @@ if (!$is_sent_view && strtolower($inv['inv_status'] ?? '') !== 'draft') {
         $cn_res = DB::query($conn, "SELECT * FROM invoices WHERE credit_ref = $inv_id ORDER BY inv_date ASC, inv_id ASC");
         if ($cn_res) while ($cn = DB::fetch_assoc($cn_res)) { $cn['total'] = invoice_dkk_totals($conn, (int)$cn['inv_id'])['incl'];  $credit_notes[] = $cn; }
     }
-    if (!empty($payments) || !empty($credit_notes)) {
+    // Bogførte rykkergebyrer - en del af det kunden skylder på fakturaen
+    $inv_fees = [];
+    if (db_has_table($conn, 'invoice_fees')) {
+        $fee_res = DB::query($conn, "SELECT fee_date, amount, reminder_no FROM invoice_fees WHERE inv_id = $inv_id ORDER BY fee_id");
+        while ($fee_res && ($fr = DB::fetch_assoc($fee_res))) $inv_fees[] = $fr;
+    }
+    if (!empty($payments) || !empty($credit_notes) || !empty($inv_fees)) {
         $inv_total  = invoice_dkk_totals($conn, $inv_id)['incl'];
-        $remaining  = round($inv_total + array_sum(array_column($credit_notes, 'total')) - $total_paid, 2);
+        $remaining  = round($inv_total + array_sum(array_column($credit_notes, 'total')) + array_sum(array_column($inv_fees, 'amount')) - $total_paid, 2);
         $paid_cur   = $settings['currency'] ?? 'DKK'; // betalinger er altid i regnskabets bogføringsvaluta, ikke fakturaens visningsvaluta
         echo '<div style="max-width:900px; margin:20px auto 0; padding:0 15px;" class="no-print">';
         echo '<div style="background:var(--bg-panel); border-radius:8px; padding:15px 20px;">';
@@ -590,6 +664,12 @@ if (!$is_sent_view && strtolower($inv['inv_status'] ?? '') !== 'draft') {
                . '<td style="padding:6px 0; text-align:right; color:' . ($p_wo ? 'var(--color-danger)' : 'var(--color-success)') . ';">' . fmt_dk((float)$p['amount']) . ' ' . $paid_cur . '</td>'
                . '</tr>';
         }
+        foreach ($inv_fees as $fr) {
+            echo '<tr style="border-bottom:1px solid var(--border-color);">'
+               . '<td style="padding:6px 0;">' . date(CONF_DATE_FORMAT, strtotime($fr['fee_date'])) . ' &nbsp;<span style="color:var(--text-muted); font-size:0.9em;">'
+               . htmlspecialchars(sprintf(lang('@Reminder fee, reminder no. %d, invoice #%s'), (int)$fr['reminder_no'], str_pad((string)$inv['invoice_no'], 6, '0', STR_PAD_LEFT))) . '</span></td>'
+               . '<td style="padding:6px 0; text-align:right; color:var(--color-warning);">+' . fmt_dk((float)$fr['amount']) . ' ' . $paid_cur . '</td></tr>';
+        }
         foreach ($credit_notes as $cn) {
             $cn_label = lang('@Credit Note') . ' ' . (!empty($cn['credit_note_no']) ? 'KN-' . str_pad($cn['credit_note_no'], 6, '0', STR_PAD_LEFT) : '');
             echo '<tr style="border-bottom:1px solid var(--border-color);">'
@@ -599,10 +679,14 @@ if (!$is_sent_view && strtolower($inv['inv_status'] ?? '') !== 'draft') {
         }
         echo '</table>';
         echo '<div style="display:flex; justify-content:space-between; margin-top:10px; padding-top:10px; border-top:2px solid var(--border-dark); font-weight:bold;">';
-        if (strtolower($inv['inv_status'] ?? '') === 'credited') {
-            echo '<span style="color:var(--color-info);">' . lang('@Credited') . '</span><span></span>';
-        } elseif ($remaining > 0.01) {
+        // Restbeløbet afgør teksten, ikke status: en krediteret faktura kan skylde et gebyr, og en betalt faktura der
+        // krediteres bagefter, giver kunden penge til gode (før stod begge som "Krediteret" / "Fuldt betalt")
+        if ($remaining > 0.01) {
             echo '<span>' . lang('@Remaining balance') . ':</span><span style="color:var(--color-warning);">' . fmt_dk($remaining) . ' ' . $paid_cur . '</span>';
+        } elseif ($remaining < -0.01) {
+            echo '<span>' . lang('@The customer has a credit balance (to be refunded)') . ':</span><span style="color:var(--color-info);">' . fmt_dk(-$remaining) . ' ' . $paid_cur . '</span>';
+        } elseif (strtolower($inv['inv_status'] ?? '') === 'credited') {
+            echo '<span style="color:var(--color-info);">' . lang('@Credited') . '</span><span></span>';
         } elseif ($inv_written_off) {
             echo '<span style="color:var(--color-danger);">' . lang('@Written off as bad debt') . '</span><span></span>';
         } else {
@@ -618,7 +702,7 @@ echo '<div id="help-system-popup">
     <div id="help-system-content">' . lang('@Loading help...') . '</div>
 </div>';
 echo doc_pdf_js();
-echo doc_design_js(['paper' => 'invoice-page', 'layout' => $il_id, 'doc' => 'invoice', 'btn' => 'designBtn', 'own' => $il_own,
+echo doc_design_js(['paper' => 'invoice-page', 'layout' => $il_id, 'doc' => 'invoice', 'btn' => 'designBtn', 'own' => $il_own, 'shapes' => $il_on && il_shapes_ready($conn),
     'url' => 'invoice_view.php?id=' . $inv_id, 'names' => array_map(fn($l) => $l['name'], $il_list), 'hide' => ['#mailBtn', '#printBtn'],
     'confirm' => ($il_on && $il_posted > 0) ? sprintf(lang('@The layout %s is used by %d posted invoice(s). Moving its blocks changes how they look when shown or printed again (the archived PDF stays as it was sent). Continue?'), '"' . ($il_list[$il_id]['name'] ?? '') . '"', $il_posted) : '',
     't' => ['title' => lang('@Invoice layout')]]);

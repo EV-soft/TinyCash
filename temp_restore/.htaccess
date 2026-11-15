@@ -1,0 +1,10 @@
+# temp_restore/.htaccess
+#
+# Midlertidig udpakningsmappe brugt af backup_restore_worker.php mens en
+# uploadet backup-ZIP behandles - indeholder for en kort periode den fulde,
+# UKRYPTEREDE database_dump.sql + uploads/ + storage/ fra den uploadede
+# backup. Samme begrundelse som backups/.htaccess. Denne fil er bevidst
+# forudoprettet (mappen findes måske slet ikke lige nu), så beskyttelsen
+# ikke afhænger af, at mkdir() når at nå at oprette den FØR en eventuel
+# samtidig forespørgsel.
+Deny from all

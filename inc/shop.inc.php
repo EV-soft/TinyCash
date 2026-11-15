@@ -89,7 +89,8 @@ function shop_ensure_schema($conn, bool $is_sqlite): array {
         : (bool)DB::fetch_assoc(DB::query($conn, "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'shop_orders' AND INDEX_NAME = 'ux_shop_orders_ext'"));
     if (!$has_idx) $out[] = DB::query($conn, "CREATE UNIQUE INDEX ux_shop_orders_ext ON shop_orders (shop_id, kind, external_id)") ? "[OK] Indeks ux_shop_orders_ext oprettet." : "[FEJL] indeks: " . DB::error($conn);
     // Platform-integrationerne (signeret webhook / hentning): kolonner på en ældre shop_connections
-    foreach (['secret' => $txt, 'api_url' => $txt, 'api_key' => $txt, 'last_remote_id' => $txt, 'last_fetch_at' => $txt, 'last_fetch_msg' => $big] as $col => $type) {
+    // (ioss: butikkens varer sendes fra et land uden for EU - se shop_is_ioss())
+    foreach (['secret' => $txt, 'api_url' => $txt, 'api_key' => $txt, 'last_remote_id' => $txt, 'last_fetch_at' => $txt, 'last_fetch_msg' => $big, 'ioss' => "$int DEFAULT 0"] as $col => $type) {
         if (shop_col_exists($conn, 'shop_connections', $col)) continue;
         $out[] = DB::query($conn, "ALTER TABLE shop_connections ADD COLUMN $col $type") ? "[OK] Kolonnen shop_connections.$col tilføjet." : "[FEJL] $col: " . DB::error($conn);
     }
@@ -151,7 +152,7 @@ function shop_create_clearing_account($conn, string $name): int {
         log_action($conn, 'CREATE_ACCOUNT', 'accounts', $n, null, ['acc_name' => $name, 'reason' => 'webbutik mellemregning']);
         return $n;
     }
-    throw new Exception('Ingen ledige kontonumre mellem 5850 og 5899.');
+    throw new Exception('No free account numbers between 5850 and 5899.');
 }
 
 // --- Adaptere ---------------------------------------------------------------------------------
@@ -291,12 +292,19 @@ function shop_handle_request($conn, array $shop, string $raw, array $headers): a
 // regnes ud af den (så brutto passer på øren). Varenummer: kendt produkt -> produktets navn/konto-moms;
 // ukendt -> fritekst (advarsel). Fragt/gebyr/rabat/fritekst kræver intet varenummer.
 function shop_resolve_lines($conn, array $shop, array $order, array &$warnings): array {
+    // EU-OSS/IOSS: en sats ordren ikke selv sender (varens konto, butikkens fragtmoms) er hjemlandets - den skal være
+    // modtagerlandets (fragten følger varen); ellers blev hver sådan ordre en kladde med "landet har ikke 25 %"
+    $party = shop_party((array)($order['customer'] ?? []));
+    $odate = tc_is_date((string)($order['date'] ?? '')) ? (string)$order['date'] : null;
+    $dest  = shop_is_ioss($conn, $shop, $order) ? ioss_dest_for(...$party) : (oss_ready($conn) ? oss_dest_for($party[0], $party[1], $odate) : null);
     $incl = $order['prices_incl_vat'] ?? null;
     $incl = ($incl === null) ? !empty($shop['prices_incl_vat']) : (bool)$incl;
     $out = [];
     foreach ($order['lines'] as $i => $l) {
         $type = in_array($l['type'] ?? 'product', SHOP_LINE_TYPES, true) ? ($l['type'] ?? 'product') : 'product';
-        $qty  = (float)($l['qty'] ?? 1);
+        // (et tal sendt som tekst med komma - "2,5", "12,50" - blev til 2 og 12; som webhook_invoice.php)
+        $num  = fn($v) => (is_int($v) || is_float($v)) ? (float)$v : parse_dk_number((string)$v);
+        $qty  = $num($l['qty'] ?? 1);
         if ($qty <= 0 && $type !== 'discount') throw new ShopError("lines[$i]: the quantity must be greater than 0.");
         if ($type === 'discount') $qty = 1;
         $sku  = trim((string)($l['sku'] ?? ''));
@@ -306,12 +314,13 @@ function shop_resolve_lines($conn, array $shop, array $order, array &$warnings):
                 LEFT JOIN accounts a ON p.acc_id = a.acc_id WHERE p.prod_sku = '" . DB::escape($conn, $sku) . "'"));
             if (!$prod && $type === 'product') $warnings[] = "lines[$i]: no product with sku \"$sku\" - booked as a text line";
         }
-        $text = trim((string)($l['text'] ?? '')) !== '' ? trim((string)$l['text']) : ($prod['prod_name'] ?? ($type === 'shipping' ? 'Fragt' : ($type === 'discount' ? 'Rabat' : ($type === 'fee' ? 'Gebyr' : ''))));
+        $text = trim((string)($l['text'] ?? '')) !== '' ? trim((string)$l['text']) : ($prod['prod_name'] ?? ($type === 'shipping' ? lang('@Shipping') : ($type === 'discount' ? lang('@Discount') : ($type === 'fee' ? lang('@Fee') : ''))));
         if ($text === '') throw new ShopError("lines[$i]: a text is needed for a line without a known sku.");
-        $vat = isset($l['vat_rate']) ? (float)$l['vat_rate']
-             : ($prod && $prod['vat_rate'] !== null ? (float)$prod['vat_rate'] : ($type === 'shipping' ? (float)($shop['shipping_vat'] ?? 25) : 25.0));
+        $vat = isset($l['vat_rate']) ? $num($l['vat_rate'])
+             : ($prod && $prod['vat_rate'] !== null ? (float)$prod['vat_rate'] : ($type === 'shipping' ? (float)($shop['shipping_vat'] ?? tc_vat_std_rate()) : tc_vat_std_rate()));
+        if (!isset($l['vat_rate']) && $dest !== null) $vat = oss_map_rate($dest, $vat);
         if (!isset($l['price']) && !$prod) throw new ShopError("lines[$i]: a price is needed for a line without a known sku.");
-        $price = isset($l['price']) ? (float)$l['price'] : (float)$prod['prod_price'] * ($incl ? (1 + $vat / 100) : 1);
+        $price = isset($l['price']) ? $num($l['price']) : (float)$prod['prod_price'] * ($incl ? (1 + $vat / 100) : 1);
         // RETTET: momssats og pris blev ikke kontrolleret - vat_rate -100 gav division med nul (fatal fejl, ordren gik
         // tabt med en 500), en sats på fx 250 eller en negativ varepris (ikke en rabatlinje) gav forkert moms og omsætning
         if (!is_finite($vat) || $vat < 0 || $vat > 100) throw new ShopError("lines[$i]: vat_rate must be between 0 and 100.");
@@ -327,6 +336,27 @@ function shop_resolve_lines($conn, array $shop, array $order, array &$warnings):
 }
 
 // --- Kunde ------------------------------------------------------------------------------------
+// Kundens land (ISO) og momsnummer fra ordren: ['DE', 'DE123456789']. Et "cvr" med landekode (WooCommerce' momsnummer-
+// felt) tæller som momsnummer. Afgør EU-OSS (privat i et andet EU-land) og omvendt betalingspligt (erhverv).
+function shop_party(array $c): array {
+    $cc = strtoupper(trim((string)($c['country'] ?? '')));
+    if (!preg_match('/^[A-Z]{2}$/', $cc)) $cc = '';
+    $vat = (string)(tc_vat_id_clean($c['vat_id'] ?? '') ?? '');
+    if ($vat === '') {
+        $cvr = (string)(tc_vat_id_clean($c['cvr'] ?? '') ?? '');
+        if (preg_match('/^[A-Z]{2}[0-9A-Z]/', $cvr) && in_array(substr($cvr, 0, 2), array_merge(TC_EU_COUNTRIES, ['EL']), true)) $vat = $cvr;
+    }
+    return [$cc, $vat];
+}
+
+// IOSS-salg: butikken (eller ordren med "ioss": true/false) sender fra et land uden for EU, virksomheden har et
+// IOSS-nummer, og køberen er en forbruger i EU. Grænsen på 150 EUR og satserne tjekkes ved bogføringen.
+function shop_is_ioss($conn, array $shop, array $order): bool {
+    if (!ioss_ready($conn) || !ioss_registered()) return false;
+    $flag = array_key_exists('ioss', $order) && $order['ioss'] !== null ? (bool)$order['ioss'] : !empty($shop['ioss']);
+    return $flag && ioss_dest_for(...shop_party((array)($order['customer'] ?? []))) !== null;
+}
+
 // Match på e-mail - ellers oprettes kunden; uden e-mail: butikkens fælles "kunde uden e-mail"
 function shop_customer($conn, array $shop, array $c): int {
     $s = get_settings($conn);
@@ -338,19 +368,36 @@ function shop_customer($conn, array $shop, array $c): int {
     // RETTET: en kunde i papirkurven (customer_edit.php "Slet") blev fundet og fik ordren - fakturaen kom på en
     // kunde, der ikke ses nogen steder. Kun aktive kunder matches nu; ellers oprettes kunden på ny.
     $active = customers_active_filter($conn);
+    [$cc, $vat] = shop_party($c);
+    $has_ctry = db_has_column($conn, 'customers', 'cust_country') && db_has_column($conn, 'customers', 'cust_vat_id');
     if ($email === '') {
-        $name = 'Webbutik ' . $shop['name'] . ' - kunder uden e-mail';
+        // (en privatkunde i et andet land får en fælles kunde pr. land med landet sat - ellers mistede ordren landet,
+        // og EU-OSS/eksport kunne ikke afgøres; momsnummeret hører til én virksomhed og gemmes ikke på den fælles kunde)
+        $home = strtoupper((string)tc_country_pack('iso', 'DK'));
+        $foreign = $has_ctry && $cc !== '' && $cc !== $home && $vat === '';
+        // (navnet var fast dansk - nu på firmaets sprog; en kunde oprettet under det gamle navn findes stadig)
+        $old_name = 'Webbutik ' . $shop['name'] . ' - kunder uden e-mail' . ($foreign ? " ($cc)" : '');
+        $name = sprintf(lang('@Web shop %s - customers without email'), $shop['name']) . ($foreign ? " ($cc)" : '');
+        $row = DB::fetch_assoc(DB::query($conn, "SELECT cust_id FROM customers WHERE cust_name = '" . DB::escape($conn, $old_name) . "' AND (cust_email IS NULL OR cust_email = '') AND $active"));
+        if ($row) return (int)$row['cust_id'];
         $row = DB::fetch_assoc(DB::query($conn, "SELECT cust_id FROM customers WHERE cust_name = '" . DB::escape($conn, $name) . "' AND (cust_email IS NULL OR cust_email = '') AND $active"));
         if ($row) return (int)$row['cust_id'];
-        DB::insert($conn, 'customers', ['cust_name' => $name, 'cust_email' => '', 'cust_payment_days' => 0]);
+        DB::insert($conn, 'customers', ['cust_name' => $name, 'cust_email' => '', 'cust_payment_days' => 0] + ($foreign ? ['cust_country' => $cc, 'cust_vat_id' => ''] : []));
         return (int)DB::insert_id($conn);
     }
-    $row = DB::fetch_assoc(DB::query($conn, "SELECT cust_id FROM customers WHERE LOWER(cust_email) = LOWER('" . DB::escape($conn, $email) . "') AND $active"));
-    if ($row) return (int)$row['cust_id'];
+    $row = DB::fetch_assoc(DB::query($conn, "SELECT cust_id" . ($has_ctry ? ', cust_country, cust_vat_id' : '') . " FROM customers WHERE LOWER(cust_email) = LOWER('" . DB::escape($conn, $email) . "') AND $active"));
+    if ($row) {
+        // (en kendt kunde uden land/momsnummer får dem fra ordren - et udfyldt felt røres ikke)
+        if ($has_ctry && $cc !== '' && trim((string)$row['cust_country']) === '') DB::prepare_and_execute($conn, "UPDATE customers SET cust_country = ? WHERE cust_id = ?", [$cc, (int)$row['cust_id']]);
+        if ($has_ctry && $vat !== '' && trim((string)$row['cust_vat_id']) === '') DB::prepare_and_execute($conn, "UPDATE customers SET cust_vat_id = ? WHERE cust_id = ?", [$vat, (int)$row['cust_id']]);
+        return (int)$row['cust_id'];
+    }
     $name = trim((string)($c['name'] ?? '')) ?: $email;
-    if (!DB::insert($conn, 'customers', ['cust_name' => $name, 'cust_email' => $email, 'cust_phone' => trim((string)($c['phone'] ?? '')),
-            'cust_address' => trim((string)($c['address'] ?? '')), 'cust_cvr' => trim((string)($c['cvr'] ?? '')), 'cust_payment_days' => $terms])) {
-        throw new Exception('Kunne ikke oprette kunden: ' . DB::error($conn));
+    $new = ['cust_name' => $name, 'cust_email' => $email, 'cust_phone' => trim((string)($c['phone'] ?? '')),
+            'cust_address' => trim((string)($c['address'] ?? '')), 'cust_cvr' => trim((string)($c['cvr'] ?? '')), 'cust_payment_days' => $terms];
+    if ($has_ctry) $new += ['cust_country' => $cc, 'cust_vat_id' => $vat];
+    if (!DB::insert($conn, 'customers', $new)) {
+        throw new Exception('Could not create the customer: ' . DB::error($conn));
     }
     $id = (int)DB::insert_id($conn);
     log_action($conn, 'CREATE_CUSTOMER_WEBHOOK', 'customers', $id, null, ['cust_name' => $name, 'cust_email' => $email, 'shop' => $shop['name']]);
@@ -386,15 +433,50 @@ function shop_process($conn, array $shop, array $order): array {
     $gross = round(array_sum(array_column($lines, 'gross')), 2);
     // Kontrol mod butikkens total: op til 1 kr forskel er øreafrunding (en linje uden moms) - mere er en fejl
     if (isset($order['total']) && $order['total'] !== null) {
-        $diff = round((float)$order['total'] - $gross, 2);
-        if (abs($diff) > 1.00) throw new ShopError("The lines add up to $gross, but the order total is " . (float)$order['total'] . '.', 422);
+        $o_total = (is_int($order['total']) || is_float($order['total'])) ? (float)$order['total'] : parse_dk_number((string)$order['total']);      // ("1.250,00" som tekst blev til 1,25)
+        $diff = round($o_total - $gross, 2);
+        if (abs($diff) > 1.00) throw new ShopError("The lines add up to $gross, but the order total is " . $o_total . '.', 422);
         if (abs($diff) >= 0.01) {
-            $lines[] = ['type' => 'text', 'prod_id' => 0, 'text' => 'Øreafrunding', 'qty' => 1, 'vat' => 0, 'net' => $diff, 'line_vat' => 0, 'gross' => $diff, 'unit_net' => $diff];
+            $lines[] = ['type' => 'text', 'prod_id' => 0, 'text' => lang('@Rounding'), 'qty' => 1, 'vat' => 0, 'net' => $diff, 'line_vat' => 0, 'gross' => $diff, 'unit_net' => $diff];
             $gross = round($gross + $diff, 2);
         }
     }
     $paid = ($order['paid'] ?? null) === null ? !empty($shop['paid_default']) : (bool)$order['paid'];
     $mode = ($shop['mode'] ?? 'invoice') === 'daily' ? 'daily' : 'invoice';
+    // EU-OSS: et salg til en privat kunde i et andet EU-land har modtagerlandets moms og hører på OSS-angivelsen - det
+    // kan ikke stå i dagens samlede bilag (model B), så ordren bliver en faktura; dens returnering en kreditnota
+    if ($mode === 'daily' && $kind === 'order' && oss_ready($conn) && oss_dest_for(...[...shop_party((array)($order['customer'] ?? [])), $date]) !== null) {
+        $mode = 'invoice';
+        $warnings[] = 'EU-OSS sale (private customer in another EU country) - booked as an invoice, not in the day voucher.';
+    }
+    // IOSS ligeså: salget hører på den månedlige IOSS-angivelse, ikke i dagens bilag
+    if ($mode === 'daily' && $kind === 'order' && shop_is_ioss($conn, $shop, $order)) {
+        $mode = 'invoice';
+        $warnings[] = 'IOSS sale (sent from outside the EU) - booked as an invoice, not in the day voucher.';
+    }
+    // Salg til en kunde i et andet land (eksport, EU-salg til en virksomhed) hører i momsangivelsens rubrik B/C og evt. på
+    // listeindberetningen med købers momsnummer - dagens bilag står på den hjemlige salgskonto og har ingen køber, så ordren
+    // bliver en faktura
+    if ($mode === 'daily' && $kind === 'order') {
+        [$cc_o] = shop_party((array)($order['customer'] ?? []));
+        if ($cc_o !== '' && $cc_o !== strtoupper((string)tc_country_pack('iso', 'DK'))) {
+            $mode = 'invoice';
+            $warnings[] = "Sale to a customer in $cc_o - booked as an invoice, not in the day voucher (VAT return boxes for sales abroad).";
+        }
+    }
+    // En sats landet ikke har (fx tysk moms uden EU-OSS) må ikke i dagens bilag på den hjemlige momskonto - som i model A
+    // bliver ordren en faktura, der står som kladde med advarslen fra shop_vat_check()
+    if ($mode === 'daily' && $kind === 'order') {
+        foreach ($lines as $l) if (!tc_home_rate_ok($conn, (float)$l['vat'])) {
+            $mode = 'invoice';
+            $warnings[] = 'A line has ' . (float)$l['vat'] . ' % VAT, which is not a VAT rate of ' . strtoupper((string)tc_country_pack('iso', 'DK')) . ' - booked as an invoice, not in the day voucher.';
+            break;
+        }
+    }
+    if ($mode === 'daily' && $kind === 'refund') {
+        $om = DB::fetch_assoc(DB::query($conn, "SELECT mode FROM shop_orders WHERE shop_id = " . (int)$shop['shop_id'] . " AND kind = 'order' AND external_id = '" . DB::escape($conn, $ref) . "'"));
+        if ($om && $om['mode'] === 'invoice') $mode = 'invoice';
+    }
     $sign = $kind === 'refund' ? -1 : 1;
     // RETTET: model B (samlet salg pr. dag) tog imod en returnering af en ordre den aldrig havde fået - og af
     // mere end ordren var på (eller den samme ordre returneret flere gange under nye numre). Dagens bilag
@@ -422,15 +504,20 @@ function shop_process($conn, array $shop, array $order): array {
         if ($mode === 'daily') {
             $row['status'] = 'pending_day';
             if (!empty($shop['track_stock'])) foreach ($lines as $l) if ($l['prod_id'] > 0) {
-                DB::query($conn, "UPDATE products SET prod_stock = prod_stock - " . ($sign * $l['qty']) . " WHERE prod_id = {$l['prod_id']}");
+                stock_move($conn, (int)$l['prod_id'], -$sign * (float)$l['qty'], 'shop', $date, ['reference' => $shop['name'] . ' ' . $ext]);
             }
             $answer = ['status' => 'pending_day'];
         } elseif ($kind === 'order') {
             $answer = shop_make_invoice($conn, $shop, $order, $lines, $date, $paid, $row);
+            if (!empty($answer['warnings'])) {
+                $warnings = array_merge($warnings, $answer['warnings']);
+                $row['message'] = implode("\n", $warnings);
+                unset($answer['warnings']);
+            }
         } else {
             $answer = shop_make_credit($conn, $shop, $lines, $date, $paid, $ref, $row);
         }
-        if (!DB::insert($conn, 'shop_orders', $row)) throw new Exception('Kunne ikke gemme ordren: ' . DB::error($conn));
+        if (!DB::insert($conn, 'shop_orders', $row)) throw new Exception('Could not save the order: ' . DB::error($conn));
         $answer['order_id'] = (int)DB::insert_id($conn);
         DB::commit($conn);
     } catch (Throwable $e) {
@@ -455,22 +542,33 @@ function shop_make_invoice($conn, array $shop, array $order, array $lines, strin
             'inv_note' => trim((string)($order['note'] ?? '')), 'cust_reference' => 'Ordre ' . $row['external_id'],
             'delivery_address' => trim((string)($order['delivery_address'] ?? '')), 'currency' => $global_settings['currency'] ?? 'DKK'];
     if (shop_col_exists($conn, 'invoices', 'external_ref')) $inv['external_ref'] = $shop['shop_id'] . ':' . $row['external_id'];
-    if (!DB::insert($conn, 'invoices', $inv)) throw new Exception('Kunne ikke oprette fakturaen: ' . DB::error($conn));
+    $ioss = shop_is_ioss($conn, $shop, $order);
+    if ($ioss) $inv['inv_ioss'] = 'Y';
+    if (!DB::insert($conn, 'invoices', $inv)) throw new Exception('Could not create the invoice: ' . DB::error($conn));
     $inv_id = (int)DB::insert_id($conn);
     foreach ($lines as $l) {
         if (!DB::insert($conn, 'invoice_lines', ['inv_id' => $inv_id, 'line_text' => $l['text'], 'quantity' => $l['qty'], 'price_each' => $l['unit_net'],
-                'line_vat_rate' => $l['vat'], 'prod_id' => $l['prod_id']])) throw new Exception('Kunne ikke gemme en linje: ' . DB::error($conn));
+                'line_vat_rate' => $l['vat'], 'prod_id' => $l['prod_id']])) throw new Exception('Could not save a line: ' . DB::error($conn));
     }
     // RETTET: på MySQL har en linjes stykpris 2 decimaler - ved priser inkl. moms kunne fakturaens total derfor
     // afvige nogle øre fra det kunden betalte. Forskellen lægges på en øreafrundingslinje (uden moms).
     $want = round(array_sum(array_column($lines, 'gross')), 2);
     $diff = round($want - invoice_dkk_totals($conn, $inv_id)['incl'], 2);
     if (abs($diff) >= 0.01 && abs($diff) <= 1.00) {
-        DB::insert($conn, 'invoice_lines', ['inv_id' => $inv_id, 'line_text' => 'Øreafrunding', 'quantity' => 1, 'price_each' => $diff, 'line_vat_rate' => 0, 'prod_id' => 0]);
+        DB::insert($conn, 'invoice_lines', ['inv_id' => $inv_id, 'line_text' => lang('@Rounding'), 'quantity' => 1, 'price_each' => $diff, 'line_vat_rate' => 0, 'prod_id' => 0]);
     }
     $row['inv_id'] = $inv_id;
     log_action($conn, 'CREATE_DRAFT_INVOICE_WEBHOOK', 'invoices', $inv_id, null, ['shop' => $shop['name'], 'external_id' => $row['external_id']]);
     if (empty($shop['auto_post'])) { $row['status'] = 'draft';  return ['invoice_id' => $inv_id, 'status' => 'draft']; }
+    // Momsen skal passe til landet, før fakturaen bogføres automatisk - ellers bliver den en kladde til rettelse
+    $hold = '';
+    if ($ioss) {
+        try { ioss_check_invoice($conn, $inv_id, $cust_id);  ioss_accounts($conn); }
+        catch (Exception $e) { $hold = 'IOSS sale: ' . $e->getMessage() . ' - left as a draft.'; }
+    } else {
+        $hold = shop_vat_check($conn, $cust_id, $lines, $date);
+    }
+    if ($hold !== '') { $row['status'] = 'draft';  return ['invoice_id' => $inv_id, 'status' => 'draft', 'warnings' => [$hold]]; }
     $no = invoice_post($conn, $inv_id, !empty($shop['track_stock']));
     $row['status'] = 'posted';
     if ($paid) {
@@ -480,6 +578,23 @@ function shop_make_invoice($conn, array $shop, array $order, array $lines, strin
         $row['status'] = 'paid';
     }
     return ['invoice_id' => $inv_id, 'invoice_no' => $no, 'status' => $row['status']];
+}
+
+// '' = ordrens momssatser kan bogføres; ellers hvorfor ikke (fakturaen bliver en kladde). EU-OSS: modtagerlandets satser
+// og OSS-konti. Ellers hjemlandets satser - en butik der opkræver fx tysk moms, uden at virksomheden er OSS-registreret
+// i TinyCash, ville ellers få den udenlandske moms med på den hjemlige momsangivelse.
+function shop_vat_check($conn, int $cust_id, array $lines, ?string $date = null): string {
+    $oss = oss_ready($conn) ? oss_dest_for_customer($conn, $cust_id, $date) : null;
+    if ($oss !== null) {
+        try { oss_accounts($conn); } catch (Exception $e) { return "EU-OSS sale to $oss, but the OSS accounts are not set (Company Settings) - left as a draft."; }
+        foreach ($lines as $l) if (!oss_rate_valid($oss, (float)$l['vat'])) return "EU-OSS sale to $oss with " . (float)$l['vat'] . " % VAT, which $oss does not have - left as a draft.";
+        return '';
+    }
+    foreach ($lines as $l) {
+        if (!tc_home_rate_ok($conn, (float)$l['vat'])) return 'A line has ' . (float)$l['vat'] . ' % VAT, which is not a VAT rate of ' . strtoupper((string)tc_country_pack('iso', 'DK'))
+            . '. If the shop charged foreign VAT (EU-OSS), register for EU-OSS under Company Settings and give the customer a country - left as a draft.';
+    }
+    return '';
 }
 
 // Model A, returnering: kreditnota på den oprindelige ordres faktura (linje for linje) - og tilbagebetaling
@@ -496,7 +611,7 @@ function shop_make_credit($conn, array $shop, array $lines, string $date, bool $
     $qtys = [];
     foreach ($inv_lines as $l) $qtys[(int)$l['line_id']] = 0.0;
     foreach ($lines as $i => $l) {
-        if ($l['text'] === 'Øreafrunding') continue;
+        if (in_array($l['text'], [lang('@Rounding'), 'Øreafrunding'], true)) continue;      // (også en linje fra før teksten blev oversat)
         $hit = null;
         foreach ($inv_lines as $il) {
             $same = $l['prod_id'] > 0 ? ((int)$il['prod_id'] === $l['prod_id']) : (mb_strtolower(trim($il['line_text'])) === mb_strtolower($l['text']));
@@ -508,7 +623,15 @@ function shop_make_credit($conn, array $shop, array $lines, string $date, bool $
     $inv_dt = (string)(DB::fetch_assoc(DB::query($conn, "SELECT inv_date FROM invoices WHERE inv_id = $inv_id"))['inv_date'] ?? '');
     $cr_date = is_date_locked($conn, $date) ? date('Y-m-d') : $date;
     if ($inv_dt !== '' && $cr_date < $inv_dt) $cr_date = $inv_dt;      // (aldrig før fakturaen - fx når ordren blev bogført i dag pga. en låst periode)
-    $credit_id = invoice_create_credit($conn, $inv_id, $qtys, $cr_date, 'Returnering ' . $row['external_id'] . ' fra webbutik ' . $shop['name'], !empty($shop['track_stock']));
+    // En regel der afviser kreditnotaen (fakturaen er allerede krediteret - fx en ANDEN delvis returnering af samme ordre -,
+    // afskrevet, eller datoen er låst) er ikke en serverfejl: svaret var 500, og butikken gentog kaldet i timevis
+    try {
+        $credit_id = invoice_create_credit($conn, $inv_id, $qtys, $cr_date, 'Returnering ' . $row['external_id'] . ' fra webbutik ' . $shop['name'], !empty($shop['track_stock']));
+    } catch (ShopError $e) {
+        throw $e;
+    } catch (Exception $e) {
+        throw new ShopError($e->getMessage() . " (order \"$ref\" - a further refund of the same invoice must be booked by hand in TinyCash)", 409);
+    }
     $row['inv_id'] = $inv_id;
     $row['credit_inv_id'] = $credit_id;
     $row['status'] = 'credited';
@@ -551,21 +674,27 @@ function shop_book_days($conn, array $shop, string $before_date): array {
     $res = DB::query($conn, "SELECT DISTINCT order_date FROM shop_orders WHERE shop_id = $sid AND status = 'pending_day' AND order_date < '" . DB::escape($conn, $before_date) . "' ORDER BY order_date");
     if ($res) while ($r = DB::fetch_assoc($res)) $days[] = (string)$r['order_date'];
     foreach ($days as $day) {
-        if (is_date_locked($conn, $day)) { $out['skipped'][$day] = 'låst periode';  continue; }
+        // En dag i en (siden) låst periode bogføres på første åbne dag - som ordremodtagelsen gør (shop_process). Før blev
+        // den sprunget over ved hver kørsel: dagens salg og moms blev aldrig bogført, mens udbetalingen kom på mellemregningen
+        $book_date = $day;
+        if (is_date_locked($conn, $day)) {
+            $book_date = date('Y-m-d', strtotime((string)setting('accounting_lock_date', $day) . ' +1 day'));
+            if ($book_date > date('Y-m-d') || is_date_locked($conn, $book_date)) { $out['skipped'][$day] = 'locked period';  continue; }
+        }
         DB::begin_transaction($conn);
         try {
             $sum = DB::fetch_assoc(DB::query($conn, "SELECT COUNT(*) AS n, SUM(CASE WHEN kind = 'refund' THEN 1 ELSE 0 END) AS n_ref,
                     COALESCE(SUM(net_sales), 0) AS ns, COALESCE(SUM(net_shipping), 0) AS nf, COALESCE(SUM(vat), 0) AS v, COALESCE(SUM(gross), 0) AS g
                 FROM shop_orders WHERE shop_id = $sid AND status = 'pending_day' AND order_date = '$day'"));
             $voucher = next_voucher_no($conn);
-            $text = DB::escape($conn, 'Webbutik ' . $shop['name'] . ': salg ' . $day . ' (' . (int)$sum['n'] . ' ordrer' . ((int)$sum['n_ref'] ? ', heraf ' . (int)$sum['n_ref'] . ' returneringer' : '') . ')');
+            $text = DB::escape($conn, 'Webbutik ' . $shop['name'] . ': salg ' . $day . ' (' . (int)$sum['n'] . ' ordrer' . ((int)$sum['n_ref'] ? ', heraf ' . (int)$sum['n_ref'] . ' returneringer' : '') . ')' . ($book_date !== $day ? ' - bogført ' . $book_date . ', dagen ligger i en låst periode' : ''));
             $cur = DB::escape($conn, $global_settings['currency'] ?? 'DKK');
             $cb = journal_created_by_sql($conn);
             if (DB::query($conn, "INSERT INTO journal (jou_date, jou_text, trans_type, voucher_no, currency{$cb['col']})
-                                  VALUES ('$day', '$text', 'shop_day', $voucher, '$cur'{$cb['val']})") === false) throw new Exception(DB::error($conn));
+                                  VALUES ('$book_date', '$text', 'shop_day', $voucher, '$cur'{$cb['val']})") === false) throw new Exception(DB::error($conn));
             $jou_id = (int)DB::insert_id($conn);
             $g = round((float)$sum['g'], 2);  $ns = round((float)$sum['ns'], 2);  $nf = round((float)$sum['nf'], 2);  $v = round((float)$sum['v'], 2);
-            if (abs($g - $ns - $nf - $v) > 0.005) throw new Exception("Dagen $day balancerer ikke ($g <> $ns + $nf + $v).");
+            if (abs($g - $ns - $nf - $v) > 0.005) throw new Exception("The day $day does not balance ($g <> $ns + $nf + $v).");
             ledger_post($conn, $jou_id, $acc_clear, $g);
             if (abs($ns) >= 0.005) ledger_post($conn, $jou_id, $acc_sales, -$ns);
             if (abs($nf) >= 0.005) ledger_post($conn, $jou_id, $acc_ship, -$nf);
@@ -574,7 +703,7 @@ function shop_book_days($conn, array $shop, string $before_date): array {
             // (MySQL) kunne begge summere den samme dag og begge bogføre den: dagens salg bogført to gange. Kun den
             // kørsel der selv flytter ALLE dagens ordrer til 'booked', må committe; ellers rulles den tilbage.
             $upd = DB::query($conn, "UPDATE shop_orders SET status = 'booked', day_jou_id = $jou_id WHERE shop_id = $sid AND status = 'pending_day' AND order_date = '$day'");
-            if (!$upd || DB::affected_rows($conn, $upd) !== (int)$sum['n']) throw new Exception("Dagen $day blev bogført af en anden, samtidig kørsel (kapløb) - intet blev dublet.");
+            if (!$upd || DB::affected_rows($conn, $upd) !== (int)$sum['n']) throw new Exception("The day $day was posted by another, simultaneous run - nothing was duplicated.");
             log_action($conn, 'SHOP_BOOK_DAY', 'journal', $jou_id, null, ['shop' => $shop['name'], 'date' => $day, 'orders' => (int)$sum['n'], 'gross' => $g, 'voucher_no' => $voucher]);
             DB::commit($conn);
             $out['days'][$day] = $voucher;

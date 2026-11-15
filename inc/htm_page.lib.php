@@ -67,229 +67,25 @@ echo '
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.0.0/css/flag-icons.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
-    <style>
-    :root,
-    [data-theme="light"] {
-        --bg-main: #f4f7f6; --bg-card: #ffffff; --bg-nav: #4c4e4f;
-        --bg-nav-hover: rgba(255,255,255,0.1); --bg-submenu: #34495e;
-        --bg-panel: #f8f9fa; --bg-table-even: #f9f9f9; --bg-table-hover: #f1f7fd;
-        --border-color: #dee2e6; --border-subtle: #eeeeee; --border-fieldset: #787878;
-        --text-main: #333333; --text-muted: #666666; --text-light: #ffffff;
-        --color-primary: #3498db; --color-success: #2ecc71; --color-danger: #e74c3c;
-        --color-warning: #f1c40f; --color-secondary: #95a5a6; --color-dark: #2c3e50;
-        --color-purple: #8e44ad; --color-info: #34495e;
-        /* RETTET (§bugs-batch-22-review-del-b): disse fire (og de nye
-           warning/info-par) lå FØR helt uden for enhver CSS-selector (mellem
-           denne bloks lukning og body{}-reglen) - ugyldig CSS, som browseren
-           stille dropper. htm_Alert() brugte derfor ALTID sin hardkodede
-           fallback-værdi (var(--x, #fallback)), aldrig den faktiske tema-
-           farve, uanset hvilket tema der var valgt. Flyttet ind i hver af de
-           tre temablokke, med selvstændige mørke/lyse værdier hvor relevant.
-           Nye --bg-alert-warning/--text-alert-warning og -info/-info tilføjet
-           samtidig, til htm_Alert()s nye warning/info-typer. */
-        --bg-alert-success: #d4edda;   --text-alert-success: #155724;
-        --bg-alert-error:   #f8d7da;   --text-alert-error:   #721c24;
-        --bg-alert-warning: #fff3cd;   --text-alert-warning: #856404;
-        --bg-alert-info:    #d1ecf1;   --text-alert-info:    #0c5460;
-    }
-
-    [data-theme="custom"] {
-        --bg-main: #3498db; --bg-card: #ffffff; --bg-nav: #2c3e50;
-        --bg-nav-hover: rgba(255,255,255,0.15); --bg-submenu: #243342;
-        --bg-panel: #f4f6f8; --bg-table-even: #f8faf9; --bg-table-hover: #eef9f3;
-        --border-color: #cbd5e1; --border-subtle: #e2e8f0; --border-fieldset: #475569;
-        --text-main: #1e293b; --text-muted: #64748b; --text-light: #ffffff;
-        --color-primary: #2ecc71; --color-dark: #1a252f; --color-warning: #f39c12;
-        --bg-alert-success: #d4edda;   --text-alert-success: #155724;
-        --bg-alert-error:   #f8d7da;   --text-alert-error:   #721c24;
-        --bg-alert-warning: #fff3cd;   --text-alert-warning: #856404;
-        --bg-alert-info:    #d1ecf1;   --text-alert-info:    #0c5460;
-    }
-
-    [data-theme="dark"] {
-        --bg-main: #121212; --bg-card: #7d7373; --bg-nav: #1a1a1a;
-        --bg-nav-hover: rgba(255,255,255,0.08); --bg-submenu: #2d2d2d;
-        /* RETTET: --bg-panel (bruges bl.a. til tabel-headers) var meget tæt
-           på sort (#262626). Lysnet en anelse til #333333 for et blødere
-           udtryk - hvid header-tekst har fortsat glimrende kontrast mod
-           denne værdi. --bg-table-even/--bg-table-hover ligger tæt på
-           --bg-cards egen lyshed for en diskret zebra-effekt. */
-        --bg-panel: #333333; --bg-table-even: #706767; --bg-table-hover: #8c8282;
-        /* --border-color/--border-subtle skal være LYSERE end baggrunden i
-           dark-tema (modsat light-tema-logikken) for at være synlige mod de
-           næsten-sorte flader. --border-fieldset er lysnet yderligere, da
-           den primært bruges mod --bg-card (den mellemgrå kort-baggrund). */
-        --border-color: #707070; --border-subtle: #555555; --border-fieldset: #a8a8a8;
-        --text-main: #ffffff; --text-muted: #dcdcdc; --text-light: #ffffff;
-        --color-primary: #2980b9; --color-success: #27ae60; --color-danger: #c0392b;
-        --color-warning: #f39c12; --color-secondary: #7f8c8d; --color-dark: #0f172a;
-        --color-purple: #7d3c98; --color-info: #c4c6c8;
-        /* Mørkere/mættede baggrunde + lyse tekstfarver, tilpasset det
-           mellemgrå --bg-card (#7d7373) i stedet for lyse light-tema-farver,
-           som ville have dårlig kontrast/virke malplacerede på en mørk side. */
-        --bg-alert-success: #1e4620;   --text-alert-success: #8fd19e;
-        --bg-alert-error:   #4a1e1e;   --text-alert-error:   #f5a3a3;
-        --bg-alert-warning: #4a3c0a;   --text-alert-warning: #f5d576;
-        --bg-alert-info:    #1a3a4a;   --text-alert-info:    #8ecae6;
-    }
-
-    body { 
-        font-family: "Inter", sans-serif; 
-        background: var(--bg-main); 
-      /*  margin: 4px 20px;  */
-        color: var(--text-main); 
-        padding-bottom: 100px;
-        position: relative;
-    }
-    
-    body.sidebar-mode {
-        margin-left: 214px !important;
-        margin-right: 20px !important;
-        margin-top: 4px !important;
-        padding-bottom: 100px !important;
-    }
-
-    body::before {
-        content: "";
-        position: fixed;
-        top: 0; left: 0; width: 100%; height: 100%;
-        z-index: -1;
-        transition: background 0.3s ease;
-    }
-
-    [data-theme="light"] body::before {
-        background-image: url("_background.png");
-    }
-
-    [data-theme="custom"] body::before {
-        background-image: none;
-        background-color: var(--bg-main);
-    }
-
-    [data-theme="dark"] body::before {
-        background-image: none;
-        background-color: var(--bg-main);
-    }
-
-    .cardW000 { max-width: '.$mwidth.'px; margin: 20px auto; background: var(--bg-card); padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border: 1px solid var(--border-color); }
-    nav { position: relative; z-index: 9000 !important; display: flex; flex-wrap: wrap; align-items: center; background: var(--bg-nav); padding: 5px 20px; min-height: 70px; }
-    .nav-main-link { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; text-decoration: none !important; color: var(--text-light) !important; padding: 5px 10px !important; min-width: 85px; transition: background 0.2s; }
-    .nav-main-link span { color: var(--text-light) !important; display: block !important; text-align: center; }
-    .nav-main-link span.menu-icon { font-size: 1.5em; line-height: 1; margin-bottom: 3px; }
-    .nav-main-link span.menu-text { font-size: 0.95em; font-weight: 600; }
-    .nav-main-link:hover { background: var(--bg-nav-hover); border-radius: 4px; }
-
-    .submenu { display: none; position: az-indbsolute; background: var(--bg-submenu) !important; min-width: 240px !important; ex: 9999 !important; box-shadow: 0 8px 25px rgba(0,0,0,0.6); border-radius: 4px; border: 1px solid var(--border-color); margin-top: 5px; padding: 5px 0 !important; }
-
-    .dropdown-item { display: flex !important; align-items: center !important; gap: 10px; padding: 12px 15px !important; color: var(--text-light) !important; text-decoration: none !important; cursor: pointer !important; border-bottom: 1px solid var(--border-subtle); }
-    .dropdown-item:hover { background: var(--color-primary) !important; }
-
-    input, select, textarea {
-        background-color: var(--bg-card) !important;
-        color: var(--text-main) !important;
-        border: 1px solid var(--border-color) !important;
-    }
-    input::placeholder,
-    textarea::placeholder {
-        font-style: italic;
-        font-size: smaller;
-        opacity: 0.8; /* Valgfrit: Gør placeholderen en smule lysere */
-    }
-
-    input:-webkit-autofill,
-    input:-webkit-autofill:hover, 
-    input:-webkit-autofill:focus {
-        -webkit-text-fill-color: var(--text-main) !important;
-        -webkit-box-shadow: 0 0 0px 1000px var(--bg-card) inset !important;
-        transition: background-color 5000s ease-in-out 0s;
-    }
-    .alert-box {
-        background-color: var(--bg-panel) !important;
-        border-left: 4px solid var(--color-warning) !important;
-        color: var(--text-main) !important;
-    }
-    /* RETTET (bruger-rapporteret gennemgang: "flere lignende problemer" efter
-       hvid-på-gul-fundet på varselsbanneret) - var(--color-info) er med vilje
-       lysegrå (#c4c6c8) i dark-temaet (fin kontrast som BADGE-/tekstfarve mod
-       kortenes mellemgrå baggrund dér), men de få steder, hvor color-info i
-       stedet bruges som en massiv knap-/pille-BAGGRUND med hvid tekst ovenpå
-       (bank_integration.php, CVR-opslagsknappen i customer_edit.php/
-       supplier_edit.php, "Send faktura"-bekræftelsen i sales_hub.php), bliver
-       næsten ulæselige af samme grund som varselsbanneret var. Selve
-       --color-info kan ikke bare gøres mørkere generelt - det ville i stedet
-       ødelægge badge-brugen. .tc-info-fill markerer kun disse fyldte-
-       baggrund-steder, så KUN de får mørk tekst i dark-temaet. */
-    [data-theme="dark"] .tc-info-fill { color: #1a1a1a !important; }
-
-    .quick-actions { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column-reverse; gap: 10px; z-index: 9999; }
-    .qa-btn { background-color: var(--color-dark); color: var(--text-light) !important; padding: 12px 20px; border-radius: 50px; text-decoration: none; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 10px; transition: all 0.3s ease; border: none; cursor: pointer; }
-    .qa-btn:hover { background-color: var(--color-primary); transform: scale(1.05); }
-    .qa-btn i { font-size: 1.2em; }
-    .qa-invoice { background-color: #27ae60; } 
-    .qa-expense { background-color: var(--color-danger); } 
-    .qa-account { background-color: var(--color-purple); } 
-
-    .floating-action-bar { position: fixed; bottom: 0; left: 0; right: 0; width: 100%; background: rgba(44, 62, 80, 0.97); border-top: 2px solid var(--color-primary); display: flex; justify-content: center; gap: 20px; padding: 6px 0; z-index: 10000; box-shadow: 0 -2px 10px rgba(0,0,0,0.2); box-sizing: border-box; }
-    .fab-item { color: var(--text-light) !important; text-decoration: none; font-size: 0.9rem; font-weight: bold; display: flex; align-items: center; gap: 8px; padding: 5px 15px; border-radius: 4px; transition: background 0.2s; }
-    .fab-item:hover { background: var(--bg-nav-hover); }
-    .fab-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; }
-    .dot-invoice { background-color: #2ecc71; } 
-    .dot-expense { background-color: var(--color-danger); } 
-    .dot-account { background-color: var(--color-warning); } 
-
-    .flag-icon { display: inline-block; background-size: contain; background-position: 50%; background-repeat: no-repeat; position: relative; width: 1.33333333em; line-height: 1em; }
-    .flag-icon::before { content: "\00a0"; }
-
-    /* RETTET (bruger-anmodet, flag-tabel-konsolidering): de fire manuelle
-       fi-da/fi-sv/fi-no/fi-en-overrides herunder er fjernet. De var kun
-       nødvendige fordi sprogkoder (da/sv/no/en) tidligere blev brugt DIREKTE
-       som flag-klassenavne nogle steder i koden, i stedet for de rigtige
-       ISO-landekoder (dk/se/no/gb) - flag-icons-bibliotekets egne CDN-klasser
-       (.fi-dk, .fi-se, .fi-no, .fi-gb m.fl.) dækker allerede alle rigtige
-       landekoder ude af boksen. Nu hvor inc/menu.inc.php og about.php begge
-       slår det korrekte flag-felt op i languages.json i stedet for at
-       gætte, emitteres kun rigtige ISO-koder - disse overrides ville aldrig
-       blive ramt længere (og var i øvrigt selv en del af den bug, hvor
-       svensk viste et forkert flag - se inc/menu.inc.php sin egen kommentar). */
-    /* body padding-bottom og font-family er defineret ovenfor — duplikat fjernet */
-
-    .fab-top { position: absolute; right: 20px; background: rgba(255, 255, 255, 0.6); border-left: 1px solid rgba(255, 255, 255, 0.2); padding: 0 15px; height: 100%; display: flex; align-items: center; cursor: pointer; transition: all 0.3s; }
-    .fab-top:hover { background: var(--color-primary); color: var(--text-light); }
-    @media (max-width: 600px) { .fab-top span { display: none; } }
-
-    [data-hint]::after, [data-hint]::before { content: none !important; display: none !important; }
-    [data-hint] { cursor: help !important; }
-    </style>
-
+    <link rel="stylesheet" href="' . tc_asset('assets/tinycash.css') . '">
+    <style>.cardW000 { max-width: '.$mwidth.'px; margin: 20px auto; background: var(--bg-card); padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border: 1px solid var(--border-color); }</style>
+    <script src="' . tc_asset('assets/tc-head.js') . '"></script>
     <script>
-    function toggleFullscreen() {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(err => { console.log("Error: " + err.message); });
-        } else {
-            if (document.exitFullscreen) document.exitFullscreen();
-        }
-    }
-
-    function toggleAllSections(open) {
-        document.querySelectorAll("details").forEach(function(el) {
-            if (open) {
-                el.setAttribute("open", "");
-            } else {
-                el.removeAttribute("open");
-            }
-        });
-    }
-
-    function setTheme(themeName) {
-        document.documentElement.setAttribute(\'data-theme\', themeName);
-        const d = new Date();
-        d.setTime(d.getTime() + (365 * 24 * 60 * 60 * 1000));
-        document.cookie = "theme=" + themeName + ";expires=" + d.toUTCString() + ";path=/;SameSite=Strict";
-    }
-
     ' . htm_ActionLinkJs() . '
     </script></head><body>';
     if (!$echo) return ob_get_clean();
+}
+
+# STATISK FIL I assets/ (CSS/JS som browseren cacher)
+// ?v=filens ændringstid, så en ny version hentes straks efter deploy. Sider i en undermappe (fx db-setup/) får ../ foran.
+function tc_asset(string $rel): string {
+    static $prefix = null;
+    $root = str_replace('\\', '/', dirname(__DIR__));
+    if ($prefix === null) {
+        $dir = str_replace('\\', '/', dirname((string)realpath($_SERVER['SCRIPT_FILENAME'] ?? '')));
+        $prefix = str_starts_with($dir, $root . '/') ? str_repeat('../', substr_count(substr($dir, strlen($root)), '/')) : '';
+    }
+    return htmlspecialchars($prefix . $rel . '?v=' . (int)@filemtime($root . '/' . $rel));
 }
 
 # HANDLINGS-LINKS SOM POST (bruges af htm_Header() og af sider der bygger deres egen <head>, fx invoice_view.php)
@@ -302,6 +98,8 @@ function htm_ActionLinkJs(): string {
         var byName = /^(send_[a-z0-9_]+|[a-z0-9_]+_actions?|[a-z0-9_]+_duplicate)\.php$/;
         // Et tal fra et inputfelt - samme regler som parse_dk_number() på serveren: "1.500,00", "1500.00", "1 500,50"
         // og "1.234.567" giver alle det rigtige tal (parseFloat(v.replace(",", ".")) gav 1,5 for "1.500,00"). Ugyldigt = 0.
+        // Landepakkens locale og decimaltegn (inc/country.inc.php) - toLocaleString(tcLocale, ...) og tcNum følger landet
+        window.tcLocale = ' . json_encode(tc_locale()) . ';  window.tcDec = ' . json_encode(tc_num_sep()[0]) . ';
         window.tcNum = function (v) {
             var s = String(v == null ? "" : v).replace(/[\s  \x27]/g, "");
             if (s === "") return 0;
@@ -309,7 +107,7 @@ function htm_ActionLinkJs(): string {
             if ((s.match(/,/g) || []).length > 1) s = s.replace(/,/g, "");
             var c = s.lastIndexOf(","), d = s.lastIndexOf(".");
             if (c >= 0 && d >= 0) s = c > d ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
-            else if (c >= 0) s = s.replace(",", ".");
+            else if (c >= 0) s = window.tcDec === "." ? s.replace(/,/g, "") : s.replace(",", ".");
             var n = parseFloat(s);
             return isFinite(n) ? n : 0;
         };
@@ -381,153 +179,7 @@ function htm_Footer($echo = true) {
         </div>
     </div>
 
-    <script>
-    function sysAlert(message, title = "TinyCash") {
-        var modal = document.getElementById("custom-alert");
-        if (modal) {
-            document.getElementById("custom-alert-title").innerText = title;
-            document.getElementById("custom-alert-text").innerText = message;
-            modal.style.display = "flex";
-        }
-    }
-
-    function closeAlert() {
-        var modal = document.getElementById("custom-alert");
-        if (modal) modal.style.display = "none";
-    }
-
-    var _sysPromptCallback = null;
-    function sysPrompt(message, callback, title = "TinyCash", defaultValue = "") {     /* (message was never shown - only the title) */
-        var modal = document.getElementById("custom-prompt");
-        if (!modal) { callback(window.prompt(message, defaultValue)); return; }
-        document.getElementById("custom-prompt-title").innerText = title;
-        document.getElementById("custom-prompt-text").innerText = message || "";
-        var input = document.getElementById("custom-prompt-input");
-        input.value = defaultValue || "";
-        _sysPromptCallback = callback;
-        modal.style.display = "flex";
-        setTimeout(function() { input.focus(); input.select(); }, 50);
-    }
-
-    function _sysPromptConfirm() {
-        var input = document.getElementById("custom-prompt-input");
-        var val = input.value;
-        document.getElementById("custom-prompt").style.display = "none";
-        if (_sysPromptCallback) _sysPromptCallback(val);
-    }
-
-    function _sysPromptCancel() {
-        document.getElementById("custom-prompt").style.display = "none";
-        if (_sysPromptCallback) _sysPromptCallback(null);
-    }
-
-    document.addEventListener("keydown", function(e) {
-        var modal = document.getElementById("custom-prompt");
-        if (modal && modal.style.display === "flex") {
-            if (e.key === "Enter") { e.preventDefault(); _sysPromptConfirm(); }
-            else if (e.key === "Escape") { e.preventDefault(); _sysPromptCancel(); }
-        }
-    });
-
-    (function() {
-        const hb = document.getElementById("tc-hint");
-        document.addEventListener("mouseover", function(e) {
-            const t = e.target.closest("[data-hint]");
-            if (t && hb) { hb.innerHTML = t.getAttribute("data-hint"); hb.style.display = "block"; }
-        });
-        document.addEventListener("mousemove", function(e) {
-            if (hb && hb.style.display === "block") {
-                let x = e.clientX + 20, y = e.clientY + 20;
-                if (x + hb.offsetWidth > window.innerWidth) x = e.clientX - hb.offsetWidth - 20;
-                if (y + hb.offsetHeight > window.innerHeight) y = e.clientY - hb.offsetHeight - 20;
-                hb.style.left = x + "px"; hb.style.top = y + "px";
-            }
-        });
-        document.addEventListener("mouseout", function(e) { if (hb) hb.style.display = "none"; });
-    })();
-    function filterTable(id) {
-        const input = document.getElementById(id + "_search"); if(!input) return;
-        const filter = input.value.toUpperCase();
-        const table = document.getElementById(id); if(!table) return;
-        const tr = table.getElementsByTagName("tr");
-        for (let i = 1; i < tr.length; i++) {
-            let found = false, td = tr[i].getElementsByTagName("td");
-            for (let j = 0; j < td.length; j++) {
-                if (td[j] && (td[j].textContent || td[j].innerText).toUpperCase().indexOf(filter) > -1) { found = true; break; }
-            }
-            tr[i].style.display = found ? "" : "none";
-        }
-    }
-    function clearSearch(id) { const i = document.getElementById(id + "_search"); if(i){ i.value = ""; filterTable(id); i.focus(); } }
-    // Fold/luk-ikon for htm_Card_(fold: true) - se inc/php2htm.lib.php.
-    function toggleCard(id, btn) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        const opening = el.style.display === "none";
-        el.style.display = opening ? "" : "none";
-        if (btn) { btn.classList.toggle("fa-chevron-down", opening); btn.classList.toggle("fa-chevron-right", !opening); }
-        // RETTET (bruger-rapporteret: skillelinjen under selve titel-rækken
-        // skal følge fold-tilstanden, ikke kun vises ved sidens første
-        // indlæsning) - se htm_Card_()s tilsvarende PHP-rettelse i php2htm.lib.php.
-        const caption = document.getElementById(id + "_caption");
-        if (caption) {
-            caption.style.borderBottom = opening ? "2px solid var(--color-primary)" : "none";
-            // RETTET (bruger-rapporteret: asymmetrisk margin over/under
-            // caption i lukket tilstand, som om der stadig var reserveret
-            // plads til linjen) - de 15px/10px hørte til linjen og skal
-            // følge den, ikke blive stående som tomt rum.
-            caption.style.marginBottom = opening ? "15px" : "0";
-            caption.style.paddingBottom = opening ? "10px" : "0";
-        }
-        updateToggleAllCardsButton();
-    }
-    // RETTET (bruger-rapporteret: "ikke der de skulle placeres, men på card
-    // ved siden af fold-ikonen") - der findes ikke længere ÉN fælles knap
-    // (id="fab-toggle-cards") - htm_Card_() (php2htm.lib.php) tegner nu et
-    // ens dobbeltpil-ikon på HVERT foldbart kort, alle med samme
-    // "tc-toggle-all-icon"-klasse og pakket i en "tc-toggle-all-wrap"-span.
-    // Alle instanserne styres samlet herfra, så de altid viser præcis samme
-    // retning/tooltip, uanset hvilket af dem man klikker på.
-    function toggleAllCards(el) {
-        const icons = document.querySelectorAll(".tc-fold-icon");
-        const anyClosed = Array.from(icons).some(i => i.classList.contains("fa-chevron-right"));
-        icons.forEach(icon => {
-            const isClosed = icon.classList.contains("fa-chevron-right");
-            if (anyClosed === isClosed) { toggleCard(icon.id.replace(/_icon$/, ""), icon); }
-        });
-        // toggleCard() kalder allerede updateToggleAllCardsButton() for os pr.
-        // kort - ingen grund til at gøre det igen her.
-    }
-    function updateToggleAllCardsButton() {
-        const wraps = document.querySelectorAll(".tc-toggle-all-wrap");
-        if (!wraps.length) return;
-        const icons = document.querySelectorAll(".tc-fold-icon");
-        if (icons.length < 3) { wraps.forEach(w => w.style.display = "none"); return; }
-        const anyClosed = Array.from(icons).some(i => i.classList.contains("fa-chevron-right"));
-        wraps.forEach(wrap => {
-            wrap.style.display = "";
-            const icon = wrap.querySelector(".tc-toggle-all-icon");
-            if (anyClosed) {
-                icon.className = "fa-solid fa-angles-down tc-toggle-all-icon";
-                wrap.setAttribute("data-hint", wrap.dataset.expandHint);
-            } else {
-                icon.className = "fa-solid fa-angles-up tc-toggle-all-icon";
-                wrap.setAttribute("data-hint", wrap.dataset.collapseHint);
-            }
-        });
-    }
-    // Ikonerne renderes som en del af hvert korts caption-række, allerede
-    // skrevet FØR dette <script>-blok (kortene ligger i selve sidens
-    // brødtekst) - men vi venter alligevel til hele siden er færdigparset,
-    // så det er robust uanset hvor på siden et givet kort ligger.
-    document.addEventListener("DOMContentLoaded", updateToggleAllCardsButton);
-    window.onscroll = function() {
-        const btn = document.getElementById("fab-scroll-top");
-        if (btn) {
-            if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) { btn.style.display = "flex"; } else { btn.style.display = "none"; }
-        }
-    };
-    </script>';
+    <script src="' . tc_asset('assets/tc-foot.js') . '"></script>';
 
     if (isset($_SESSION['user_id']) && $_SESSION['user_id'] > 0) { 
         if (function_exists('htm_FloatingActionBar')) { htm_FloatingActionBar(); }

@@ -35,7 +35,7 @@ $sep = ";"; // Semikolon fungerer bedst i dansk Excel
 if ($type == 'customers') {
     // Overskrifter baseret på din Blueprint
     // Kolonnenavnene var faste danske tekster - nu på brugerens sprog som resten af appens eksporter
-    fputcsv($output, array_map('lang', ['@ID', '@Name', '@Contact Person', '@Address', '@Email', '@Phone', '@CVR', '@Notes', '@Payment Days']), $sep);
+    fputcsv($output, array_map('lang', ['@ID', '@Name', '@Contact Person', '@Address', '@Email', '@Phone', tc_company_id_short(), '@Notes', '@Payment Days']), $sep, '"', '');
     
     $sql = "SELECT cust_id, cust_name, cust_contact_person, cust_address, cust_email, cust_phone, cust_cvr, cust_notes, cust_payment_days 
             FROM customers WHERE " . customers_active_filter($conn) . "
@@ -50,13 +50,13 @@ if ($type == 'customers') {
         foreach (['cust_name', 'cust_contact_person', 'cust_address', 'cust_email', 'cust_phone', 'cust_cvr', 'cust_notes'] as $f) {
             if (isset($row[$f])) $row[$f] = csv_safe($row[$f]);
         }
-        fputcsv($output, $row, $sep);
+        fputcsv($output, $row, $sep, '"', '');
     }
 }
 elseif ($type == 'invoices') {
     // Kombineret oversigt over fakturaer og deres linjer
     fputcsv($output, array_map('lang', ['@Invoice ID', '@No.', '@Date', '@Due Date', '@Customer', '@Status',
-        '@Line text', '@Qty', '@Price', '@VAT %', '@Line total', '@Currency']), $sep);
+        '@Line text', '@Qty', '@Price', '@VAT %', '@Line total', '@Currency']), $sep, '"', '');
     
     // RETTET: linjetotalen så bort fra linjens rabat (discount_pct) - eksporten viste for høje beløb
     $exp_disc = invoice_discount_sql($conn, 'l.');
@@ -86,7 +86,7 @@ elseif ($type == 'invoices') {
         foreach (['cust_name', 'line_text'] as $f) {
             if (isset($row[$f])) $row[$f] = csv_safe($row[$f]);
         }
-        fputcsv($output, $row, $sep);
+        fputcsv($output, $row, $sep, '"', '');
     }
 }
 

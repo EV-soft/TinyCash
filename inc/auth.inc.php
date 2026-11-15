@@ -35,6 +35,11 @@ if (session_status() === PHP_SESSION_NONE) {
     ]);
 
     session_start();
+    // Cookien sendes kun når sessionen oprettes - dens 4 timer regnedes fra login, så en aktiv bruger blev logget ud midt
+    // i arbejdet (og mistede en udfyldt formular). Den fornyes nu ved hver side: udløb efter 4 timers inaktivitet.
+    if (!headers_sent() && isset($_COOKIE[session_name()]) && $_COOKIE[session_name()] === session_id()) {
+        setcookie(session_name(), session_id(), ['expires' => time() + $session_time, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax', 'secure' => $is_https]);
+    }
     echo "";
 }
 
@@ -72,9 +77,7 @@ if (isset($_GET['l'])) {
 }
 
 // Fallback hvis sessionen ikke er sat endnu
-if (!isset($_SESSION['lang'])) {
-    $_SESSION['lang'] = 'da'; 
-}
+// (sat længere nede, efter forbindelsen til regnskabet - standardsproget følger landepakken)
 if (!isset($_SESSION['proglang'])) {
     $_SESSION['proglang'] = 'da : Dansk';
 }
@@ -124,7 +127,19 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_id'] <= 0) {
 // En admin der ændrede en andens rolle, kodeord, eller (denne feature) deaktiverede kontoen, havde derfor INGEN
 // effekt på en allerede aktiv session, som forblev fuldt funktionsdygtig indtil brugeren selv loggede ud.
 require_once 'inc/db_connect.inc.php';
+if (!isset($_SESSION['lang'])) $_SESSION['lang'] = tc_default_lang();      // (landepakkens sprog - ikke altid dansk)
 $auth_has_is_active_col = db_has_column($conn, 'users', 'is_active');
+// Kodeordet ændret siden login (fx nulstillet af en administrator efter et brud): sessionen er ikke længere gyldig.
+// En session fra før denne kontrol får blot sit fingeraftryk sat første gang.
+$auth_pw_row = DB::fetch_assoc(DB::query($conn, "SELECT password_hash FROM users WHERE user_id = " . (int)$_SESSION['user_id']));
+$auth_pw_fp  = tc_pw_fingerprint((string)($auth_pw_row['password_hash'] ?? ''));
+if (!isset($_SESSION['pw_fp'])) $_SESSION['pw_fp'] = $auth_pw_fp;
+elseif (!$auth_pw_row || !hash_equals((string)$_SESSION['pw_fp'], $auth_pw_fp)) {
+    $_SESSION = array();
+    session_destroy();
+    header("Location: login.php");
+    exit;
+}
 if ($auth_has_is_active_col) {
     $auth_user_row = DB::fetch_assoc(DB::query($conn, "SELECT is_active FROM users WHERE user_id = " . (int)$_SESSION['user_id']));
     if (!$auth_user_row || (int)$auth_user_row['is_active'] === 0) {
@@ -133,6 +148,12 @@ if ($auth_has_is_active_col) {
         header("Location: login.php?msg=account_disabled");
         exit;
     }
+}
+// ?Debug=true for en indlogget bruger - også på sider der indlæser db_connect.inc.php før denne fil (sessionen fandtes
+// ikke endnu, da db_connect afgjorde om fejl måtte vises)
+if (isset($_GET['Debug']) && $_GET['Debug'] === 'true' && !ini_get('display_errors')) {
+    ini_set('display_errors', 1);
+    $GLOBAL_DEBUG_ALERT = '<div style="background:red; color:white; padding:5px; position:fixed; bottom:0; right:0; z-index:9999; font-size:10px; opacity:0.7;">DEBUG ACTIVE</div>';
 }
 // RETTET (SIKKERHED): login'et er bundet til det regnskab det blev givet i - er et andet regnskab valgt i sessionen
 // (Skift regnskab), er brugeren ikke logget ind dér. (En session fra før denne rettelse logges ud én gang.)
@@ -212,14 +233,14 @@ function deny_access_gracefully() {
         require_once 'inc/menu.inc.php';
     }
     
-    htm_Header(lang('Access Denied'));
+    htm_Header(lang('@Access Denied'));
     showMenu();
     
-    htm_Card_(lang('Access Denied'), 600, '', 'access_error', false);
+    htm_Card_(lang('@Access Denied'), 600, '', 'access_error', false);
     echo '<div style="text-align:center; padding:20px;">';
     echo '<i class="fa fa-exclamation-triangle" style="font-size:48px; color:#e74c3c; margin-bottom:15px;"></i>';
-    echo '<p style="font-size:1.2em; color:#555; margin-bottom:25px;">' . lang('Your user level is not high enough to view this page.') . '</p>';
-    htm_Button('fa-arrow-left', 'Back to Dashboard', 'primary', 'sales_hub.php', '', 'data-hint="'.lang('@Return to the main dashboard').'"', '', true);
+    echo '<p style="font-size:1.2em; color:#555; margin-bottom:25px;">' . lang('@Your user level is not high enough to view this page.') . '</p>';
+    htm_Button('fa-arrow-left', '@Back to Dashboard', 'primary', 'sales_hub.php', '', 'data-hint="'.lang('@Return to the main dashboard').'"', '', true);
     echo '</div>';
     htm_Card_end();
     
@@ -227,14 +248,12 @@ function deny_access_gracefully() {
     exit;
 }
 
-// NYT: fælles afvisnings-funktion til sider, der er specifikt bundet til DANSK lovgivning/SKAT (SAF-T-eksport,
-// OIOUBL e-faktura, den officielle momsrapport med dens TastSelv-afrundingslogik) og derfor ikke giver mening for
-// en ikke-dansk virksomhed, der bruger firmaets faktisk konfigurerede bogføringsvaluta (settings.currency) til
-// noget andet end DKK. Kaldes af den enkelte side selv (efter db_connect.inc.php er indlæst), samme mønster som
-// $rLev ovenfor - men datadrevet (valutaindstilling) i stedet for et statisk niveau-tal.
-function require_dkk_base_currency($conn) {
+// Fælles afvisning af en side, der hører til et lands regler (momsangivelse, OIOUBL, SAF-T DK ...), når den valgte
+// landepakke ikke har den - eller bogføringsvalutaen ikke er landets egen.
+// $feature: se tc_pack_feature() i inc/country.inc.php - landepakken afgør, om siden findes for virksomhedens land.
+function require_country_feature($conn, string $feature) {
+    if (tc_pack_feature($feature)) return;
     $base = strtoupper(get_settings($conn)['currency'] ?? 'DKK');
-    if ($base === 'DKK') return;
 
     if (ob_get_length()) ob_clean();
     if (!function_exists('showMenu')) {
@@ -247,8 +266,8 @@ function require_dkk_base_currency($conn) {
     htm_Card_(lang('@Access Restricted'), 600, '', 'access_error', false);
     echo '<div style="text-align:center; padding:20px;">';
     echo '<i class="fa fa-flag" style="font-size:48px; color:#e74c3c; margin-bottom:15px;"></i>';
-    echo '<p style="font-size:1.2em; color:#555; margin-bottom:10px;">' . lang('@This feature follows Danish-specific tax and bookkeeping rules, and is only available when your company\'s base currency is DKK.') . '</p>';
-    echo '<p style="font-size:0.95em; color:#888; margin-bottom:25px;">' . sprintf(lang('@Your company is currently configured with %s as its base currency (Company Settings -> Currency).'), htmlspecialchars($base)) . '</p>';
+    echo '<p style="font-size:1.2em; color:#555; margin-bottom:10px;">' . lang('@This feature follows the tax and bookkeeping rules of another country, or needs the country\'s own currency as base currency.') . '</p>';
+    echo '<p style="font-size:0.95em; color:#888; margin-bottom:25px;">' . sprintf(lang('@Your company is set up with the country %s and %s as its base currency (Company Settings).'), htmlspecialchars((string)tc_country_pack('name', '')), htmlspecialchars($base)) . '</p>';
     htm_Button('fa-arrow-left', '@Back to Dashboard', 'primary', 'sales_hub.php', '', 'data-hint="'.lang('@Return to the main dashboard').'"', '', true);
     echo '</div>';
     htm_Card_end();

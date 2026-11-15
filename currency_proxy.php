@@ -20,10 +20,14 @@ if (file_exists($cache_file) && (time() - filemtime($cache_file)) < $cache_ttl) 
 }
 
 // Hent fra API
-$url  = 'https://api.frankfurter.app/latest';
+$url  = 'https://api.frankfurter.dev/v1/latest';
 $ctx  = stream_context_create(['http' => ['timeout' => 5]]);
 $data = @file_get_contents($url, false, $ctx);
 
+// Kun et svar med kurser er brugbart - en fejl- eller vedligeholdelsesside (med status 200) blev gemt i cachen og
+// erstattede de gode kurser i 6 timer
+$cp_json = $data === false ? null : json_decode($data, true);
+if (!is_array($cp_json) || empty($cp_json['rates']) || !is_array($cp_json['rates'])) $data = false;
 if ($data === false) {
     // Returner gammel cache hvis tilgængelig, ellers fejl
     if (file_exists($cache_file)) {

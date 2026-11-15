@@ -11,6 +11,7 @@ require_once 'inc/db_connect.inc.php';
 require_once 'inc/php2htm.lib.php';
 require_once 'inc/audit.inc.php';
 require_once 'inc/field_visibility.inc.php';
+require_once 'inc/stock.inc.php';
 
 $action = $_GET['action'] ?? '';
 
@@ -45,6 +46,12 @@ if ($action === 'delete_product') {
         if ($in_use) {
             redirect('inventory_status.php', '@Cannot delete product: it is used on one or more invoice lines.', 'error');
         }
+        // En vare med beholdning eller lagerhistorik må ikke forsvinde: lagerværdien (bogført på varelagerkontoen) og
+        // bevægelserne der forklarer den, ville pege på en vare der ikke findes - sæt beholdningen til 0 ved en optælling først
+        $has_moves = stock_ready($conn) && DB::fetch_assoc(DB::query($conn, "SELECT move_id FROM stock_movements WHERE prod_id = $del_id LIMIT 1"));
+        if (abs((float)($del_old_row['prod_stock'] ?? 0)) >= 0.0005 || $has_moves) {
+            redirect('inventory_status.php', '@Cannot delete product: it has stock or stock movements. A product with a history is kept for the documentation.', 'error');
+        }
         if (DB::query($conn, "DELETE FROM products WHERE prod_id = $del_id") && $del_old_row) {
             log_action($conn, 'DELETE_PRODUCT', 'products', $del_id, $del_old_row, null);
         }
@@ -68,7 +75,7 @@ if (in_array($action, ['create_product', 'update_product'], true) && !empty($_PO
     redirect('product_edit.php' . ($prod_id > 0 ? "?id=$prod_id" : ''), '@The selected account does not exist in the chart of accounts.', 'error');
 }
 $ia_bad = fn($k, $min) => trim((string)($_POST[$k] ?? '')) !== '' && tc_num($_POST[$k], $min) === null;      // (tomt felt = 0)
-if ($ia_bad('prod_price', 0) || $ia_bad('prod_stock', null) || $ia_bad('prod_cost_price', 0)) {
+if ($ia_bad('prod_price', 0) || $ia_bad('prod_stock', null) || $ia_bad('prod_cost_price', 0) || $ia_bad('prod_min_stock', 0)) {      // (minimumslager "abc" blev 0 = ingen advarsel)
     redirect('product_edit.php' . ($prod_id > 0 ? "?id=$prod_id" : ''), '@Please enter a valid amount.', 'error');
 }
 
@@ -80,7 +87,7 @@ $prod_sku_raw   = trim($_POST['prod_sku'] ?? '');
 $prod_sku_sql   = $prod_sku_raw !== '' ? "'" . DB::escape($conn, $prod_sku_raw) . "'" : 'NULL';
 $prod_name      = DB::escape($conn, $_POST['prod_name'] ?? '');
 $prod_stock     = parse_dk_number($_POST['prod_stock'] ?? 0);      // RETTET: (int) kappede en brøkdel af (fx 7,5 kg -> 7)
-$prod_min_stock = (int)($_POST['prod_min_stock'] ?? 5);
+$prod_min_stock = trim((string)($_POST['prod_min_stock'] ?? '')) === '' ? 0 : (int)ceil((float)tc_num($_POST['prod_min_stock'], 0));      // ("2,5" blev 2 - nu rundet op, så advarslen kommer i tide)
 $prod_price     = parse_dk_number($_POST['prod_price'] ?? 0);
 $acc_id         = isset($_POST['acc_id']) ? (int)$_POST['acc_id'] : "NULL";
 
@@ -144,7 +151,9 @@ if ($action === 'create_product') {
     $sql = "INSERT INTO products ($cols) VALUES ($vals)";
     $success = DB::query($conn, $sql);
     if ($success) {
-        log_action($conn, 'CREATE_PRODUCT', 'products', DB::insert_id($conn), null, $after_row);
+        $new_pid = (int)DB::insert_id($conn);
+        log_action($conn, 'CREATE_PRODUCT', 'products', $new_pid, null, $after_row);
+        stock_log_move($conn, $new_pid, (float)$prod_stock, 'manual', date('Y-m-d'), ['note' => lang('@Opening stock')]);
     }
 }
 elseif ($action === 'update_product' && $prod_id > 0) {
@@ -178,6 +187,9 @@ elseif ($action === 'update_product' && $prod_id > 0) {
     $success = DB::query($conn, $sql);
     if ($success) {
         log_action($conn, 'UPDATE_PRODUCT', 'products', $prod_id, $before_row, $after_row);
+        // En rettelse af beholdningen på varekortet logges som lagerbevægelse - ellers forklarede varekortets liste ikke beholdningen
+        $after_stock = (float)(DB::fetch_row(DB::query($conn, "SELECT prod_stock FROM products WHERE prod_id = $prod_id"))[0] ?? 0);
+        stock_log_move($conn, $prod_id, round($after_stock - (float)($before_row['prod_stock'] ?? 0), 3), 'manual', date('Y-m-d'), ['note' => lang('@Changed on the product card')]);
     }
 }
 

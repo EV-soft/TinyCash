@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $address = DB::escape($conn, $_POST['address'] ?? '');
     $cvr     = DB::escape($conn, $_POST['cvr'] ?? '');
     $phone   = DB::escape($conn, $_POST['phone'] ?? '');
-    $email   = DB::escape($conn, $_POST['email'] ?? '');
+    $email   = DB::escape($conn, trim((string)($_POST['email'] ?? '')));      // (valideret trimmet, men gemt med mellemrummene)
     $days    = max(0, (int)($_POST['payment_days'] ?? 8));      // RETTET: negative dage gav et forfald før udgiftens dato
     $notes   = DB::escape($conn, $_POST['notes'] ?? '');
     $active  = isset($_POST['is_active']) ? 1 : 0;
@@ -30,10 +30,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // NYT: valgfrie bankoplysninger - nødvendige for CSV-eksporten til bankbetaling (supplier_payment_export.php).
     // Samme "stille degradering hvis ikke migreret endnu"-mønster som andre nyere felter.
     $has_bank_cols = db_has_column($conn, 'suppliers', 'supplier_reg_no');
-    $reg_no_raw  = trim($_POST['supplier_reg_no'] ?? '');
-    $acct_no_raw = trim($_POST['supplier_account_no'] ?? '');
+    // (mellemrum/bindestreger fjernes - "1234-567 890" gik ellers uændret i betalingsfilen til netbanken)
+    $reg_no_raw  = preg_replace('/[\s.-]+/', '', trim($_POST['supplier_reg_no'] ?? ''));
+    $acct_no_raw = preg_replace('/[\s.-]+/', '', trim($_POST['supplier_account_no'] ?? ''));
     $reg_no_sql  = $reg_no_raw !== ''  ? "'" . DB::escape($conn, $reg_no_raw) . "'"  : 'NULL';
     $acct_no_sql = $acct_no_raw !== '' ? "'" . DB::escape($conn, $acct_no_raw) . "'" : 'NULL';
+
+    // Land og momsnummer (EU-køb/landepakker) - kun når migreret. Tomt land = virksomhedens eget land.
+    $has_country_cols = db_has_column($conn, 'suppliers', 'vat_id');
+    $sup_country = strtoupper(trim((string)($_POST['country'] ?? '')));
+    $sup_country_sql = isset(tc_country_codes()[$sup_country]) ? "'" . DB::escape($conn, $sup_country) . "'" : 'NULL';
+    $sup_vat_id = tc_vat_id_clean($_POST['vat_id'] ?? '');
+    $sup_vat_id_sql = $sup_vat_id ? "'" . DB::escape($conn, $sup_vat_id) . "'" : 'NULL';
 
     // NYT: denne side kaldte FØR aldrig log_action overhovedet - i modsætning til
     // customer_edit.php/account_edit.php/vat_codes.php, som alle logger ændringer af stamdata. Henter
@@ -46,17 +54,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $err = lang('@Please enter a supplier name.');
     } elseif ($raw_email !== '' && filter_var($raw_email, FILTER_VALIDATE_EMAIL) === false) {
         $err = lang('@Please enter a valid email address, or leave the field empty.');
+    } elseif ($has_bank_cols && (($reg_no_raw !== '' && !preg_match('/^\d{4}$/', $reg_no_raw)) || ($acct_no_raw !== '' && !preg_match('/^\d{1,10}$/', $acct_no_raw))
+              || (($reg_no_raw === '') !== ($acct_no_raw === '')))) {
+        // (et forkert reg./kontonummer gik direkte i betalingsfilen til netbanken - betalingen blev afvist eller ramte forkert)
+        $err = lang('@The reg. no. must be 4 digits and the account no. at most 10 digits - fill in both or neither.');
+    } elseif ($has_country_cols && $sup_vat_id === null) {
+        $err = lang('@The VAT number must start with the country code, e.g. SE556677889901, or leave the field empty.');
+    } elseif ($has_country_cols && $sup_vat_id !== '' && in_array($sup_country, TC_EU_COUNTRIES, true)
+              && substr($sup_vat_id, 0, 2) !== ($sup_country === 'GR' ? 'EL' : $sup_country)) {      // (som kundekortet)
+        $err = sprintf(lang('@The VAT number %s does not belong to the chosen country (%s) - check the country or the number.'), htmlspecialchars($sup_vat_id), htmlspecialchars($sup_country));
     } elseif ($supplier_id > 0) {
         $sql = "UPDATE suppliers SET
                 supplier_name = '$name', contact_person = '$contact', address = '$address',
                 cvr = '$cvr', phone = '$phone', email = '$email', payment_days = $days,
                 notes = '$notes', is_active = $active"
-                . ($has_bank_cols ? ", supplier_reg_no = $reg_no_sql, supplier_account_no = $acct_no_sql" : "") . "
+                . ($has_bank_cols ? ", supplier_reg_no = $reg_no_sql, supplier_account_no = $acct_no_sql" : "")
+                . ($has_country_cols ? ", country = $sup_country_sql, vat_id = $sup_vat_id_sql" : "") . "
                 WHERE supplier_id = $supplier_id";
     } else {
         $ins_cols = "supplier_name, contact_person, address, cvr, phone, email, payment_days, notes, is_active";
         $ins_vals = "'$name', '$contact', '$address', '$cvr', '$phone', '$email', $days, '$notes', $active";
         if ($has_bank_cols) { $ins_cols .= ", supplier_reg_no, supplier_account_no"; $ins_vals .= ", $reg_no_sql, $acct_no_sql"; }
+        if ($has_country_cols) { $ins_cols .= ", country, vat_id"; $ins_vals .= ", $sup_country_sql, $sup_vat_id_sql"; }
         $sql = "INSERT INTO suppliers ($ins_cols) VALUES ($ins_vals)";
     }
 
@@ -66,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'address' => $_POST['address'] ?? '', 'cvr' => $_POST['cvr'] ?? '',
             'phone' => $_POST['phone'] ?? '', 'email' => $raw_email,
             'payment_days' => $days, 'notes' => $_POST['notes'] ?? '', 'is_active' => $active,
-        ];
+        ] + ($has_country_cols ? ['country' => trim($sup_country_sql, "'"), 'vat_id' => (string)$sup_vat_id] : []);
         if ($supplier_id == 0) {
             $supplier_id = DB::insert_id($conn);
             log_action($conn, 'CREATE_SUPPLIER', 'suppliers', $supplier_id, null, $after_row);
@@ -75,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $msg = lang('@Supplier saved successfully');
     } elseif (!isset($err) || $err === '') {
-        $err = lang('@SQL Error:') . " " . DB::error($conn);
+        $err = lang('@SQL Error:') . ' ' . htmlspecialchars((string)DB::error($conn));
     }
 }
 
@@ -89,6 +108,7 @@ if (isset($err) && $err !== '' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset
         'phone' => $_POST['phone'] ?? '', 'email' => $_POST['email'] ?? '',
         'payment_days' => (int)($_POST['payment_days'] ?? 8), 'notes' => $_POST['notes'] ?? '',
         'is_active' => isset($_POST['is_active']) ? 1 : 0,
+        'country' => $_POST['country'] ?? '', 'vat_id' => $_POST['vat_id'] ?? '',
     ];
 } elseif ($supplier_id > 0) {
     $res = DB::query($conn, "SELECT * FROM suppliers WHERE supplier_id = $supplier_id");
@@ -99,7 +119,7 @@ if (isset($err) && $err !== '' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset
 } else {
     $sup = [
         'supplier_name' => '', 'contact_person' => '', 'address' => '', 'cvr' => '',
-        'phone' => '', 'email' => '', 'payment_days' => 8, 'notes' => '', 'is_active' => 1,
+        'phone' => '', 'email' => '', 'payment_days' => 8, 'notes' => '', 'is_active' => 1, 'country' => '', 'vat_id' => '',
     ];
 }
 
@@ -121,12 +141,13 @@ htm_Card_(capt: '@Supplier Information', wdth: 550, form: 'edit_supplier_form');
     echo "<div style='display:flex; width:100%; gap:6px; align-items:flex-end;'>";
         echo '<div style="width:33%; display:flex; gap:4px; align-items:flex-end;">';
         echo '<div style="flex:1;">';
-        htm_Field(icon: 'fa-id-card', labl: '@CVR', name: 'cvr', valu: $sup['cvr'], extr: 'align-left onblur="checkCvrDuplicate(this.value, \'supplier\', '.$supplier_id.')"', wdth: '100%');
+        htm_Field(icon: 'fa-id-card', labl: '@' . tc_country_pack('company_id.short', 'CVR'), name: 'cvr', valu: $sup['cvr'], extr: 'align-left onblur="checkCvrDuplicate(this.value, \'supplier\', '.$supplier_id.')"', wdth: '100%');
         echo '</div>';
         // NYT - se customer_edit.php's samme tilføjelse for den fulde begrundelse (cvr_proxy.php/cvrapi.dk).
         // "tc-info-fill" (htm_page.lib.php): mørkere tekst/ikon i dark-temaet, hvor var(--color-info) er lysegrå
         // og ellers gør ikonet ulæseligt (samme rettelse som customer_edit.php's identiske knap).
-        echo '<button type="button" onclick="cvrLookup(this)" class="tc-info-fill" style="flex-shrink:0; margin-bottom:2px; padding:9px 10px; background:var(--color-info); color:var(--text-light); border:none; border-radius:4px; cursor:pointer;" data-hint="'.lang('@Look up company name, address, phone and email from the CVR number').'"><i class="fa-solid fa-magnifying-glass"></i></button>';
+        if (tc_registry() !== null)
+        echo '<button type="button" onclick="cvrLookup(this)" class="tc-info-fill" style="flex-shrink:0; margin-bottom:2px; padding:9px 10px; background:var(--color-info); color:var(--text-light); border:none; border-radius:4px; cursor:pointer;" data-hint="'.htmlspecialchars(sprintf(lang('@Look up company name, address, phone and email from the %s'), tc_company_id_label())).'"><i class="fa-solid fa-magnifying-glass"></i></button>';
         echo '</div>';
         htm_Field(icon: 'fa-phone', labl: '@Phone', name: 'phone', valu: $sup['phone'], extr: 'align-left', wdth: '33%');
         htm_Field(icon: 'fa-calendar-check', labl: '@Payment Days', name: 'payment_days', valu: $sup['payment_days'], type: 'number', extr: 'min="0" align-left', wdth: '34%', hint: '@Used as the default due date offset when registering an unpaid expense for this supplier.');
@@ -140,6 +161,19 @@ htm_Card_(capt: '@Supplier Information', wdth: 550, form: 'edit_supplier_form');
         htm_Field(icon: 'fa-envelope', labl: '@Email', name: 'email', valu: $sup['email'], type: 'email', extr: 'align-left', wdth: '50%');
         htm_Field(icon: 'fa-user-tie', labl: '@Contact Person', name: 'contact_person', valu: $sup['contact_person'], extr: 'align-left', wdth: '50%');
     echo "</div>";
+
+    if (db_has_column($conn, 'suppliers', 'vat_id')) {
+        // Land og momsnummer: tomt land = virksomhedens eget land (EU-køb med omvendt betalingspligt kræver landet)
+        $c_opts = ['' => '-- ' . lang('@Same as the company') . ' --'];
+        foreach (tc_country_codes() as $iso => $nm) $c_opts[$iso] = $iso . ' - ' . lang($nm);
+        echo "<div style='display:flex; width:100%;'>";
+        htm_Field(icon: 'fa-globe', labl: '@Country', name: 'country', valu: (string)($sup['country'] ?? ''), type: 'sele', opti: $c_opts, wdth: '40%',
+            hint: '@Only needed for suppliers abroad - used for EU purchases with reverse charge and the VAT return.');
+        htm_Field(icon: 'fa-receipt', labl: '@VAT Number', name: 'vat_id', valu: (string)($sup['vat_id'] ?? ''), extr: 'align-left maxlength="20"', wdth: '60%', plho: 'DE123456789');
+        echo "</div>";
+        require_once 'inc/vies.inc.php';
+        htm_vies_button($conn, 'vat_id', 'suppliers', (int)$supplier_id);
+    }
 
     htm_Field(icon: 'fa-sticky-note', labl: '@Notes', name: 'notes', valu: $sup['notes'], type: 'textarea', extr: 'align-left', wdth: '100%');
 
@@ -176,7 +210,7 @@ htm_Card_(capt: '@Supplier Information', wdth: 550, form: 'edit_supplier_form');
                 icon: 'fa-trash',
                 labl: '@Delete',
                 link: 'supplier_list.php?del='.$supplier_id,
-                mess: '@Are you sure you want to delete this supplier? This cannot be undone.',
+                mess: '@Delete this supplier? It is moved to the trash bin, where it can be restored.',      // (sletningen er en blødsletning - "kan ikke fortrydes" var forkert)
                 type: 'danger',
                 styl: 'flex:1; text-align:center;',
                 attr: 'data-hint="'.lang('@Delete this supplier - only possible if no expenses are linked').'"'
@@ -198,7 +232,7 @@ function checkCvrDuplicate(cvrRaw, type, excludeId) {
     var box = document.getElementById('cvr_dup_warning');
     if (!box) return;
     var cvr = (cvrRaw || '').replace(/\D/g, '');
-    if (cvr.length !== 8) { box.style.display = 'none'; return; }
+    if (cvr.length < 6) { box.style.display = 'none'; return; }
     var params = new URLSearchParams({ type: type, cvr: cvr, exclude_id: excludeId || 0 });
     fetch('cvr_duplicate_check.php?' + params.toString())
         .then(function(r) { return r.json(); })
@@ -206,7 +240,7 @@ function checkCvrDuplicate(cvrRaw, type, excludeId) {
             if (data.duplicate && data.matches && data.matches.length > 0) {
                 var names = data.matches.map(function(m) { return m.name; }).join(', ');
                 box.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:var(--color-warning);"></i> '
-                    + <?php echo json_encode(lang('@This CVR number is already registered on:')); ?> + ' <strong>' + names.replace(/</g, '&lt;') + '</strong>.';
+                    + <?php echo json_encode(sprintf(lang('@This %s is already registered on:'), tc_company_id_label())); ?> + ' <strong>' + names.replace(/</g, '&lt;') + '</strong>.';
                 box.style.display = 'block';
             } else {
                 box.style.display = 'none';
@@ -219,8 +253,8 @@ function checkCvrDuplicate(cvrRaw, type, excludeId) {
 function cvrLookup(btn) {
     var cvrField = document.querySelector('[name="cvr"]');
     var cvr = (cvrField.value || '').replace(/\D/g, '');
-    if (cvr.length !== 8) {
-        alert(<?php echo json_encode(lang('@Please enter a valid 8-digit CVR number first.')); ?>);
+    if (cvr.length !== <?= tc_company_id_digits() ?>) {
+        sysAlert(<?php echo json_encode(sprintf(lang('@Please enter a valid %s first.'), tc_company_id_label())); ?>);
         return;
     }
     var icon = btn.querySelector('i');
@@ -232,7 +266,7 @@ function cvrLookup(btn) {
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (!data.success) {
-                alert(data.error || <?php echo json_encode(lang('@CVR lookup failed.')); ?>);
+                sysAlert(data.error || <?php echo json_encode(lang('@The company register lookup failed.')); ?>);
                 return;
             }
             var nameField  = document.querySelector('[name="supplier_name"]');
@@ -245,7 +279,7 @@ function cvrLookup(btn) {
             if (emailField && !emailField.value && data.email) emailField.value = data.email;
         })
         .catch(function() {
-            alert(<?php echo json_encode(lang('@Could not reach the CVR lookup service.')); ?>);
+            sysAlert(<?php echo json_encode(lang('@Could not reach the company register.')); ?>);
         })
         .finally(function() {
             icon.className = origClass;

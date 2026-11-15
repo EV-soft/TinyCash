@@ -43,9 +43,9 @@ if (isset($_GET['del']) && (int)$_GET['del'] > 0) {
 
         if (DB::query($conn, $del_sql)) {
             if ($old_row) log_action($conn, 'DELETE_SUPPLIER', 'suppliers', $del_id, $old_row, null);
-            redirect('supplier_list.php', '@Deleted successfully');
+            redirect('supplier_list.php', $has_trash_col ? '@Moved to the trash bin - it can be restored from there.' : '@Deleted successfully');
         } else {
-            $err = lang('@SQL Error:') . " " . DB::error($conn);
+            $err = lang('@SQL Error:') . ' ' . htmlspecialchars((string)DB::error($conn));
         }
     }
 }
@@ -102,7 +102,7 @@ if ($has_debt_columns) {
 
 $res = DB::query($conn, "SELECT * FROM suppliers WHERE " . suppliers_active_filter($conn) . " ORDER BY is_active DESC, supplier_name ASC");
 
-$headers = ['@Name', '@Contact', '@Phone / Email', '@CVR', '@Amount Owed', '@Actions'];
+$headers = ['@Name', '@Contact', '@Phone / Email', tc_company_id_short(), '@Amount Owed', '@Actions'];
 $data = [];
 
 if ($res) {
@@ -149,7 +149,7 @@ if ($res) {
                 : '<span style="color:var(--text-muted);">' . fmt_dk(0) . ' ' . $cur . '</span>',
             htm_ActionButtons($actions, false) . htm_ConfirmLink(
                 icon: 'fa-trash', labl: '', link: 'supplier_list.php?del='.$sid,
-                mess: '@Are you sure you want to delete this supplier? This cannot be undone.',
+                mess: '@Delete this supplier? It is moved to the trash bin, where it can be restored.',      // (sletningen er en blødsletning - "kan ikke fortrydes" var forkert)
                 type: 'danger', styl: 'display:inline-block; margin-left:4px; padding:4px 8px;',
                 attr: 'data-hint="'.lang('@Delete this supplier - only possible if no expenses are linked').'"', echo: false
             ),

@@ -15,6 +15,11 @@ $recur_id = (int)($_GET['id'] ?? 0);
 // --- GEM ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recur'])) {
     // Linjens momssats er et frit talfelt - en tastefejl som 250 eller -25 må ikke bogføres (tom linje = 0 %)
+    // Prisen og antallet var lige så frie - "abc" eller "500 kr" blev stille til 0 kr på linjen (et negativt beløb, fx en
+    // rabatlinje, er stadig tilladt)
+    foreach (['price_each', 'quantity'] as $nf) foreach ((array)($_POST[$nf] ?? []) as $nchk) {
+        if (trim((string)$nchk) !== '' && tc_num($nchk) === null) redirect("recurring_invoice_edit.php?id=" . (int)($_GET['id'] ?? 0), '@Please enter a valid amount.', 'error');
+    }
     foreach ((array)($_POST['line_vat'] ?? []) as $vchk) {
         if (trim((string)$vchk) !== '' && tc_pct($vchk) === null) redirect("recurring_invoice_edit.php?id=" . (int)($_GET['id'] ?? 0), '@The VAT rate must be between 0 and 100 %.', 'error');
     }
@@ -38,6 +43,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recur'])) {
     if (!tc_project_ok($conn, $proj_id, $proj_id)) $proj_id = 0;      // RETTET: et projekt-id der ikke findes, blev gemt (løs henvisning i projektregnskabet)
     $proj_sql      = ($proj_id > 0) ? $proj_id : 'NULL';
 
+    // Skabelon og linjer gemmes samlet: fejlede en linje, var de gamle linjer allerede slettet, og hver måned blev der
+    // dannet en faktura med for få linjer
+    DB::begin_transaction($conn);
     if ($recur_id > 0) {
         $save_ok = DB::query($conn, "UPDATE recurring_invoices SET
             cust_id=$cust_id, interval_type='$interval_type', next_run_date='$next_run',
@@ -52,7 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recur'])) {
     }
 
     if (!$save_ok) {
-        die(lang('@Error saving invoice: ') . DB::error($conn));
+        $ri_err = (string)DB::error($conn);  DB::rollback($conn);
+        redirect("recurring_invoice_edit.php?id=$recur_id", lang('@Error saving invoice: ') . htmlspecialchars($ri_err), 'error');      // (var en hvid side)
     }
 
     DB::query($conn, "DELETE FROM recurring_invoice_lines WHERE recur_id=$recur_id");
@@ -67,13 +76,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recur'])) {
             $vat = parse_dk_number($_POST['line_vat'][$k]);
             $prod_row = DB::fetch_assoc(DB::query($conn, "SELECT prod_name FROM products WHERE prod_id=$pid"));
             $txt = DB::escape($conn, $prod_row['prod_name'] ?? $_POST['line_text'][$k]);
+            if ($pid > 0 && !$prod_row) continue;      // (en vare slettet imens - linjen pegede ellers på en vare der ikke findes)
             if ($pid > 0 && $qty <= 0) $GLOBALS['tc_dropped_lines'] = ($GLOBALS['tc_dropped_lines'] ?? 0) + 1;      // RETTET: en udfyldt linje med antal 0 eller negativt forsvandt stille - nu en advarsel efter gem
             if ($pid <= 0 || $qty <= 0) continue;
-            DB::query($conn, "INSERT INTO recurring_invoice_lines
+            if (!DB::query($conn, "INSERT INTO recurring_invoice_lines
                 (recur_id, line_text, quantity, price_each, line_vat_rate, prod_id, proj_id)
-                VALUES ($recur_id, '$txt', $qty, $prc, $vat, $pid, $proj_sql)");
+                VALUES ($recur_id, '$txt', $qty, $prc, $vat, $pid, $proj_sql)")) {
+                $ri_err = (string)DB::error($conn);  DB::rollback($conn);
+                redirect("recurring_invoice_edit.php?id=$recur_id", lang('@Error saving invoice: ') . htmlspecialchars($ri_err), 'error');
+            }
         }
     }
+    DB::commit($conn);
     if (!empty($GLOBALS['tc_dropped_lines'])) flash(sprintf(lang('@%d line(s) with a quantity of 0 or less were not saved - use a credit note to reduce an invoice.'), $GLOBALS['tc_dropped_lines']), 'warning');
     redirect("recurring_invoice_edit.php?id=$recur_id", '@Changes saved successfully');
 }
@@ -81,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recur'])) {
 // --- HENT DATA ---
 if ($recur_id > 0) {
     $tmpl = DB::fetch_assoc(DB::query($conn, "SELECT * FROM recurring_invoices WHERE recur_id=$recur_id"));
-    if (!$tmpl) redirect("recurring_invoice_edit.php?id=" . (int)($_GET['id'] ?? 0), '@Invoice not found', 'error');
+    if (!$tmpl) redirect('recurring_invoices.php', '@Not found - it may already have been deleted.', 'error');      // (omdirigerede til sig selv med samme id - en uendelig løkke)
     $tmpl_lines = [];
     $lines_res = DB::query($conn, "SELECT * FROM recurring_invoice_lines WHERE recur_id=$recur_id ORDER BY rline_id");
     while ($l = DB::fetch_assoc($lines_res)) { $tmpl_lines[] = $l; }
@@ -140,10 +154,10 @@ echo '<h3 style="margin:20px 0 10px 0;">'.lang('@Invoice Lines').'</h3>';
 
 $prod_res = DB::query($conn, "SELECT p.prod_id, p.prod_name, p.prod_price, a.vat_rate FROM products p LEFT JOIN accounts a ON p.acc_id = a.acc_id ORDER BY p.prod_name");
 $prod_opt = [0 => '-- '.lang('@Select Product/Description').' --'];
-$prod_vat_map = [0 => 25]; $prod_price_map = [0 => 0.00];
+$prod_vat_map = [0 => tc_vat_std_rate()]; $prod_price_map = [0 => 0.00];
 while ($p = DB::fetch_assoc($prod_res)) {
     $prod_opt[$p['prod_id']] = $p['prod_name'];
-    $prod_vat_map[$p['prod_id']]   = ($p['vat_rate']   !== null) ? (float)$p['vat_rate']   : 25.00;
+    $prod_vat_map[$p['prod_id']]   = ($p['vat_rate']   !== null) ? (float)$p['vat_rate']   : tc_vat_std_rate();
     $prod_price_map[$p['prod_id']] = ($p['prod_price'] !== null) ? (float)$p['prod_price'] : 0.00;
 }
 
@@ -152,7 +166,7 @@ for ($i = 0; $i < 5; $i++) {
     $prod_id    = isset($tmpl_lines[$i]['prod_id'])       ? (int)$tmpl_lines[$i]['prod_id']       : 0;
     $line_qty   = isset($tmpl_lines[$i]['quantity'])      ? $tmpl_lines[$i]['quantity']            : '';
     $line_price = isset($tmpl_lines[$i]['price_each'])    ? $tmpl_lines[$i]['price_each']          : '';
-    $line_vat   = isset($tmpl_lines[$i]['line_vat_rate']) ? $tmpl_lines[$i]['line_vat_rate']       : 25;
+    $line_vat   = isset($tmpl_lines[$i]['line_vat_rate']) ? $tmpl_lines[$i]['line_vat_rate']       : tc_vat_std_rate();
 
     $f_prod  = '<input type="hidden" name="prod_id[]" id="prod_id_'.$i.'" value="'.$prod_id.'">';
     $f_text  = htm_Field('', '', 'line_text[]', $prod_id, 'sele', $prod_opt, 'onchange="updateVatRate(this, '.$i.')"', '100%', '', '', '', false) . $f_prod;
@@ -198,7 +212,7 @@ function updateRecurPreview() {
     var d = new Date(dateField.value + 'T00:00:00');
     var dates = [];
     for (var i = 0; i < 4; i++) {
-        dates.push(d.toLocaleDateString('da-DK'));
+        dates.push(d.toLocaleDateString(window.tcLocale || 'da-DK'));
         // Samme regel som recurring_next_date(): samme dag, højst månedens sidste - den sidste forbliver den sidste
         var day = d.getDate(), wasLast = day === new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
         var last = new Date(d.getFullYear(), d.getMonth() + months + 1, 0).getDate();
@@ -218,7 +232,7 @@ function updateDueDays() {
 function updateVatRate(selectElement, rowIndex) {
     const pid = selectElement.value;
     document.getElementsByName('prod_id[]')[rowIndex].value       = pid;
-    document.getElementsByName('line_vat[]')[rowIndex].value      = vatMap[pid]   !== undefined ? vatMap[pid]   : 25;
+    document.getElementsByName('line_vat[]')[rowIndex].value      = vatMap[pid]   !== undefined ? vatMap[pid]   : <?= json_encode(tc_vat_std_rate()) ?>;
     document.getElementsByName('price_each[]')[rowIndex].value    = priceMap[pid] !== undefined ? priceMap[pid] : 0.00;
     calculateInvoiceTotals();
 }
@@ -236,9 +250,9 @@ function calculateInvoiceTotals() {
         vat += q * p * (v / 100);
     }
     const fmt = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
-    document.getElementById('total_sub').innerText   = sub.toLocaleString('da-DK', fmt);
-    document.getElementById('total_vat').innerText   = vat.toLocaleString('da-DK', fmt);
-    document.getElementById('total_grand').innerText = (sub + vat).toLocaleString('da-DK', fmt);
+    document.getElementById('total_sub').innerText   = sub.toLocaleString(window.tcLocale || 'da-DK', fmt);
+    document.getElementById('total_vat').innerText   = vat.toLocaleString(window.tcLocale || 'da-DK', fmt);
+    document.getElementById('total_grand').innerText = (sub + vat).toLocaleString(window.tcLocale || 'da-DK', fmt);
 }
 
 document.addEventListener('input', function(e) {

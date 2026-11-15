@@ -108,8 +108,12 @@ if ($action === 'convert') {
         if (!$ok) throw new Exception('insert_failed');
         $new_inv_id = DB::insert_id($conn);
 
-        $lines_res = DB::query($conn, "SELECT * FROM quote_lines WHERE quote_id = $id");
+        // EU-OSS: et tilbud lavet med den hjemlige sats får modtagerlandets standardsats på fakturaen (inc/oss.inc.php)
+        require_once 'inc/oss.inc.php';
+        $oss_cc = oss_ready($conn) ? oss_dest_for_customer($conn, (int)$q['cust_id']) : null;
+        $lines_res = DB::query($conn, "SELECT * FROM quote_lines WHERE quote_id = $id ORDER BY line_id");      // (uden ORDER BY kunne fakturaen få linjerne i en anden rækkefølge end tilbuddet)
         while ($l = DB::fetch_assoc($lines_res)) {
+            if ($oss_cc !== null) $l['line_vat_rate'] = oss_map_rate($oss_cc, (float)$l['line_vat_rate']);
             $txt = DB::escape($conn, $l['line_text']);
             $lproj_sql = !empty($l['proj_id']) ? (int)$l['proj_id'] : $proj_sql;
             DB::query($conn, "INSERT INTO invoice_lines
@@ -124,7 +128,7 @@ if ($action === 'convert') {
             ['status' => 'converted', 'invoice_id' => $new_inv_id]);
 
         DB::commit($conn);
-        redirect("invoice_edit.php?id=$new_inv_id", '@Changes saved successfully');
+        redirect("invoice_edit.php?id=$new_inv_id", '@Draft invoice created from the quote - review it and post it.');
     } catch (Exception $e) {
         DB::rollback($conn);
         if ($e->getMessage() === 'bad_status') {

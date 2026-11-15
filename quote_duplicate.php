@@ -47,8 +47,8 @@ $ok = DB::query($conn, "INSERT INTO quotes
      $deliv_sql, $proj_sql, " . (int)($_SESSION['user_id'] ?? 0) . ")");
 
 if (!$ok) {
-    DB::rollback($conn);
-    die(lang('@Error saving invoice: ') . DB::error($conn));
+    $dup_err = (string)DB::error($conn);  DB::rollback($conn);
+    redirect('quote_list.php', lang('@Error saving to database:') . ' ' . htmlspecialchars($dup_err), 'error');      // (var en hvid side)
 }
 $new_id = DB::insert_id($conn);
 
@@ -68,7 +68,7 @@ while ($l = DB::fetch_assoc($lres)) {
 log_action($conn, 'DUPLICATE_QUOTE', 'quotes', $new_id, ['source_quote_id' => $src_id], ['cust_id' => $cust_id_sql, 'quote_date' => $today]);
 
 DB::commit($conn);
-redirect("quote_edit.php?id=$new_id", sprintf(lang('@New draft created as a duplicate of quote #%d - review and adjust before sending.'), $src_id), 'info');
+redirect("quote_edit.php?id=$new_id", sprintf(lang('@New draft created as a copy of quote %s - review and adjust before sending.'), 'T-' . str_pad((string)$src['quote_no'], 6, '0', STR_PAD_LEFT)), 'info');      // (viste tilbuddets interne id, ikke T-nummeret)
 ob_end_flush();
 exit;
 ?>

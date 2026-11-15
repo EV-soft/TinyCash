@@ -35,7 +35,8 @@ $inv = DB::fetch_assoc(DB::query($conn,
     "SELECT i.*, c.cust_name FROM invoices i JOIN customers c ON i.cust_id = c.cust_id WHERE i.inv_id = $inv_id"));
 if (!$inv) { redirect("sales_hub.php"); }
 
-if (strtolower($inv['inv_status']) !== 'sent') {
+// 'sent' - eller en krediteret faktura der stadig skylder noget (et bogført rykkergebyr, se invoice_open_dkk())
+if (strtolower($inv['inv_status']) !== 'sent' && !(strtolower($inv['inv_status']) === 'credited' && empty($inv['credit_ref']) && invoice_open_dkk($conn, $inv_id) > 0.01)) {
     redirect("invoice_view.php?id=$inv_id", '@This invoice cannot be manually marked as paid in its current status.', 'error');
 }
 
@@ -45,14 +46,24 @@ $remaining = invoice_open_dkk($conn, $inv_id);      // (total + delvis kreditnot
 
 $err = '';
 
+// Bank- og kassekonti, som betalingen kan gå ind på (som bankafstemningen: inc/reconcile.inc.php, tc_bank_line_account())
+require_once 'inc/accounts.inc.php';
+$mp_s = get_settings($conn);
+$mp_bank_accounts = [];
+$mp_res = DB::query($conn, "SELECT acc_id, acc_name" . acc_status_col($conn) . " FROM accounts WHERE acc_type = 'bank' AND " . acc_visible_sql($conn, '', [(int)($mp_s['conf_acc_bank'] ?? 0)]) . " ORDER BY " . acc_order_sql($conn) . "acc_id");
+while ($mp_res && ($mr = DB::fetch_assoc($mp_res))) $mp_bank_accounts[(int)$mr['acc_id']] = $mr['acc_id'] . ' - ' . acc_label($mr['acc_name'], $mr['acc_status'] ?? null);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_payment'])) {
     $pay_date = $_POST['pay_date'] ?? date('Y-m-d');
     $pay_amount = parse_dk_number($_POST['pay_amount'] ?? '0');
     $pay_note = trim($_POST['pay_note'] ?? '');
+    // Kontant- og MobilePay-betalinger går ikke ind på bankkontoen - kontoen vælges (bank/kasse); tom = standard-bankkontoen
+    $pay_acc = (int)($_POST['pay_acc'] ?? 0);
+    if ($pay_acc > 0 && !isset($mp_bank_accounts[$pay_acc])) $pay_acc = 0;
 
     if (!tc_is_date($pay_date)) {
         $err = lang('@Please enter a valid date.');
-    } elseif ($pay_amount <= 0) {
+    } elseif ($pay_amount <= 0 || tc_num($_POST['pay_amount'] ?? '', 0.01) === null) {      // ("1.250 kr" blev registreret som 1,25)
         $err = lang('@Please enter a valid amount.');
     // RETTET: ethvert beløb og enhver dato blev taget imod - en tastefejl (12.500 i stedet for 1.250) markerede
     // fakturaen betalt og efterlod kunden med et tilgodehavende på 11.250, og en betaling kunne dateres før
@@ -63,8 +74,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_payment'])) {
         $err = lang('@The payment date cannot be before the invoice date or in the future.');
     } else {
         $text_val = lang('@Manual payment') . ($pay_note !== '' ? ' - ' . $pay_note : '') . ' (' . $inv['cust_name'] . ')';
-        DB::query($conn, "INSERT INTO bank_statement_temp (trans_date, text_val, amount, fee_amount, import_source, is_processed)
-            VALUES ('" . DB::escape($conn, $pay_date) . "', '" . DB::escape($conn, $text_val) . "', $pay_amount, 0, 'manual', 0)");
+        DB::query($conn, "INSERT INTO bank_statement_temp (trans_date, text_val, amount, fee_amount, import_source, is_processed, acc_id)
+            VALUES ('" . DB::escape($conn, $pay_date) . "', '" . DB::escape($conn, $text_val) . "', $pay_amount, 0, 'manual', 0, " . ($pay_acc > 0 ? $pay_acc : 'NULL') . ")");
         $tmp_id = DB::insert_id($conn);
 
         $s = get_settings($conn);
@@ -94,9 +105,13 @@ htm_Note(sprintf(lang('@For payments that did not come through a bank import (ca
 
 echo '<form method="POST">';
 csrf_field();
-htm_Field(icon:'fa-calendar', labl:'@Payment date', name:'pay_date', valu:date('Y-m-d'), type:'date', echo:true);
-htm_Field(icon:'fa-coins', labl:'@Amount', name:'pay_amount', valu:fmt_dk_input($remaining), type:'text', hint:'@Defaults to the full amount due - lower it for a partial payment.', echo:true);
-htm_Field(icon:'fa-comment', labl:'@Note (optional)', name:'pay_note', valu:'', type:'text', echo:true);
+// (efter en fejl beholdes det indtastede - før stod dato, beløb og note nulstillet)
+htm_Field(icon:'fa-calendar', labl:'@Payment date', name:'pay_date', valu:(string)($_POST['pay_date'] ?? date('Y-m-d')), type:'date', echo:true);
+htm_Field(icon:'fa-coins', labl:'@Amount', name:'pay_amount', valu:(string)($_POST['pay_amount'] ?? fmt_dk_input($remaining)), type:'text', hint:'@Defaults to the full amount due - lower it for a partial payment.', echo:true);
+if (count($mp_bank_accounts) > 1) {
+    htm_Field(icon:'fa-building-columns', labl:'@Paid into account', name:'pay_acc', valu:(string)(int)($_POST['pay_acc'] ?? ($mp_s['conf_acc_bank'] ?? 0)), type:'sele', opti:$mp_bank_accounts, hint:'@The bank or cash account the money was paid into - e.g. the cash account for a cash payment.', echo:true);
+}
+htm_Field(icon:'fa-comment', labl:'@Note (optional)', name:'pay_note', valu:(string)($_POST['pay_note'] ?? ''), type:'text', echo:true);
 
 echo '<div style="margin-top:20px; display:flex; gap:10px;">';
 echo '<button type="submit" name="confirm_payment" value="1" style="flex:1; background:var(--color-success); color:white; border:none; padding:12px; border-radius:4px; font-weight:bold; cursor:pointer;"><i class="fa fa-check"></i> ' . lang('@Register Payment') . '</button>';

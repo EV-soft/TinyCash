@@ -16,7 +16,7 @@ $type       = $_GET['type'] ?? '';
 $cvr        = preg_replace('/\D/', '', $_GET['cvr'] ?? '');
 $exclude_id = isset($_GET['exclude_id']) ? (int)$_GET['exclude_id'] : 0;
 
-if (strlen($cvr) !== 8 || !in_array($type, ['customer', 'supplier'], true)) {
+if (strlen($cvr) < 6 || strlen($cvr) > 14 || !in_array($type, ['customer', 'supplier'], true)) {
     echo json_encode(['duplicate' => false]);
     ob_end_flush();
     exit;
@@ -25,21 +25,24 @@ if (strlen($cvr) !== 8 || !in_array($type, ['customer', 'supplier'], true)) {
 $results = [];
 
 // Tjek kunder
-$sql_c = "SELECT cust_id, cust_name FROM customers WHERE cust_cvr = '" . DB::escape($conn, $cvr) . "'";
+// (sammenlignes uden bindestreg/mellemrum: "556677-8899" og "5566778899" er samme svenske org.nr.)
+// En kunde/leverandør i papirkurven nævnes med det - før stod den som en almindelig dublet, man ikke kunne finde i listen
+$trash_lbl = ' (' . lang('@in the trash bin') . ')';
+$sql_c = "SELECT cust_id, cust_name, CASE WHEN " . customers_active_filter($conn) . " THEN 0 ELSE 1 END AS trashed FROM customers WHERE REPLACE(REPLACE(cust_cvr, '-', ''), ' ', '') = '" . DB::escape($conn, $cvr) . "'";
 if ($type === 'customer' && $exclude_id > 0) $sql_c .= " AND cust_id != $exclude_id";
 $res_c = DB::query($conn, $sql_c);
 if ($res_c) {
     while ($r = DB::fetch_assoc($res_c)) {
-        $results[] = ['type' => 'customer', 'name' => $r['cust_name'], 'edit_link' => 'customer_edit.php?id=' . (int)$r['cust_id']];
+        $results[] = ['type' => 'customer', 'name' => $r['cust_name'] . (!empty($r['trashed']) ? $trash_lbl : ''), 'edit_link' => 'customer_edit.php?id=' . (int)$r['cust_id']];
     }
 }
 
 // Tjek leverandører (findes kun efter db-setup/migrate_suppliers.php)
-$res_s = @DB::query($conn, "SELECT supplier_id, supplier_name FROM suppliers WHERE cvr = '" . DB::escape($conn, $cvr) . "'"
+$res_s = @DB::query($conn, "SELECT supplier_id, supplier_name, CASE WHEN " . suppliers_active_filter($conn) . " THEN 0 ELSE 1 END AS trashed FROM suppliers WHERE REPLACE(REPLACE(cvr, '-', ''), ' ', '') = '" . DB::escape($conn, $cvr) . "'"
     . ($type === 'supplier' && $exclude_id > 0 ? " AND supplier_id != $exclude_id" : ""));
 if ($res_s) {
     while ($r = DB::fetch_assoc($res_s)) {
-        $results[] = ['type' => 'supplier', 'name' => $r['supplier_name'], 'edit_link' => 'supplier_edit.php?id=' . (int)$r['supplier_id']];
+        $results[] = ['type' => 'supplier', 'name' => $r['supplier_name'] . (!empty($r['trashed']) ? $trash_lbl : ''), 'edit_link' => 'supplier_edit.php?id=' . (int)$r['supplier_id']];
     }
 }
 

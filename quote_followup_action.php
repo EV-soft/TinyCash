@@ -19,7 +19,7 @@ require_once 'inc/invoice_layouts.inc.php';  // il_column_exists()
 function send_single_followup($conn, array $s, int $id): string {
     if ($id <= 0) return 'error';
 
-    $sql = "SELECT q.quote_id, q.quote_no, q.valid_until, q.status, q.followup_count, q.followup_sent_at,
+    $sql = "SELECT q.quote_id, q.quote_no, q.valid_until, q.status, q.followup_count, q.followup_sent_at, q.cust_id,
                    c.cust_name, c.cust_email" . (il_column_exists($conn, 'customers', 'cust_language') ? ", c.cust_language" : "") . ",
                    (SELECT COALESCE(SUM(quantity * price_each * (100 + line_vat_rate) / 100.0), 0) FROM quote_lines WHERE quote_id = q.quote_id) AS total
             FROM quotes q JOIN customers c ON q.cust_id = c.cust_id WHERE q.quote_id = $id";
@@ -48,6 +48,8 @@ function send_single_followup($conn, array $s, int $id): string {
 
     // RETTET: opfølgningen blev skrevet på den indloggede brugers sprog, ikke kundens - se reminder_action.php
     $fu_lang_orig = $_SESSION['lang'] ?? 'da';
+    require_once __DIR__ . '/inc/doc_paper.inc.php';
+    $q['cust_language'] = doc_customer_lang($conn, (int)$q['cust_id']);      // (udenlandsk kunde uden valgt sprog: engelsk)
     if (!empty($q['cust_language'])) $_SESSION['lang'] = $q['cust_language'];
     $cur = $s['currency'] ?? 'DKK';
     $q_no = 'T-' . str_pad((string)$q['quote_no'], 6, '0', STR_PAD_LEFT);

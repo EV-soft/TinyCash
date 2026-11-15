@@ -26,7 +26,7 @@ try {
     if (!$res) throw new Exception("Database error: " . DB::error($conn));
     $q = DB::fetch_assoc($res);
     if (!$q) {
-        echo json_encode(['success' => false, 'error' => lang('@Invoice or customer not found')]);
+        echo json_encode(['success' => false, 'error' => lang('@Not found - it may already have been deleted.')]);      // (sagde "faktura eller kunde ikke fundet" om et tilbud)
         exit;
     }
 
@@ -66,7 +66,7 @@ try {
     $subject = $doc_title . ' ' . $quote_no_display;
     // ASCII-sikkert (uden æ/ø/å) til selve vedhæftningens filnavn - se
     // sendTinyMail()'s nye $doc_label-parameter, §bugs-batch-31-review.
-    $doc_label = $is_confirmation ? 'Ordrebekraeftelse' : 'Tilbud';
+    $doc_label = $is_confirmation ? tc_mail_doc_label('Ordrebekraeftelse', '@Order Confirmation') : tc_mail_doc_label('Tilbud', '@Quote');
 
     $sys_settings = function_exists('get_settings') ? get_settings($conn) : [];
     if (isset($_POST['custom_body']) && trim($_POST['custom_body']) !== '') {
@@ -91,7 +91,7 @@ try {
         // tilbage (samme princip som send_invoice_action.php's paid/credited-
         // undtagelse).
         if ($q['status'] === 'draft') {
-            DB::query($conn, "UPDATE quotes SET status = 'sent' WHERE quote_id = $id");
+            DB::query($conn, "UPDATE quotes SET status = 'sent' WHERE quote_id = $id AND status = 'draft'");      // (accepteret imens mailen blev sendt: bevares)
             log_action($conn, 'MARK_QUOTE_SENT', 'quotes', $id, ['status' => 'draft'], ['status' => 'sent', 'to' => $q['cust_email']]);
         }
     }

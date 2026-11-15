@@ -112,14 +112,8 @@ if ($filter_proj > 0) {
             link: 'time_actions.php?action=invoice&proj_id='.$filter_proj,
             attr: 'onclick="' . htm_confirm_js('@Create a draft invoice with one line per unbilled hour entry for this project?') . '" data-hint="'.lang('@Generate a draft invoice from all unbilled hours on this project').'"');
         echo '</div>';
-        // NYT: fakturaers redigeringsformular understøtter kun 5 linjer i alt (samme grænse som
-        // recurring_invoice_edit.php/quote_edit.php) - alle linjer oprettes og vises korrekt på selve
-        // fakturaen/PDF'en uanset antal, men et EFTERFØLGENDE "Gem" i redigeringsformularen ville kun beholde de
-        // første 5. Advarer proaktivt i stedet for at brugeren opdager det ved en stille datamistet efter et helt
-        // normalt gem.
-        if ($unbilled_cnt > 5) {
-            htm_Banner('<i class="fa fa-triangle-exclamation"></i> ' . sprintf(lang('@This will create %d invoice lines, but the invoice editing form only supports editing up to 5 lines. All %d lines will be correctly created and shown on the invoice/PDF - but if you open and re-save the draft in the edit form afterwards, only the first 5 will be kept. Consider invoicing more often (e.g. weekly) to stay under this limit, or review the invoice without re-saving it.'), $unbilled_cnt, $unbilled_cnt), 'warning');
-        }
+        // (Advarslen om "kun 5 linjer" er fjernet: fakturaformularen viser og gemmer nu alle linjer, også fritekst-
+        // linjer fra timer - advarslen fik brugeren til at undgå at rette en helt almindelig kladde.)
     }
 }
 

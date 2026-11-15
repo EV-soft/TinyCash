@@ -41,7 +41,7 @@ fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
 // eller indlæs biblioteket uden at bruge htm_Header)
 // $headers = ['SKU', 'Varenavn', 'Konto', 'Pris', 'På lager', 'Samlet værdi'];
 $headers = [lang('@SKU'), lang('@ItemName'), lang('@Account'), lang('@Price'), lang('@Cost Price'), lang('@In Stock'), lang('@Stock value (cost price)')];
-fputcsv($output, $headers, ';');
+fputcsv($output, $headers, ';', '"', '');
 
 // 5. Skriv rækkerne
 while ($row = DB::fetch_assoc($res)) {
@@ -60,7 +60,7 @@ while ($row = DB::fetch_assoc($res)) {
         rtrim(rtrim(fmt_dk_input($stock, 3), '0'), ','),
         $cost === null ? '' : fmt_dk_input($cost * $stock)
     ];
-    fputcsv($output, $line, ';');
+    fputcsv($output, $line, ';', '"', '');
 }
 
 fclose($output);

@@ -25,13 +25,14 @@ $to   = isset($_GET['to'])   && $_GET['to']   !== '' ? $_GET['to']   : '';
 // RETTET: samme manglende datokontrol som customer_statement.php havde - en ugyldig dato ("31-06-2026") blev
 // sammenlignet som tekst, filtrerede stille den forkerte periode og blev vist som "01-01-1970 eller tidligere".
 foreach (['from', 'to'] as $ps_k) if ($$ps_k !== '' && (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $$ps_k) || !checkdate((int)substr($$ps_k, 5, 2), (int)substr($$ps_k, 8, 2), (int)substr($$ps_k, 0, 4)))) $$ps_k = '';
+if ($from !== '' && $to !== '' && $from > $to) [$from, $to] = [$to, $from];      // (som kontoudtoget: en omvendt periode gav et tomt udtog med saldo primo fra slutdatoen)
 
 $stmt = get_project_statement_data($conn, $proj_id, $from, $to);
 if ($stmt === null) { redirect("project_view.php"); }
 $proj             = $stmt['proj'];
 $visible_events   = $stmt['visible_events'];
 $opening_balance  = $stmt['opening_balance'];
-$total_balance    = $stmt['total_balance'];
+$total_balance    = $stmt['closing_balance'];      // (saldoen ved periodens slutning)
 
 $title = lang('@Account Card') . ': ' . $proj['proj_no'];
 htm_Header($title, 1100);

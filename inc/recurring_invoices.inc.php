@@ -35,7 +35,13 @@ function recurring_invoices_check($conn) {
 // Genererer én kladde-faktura fra en skabelon og fremrykker next_run_date med
 // ét interval. Kaldes både fra det automatiske tjek ovenfor ($auto=true) og
 // fra "Generér nu"-knappen i recurring_invoices.php ($auto=false).
+// Atomisk: reservationen af perioden, fakturahovedet og linjerne - fejler et trin, rulles alt tilbage, og perioden
+// prøves igen ved næste sidevisning (før var perioden brugt op, og der kunne stå en kladde uden linjer)
 function generate_recurring_invoice($conn, int $recur_id, bool $auto = false): ?int {
+    try { return DB::transaction($conn, fn() => generate_recurring_invoice_steps($conn, $recur_id, $auto)); }
+    catch (\Throwable $e) { error_log("[recurring invoice $recur_id] " . $e->getMessage());  return null; }
+}
+function generate_recurring_invoice_steps($conn, int $recur_id, bool $auto): ?int {
     $tmpl = DB::fetch_assoc(DB::query($conn, "SELECT * FROM recurring_invoices WHERE recur_id = $recur_id"));
     if (!$tmpl) return null;
     // RETTET: "Generér nu" dannede en kladde til en kunde i papirkurven (det automatiske tjek springer dem over)
@@ -77,17 +83,22 @@ function generate_recurring_invoice($conn, int $recur_id, bool $auto = false): ?
     $ok = DB::query($conn, "INSERT INTO invoices
         (cust_id, inv_date, inv_due_date, inv_status, cust_reference, inv_note, delivery_address, currency, proj_id)
         VALUES (" . (int)$tmpl['cust_id'] . ", '$today', '$due_date', 'draft', '$cust_ref', '$note', '$deliv', '$inv_currency', $proj_sql)");
-    if (!$ok) return null;
+    if (!$ok) throw new Exception('fakturahovedet: ' . DB::error($conn));
     $inv_id = DB::insert_id($conn);
 
-    $lines_res = DB::query($conn, "SELECT * FROM recurring_invoice_lines WHERE recur_id = $recur_id");
+    // EU-OSS: en privatkunde i et andet EU-land får modtagerlandets standardsats (som ved tilbud -> faktura) - ellers
+    // afviste bogføringen hver måneds kladde, til hver linje var rettet i hånden
+    require_once __DIR__ . '/oss.inc.php';
+    $oss_cc = oss_ready($conn) ? oss_dest_for_customer($conn, (int)$tmpl['cust_id'], $today) : null;
+    $lines_res = DB::query($conn, "SELECT * FROM recurring_invoice_lines WHERE recur_id = $recur_id ORDER BY rline_id");
     while ($l = DB::fetch_assoc($lines_res)) {
+        if ($oss_cc !== null) $l['line_vat_rate'] = oss_map_rate($oss_cc, (float)$l['line_vat_rate']);
         $txt = DB::escape($conn, $l['line_text']);
         $lproj_sql = !empty($l['proj_id']) ? (int)$l['proj_id'] : $proj_sql;
-        DB::query($conn, "INSERT INTO invoice_lines
+        if (!DB::query($conn, "INSERT INTO invoice_lines
             (inv_id, line_text, quantity, price_each, line_vat_rate, prod_id, proj_id)
             VALUES ($inv_id, '$txt', " . (float)$l['quantity'] . ", " . (float)$l['price_each'] . ", "
-            . (float)$l['line_vat_rate'] . ", " . (int)$l['prod_id'] . ", $lproj_sql)");
+            . (float)$l['line_vat_rate'] . ", " . (int)$l['prod_id'] . ", $lproj_sql)")) throw new Exception('en linje: ' . DB::error($conn));
     }
 
     // RETTET (ALVORLIGT FUND, se [[bugs-batch-10-review]]): recurring_next_date()

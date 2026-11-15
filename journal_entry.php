@@ -58,6 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['post_entry'])) {
             $acc_id = (int)($l['acc_id'] ?? 0);
             // RETTET (KRITISK): (float)str_replace(',', '.') gjorde "1.500,00" til 1,50 - begge sider ens, så posteringen
             // gik i nul og blev bogført med et tusindedel af beløbet. Dansk talformat læses nu korrekt.
+            // ("1.250 kr" blev læst som 1,25 - på begge sider balancerede posteringen stadig og blev bogført)
+            foreach (['debit', 'credit'] as $je_f) if (trim((string)($l[$je_f] ?? '')) !== '' && tc_num($l[$je_f]) === null) { $err = lang('@Please enter a valid amount.');  break 2; }
             $debit  = parse_dk_number($l['debit'] ?? '0');
             $credit = parse_dk_number($l['credit'] ?? '0');
 
@@ -81,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['post_entry'])) {
 
         if ($err === '' && count($clean_lines) < 2) {
             $err = lang('@A journal entry needs at least two lines (double-entry bookkeeping).');
-        } elseif ($err === '' && abs($total) > 0.01) {
+        } elseif ($err === '' && abs(round($total, 2)) >= 0.005) {      // (med "> 0.01" kunne en difference på præcis 1 øre slippe igennem - et bilag der ikke balancerer)
             $err = sprintf(lang('@The entry does not balance: debit and credit differ by %s. Debit must equal credit.'), fmt_dk(abs($total)));
         }
 
@@ -110,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['post_entry'])) {
                     . ' <a href="ledger_view.php">' . lang('@View in General Ledger') . '</a>');
             } catch (Exception $e) {
                 DB::rollback($conn);
-                $err = lang('@Error saving entry') . ': ' . $e->getMessage();
+                $err = lang('@Error saving entry') . ': ' . htmlspecialchars($e->getMessage());
             }
         }
     }
@@ -165,11 +167,20 @@ foreach (['' => lang('@Select account...')] + $acc_options as $val => $labl) {
     $acc_select_html .= '<option value="' . htmlspecialchars((string)$val) . '">' . htmlspecialchars($labl) . '</option>';
 }
 
-for ($i = 0; $i < 4; $i++) {
+// En afvist postering (ubalance, låst dato ...) vises igen med sine linjer - før kom fire tomme rækker, og alt skulle tastes om
+$je_rows = [];
+foreach ((array)($raw_lines ?? []) as $l) {
+    if (!is_array($l)) continue;
+    $a = (int)($l['acc_id'] ?? 0);  $d = trim((string)($l['debit'] ?? ''));  $c = trim((string)($l['credit'] ?? ''));
+    if ($a > 0 || $d !== '' || $c !== '') $je_rows[] = [$a, $d, $c];
+}
+while (count($je_rows) < 4) $je_rows[] = [0, '', ''];
+foreach ($je_rows as [$je_acc, $je_deb, $je_cre]) {
+    $je_sel = $je_acc > 0 ? str_replace('<option value="' . $je_acc . '">', '<option value="' . $je_acc . '" selected>', $acc_select_html) : $acc_select_html;
     echo '<tr>';
-    echo '<td style="padding:4px;"><select name="lines[][acc_id]" style="width:100%; padding:6px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-card); color:var(--text-main);">' . $acc_select_html . '</select></td>';
-    echo '<td style="padding:4px;"><input type="number" step="0.01" name="lines[][debit]" style="width:100%; padding:6px; text-align:right; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-card); color:var(--text-main);"></td>';
-    echo '<td style="padding:4px;"><input type="number" step="0.01" name="lines[][credit]" style="width:100%; padding:6px; text-align:right; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-card); color:var(--text-main);"></td>';
+    echo '<td style="padding:4px;"><select name="lines[][acc_id]" style="width:100%; padding:6px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-card); color:var(--text-main);">' . $je_sel . '</select></td>';
+    echo '<td style="padding:4px;"><input type="number" step="0.01" name="lines[][debit]" value="' . htmlspecialchars($je_deb) . '" style="width:100%; padding:6px; text-align:right; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-card); color:var(--text-main);"></td>';
+    echo '<td style="padding:4px;"><input type="number" step="0.01" name="lines[][credit]" value="' . htmlspecialchars($je_cre) . '" style="width:100%; padding:6px; text-align:right; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-card); color:var(--text-main);"></td>';
     echo '<td style="padding:4px; text-align:center;"><button type="button" onclick="removeLine(this)" title="' . htmlspecialchars(lang('@Remove line')) . '" style="background:none; border:none; color:var(--color-danger); cursor:pointer; font-size:16px;"><i class="fa fa-times-circle"></i></button></td>';
     echo '</tr>';
 }
@@ -224,9 +235,9 @@ function updateBalance() {
     document.querySelectorAll('#linesBody [name="lines[][credit]"]').forEach(function(el) { credit += parseAmt(el.value); });
     var diff = Math.round((debit - credit) * 100) / 100;
     var fmt = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
-    document.getElementById('balDebit').innerText = debit.toLocaleString('da-DK', fmt);
-    document.getElementById('balCredit').innerText = credit.toLocaleString('da-DK', fmt);
-    document.getElementById('balDiff').innerText = diff.toLocaleString('da-DK', fmt);
+    document.getElementById('balDebit').innerText = debit.toLocaleString(window.tcLocale || 'da-DK', fmt);
+    document.getElementById('balCredit').innerText = credit.toLocaleString(window.tcLocale || 'da-DK', fmt);
+    document.getElementById('balDiff').innerText = diff.toLocaleString(window.tcLocale || 'da-DK', fmt);
     document.getElementById('balDiffWrap').style.color = (Math.abs(diff) < 0.01) ? 'var(--color-success)' : 'var(--color-danger)';
 }
 document.getElementById('linesTable').addEventListener('input', updateBalance);

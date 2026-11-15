@@ -42,6 +42,8 @@ if (isset($_GET['disconnect']) && (int)$_GET['disconnect'] > 0) {
     $did = (int)$_GET['disconnect'];
     $old = DB::fetch_assoc(DB::query($conn, "SELECT * FROM bank_connections WHERE conn_id = $did"));
     if (!$old) redirect('bank_integration.php', '@Not found - it may already have been deleted.', 'error');      // RETTET: meldte succes, selv om intet fandtes (dobbeltklik, en anden fane)
+    // Samtykket trækkes også tilbage hos Enable Banking - før blev kun den lokale række slettet, og banken gav stadig adgang
+    if (!empty($old['requisition_id']) && eb_credentials_configured()) eb_delete_session((string)$old['requisition_id']);
     if (DB::query($conn, "DELETE FROM bank_connections WHERE conn_id = $did") && $old) {
         log_action($conn, 'DISCONNECT_BANK', 'bank_connections', $did, $old, null);
     }

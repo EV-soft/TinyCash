@@ -1,0 +1,1022 @@
+{
+ "_source": "Skatteetaten, github.com/Skatteetaten/saf-t - Grouping Category Code 2025-2026/CSV/naeringsspesifikasjon.csv (bank/forsikring og IFRS udeladt)",
+ "_fetched": "2026-11-11",
+ "codes": {
+  "1000": [
+   "balanseverdiForAnleggsmiddel",
+   "Utvikling"
+  ],
+  "1020": [
+   "balanseverdiForAnleggsmiddel",
+   "Varige konsesjoner, patenter, lisenser, rettigheter med mer"
+  ],
+  "1070": [
+   "balanseverdiForAnleggsmiddel",
+   "Utsatt skattefordel"
+  ],
+  "1080": [
+   "balanseverdiForAnleggsmiddel",
+   "Goodwill"
+  ],
+  "1101": [
+   "balanseverdiForAnleggsmiddel",
+   "Aktiverte letekostnader"
+  ],
+  "1102": [
+   "balanseverdiForAnleggsmiddel",
+   "Felt under utbygging"
+  ],
+  "1103": [
+   "balanseverdiForAnleggsmiddel",
+   "Produksjonsinnretning og rørledning"
+  ],
+  "1104": [
+   "balanseverdiForAnleggsmiddel",
+   "Fjernings- og nedstengningseiendeler"
+  ],
+  "1105": [
+   "balanseverdiForAnleggsmiddel",
+   "Forretningsbygg"
+  ],
+  "1115": [
+   "balanseverdiForAnleggsmiddel",
+   "Bygg, anlegg, hotell o.l."
+  ],
+  "1117": [
+   "balanseverdiForAnleggsmiddel",
+   "Elektroteknisk utrustning i kraftforetak mv."
+  ],
+  "1120": [
+   "balanseverdiForAnleggsmiddel",
+   "Fast teknisk installasjon i bygninger"
+  ],
+  "1130": [
+   "balanseverdiForAnleggsmiddel",
+   "Anlegg og maskiner under bygging"
+  ],
+  "1140": [
+   "balanseverdiForAnleggsmiddel",
+   "Jord- og skogbrukseiendommer"
+  ],
+  "1150": [
+   "balanseverdiForAnleggsmiddel",
+   "Tomter og andre grunnarealer"
+  ],
+  "1160": [
+   "balanseverdiForAnleggsmiddel",
+   "Bolig inkl. boligtomter, hytter mv."
+  ],
+  "1180": [
+   "balanseverdiForAnleggsmiddel",
+   "Investeringseiendommer"
+  ],
+  "1205": [
+   "balanseverdiForAnleggsmiddel",
+   "Personbiler, maskiner, inventar"
+  ],
+  "1221": [
+   "balanseverdiForAnleggsmiddel",
+   "Skip, rigger mv."
+  ],
+  "1225": [
+   "balanseverdiForAnleggsmiddel",
+   "Fly, helikopter mv."
+  ],
+  "1238": [
+   "balanseverdiForAnleggsmiddel",
+   "Vare- og lastebiler, busser, inkludert varebiler med nullutslipp mv."
+  ],
+  "1280": [
+   "balanseverdiForAnleggsmiddel",
+   "Kontormaskiner o.l."
+  ],
+  "1290": [
+   "balanseverdiForAnleggsmiddel",
+   "Andre driftsmidler"
+  ],
+  "1295": [
+   "balanseverdiForAnleggsmiddel",
+   "Driftsmidler som avskrives lineært"
+  ],
+  "1296": [
+   "balanseverdiForAnleggsmiddel",
+   "Negativ gevinst- og tapskonto"
+  ],
+  "1298": [
+   "balanseverdiForAnleggsmiddel",
+   "Negativ tømmerkonto"
+  ],
+  "1299": [
+   "balanseverdiForAnleggsmiddel",
+   "Negativ jordbrukskonto"
+  ],
+  "1312": [
+   "balanseverdiForAnleggsmiddel",
+   "Investeringer i datter- og konsernselskap med deltakerfastsetting"
+  ],
+  "1313": [
+   "balanseverdiForAnleggsmiddel",
+   "Investeringer i andre datter- og konsernselskap"
+  ],
+  "1320": [
+   "balanseverdiForAnleggsmiddel",
+   "Lån til foretak i samme konsern"
+  ],
+  "1331": [
+   "balanseverdiForAnleggsmiddel",
+   "Investeringer i tilknyttede selskap med deltakerfastsetting"
+  ],
+  "1332": [
+   "balanseverdiForAnleggsmiddel",
+   "Investeringer i andre tilknyttede selskap"
+  ],
+  "1340": [
+   "balanseverdiForAnleggsmiddel",
+   "Lån til tilknyttet selskap og felles kontrollert virksomhet"
+  ],
+  "1350": [
+   "balanseverdiForAnleggsmiddel",
+   "Investeringer i aksjer, andeler og verdipapirfondsandeler"
+  ],
+  "1360": [
+   "balanseverdiForAnleggsmiddel",
+   "Obligasjoner"
+  ],
+  "1370": [
+   "balanseverdiForAnleggsmiddel",
+   "Fordringer på personlige eiere, styremedl. o.l."
+  ],
+  "1380": [
+   "balanseverdiForAnleggsmiddel",
+   "Krav/fordringer mot ansatte"
+  ],
+  "1390": [
+   "balanseverdiForAnleggsmiddel",
+   "Andre langsiktige fordringer"
+  ],
+  "1395": [
+   "balanseverdiForAnleggsmiddel",
+   "Netto pensjonsmidler"
+  ],
+  "1400": [
+   "balanseverdiForOmloepsmiddel",
+   "Varelager"
+  ],
+  "1401": [
+   "balanseverdiForOmloepsmiddel",
+   "Beholdning av egenproduserte varer for bruk i egen jordbruksvirksomhet"
+  ],
+  "1470": [
+   "balanseverdiForOmloepsmiddel",
+   "Mindreuttak av petroleumsprodukter"
+  ],
+  "1490": [
+   "balanseverdiForOmloepsmiddel",
+   "Biologiske eiendeler"
+  ],
+  "1500": [
+   "balanseverdiForOmloepsmiddel",
+   "Kundefordringer"
+  ],
+  "1501": [
+   "balanseverdiForOmloepsmiddel",
+   "Kundefordringer på selskap i samme konsern"
+  ],
+  "1530": [
+   "balanseverdiForOmloepsmiddel",
+   "Opptjente ikke fakturerte driftsinntekter"
+  ],
+  "1560": [
+   "balanseverdiForOmloepsmiddel",
+   "Andre fordringer på selskap i samme konsern"
+  ],
+  "1565": [
+   "balanseverdiForOmloepsmiddel",
+   "Kortsiktige fordringer mot personlig eier, styremedlem o.l."
+  ],
+  "1570": [
+   "balanseverdiForOmloepsmiddel",
+   "Andre kortsiktige krav/fordringer"
+  ],
+  "1780": [
+   "balanseverdiForOmloepsmiddel",
+   "Krav på innbetalt selskapskapital"
+  ],
+  "1800": [
+   "balanseverdiForOmloepsmiddel",
+   "Ikke-markedsbaserte aksjer og verdipapirfondsandeler"
+  ],
+  "1810": [
+   "balanseverdiForOmloepsmiddel",
+   "Markedsbaserte aksjer og verdipapirfondsandeler"
+  ],
+  "1830": [
+   "balanseverdiForOmloepsmiddel",
+   "Markedsbaserte obligasjoner, sertifikater mv."
+  ],
+  "1840": [
+   "balanseverdiForOmloepsmiddel",
+   "Andre obligasjoner og sertifikater"
+  ],
+  "1880": [
+   "balanseverdiForOmloepsmiddel",
+   "Andre finansielle instrumenter"
+  ],
+  "1895": [
+   "balanseverdiForOmloepsmiddel",
+   "Andel i selskap med deltakerfastsetting"
+  ],
+  "1900": [
+   "balanseverdiForOmloepsmiddel",
+   "Kontanter"
+  ],
+  "1920": [
+   "balanseverdiForOmloepsmiddel",
+   "Bankinnskudd"
+  ],
+  "1950": [
+   "balanseverdiForOmloepsmiddel",
+   "Innskudd på skattetrekkskonto"
+  ],
+  "2000": [
+   "egenkapital",
+   "Aksjekapital/Egenkapital andre foretak"
+  ],
+  "2010": [
+   "egenkapital",
+   "Egne aksjer"
+  ],
+  "2015": [
+   "egenkapital",
+   "Felleseid andelskapital"
+  ],
+  "2020": [
+   "egenkapital",
+   "Overkurs"
+  ],
+  "2030": [
+   "egenkapital",
+   "Annen innskutt egenkapital"
+  ],
+  "2041": [
+   "egenkapital",
+   "Etterbetalingsfond"
+  ],
+  "2042": [
+   "egenkapital",
+   "Medlemskapitalkonti"
+  ],
+  "2043": [
+   "egenkapital",
+   "Fond for vurderingsforskjeller"
+  ],
+  "2045": [
+   "egenkapital",
+   "Fond for urealiserte gevinster"
+  ],
+  "2050": [
+   "egenkapital",
+   "Positiv egenkapital"
+  ],
+  "2055": [
+   "egenkapital",
+   "Avsatt utbytte - IFRS"
+  ],
+  "2080": [
+   "egenkapital",
+   "Negativ egenkapital"
+  ],
+  "2095": [
+   "egenkapital",
+   "Negativ saldo"
+  ],
+  "2096": [
+   "egenkapital",
+   "Positiv gevinst og tapskonto"
+  ],
+  "2097": [
+   "egenkapital",
+   "Betinget avsatt gevinst"
+  ],
+  "2098": [
+   "egenkapital",
+   "Positiv tømmerkonto"
+  ],
+  "2099": [
+   "egenkapital",
+   "Positiv jordbrukskonto"
+  ],
+  "2100": [
+   "langsiktigGjeld",
+   "Pensjonsforpliktelser"
+  ],
+  "2120": [
+   "langsiktigGjeld",
+   "Utsatt skatt"
+  ],
+  "2130": [
+   "langsiktigGjeld",
+   "Derivater"
+  ],
+  "2160": [
+   "langsiktigGjeld",
+   "Uopptjent inntekt"
+  ],
+  "2180": [
+   "langsiktigGjeld",
+   "Avsetninger for forpliktelser"
+  ],
+  "2185": [
+   "langsiktigGjeld",
+   "Avsetninger for fjerning- og nedstengningsforpliktelser"
+  ],
+  "2200": [
+   "langsiktigGjeld",
+   "Konvertible lån"
+  ],
+  "2210": [
+   "langsiktigGjeld",
+   "Obligasjonslån"
+  ],
+  "2220": [
+   "langsiktigGjeld",
+   "Langsiktig gjeld til banker og andre kredittinstitusjoner"
+  ],
+  "2250": [
+   "langsiktigGjeld",
+   "Gjeld til ansatte og personlige eiere"
+  ],
+  "2260": [
+   "langsiktigGjeld",
+   "Gjeld til selskap i samme konsern"
+  ],
+  "2280": [
+   "langsiktigGjeld",
+   "Stille interessentinnskudd og ansvarlig lånekapital"
+  ],
+  "2290": [
+   "langsiktigGjeld",
+   "Annen langsiktig gjeld"
+  ],
+  "2310": [
+   "kortsiktigGjeld",
+   "Konvertible lån"
+  ],
+  "2320": [
+   "kortsiktigGjeld",
+   "Obligasjonslån"
+  ],
+  "2330": [
+   "kortsiktigGjeld",
+   "Derivater"
+  ],
+  "2380": [
+   "kortsiktigGjeld",
+   "Kortsiktig gjeld til banker og andre kredittinstitusjoner"
+  ],
+  "2400": [
+   "kortsiktigGjeld",
+   "Gjeld til leverandører"
+  ],
+  "2460": [
+   "kortsiktigGjeld",
+   "Leverandørgjeld til selskap i samme konsern"
+  ],
+  "2470": [
+   "kortsiktigGjeld",
+   "Meruttak av petroleumsprodukter"
+  ],
+  "2500": [
+   "kortsiktigGjeld",
+   "Betalbar skatt, ikke fastsatt"
+  ],
+  "2510": [
+   "kortsiktigGjeld",
+   "Betalbar skatt, fastsatt"
+  ],
+  "2600": [
+   "kortsiktigGjeld",
+   "Skattetrekk og andre trekk"
+  ],
+  "2740": [
+   "kortsiktigGjeld",
+   "Skyldig merverdiavgift"
+  ],
+  "2770": [
+   "kortsiktigGjeld",
+   "Skyldig arbeidsgiveravgift"
+  ],
+  "2790": [
+   "kortsiktigGjeld",
+   "Andre offentlige avgifter"
+  ],
+  "2800": [
+   "kortsiktigGjeld",
+   "Avsatt utbytte"
+  ],
+  "2900": [
+   "kortsiktigGjeld",
+   "Forskudd fra kunder"
+  ],
+  "2910": [
+   "kortsiktigGjeld",
+   "Gjeld til ansatte og personlige eiere"
+  ],
+  "2920": [
+   "kortsiktigGjeld",
+   "Gjeld til selskap i samme konsern"
+  ],
+  "2949": [
+   "kortsiktigGjeld",
+   "Skyldig lønn og feriepenger med mer"
+  ],
+  "2950": [
+   "kortsiktigGjeld",
+   "Skyldige gjeldsrenter"
+  ],
+  "2970": [
+   "kortsiktigGjeld",
+   "Uopptjent inntekt"
+  ],
+  "2980": [
+   "kortsiktigGjeld",
+   "Avsetninger for forpliktelser"
+  ],
+  "2981": [
+   "kortsiktigGjeld",
+   "Avsatt etterbetaling til utbetaling"
+  ],
+  "2990": [
+   "kortsiktigGjeld",
+   "Annen kortsiktig gjeld"
+  ],
+  "3000": [
+   "salgsinntekt",
+   "Salg og uttak med mva-plikt"
+  ],
+  "3001": [
+   "salgsinntekt",
+   "Salgsinntekter og uttak av olje"
+  ],
+  "3002": [
+   "salgsinntekt",
+   "Salgsinntekter og uttak av tørrgass"
+  ],
+  "3003": [
+   "salgsinntekt",
+   "Salgsinntekter og uttak av våtgass"
+  ],
+  "3004": [
+   "salgsinntekt",
+   "Tariffinntekt rørledning"
+  ],
+  "3005": [
+   "salgsinntekt",
+   "Tariffinntekt prosessering"
+  ],
+  "3006": [
+   "salgsinntekt",
+   "Timer viderefakturert"
+  ],
+  "3007": [
+   "salgsinntekt",
+   "Annen kostnad viderefakturert"
+  ],
+  "3008": [
+   "salgsinntekt",
+   "Endring i mer-/mindreuttak av petroleumsprodukter"
+  ],
+  "3100": [
+   "salgsinntekt",
+   "Salg og uttak med 0 prosent mva."
+  ],
+  "3200": [
+   "salgsinntekt",
+   "Salg og uttak utenfor mva-loven"
+  ],
+  "3300": [
+   "salgsinntekt",
+   "Offentlige særavgifter ved salg"
+  ],
+  "3400": [
+   "annenDriftsinntekt",
+   "Offentlige tilskudd og refusjoner"
+  ],
+  "3500": [
+   "annenDriftsinntekt",
+   "Endring uopptjent inntekt"
+  ],
+  "3600": [
+   "annenDriftsinntekt",
+   "Inntekt fra utleie av eiendom"
+  ],
+  "3650": [
+   "annenDriftsinntekt",
+   "Utleie av rettigheter til jakt og fiske med mer"
+  ],
+  "3695": [
+   "annenDriftsinntekt",
+   "Andre leieinntekter"
+  ],
+  "3700": [
+   "annenDriftsinntekt",
+   "Provisjon"
+  ],
+  "3710": [
+   "annenDriftsinntekt",
+   "Lisens-, patent- og royalty-inntekter"
+  ],
+  "3850": [
+   "annenDriftsinntekt",
+   "Verdiendringer av investeringseiendommer etter IFRS"
+  ],
+  "3870": [
+   "annenDriftsinntekt",
+   "Verdiendringer biologiske eiendeler etter IFRS"
+  ],
+  "3880": [
+   "annenDriftsinntekt",
+   "Gevinst ved avgang av immaterielle eiendeler og varige driftsmidler"
+  ],
+  "3885": [
+   "annenDriftsinntekt",
+   "Gevinst ved avgang av finansielle anleggsmidler"
+  ],
+  "3886": [
+   "annenDriftsinntekt",
+   "Gevinst ved overdragelse av tillatelse til petroleumsvirksomhet"
+  ],
+  "3890": [
+   "annenDriftsinntekt",
+   "Inntekt fra gevinst-/tapskonto"
+  ],
+  "3895": [
+   "annenDriftsinntekt",
+   "Inntekt fra saldo"
+  ],
+  "3900": [
+   "annenDriftsinntekt",
+   "Andre driftsinntekter"
+  ],
+  "3910": [
+   "annenDriftsinntekt",
+   "Inntekt fra tømmerkonto"
+  ],
+  "3911": [
+   "annenDriftsinntekt",
+   "Inntekt fra jordbrukskonto"
+  ],
+  "4001": [
+   "varekostnad",
+   "Letekostnader"
+  ],
+  "4002": [
+   "varekostnad",
+   "Utbyggingskostnader"
+  ],
+  "4003": [
+   "varekostnad",
+   "Produksjonskostnader"
+  ],
+  "4004": [
+   "varekostnad",
+   "Handling fee / Service fee / Trading fee"
+  ],
+  "4005": [
+   "varekostnad",
+   "Varekostnader inklusiv endring i beholdningen"
+  ],
+  "4007": [
+   "varekostnad",
+   "Endring i mer-/mindreuttak av petroleumsprodukter"
+  ],
+  "4008": [
+   "varekostnad",
+   "Fjernings- og nedstengningskostnader"
+  ],
+  "4295": [
+   "varekostnad",
+   "Endring i beholdningen av ferdige og uferdige egenproduserte varerr"
+  ],
+  "4500": [
+   "varekostnad",
+   "Innleid arbeidskraft"
+  ],
+  "4995": [
+   "varekostnad",
+   "Beholdningsendring av egentilvirkede anleggsmidler"
+  ],
+  "5000": [
+   "loennskostnad",
+   "Lønn og feriepenger med mer"
+  ],
+  "5300": [
+   "loennskostnad",
+   "Andre opplysningspliktige godtgjørelser"
+  ],
+  "5400": [
+   "loennskostnad",
+   "Arbeidsgiveravgift"
+  ],
+  "5420": [
+   "loennskostnad",
+   "Opplysningspliktige pensjonskostnader"
+  ],
+  "5600": [
+   "loennskostnad",
+   "Arbeidsgodtgjørelse til eiere i ANS mv."
+  ],
+  "5900": [
+   "loennskostnad",
+   "Andre personalkostnader"
+  ],
+  "5950": [
+   "loennskostnad",
+   "Egen pensjonsordning"
+  ],
+  "6000": [
+   "annenDriftskostnad",
+   "Avskrivning på varige driftsmidler"
+  ],
+  "6001": [
+   "annenDriftskostnad",
+   "Avskrivning på produksjonsinnretning  og rørledning"
+  ],
+  "6002": [
+   "annenDriftskostnad",
+   "Avskrivning på fjernings- og nedstengningseiendeler"
+  ],
+  "6004": [
+   "annenDriftskostnad",
+   "Annen avskrivning"
+  ],
+  "6050": [
+   "annenDriftskostnad",
+   "Nedskrivning på varige driftsmidler og immaterielle eiendeler"
+  ],
+  "6051": [
+   "annenDriftskostnad",
+   "Nedskrivning på produksjonsinnretning og rørledning"
+  ],
+  "6052": [
+   "annenDriftskostnad",
+   "Nedskrivning på aktiverte letekostnader"
+  ],
+  "6053": [
+   "annenDriftskostnad",
+   "Nedskrivning på anlegg under utførelse"
+  ],
+  "6054": [
+   "annenDriftskostnad",
+   "Annen nedskrivning"
+  ],
+  "6100": [
+   "annenDriftskostnad",
+   "Frakt- og transportkostnader ved salg"
+  ],
+  "6110": [
+   "annenDriftskostnad",
+   "Frakt- og transportkostnad vedrørende salg av olje"
+  ],
+  "6120": [
+   "annenDriftskostnad",
+   "Frakt- og transportkostnad vedrørende salg av tørrgass"
+  ],
+  "6130": [
+   "annenDriftskostnad",
+   "Frakt- og transportkostnad vedrørende salg av LNG"
+  ],
+  "6140": [
+   "annenDriftskostnad",
+   "Frakt- og transportkostnad vedrørende salg av våtgass"
+  ],
+  "6200": [
+   "annenDriftskostnad",
+   "Energi og brensel med mer til produksjon"
+  ],
+  "6300": [
+   "annenDriftskostnad",
+   "Leie av lokaler"
+  ],
+  "6340": [
+   "annenDriftskostnad",
+   "Strøm og oppvarming"
+  ],
+  "6350": [
+   "annenDriftskostnad",
+   "IT kostnader"
+  ],
+  "6395": [
+   "annenDriftskostnad",
+   "Renovasjon, vann, avløp, renhold med mer"
+  ],
+  "6400": [
+   "annenDriftskostnad",
+   "Leie av maskiner, inventar og utstyr med mer"
+  ],
+  "6440": [
+   "annenDriftskostnad",
+   "Langtidsleie/leasing av bil"
+  ],
+  "6500": [
+   "annenDriftskostnad",
+   "Verktøy, inventar med mer som skal kostnadsføres direkte"
+  ],
+  "6600": [
+   "annenDriftskostnad",
+   "Reparasjoner og vedlikehold av bygninger"
+  ],
+  "6695": [
+   "annenDriftskostnad",
+   "Reparasjoner og vedlikehold av utstyr med mer"
+  ],
+  "6700": [
+   "annenDriftskostnad",
+   "Regnskapstjenester, rådgivning med mer"
+  ],
+  "6750": [
+   "annenDriftskostnad",
+   "Konserntjenester"
+  ],
+  "6751": [
+   "annenDriftskostnad",
+   "Kostnadsreduksjon timer viderefakturert"
+  ],
+  "6752": [
+   "annenDriftskostnad",
+   "Kostnadsreduksjon annen kostnad viderefakturert"
+  ],
+  "6995": [
+   "annenDriftskostnad",
+   "Kontorrekvisita, elektronisk kommunikasjon, porto med mer"
+  ],
+  "6998": [
+   "annenDriftskostnad",
+   "Privat bruk av elektronisk kommunikasjon"
+  ],
+  "7000": [
+   "annenDriftskostnad",
+   "Drivstoff"
+  ],
+  "7020": [
+   "annenDriftskostnad",
+   "Vedlikehold"
+  ],
+  "7040": [
+   "annenDriftskostnad",
+   "Forsikring og avgifter"
+  ],
+  "7080": [
+   "annenDriftskostnad",
+   "Fradrag for bruk av privat bil i næringsvirksomheten"
+  ],
+  "7099": [
+   "annenDriftskostnad",
+   "Privat bruk av næringsbil"
+  ],
+  "7155": [
+   "annenDriftskostnad",
+   "Reise-, diett- og bilgodtgjørelser, med opplysningsplikt"
+  ],
+  "7165": [
+   "annenDriftskostnad",
+   "Reise- og diettkostnader, uten opplysningsplikt"
+  ],
+  "7295": [
+   "annenDriftskostnad",
+   "Provisjonskostnader"
+  ],
+  "7330": [
+   "annenDriftskostnad",
+   "Salgs- og reklamekostnader"
+  ],
+  "7350": [
+   "annenDriftskostnad",
+   "Representasjonskostnader med fradragsrett"
+  ],
+  "7370": [
+   "annenDriftskostnad",
+   "Representasjonskostnader"
+  ],
+  "7400": [
+   "annenDriftskostnad",
+   "Kontingenter med fradragsrett"
+  ],
+  "7420": [
+   "annenDriftskostnad",
+   "Gaver med fradragsrett"
+  ],
+  "7440": [
+   "annenDriftskostnad",
+   "Gaver"
+  ],
+  "7490": [
+   "annenDriftskostnad",
+   "Kontingenter"
+  ],
+  "7500": [
+   "annenDriftskostnad",
+   "Forsikringspremier"
+  ],
+  "7501": [
+   "annenDriftskostnad",
+   "Driftsforsikring"
+  ],
+  "7502": [
+   "annenDriftskostnad",
+   "Utbyggingsforsikring"
+  ],
+  "7503": [
+   "annenDriftskostnad",
+   "Annen forsikring"
+  ],
+  "7565": [
+   "annenDriftskostnad",
+   "Garanti- og servicekostnader"
+  ],
+  "7600": [
+   "annenDriftskostnad",
+   "Lisenser, patenter og royalties"
+  ],
+  "7650": [
+   "annenDriftskostnad",
+   "Forskning og utviklingskostnad"
+  ],
+  "7651": [
+   "annenDriftskostnad",
+   "Tilskudd til vitenskapelig forskning mv jf sktl § 6-42"
+  ],
+  "7700": [
+   "annenDriftskostnad",
+   "Andre kostnader"
+  ],
+  "7701": [
+   "annenDriftskostnad",
+   "Co2-avgift"
+  ],
+  "7830": [
+   "annenDriftskostnad",
+   "Tap på fordringer"
+  ],
+  "7860": [
+   "annenDriftskostnad",
+   "Tap på kontrakter"
+  ],
+  "7880": [
+   "annenDriftskostnad",
+   "Tap ved avgang av immaterielle eiendeler og varige driftsmidler"
+  ],
+  "7885": [
+   "annenDriftskostnad",
+   "Tap ved avgang av finansielle anleggsmidler"
+  ],
+  "7886": [
+   "annenDriftskostnad",
+   "Tap ved overdragelse av tillatelse til petroleumsvirksomhet"
+  ],
+  "7890": [
+   "annenDriftskostnad",
+   "Fradrag fra gevinst- og tapskonto"
+  ],
+  "7897": [
+   "annenDriftskostnad",
+   "Endring i skattemessig tap på fordringer"
+  ],
+  "7910": [
+   "annenDriftskostnad",
+   "Overført til tømmerkonto av årets overskudd/underskudd"
+  ],
+  "7911": [
+   "annenDriftskostnad",
+   "Kostnadsføring tømmerkonto"
+  ],
+  "7912": [
+   "annenDriftskostnad",
+   "Overført til jordbrukskonto av årets overskudd/underskudd"
+  ],
+  "7913": [
+   "annenDriftskostnad",
+   "Kostnadsføring fra jordbrukskonto"
+  ],
+  "8005": [
+   "finansinntekt",
+   "Netto positiv resultatandel vedrørende investering i DS, TS og FKV"
+  ],
+  "8030": [
+   "finansinntekt",
+   "Renteinntekt fra foretak i samme konsern"
+  ],
+  "8050": [
+   "finansinntekt",
+   "Annen renteinntekt"
+  ],
+  "8054": [
+   "finansinntekt",
+   "Garantiinntekter fra foretak i samme konsern"
+  ],
+  "8059": [
+   "finansinntekt",
+   "Garantiinntekt"
+  ],
+  "8060": [
+   "finansinntekt",
+   "Gevinst ved kursendring på valuta"
+  ],
+  "8074": [
+   "finansinntekt",
+   "Gevinst ved realisasjon av aksjer, egenkapitalbevis og fondsandeler"
+  ],
+  "8075": [
+   "finansinntekt",
+   "Finansinntekt fra foretak i samme konsern"
+  ],
+  "8079": [
+   "finansinntekt",
+   "Andre finansinntekter"
+  ],
+  "8080": [
+   "finansinntekt",
+   "Verdiøkning av finansielle instrumenter vurdert til virkelig verdi"
+  ],
+  "8090": [
+   "finansinntekt",
+   "Inntekt av andre investeringer/utbytte"
+  ],
+  "8091": [
+   "finansinntekt",
+   "3 % av netto skattefrie inntekter etter fritaksmetoden og 3 % av utdeling fra selskap med deltakerfastsetting til selskapsdeltaker"
+  ],
+  "8100": [
+   "finanskostnad",
+   "Verdireduksjon av finansielle instrumenter vurdert til virkelig verdi"
+  ],
+  "8105": [
+   "finanskostnad",
+   "Netto negativ resultatandel vedrørende investering i DS, TS og FKV"
+  ],
+  "8115": [
+   "finanskostnad",
+   "Nedskriving av finansielle eiendeler"
+  ],
+  "8120": [
+   "finanskostnad",
+   "Kalkulatorisk rente fjernings- og nedstengningsforpliktelse"
+  ],
+  "8130": [
+   "finanskostnad",
+   "Rentekostnad til foretak i samme konsern"
+  ],
+  "8150": [
+   "finanskostnad",
+   "Annen rentekostnad"
+  ],
+  "8154": [
+   "finanskostnad",
+   "Garantikostnad til foretak i samme konsern"
+  ],
+  "8159": [
+   "finanskostnad",
+   "Annen garantikostnad"
+  ],
+  "8160": [
+   "finanskostnad",
+   "Tap ved kursendring på valuta"
+  ],
+  "8174": [
+   "finanskostnad",
+   "Tap ved realisasjon av aksjer, egenkapitalbevis og fondsandeler"
+  ],
+  "8175": [
+   "finanskostnad",
+   "Finanskostnader til foretak i samme konsern"
+  ],
+  "8179": [
+   "finanskostnad",
+   "Andre finanskostnader"
+  ],
+  "8300": [
+   "skattekostnad",
+   "Betalbar skatt på ordinært resultat"
+  ],
+  "8321": [
+   "skattekostnad",
+   "Økning i utsatt skatt/nedgang i utsatt skattefordel på ordinært resultat"
+  ],
+  "8322": [
+   "skattekostnad",
+   "Nedgang i utsatt skatt/økning i utsatt skattefordel på ordinært resultat"
+  ],
+  "8323": [
+   "skattekostnad",
+   "For lite avsatt skatt fra forrige år"
+  ],
+  "8324": [
+   "skattekostnad",
+   "For mye avsatt skatt fra forrige år"
+  ],
+  "8800": [
+   "resultatDisponeringForSAF-T",
+   "Disponering av årets overskudd/dekning av årets underskudd"
+  ]
+ }
+}

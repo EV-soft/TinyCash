@@ -161,6 +161,9 @@ switch ($action) {
         redirect('project_view.php', '@Project deleted');
 
     case 'toggle_module':
+        // Et regnskabsvalg (som de andre moduler i firmaindstillingerne, niveau 3) - enhver bruger kunne slå
+        // projektmodulet til og fra for hele regnskabet
+        if ((int)($_SESSION['user_level'] ?? 0) < 3) redirect('project_view.php', '@Access denied', 'error');
         // Slå projekt-modulet til/fra fra settings-siden
         $val = ($_POST['module_projects'] ?? '0') === '1' ? '1' : '0';
         // RETTET: et rent UPDATE ramte 0 rækker og fejlede derfor helt tavst, hvis module_projects-nøglen aldrig

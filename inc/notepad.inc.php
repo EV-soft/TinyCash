@@ -17,6 +17,46 @@ ob_start();
 
 $file_path = __DIR__ . '/data/global_notepad.html';
 
+// Notesblokken deles af alle brugere og vises på hver side: kun formatering (fed, kursiv, farve, lister...) - ingen
+// scripts, hændelsesattributter eller links med javascript:. Før kunne en bruger på niveau 1 gemme et script, der kørte
+// i administratorens browser (med administratorens rettigheder).
+function tc_notepad_clean(string $html): string {
+    if (trim($html) === '' || !class_exists('DOMDocument')) return strip_tags($html, '<b><i><u><strong><em><br><p><div><span><ul><ol><li><font>');
+    $ok_tags = ['b', 'i', 'u', 'strong', 'em', 'br', 'p', 'div', 'span', 'ul', 'ol', 'li', 'font', 'h1', 'h2', 'h3', 'h4', 'blockquote', 'strike', 's', 'sub', 'sup', 'hr', 'pre', 'code'];
+    $drop_all = ['script', 'style', 'iframe', 'object', 'embed', 'svg', 'math', 'link', 'meta', 'base', 'form', 'input', 'button', 'textarea', 'select', 'template', 'frame', 'frameset', 'noscript'];
+    $doc = new DOMDocument();
+    $prev = libxml_use_internal_errors(true);
+    $doc->loadHTML('<?xml encoding="utf-8"?><div id="tc-np-root">' . $html . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+    libxml_clear_errors();  libxml_use_internal_errors($prev);
+    $root = $doc->getElementById('tc-np-root');
+    if (!$root) return htmlspecialchars(strip_tags($html));
+    $walk = function (DOMNode $node) use (&$walk, $ok_tags, $drop_all) {
+        for ($c = $node->firstChild; $c !== null; $c = $next) {
+            $next = $c->nextSibling;
+            if ($c instanceof DOMComment) { $node->removeChild($c);  continue; }
+            if (!($c instanceof DOMElement)) continue;
+            $tag = strtolower($c->nodeName);
+            if (in_array($tag, $drop_all, true)) { $node->removeChild($c);  continue; }
+            $walk($c);
+            if (!in_array($tag, $ok_tags, true)) {      // (ukendt element: behold teksten, fjern elementet)
+                while ($c->firstChild) $node->insertBefore($c->firstChild, $c);
+                $node->removeChild($c);
+                continue;
+            }
+            foreach (iterator_to_array($c->attributes) as $a) {
+                $an = strtolower($a->nodeName);  $av = (string)$a->nodeValue;
+                $keep = ($an === 'style' && !preg_match('/url\s*\(|expression|javascript:|@import|behavior/i', $av))
+                     || ($tag === 'font' && in_array($an, ['color', 'size', 'face'], true) && !preg_match('/[<>"\'`]|javascript:/i', $av));
+                if (!$keep) $c->removeAttribute($a->nodeName);
+            }
+        }
+    };
+    $walk($root);
+    $out = '';
+    foreach ($root->childNodes as $c) $out .= $doc->saveHTML($c);
+    return $out;
+}
+
 // =========================================================================
 // 1. WORKER-LOGIK (Kører KUN når der gemmes data via POST)
 // =========================================================================
@@ -50,7 +90,7 @@ if (isset($_GET['notepad_action']) && $_GET['notepad_action'] === 'save') {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_once __DIR__ . '/core_utils.lib.php';      // (filen kaldes også direkte, uden auth.inc.php)
-        $notes_content = tc_utf8((string)file_get_contents('php://input'));      // (se tc_utf8())
+        $notes_content = tc_notepad_clean(tc_utf8((string)file_get_contents('php://input')));      // (se tc_utf8() og tc_notepad_clean())
         // Selv-helbredende: en frisk installation har ofte ikke inc/data/-
         // mappen endnu. Opret den før skrivning, så notesblokken virker uden
         // manuelt setup. (Deny-from-all .htaccess i inc/data/ rammer kun
@@ -75,7 +115,7 @@ require_once __DIR__ . '/php2htm.lib.php';
 // Hent indholdet direkte i PHP med det samme (Ingen AJAX 'get' forespørgsel nødvendig)
 $notepad_content = '';
 if (file_exists($file_path)) {
-    $notepad_content = file_get_contents($file_path);
+    $notepad_content = tc_notepad_clean((string)file_get_contents($file_path));      // (også noter gemt før rensningen)
 } else {
     $notepad_content = "<p style='color:#7f8c8d;'>" . lang('@Write your formatted notes here...') . "</p>";
 }
@@ -150,146 +190,12 @@ if (file_exists($file_path)) {
 
 <script>
 const notepadWorkerUrl = 'inc/notepad.inc.php';
-// NYT (§bugs-batch-27-review): se PHP-tjekket ovenfor for baggrunden - samme
-// mønster som invoice_view.php/storage_browser.php allerede bruger til deres
-// egne fetch()-baserede AJAX-kald uden om et rigtigt <form>.
+// fetch() uden om et <form> skal selv sende CSRF-nøglen (se PHP-tjekket ovenfor)
 const notepadCsrfToken = <?php echo json_encode(csrf_token()); ?>;
-
-function formatDoc(cmd, value = null) {
-    document.execCommand(cmd, false, value);
-    document.getElementById('globalNotesArea').focus();
-    saveGlobalNotes();
-}
-
-function toggleGlobalNotes() {
-    var modal = document.getElementById('globalNotesModal');
-    if (modal.style.display === "none" || modal.style.display === "") {
-        modal.style.display = "flex";
-    } else {
-        modal.style.display = "none";
-    }
-}
-
-// Skift mellem normal (WYSIWYG) visning og redigerbar HTML-kilde.
-var notepadSourceMode = false;
-function getNotepadContent() {
-    return notepadSourceMode
-        ? document.getElementById('globalNotesSource').value
-        : document.getElementById('globalNotesArea').innerHTML;
-}
-function toggleNotepadSource() {
-    var area = document.getElementById('globalNotesArea');
-    var src  = document.getElementById('globalNotesSource');
-    var btn  = document.getElementById('notepadCodeBtn');
-    if (!notepadSourceMode) {
-        // Til kilde-visning: vis den rå HTML som redigerbar tekst.
-        src.value = area.innerHTML;
-        area.style.display = 'none';
-        src.style.display  = 'block';
-        btn.style.background = '#2c3e50';
-        btn.style.color = '#fff';
-        notepadSourceMode = true;
-        src.focus();
-    } else {
-        // Tilbage til normal visning: fortolk den redigerede HTML og gem.
-        area.innerHTML = src.value;
-        src.style.display  = 'none';
-        area.style.display = 'block';
-        btn.style.background = 'white';
-        btn.style.color = '';
-        notepadSourceMode = false;
-        saveGlobalNotes();
-    }
-}
-
-var saveTimeout;
-function saveGlobalNotes() {
-    var htmlContent = getNotepadContent();
-    var status = document.getElementById('notesStatus');
-    status.innerText = "<?php echo lang('@Saving...'); ?>";
-    
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(function() {
-        fetch(notepadWorkerUrl + '?notepad_action=save&csrf_token=' + encodeURIComponent(notepadCsrfToken), {
-            method: 'POST',
-            body: htmlContent,
-            headers: { 'Content-Type': 'text/html' }
-        })
-        .then(response => response.text())
-        .then(res => {
-            if (res === 'saved') {
-                status.innerText = "<?php echo lang('@Saved'); ?>";
-            } else if (res === 'error_session') {
-                status.innerText = "<?php echo lang('@Session Expired'); ?>";
-            } else {
-                status.innerText = "<?php echo lang('@Error'); ?>";
-            }
-        })
-        .catch(() => { status.innerText = "<?php echo lang('@Error'); ?>"; });
-    }, 600);
-}
-
-window.addEventListener('keydown', function(e) {
-    if (e.altKey && e.key.toLowerCase() === 'n') {
-        e.preventDefault();
-        toggleGlobalNotes();
-    }
-});
-
-// TRÆK-OG-SLIP LOGIK (Frigjort scope)
-var notepadHeader = document.getElementById("globalNotesHeader");
-var notepadModal = document.getElementById("globalNotesModal");
-var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-
-if (notepadHeader) {
-    notepadHeader.onmousedown = dragMouseDown;
-}
-
-function dragMouseDown(e) {
-    // Nu kan koden se den globale isNotepadMaximized variabel uden fejl
-    if (typeof isNotepadMaximized !== 'undefined' && isNotepadMaximized) return; 
-    
-    e = e || window.event;
-    if (e.target.tagName.toLowerCase() === 'button' || e.target.tagName.toLowerCase() === 'select') return;
-    e.preventDefault();
-    
-    pos3 = e.clientX;
-    pos4 = e.clientY;
-    document.onmouseup = closeDragElement;
-    document.onmousemove = elementDrag;
-}
-
-function elementDrag(e) {
-    e = e || window.event;
-    e.preventDefault();
-    
-    pos1 = pos3 - e.clientX;
-    pos2 = pos4 - e.clientY;
-    pos3 = e.clientX;
-    pos4 = e.clientY;
-    
-    var newTop = notepadModal.offsetTop - pos2;
-    var newLeft = notepadModal.offsetLeft - pos1;
-    
-    if (newTop < 0) { newTop = 0; }
-    if (newLeft < 0) { newLeft = 0; }
-    var maxLeft = window.innerWidth - notepadModal.offsetWidth;
-    if (newLeft > maxLeft) { newLeft = maxLeft; }
-    var maxTop = window.innerHeight - 40; 
-    if (newTop > maxTop) { newTop = maxTop; }
-    
-    notepadModal.style.top = newTop + "px";
-    notepadModal.style.left = newLeft + "px";
-}
-
-function closeDragElement() {
-    document.onmouseup = null;
-    document.onmousemove = null;
-    if (typeof saveNotepadGeometry === 'function') {
-        saveNotepadGeometry(); 
-    }
-}
+const notepadTxt = { saving: <?php echo json_encode(lang('@Saving...')); ?>, saved: <?php echo json_encode(lang('@Saved')); ?>,
+                     expired: <?php echo json_encode(lang('@Session Expired')); ?>, error: <?php echo json_encode(lang('@Error')); ?> };
 </script>
+<script src="<?php echo tc_asset('assets/tc-notepad.js'); ?>"></script>
 <?php
 ob_end_flush();
 ?>

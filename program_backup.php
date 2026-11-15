@@ -17,9 +17,10 @@ $msg = ""; $err = "";
 if (isset($_POST['create_program_zip'])) {
     $result = program_backup_build($conn);
     if ($result) {
+        // (linket gik direkte til backups/, som .htaccess spærrer - 403; filbrowseren henter filen bag login)
         $msg = lang('@Program backup created successfully!') .
             '<span style="text-align:right; width: 50%; display: inline-block;">
-            <a href="' . $result['path'] . '" style="display:inline-block; background:#16a34a; color:white;
+            <a href="storage_browser.php?folder=backups&download=' . urlencode($result['name']) . '" style="display:inline-block; background:#16a34a; color:white;
             padding:8px 15px; text-decoration:none; border-radius:4px; font-weight:bold;"
             download>💾 ' . lang('@Download archive now') . '</a></span>';
     } else {
